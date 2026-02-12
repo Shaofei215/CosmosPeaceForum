@@ -2,6 +2,12 @@ import random
 import json
 import time
 import threading
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+
+# 创建Flask应用
+app = Flask(__name__)
+CORS(app)  # 启用CORS，允许前端访问
 
 # 创建用户类
 class User(object):
@@ -15,8 +21,43 @@ class User(object):
         self.comment_prompt = comment_prompt
 
     def post(self):
-        """生成帖子内容"""
-        return f"[{self.username}] 使用prompt: {self.prompt[:50]}..."
+        """生成帖子内容（调用硅基流动API）"""
+        import requests
+        
+        # 硅基流动API配置
+        api_url = "https://api.siliconflow.cn/v1/chat/completions"
+        api_key = "sk-kookgpxohtivpdxotdnhgdgrjqidpsnhfptsmwrspjwiiukj"  # 需要替换为实际的API密钥
+        
+        # API请求参数
+        payload = {
+            "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+            "messages": [
+                {"role": "system", "content": "你是一个社交平台用户，根据给定的prompt生成自然的帖子内容。"},
+                {"role": "user", "content": self.prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 200
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        try:
+            # 发送API请求
+            response = requests.post(api_url, json=payload, headers=headers)
+            response.raise_for_status()  # 检查响应状态
+            
+            # 解析响应
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            
+            return f"[{self.username}] {content}"
+        except Exception as e:
+            # 错误处理，返回默认内容
+            print(f"API调用失败: {str(e)}")
+            return f"[{self.username}] 使用prompt: {self.prompt[:50]}..."
 
     def get_daily_frequency(self):
         """计算每日平均发帖频率"""
@@ -37,6 +78,12 @@ with open("ai_users_config.json", "r", encoding= "UTF-8") as USER_CONFIG:
             user["comment_prompt"])
         )
 
+# 存储帖子数据
+posts = []
+
+# 存储用户对象映射（用于快速查找）
+user_map = {user.id: user for user in users}
+
 
 class AIScheduler:
     """AI用户调度器"""
@@ -45,76 +92,95 @@ class AIScheduler:
         self.users = users
         self.running = True
         self.test_mode = True  # 测试模式，使用缩短的时间单位
+        self.test_hour_duration = 10  # 测试模式下每小时的持续时间（秒）
     
     def start(self):
         """启动调度器"""
-        print("=== AI社交平台测试模式 ===")
+        if self.test_mode:
+            print("=== AI社交平台测试模式 ===")
+            print(f"时间尺度：每{self.test_hour_duration}秒模拟1小时\n")
+        else:
+            print("=== AI社交平台正常模式 ===")
+        
         print("用户信息:")
         for user in self.users:
-            # 测试模式：将发帖频率转换为每分钟的概率
-            if self.test_mode:
-                # 加速测试：使用提高后的概率
-                test_frequency = user.frequency / 150  # 每分钟概率，适应30个用户的测试场景
-                print(f"{user.avatar} {user.username} - 原每月发帖: {user.frequency}帖 - 测试模式每分钟概率: {test_frequency:.3f}")
-            else:
-                daily_freq = user.get_daily_frequency()
-                print(f"{user.avatar} {user.username} - 每月发帖: {user.frequency}帖 - 每日平均: {daily_freq:.2f}帖")
+            daily_freq = user.get_daily_frequency()
+            hourly_frequency = daily_freq / 24  # 每小时概率
+            print(f"{user.avatar} {user.username} - 每月发帖: {user.frequency}帖 - 每日平均: {daily_freq:.2f}帖 - 每小时概率: {hourly_frequency:.4f}")
         
-        print("\n=== 开始测试随机发帖 ===")
+        print("\n=== 开始随机发帖 ===")
         print("按Ctrl+C停止测试\n")
         
-        # 启动测试循环
+        # 启动模拟
         try:
-            self.test_posting()
+            self.run_simulation()
         except KeyboardInterrupt:
             print("\n测试已停止")
     
-    def _execute_post(self, user, current_time, is_hour=False):
-        """执行发帖操作（带随机延迟）"""
+    def _execute_post(self, user, current_hour, delay_time):
+        """执行发帖操作（带延迟）"""
+        # 执行延迟
+        time.sleep(delay_time)
+        
+        # 计算显示的发帖时间
         if self.test_mode:
-            # 测试模式：生成随机秒数（0-59）
-            random_second = random.randint(0, 59)
-            # 计算实际发帖时间
-            post_time = f"{current_time:02d}:{random_second:02d}"
+            # 测试模式：将秒转换为分钟显示
+            display_minute = int((delay_time / self.test_hour_duration) * 60)
+            post_time = f"{current_hour:02d}:{display_minute:02d}"
         else:
-            # 常规模式：生成随机分钟数（0-59）
-            random_minute = random.randint(0, 59)
-            # 计算实际发帖时间
-            post_time = f"{current_time:02d}:{random_minute:02d}"
+            # 正常模式：直接使用分钟
+            post_time = f"{current_hour:02d}:{delay_time:02d}"
         
         # 生成帖子内容
         content = user.post()
         # 输出发帖信息
         print(f"{user.avatar} {user.username} 在 {post_time} 发帖: {content}")
 
-    def test_posting(self):
-        """测试随机发帖（带延迟）"""
-        time_count = 0
+    def run_simulation(self):
+        """运行模拟（等比例时间转换）"""
+        hour_count = 0
         
         while self.running:
-            time_count += 1
+            hour_count += 1
             if self.test_mode:
-                print(f"\n--- 第 {time_count} 分钟 ---")
+                print(f"\n--- 第 {hour_count} 小时（测试模式）---\n")
             else:
-                print(f"\n--- {time_count:02d}:00 检查 ---")
+                print(f"\n--- {hour_count:02d}:00 检查 ---\n")
             
+            # 计算每小时概率（两种模式通用）
+            hourly_probabilities = {}
             for user in self.users:
-                # 计算发帖概率
-                if self.test_mode:
-                    post_probability = user.frequency / 150  # 测试模式：每分钟概率
-                else:
-                    post_probability = user.get_daily_frequency() / 24  # 常规模式：每小时概率
-                
-                # 随机判断是否发帖
-                if random.random() < post_probability:
-                    # 带延迟执行发帖
-                    self._execute_post(user, time_count, not self.test_mode)
+                daily_freq = user.get_daily_frequency()
+                hourly_probabilities[user] = daily_freq / 24  # 每小时概率
             
-            # 根据模式决定睡眠时间
+            # 存储需要发帖的用户和延迟时间
+            posts_to_execute = []
+            
+            for user, probability in hourly_probabilities.items():
+                # 随机判断是否发帖
+                if random.random() < probability:
+                    # 生成延迟时间
+                    if self.test_mode:
+                        # 测试模式：延迟0-10秒（等比例缩减）
+                        delay_time = random.uniform(0, self.test_hour_duration)
+                    else:
+                        # 正常模式：延迟0-60分钟
+                        delay_time = random.uniform(0, 60)
+                    posts_to_execute.append((user, delay_time))
+            
+            # 并行执行所有发帖（带延迟）
+            for user, delay in posts_to_execute:
+                thread = threading.Thread(target=self._execute_post, args=(user, hour_count, delay))
+                thread.daemon = True
+                thread.start()
+            
+            # 控制时间流逝
             if self.test_mode:
-                time.sleep(10)  # 测试模式：每秒模拟1分钟
+                # 测试模式：每10秒模拟1小时
+                time.sleep(self.test_hour_duration)
             else:
-                time.sleep(3600)  # 常规模式：每小时检查一次
+                # 正常模式：每小时检查一次
+                time.sleep(3600)
 
 
 # 运行测试
