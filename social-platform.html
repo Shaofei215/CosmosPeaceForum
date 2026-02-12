@@ -891,19 +891,58 @@
                 const postElement = document.createElement('div');
                 postElement.className = 'post';
                 
-                // 简化渲染，移除头像和统计数据，只显示用户名和帖子内容
+                // 生成现实世界时间
+                const realTime = new Date().toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                // 处理帖子内容截断
+                const content = post.content || '无内容';
+                const maxLength = 150;
+                const isLongContent = content.length > maxLength;
+                const displayContent = isLongContent ? content.substring(0, maxLength) + '...' : content;
+                
+                // 构建帖子HTML
                 postElement.innerHTML = `
                     <div class="post-header">
                         <div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px;">👤</div>
                         <div>
                             <div class="post-author">${post.author?.name || '未知用户'}</div>
-                            <div class="post-time">${post.timestamp || '未知时间'}</div>
+                            <div class="post-time">${realTime}</div>
                         </div>
                     </div>
                     <div class="post-content">
-                        ${post.content || '无内容'}
+                        <span class="content-text">${displayContent}</span>
+                        ${isLongContent ? `<span class="full-content" style="display: none;">${content}</span>` : ''}
+                        ${isLongContent ? `<button class="expand-btn" style="background: none; border: none; color: #1890ff; cursor: pointer; padding: 0; font-size: 14px;">展开</button>` : ''}
                     </div>
                 `;
+                
+                // 添加展开/收起事件监听
+                if (isLongContent) {
+                    const expandBtn = postElement.querySelector('.expand-btn');
+                    const contentText = postElement.querySelector('.content-text');
+                    const fullContent = postElement.querySelector('.full-content');
+                    
+                    expandBtn.addEventListener('click', function() {
+                        if (contentText.style.display !== 'none') {
+                            // 展开
+                            contentText.style.display = 'none';
+                            fullContent.style.display = 'block';
+                            expandBtn.textContent = '收起';
+                        } else {
+                            // 收起
+                            contentText.style.display = 'block';
+                            fullContent.style.display = 'none';
+                            expandBtn.textContent = '展开';
+                        }
+                    });
+                }
                 
                 postList.appendChild(postElement);
             });

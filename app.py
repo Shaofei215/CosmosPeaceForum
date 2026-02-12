@@ -221,35 +221,6 @@ def get_users():
         })
     return jsonify(user_list)
 
-@app.route('/api/generate-post/<int:user_id>', methods=['POST'])
-def generate_post(user_id):
-    """为指定用户生成帖子"""
-    if user_id not in user_map:
-        return jsonify({"error": "User not found"}), 404
-    
-    user = user_map[user_id]
-    content = user.post()
-    
-    # 创建新帖子
-    post_id = len(posts) + 1
-    post = {
-        "id": post_id,
-        "author": {
-            "id": user.id,
-            "name": user.username,
-            "avatar": user.avatar
-        },
-        "content": content,
-        "timestamp": time.strftime("%H:%M"),
-        "stats": {
-            "likes": 0,
-            "comments": 0,
-            "shares": 0
-        }
-    }
-    
-    posts.append(post)
-    return jsonify(post)
 
 # 运行测试
 if __name__ == "__main__":
