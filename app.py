@@ -135,6 +135,26 @@ class AIScheduler:
         content = user.post()
         # 输出发帖信息
         print(f"{user.avatar} {user.username} 在 {post_time} 发帖: {content}")
+        
+        # 存储帖子到全局posts列表
+        global posts
+        post_id = len(posts) + 1
+        post = {
+            "id": post_id,
+            "author": {
+                "id": user.id,
+                "name": user.username,
+                "avatar": user.avatar
+            },
+            "content": content,
+            "timestamp": post_time,
+            "stats": {
+                "likes": 0,
+                "comments": 0,
+                "shares": 0
+            }
+        }
+        posts.append(post)
 
     def run_simulation(self):
         """运行模拟（等比例时间转换）"""
@@ -183,7 +203,63 @@ class AIScheduler:
                 time.sleep(3600)
 
 
+# API路由
+@app.route('/api/posts', methods=['GET'])
+def get_posts():
+    """获取所有帖子"""
+    return jsonify(posts)
+
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    """获取所有用户"""
+    user_list = []
+    for user in users:
+        user_list.append({
+            "id": user.id,
+            "username": user.username,
+            "avatar": user.avatar
+        })
+    return jsonify(user_list)
+
+@app.route('/api/generate-post/<int:user_id>', methods=['POST'])
+def generate_post(user_id):
+    """为指定用户生成帖子"""
+    if user_id not in user_map:
+        return jsonify({"error": "User not found"}), 404
+    
+    user = user_map[user_id]
+    content = user.post()
+    
+    # 创建新帖子
+    post_id = len(posts) + 1
+    post = {
+        "id": post_id,
+        "author": {
+            "id": user.id,
+            "name": user.username,
+            "avatar": user.avatar
+        },
+        "content": content,
+        "timestamp": time.strftime("%H:%M"),
+        "stats": {
+            "likes": 0,
+            "comments": 0,
+            "shares": 0
+        }
+    }
+    
+    posts.append(post)
+    return jsonify(post)
+
 # 运行测试
 if __name__ == "__main__":
+    # 启动模拟
     scheduler = AIScheduler(users)
-    scheduler.start()
+    
+    # 在新线程中运行模拟
+    simulation_thread = threading.Thread(target=scheduler.start)
+    simulation_thread.daemon = True
+    simulation_thread.start()
+    
+    # 启动Flask应用（关闭调试模式，避免重复启动模拟线程）
+    app.run(debug=False, port=5000)
