@@ -885,21 +885,17 @@
                 return;
             }
             
-            apiData.posts.forEach((post, index) => {
+            // 反转帖子数组，使新帖子显示在上方
+            const reversedPosts = [...apiData.posts].reverse();
+            
+            reversedPosts.forEach((post, index) => {
                 console.log(`渲染第${index}个帖子:`, post);
                 
                 const postElement = document.createElement('div');
                 postElement.className = 'post';
                 
-                // 生成现实世界时间
-                const realTime = new Date().toLocaleString('zh-CN', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                });
+                // 使用帖子的时间戳
+                let postTime = post.timestamp || '未知时间';
                 
                 // 处理帖子内容截断
                 const content = post.content || '无内容';
@@ -913,7 +909,7 @@
                         <div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px;">👤</div>
                         <div>
                             <div class="post-author">${post.author?.name || '未知用户'}</div>
-                            <div class="post-time">${realTime}</div>
+                            <div class="post-time">${postTime}</div>
                         </div>
                     </div>
                     <div class="post-content">
@@ -1044,12 +1040,8 @@
             renderPosts();
             console.log('渲染完成');
             
-            // 每30秒刷新一次帖子
-            setInterval(async function() {
-                console.log('自动刷新帖子数据');
-                await fetchPosts();
-                renderPosts();
-            }, 30000);
+            // 手动刷新帖子（已移除自动刷新）
+            console.log('帖子已加载，可手动刷新页面获取最新内容');
         });
     </script>
 </body>

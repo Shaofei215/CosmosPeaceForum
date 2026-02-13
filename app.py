@@ -12,11 +12,12 @@ CORS(app)  # 启用CORS，允许前端访问
 # 创建用户类
 class User(object):
 
-    def __init__(self, user_id, username, avatar, post_frequency, post_prompt, comment_prompt):
+    def __init__(self, user_id, username, avatar, post_frequency, interaction_frequency, post_prompt, comment_prompt):
         self.id = user_id
         self.username = username
         self.avatar = avatar
         self.frequency = post_frequency
+        self.interaction_frequency = interaction_frequency
         self.prompt = post_prompt
         self.comment_prompt = comment_prompt
 
@@ -36,7 +37,7 @@ class User(object):
                 {"role": "user", "content": self.prompt}
             ],
             "temperature": 0.7,
-            "max_tokens": 200
+            "max_tokens": 350
         }
         
         headers = {
@@ -53,7 +54,7 @@ class User(object):
             result = response.json()
             content = result["choices"][0]["message"]["content"].strip()
             
-            return f"[{self.username}] {content}"
+            return f"{content}"
         except Exception as e:
             # 错误处理，返回默认内容
             print(f"API调用失败: {str(e)}")
@@ -74,6 +75,7 @@ with open("ai_users_config.json", "r", encoding= "UTF-8") as USER_CONFIG:
             user["username"],
             user["avatar"],
             user["post_frequency"],
+            user["interaction_frequency"],
             user["post_prompt"],
             user["comment_prompt"])
         )
@@ -120,7 +122,12 @@ class AIScheduler:
     def _execute_post(self, user, current_hour, delay_time):
         """执行发帖操作（带延迟）"""
         # 执行延迟
-        time.sleep(delay_time)
+        if self.test_mode:
+            # 测试模式：延迟时间是秒
+            time.sleep(delay_time)
+        else:
+            # 正常模式：延迟时间是分钟，需要转换为秒
+            time.sleep(delay_time * 60)
         
         # 计算显示的发帖时间
         if self.test_mode:
@@ -128,8 +135,8 @@ class AIScheduler:
             display_minute = int((delay_time / self.test_hour_duration) * 60)
             post_time = f"{current_hour:02d}:{display_minute:02d}"
         else:
-            # 正常模式：直接使用分钟
-            post_time = f"{current_hour:02d}:{delay_time:02d}"
+            # 正常模式：使用完整的当前时间
+            post_time = time.strftime("%Y-%m-%d %H:%M:%S")
         
         # 生成帖子内容
         content = user.post()
@@ -161,7 +168,6 @@ class AIScheduler:
         hour_count = 0
         
         while self.running:
-            hour_count += 1
             if self.test_mode:
                 print(f"\n--- 第 {hour_count} 小时（测试模式）---\n")
             else:
@@ -201,6 +207,9 @@ class AIScheduler:
             else:
                 # 正常模式：每小时检查一次
                 time.sleep(3600)
+            
+            # 每小时结束后增加计数
+            hour_count += 1
 
 
 # API路由
