@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文字社交平台</title>
+    <title>StarRail VibeTown</title>
     <style>
         * {
             margin: 0;
@@ -461,7 +461,7 @@
     <!-- 导航栏 -->
     <nav class="navbar">
         <div class="navbar-container">
-            <div class="logo">文字社交</div>
+            <div class="logo">名字名字</div>
             <div class="search-box">
                 <input type="text" class="search-input" placeholder="搜索内容、用户或话题">
             </div>
@@ -737,7 +737,7 @@
                 <a href="#" class="footer-link">联系我们</a>
             </div>
             <div class="footer-copyright">
-                © 2026 文字社交平台 版权所有
+                星际和平公司 版权所有
             </div>
         </div>
     </footer>
@@ -904,9 +904,19 @@
                 const displayContent = isLongContent ? content.substring(0, maxLength) + '...' : content;
                 
                 // 构建帖子HTML
+                let avatarHtml = '';
+                const avatar = post.author?.avatar || '👤';
+                if (avatar.startsWith('avatar/')) {
+                    // 如果是图片路径，使用img标签
+                    avatarHtml = `<img src="${avatar}" alt="${post.author?.name || '未知用户'}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 10px;">`;
+                } else {
+                    // 如果是表情符号，使用当前方式
+                    avatarHtml = `<div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px;">${avatar}</div>`;
+                }
+                
                 postElement.innerHTML = `
                     <div class="post-header">
-                        <div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px;">${post.author?.avatar || '👤'}</div>
+                        ${avatarHtml}
                         <div>
                             <div class="post-author">${post.author?.name || '未知用户'}</div>
                             ${post.author?.personal_signature ? `<div class="post-signature" style="font-size: 12px; color: #999; margin-top: 2px;">${post.author.personal_signature}</div>` : ''}
