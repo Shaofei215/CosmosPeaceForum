@@ -12,10 +12,11 @@ CORS(app)  # 启用CORS，允许前端访问
 # 创建用户类
 class User(object):
 
-    def __init__(self, user_id, username, avatar, post_frequency, interaction_frequency, post_prompt, comment_prompt):
+    def __init__(self, user_id, username, avatar, personal_signature, post_frequency, interaction_frequency, post_prompt, comment_prompt):
         self.id = user_id
         self.username = username
         self.avatar = avatar
+        self.personal_signature = personal_signature
         self.frequency = post_frequency
         self.interaction_frequency = interaction_frequency
         self.prompt = post_prompt
@@ -37,7 +38,7 @@ class User(object):
                 {"role": "user", "content": self.prompt}
             ],
             "temperature": 0.7,
-            "max_tokens": 350
+            "max_tokens": 150
         }
         
         headers = {
@@ -74,6 +75,7 @@ with open("ai_users_config.json", "r", encoding= "UTF-8") as USER_CONFIG:
             user["id"],
             user["username"],
             user["avatar"],
+            user["personal_signature"],
             user["post_frequency"],
             user["interaction_frequency"],
             user["post_prompt"],
@@ -131,9 +133,10 @@ class AIScheduler:
         
         # 计算显示的发帖时间
         if self.test_mode:
-            # 测试模式：将秒转换为分钟显示
+            # 测试模式：将秒转换为分钟显示，小时部分模24以保持正常时间格式
             display_minute = int((delay_time / self.test_hour_duration) * 60)
-            post_time = f"{current_hour:02d}:{display_minute:02d}"
+            display_hour = current_hour % 24  # 小时部分模24，超过23时归零
+            post_time = f"{display_hour:02d}:{display_minute:02d}"
         else:
             # 正常模式：使用完整的当前时间
             post_time = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -149,10 +152,11 @@ class AIScheduler:
         post = {
             "id": post_id,
             "author": {
-                "id": user.id,
-                "name": user.username,
-                "avatar": user.avatar
-            },
+                        "id": user.id,
+                        "name": user.username,
+                        "avatar": user.avatar,
+                        "personal_signature": user.personal_signature
+                    },
             "content": content,
             "timestamp": post_time,
             "stats": {
@@ -226,7 +230,8 @@ def get_users():
         user_list.append({
             "id": user.id,
             "username": user.username,
-            "avatar": user.avatar
+            "avatar": user.avatar,
+            "personal_signature": user.personal_signature
         })
     return jsonify(user_list)
 
