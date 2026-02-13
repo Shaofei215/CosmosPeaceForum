@@ -3,6 +3,7 @@ import json
 import time
 import threading
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -33,13 +34,13 @@ class User(object):
         
         # API请求参数
         payload = {
-            "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+            "model": "Pro/moonshotai/Kimi-K2.5",
             "messages": [
                 {"role": "system", "content": "你是一个社交平台用户，根据给定的prompt生成自然的帖子内容。"},
                 {"role": "user", "content": self.prompt}
             ],
             "temperature": 1.0,
-            "max_tokens": 50
+            "max_tokens": 300
         }
         
         headers = {
@@ -163,33 +164,28 @@ class AIScheduler:
         self.test_hour_duration = 10  # 测试模式下每小时的持续时间（秒）
         # 统计相关属性
         self.statistics_start_time = time.time()  # 统计开始时间
-        self.statistics_posts = []  # 存储统计周期内的帖子
+        self.statistics_authors = set()  # 存储统计周期内的发帖作者ID（用于去重）
+        self.statistics_post_count = 0  # 统计周期内的帖子数量
+        self.statistics_lock = threading.Lock()  # 统计操作的线程锁
         self.statistics_thread = None  # 统计线程
         self.statistics_running = True
     
-    def add_post_to_statistics(self, post):
-        """添加新帖子到统计
+    def record_post_statistics(self, author_id):
+        """记录发帖统计（在API调用前执行，避免延迟影响统计准确性）
         
         Args:
-            post: 帖子对象
+            author_id: 发帖作者ID
         """
-        # 为帖子添加时间戳，用于统计
-        post['stat_time'] = time.time()
-        self.statistics_posts.append(post)
+        with self.statistics_lock:
+            self.statistics_authors.add(author_id)
+            self.statistics_post_count += 1
     
     def reset_statistics(self):
         """重置统计数据"""
-        self.statistics_start_time = time.time()
-        # 只保留当前统计周期内的帖子
-        current_time = time.time()
-        if self.test_mode:
-            # 测试模式：24个测试小时 = 24 * test_hour_duration 秒
-            window = 24 * self.test_hour_duration
-        else:
-            # 正常模式：24小时 = 86400秒
-            window = 86400
-        
-        self.statistics_posts = [p for p in self.statistics_posts if current_time - p.get('stat_time', 0) <= window]
+        with self.statistics_lock:
+            self.statistics_start_time = time.time()
+            self.statistics_authors.clear()
+            self.statistics_post_count = 0
     
     def calculate_statistics(self):
         """计算统计数据
@@ -197,30 +193,8 @@ class AIScheduler:
         Returns:
             tuple: (发帖人数, 发帖总数量)
         """
-        current_time = time.time()
-        
-        # 确定时间窗口
-        if self.test_mode:
-            # 测试模式：24个测试小时 = 24 * test_hour_duration 秒
-            window = 24 * self.test_hour_duration
-        else:
-            # 正常模式：24小时 = 86400秒
-            window = 86400
-        
-        # 过滤出时间窗口内的帖子
-        recent_posts = [p for p in self.statistics_posts if current_time - p.get('stat_time', 0) <= window]
-        
-        # 统计发帖人数（去重）
-        poster_ids = set()
-        for post in recent_posts:
-            author_id = post.get('author', {}).get('id')
-            if author_id:
-                poster_ids.add(author_id)
-        
-        # 统计发帖总数量
-        post_count = len(recent_posts)
-        
-        return len(poster_ids), post_count
+        with self.statistics_lock:
+            return len(self.statistics_authors), self.statistics_post_count
     
     def print_statistics(self):
         """打印统计结果"""
@@ -292,58 +266,9 @@ class AIScheduler:
             # 停止统计模块
             self.stop_statistics()
     
-    def _execute_post(self, user, current_hour, delay_time):
-        """执行发帖操作（带延迟）"""
-        # 执行延迟
-        if self.test_mode:
-            # 测试模式：延迟时间是秒
-            time.sleep(delay_time)
-        else:
-            # 正常模式：延迟时间是分钟，需要转换为秒
-            time.sleep(delay_time * 60)
-        
-        # 计算显示的发帖时间
-        if self.test_mode:
-            # 测试模式：将秒转换为分钟显示，小时部分模24以保持正常时间格式
-            display_minute = int((delay_time / self.test_hour_duration) * 60)
-            display_hour = current_hour % 24  # 小时部分模24，超过23时归零
-            post_time = f"{display_hour:02d}:{display_minute:02d}"
-        else:
-            # 正常模式：使用完整的当前时间
-            post_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 生成帖子内容
-        content = user.post()
-        # 输出发帖信息
-        print(f"{user.avatar} {user.username} 在 {post_time} 发帖: {content}")
-        
-        # 存储帖子到全局posts列表
-        global posts
-        post_id = len(posts) + 1
-        post = {
-            "id": post_id,
-            "author": {
-                        "id": user.id,
-                        "name": user.username,
-                        "avatar": user.avatar,
-                        "personal_signature": user.personal_signature
-                    },
-            "content": content,
-            "timestamp": post_time,
-            "stats": {
-                "likes": 0,
-                "comments": 0,
-                "shares": 0
-            }
-        }
-        posts.append(post)
-        
-        # 添加帖子到统计模块
-        self.add_post_to_statistics(post)
-    
     def _execute_post_poisson(self, user, simulation_time):
         """执行基于泊松过程的发帖操作"""
-        # 计算显示的发帖时间
+        # 计算显示的发帖时间（基于执行发帖操作时的系统时间，而非API返回时间）
         if self.test_mode:
             # 测试模式：10秒模拟1小时
             # 计算模拟的小时数和分钟数
@@ -353,12 +278,15 @@ class AIScheduler:
             display_hour = simulated_hours % 24  # 小时部分模24，超过23时归零
             post_time = f"{display_hour:02d}:{simulated_minutes:02d}"
         else:
-            # 正常模式：使用完整的当前时间
+            # 正常模式：使用执行发帖操作时的实际系统时间
             post_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 在API调用前记录统计（避免API延迟影响统计准确性）
+        self.record_post_statistics(user.id)
         
         # 生成帖子内容
         content = user.post()
-        # 输出发帖信息
+        # 输出发帖信息（显示的是执行发帖操作时的时间，而非API返回时间）
         print(f"{user.avatar} {user.username} 在 {post_time} 发帖: {content}")
         
         # 存储帖子到全局posts列表
@@ -381,12 +309,9 @@ class AIScheduler:
             }
         }
         posts.append(post)
-        
-        # 添加帖子到统计模块
-        self.add_post_to_statistics(post)
 
     def run_simulation(self):
-        """运行模拟（基于泊松过程）"""
+        """运行模拟（基于泊松过程）- 使用多线程避免API阻塞"""
         # 初始化每个用户的下次发帖时间
         next_post_times = {}
         simulation_time = 0  # 模拟时间（秒）
@@ -412,49 +337,64 @@ class AIScheduler:
         print("\n=== 开始基于泊松过程的随机发帖 ===\n")
         print("按Ctrl+C停止测试\n")
         
+        # 使用线程池处理发帖任务，避免API请求阻塞主循环
+        # max_workers根据用户数量动态调整，最多20个线程
+        max_workers = min(len(self.users) * 2, 20)
+        
         try:
-            while self.running:
-                # 找到最早的下次发帖时间
-                if not next_post_times:
-                    break
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # 存储正在执行的发帖任务 {user_id: future}
+                pending_futures = {}
                 
-                # 找出所有用户中的最小下次发帖时间
-                min_user_id = min(next_post_times, key=next_post_times.get)
-                min_time = next_post_times[min_user_id]
-                
-                # 计算需要等待的真实时间
-                if self.test_mode:
-                    # 测试模式：时间加速，直接使用模拟时间
-                    wait_time = min_time - simulation_time
-                    if wait_time > 0:
-                        time.sleep(wait_time)
-                    simulation_time = min_time
-                else:
-                    # 正常模式：使用真实时间
-                    current_real_time = time.time()
-                    elapsed_real_time = current_real_time - real_start_time
-                    wait_time = min_time - elapsed_real_time
-                    if wait_time > 0:
-                        time.sleep(wait_time)
-                    simulation_time = min_time
-                
-                # 获取对应的用户
-                user = user_map[min_user_id]
-                
-                # 执行发帖操作
-                self._execute_post_poisson(user, simulation_time)
-                
-                # 计算下一次发帖的时间间隔
-                if self.test_mode:
-                    # 测试模式：10秒模拟1小时，时间加速360倍
-                    lambda_per_second = user.get_hourly_lambda() * 360 / 3600
-                else:
-                    # 正常模式：每小时lambda -> 每秒lambda: lambda_hourly / 3600
-                    lambda_per_second = user.get_hourly_lambda() / 3600
-                
-                interval = user.generate_exponential_interval(lambda_per_second)
-                next_post_times[min_user_id] = simulation_time + interval
-                
+                while self.running:
+                    # 找到最早的下次发帖时间
+                    if not next_post_times:
+                        break
+                    
+                    # 找出所有用户中的最小下次发帖时间
+                    min_user_id = min(next_post_times, key=next_post_times.get)
+                    min_time = next_post_times[min_user_id]
+                    
+                    # 计算需要等待的真实时间
+                    if self.test_mode:
+                        # 测试模式：时间加速，直接使用模拟时间
+                        wait_time = min_time - simulation_time
+                        if wait_time > 0:
+                            time.sleep(wait_time)
+                        simulation_time = min_time
+                    else:
+                        # 正常模式：使用真实时间
+                        current_real_time = time.time()
+                        elapsed_real_time = current_real_time - real_start_time
+                        wait_time = min_time - elapsed_real_time
+                        if wait_time > 0:
+                            time.sleep(wait_time)
+                        simulation_time = min_time
+                    
+                    # 获取对应的用户
+                    user = user_map[min_user_id]
+                    
+                    # 提交发帖任务到线程池（非阻塞）
+                    # 使用submit将任务放入线程池异步执行
+                    future = executor.submit(self._execute_post_poisson, user, simulation_time)
+                    pending_futures[min_user_id] = future
+                    
+                    # 立即计算下一次发帖的时间间隔（不等待API返回）
+                    if self.test_mode:
+                        # 测试模式：10秒模拟1小时，时间加速360倍
+                        lambda_per_second = user.get_hourly_lambda() * 360 / 3600
+                    else:
+                        # 正常模式：每小时lambda -> 每秒lambda: lambda_hourly / 3600
+                        lambda_per_second = user.get_hourly_lambda() / 3600
+                    
+                    interval = user.generate_exponential_interval(lambda_per_second)
+                    next_post_times[min_user_id] = simulation_time + interval
+                    
+                    # 清理已完成的任务，避免内存泄漏
+                    completed_users = [uid for uid, fut in pending_futures.items() if fut.done()]
+                    for uid in completed_users:
+                        del pending_futures[uid]
+                        
         except KeyboardInterrupt:
             print("\n测试已停止")
             # 停止统计模块
