@@ -955,9 +955,9 @@
                         commentsHtml += `
                             <div class="comment-item" style="padding: 10px 0; border-bottom: 1px solid #f0f0f0;" data-comment-id="${comment.id}">
                                 <div style="display: flex; align-items: flex-start;">
-                                    <div style="width: 32px; height: 32px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 14px;">${commentAvatar}</div>
+                                    <a href="/user-profile.html?id=${comment.user_id}" style="text-decoration: none;"><div style="width: 32px; height: 32px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 14px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">${commentAvatar}</div></a>
                                     <div style="flex: 1;">
-                                        <div style="font-weight: bold; font-size: 13px; margin-bottom: 2px;">${comment.username || comment.name}</div>
+                                        <a href="/user-profile.html?id=${comment.user_id}" style="text-decoration: none; color: inherit;"><div style="font-weight: bold; font-size: 13px; margin-bottom: 2px; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#1890ff'" onmouseout="this.style.color='#333'">${comment.username || comment.name}</div></a>
                                         <div style="font-size: 13px; color: #333; line-height: 1.5;">${comment.content}</div>
                                         <div style="font-size: 11px; color: #999; margin-top: 4px;">
                                             ${comment.timestamp || ''} · ❤️ ${likesCount}
@@ -971,9 +971,9 @@
                                                 ${commentReplies.map(reply => `
                                                     <div class="reply-item" style="padding: 8px 0;">
                                                         <div style="display: flex; align-items: flex-start;">
-                                                            <div style="width: 24px; height: 24px; background: #f5f5f5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 8px; font-size: 12px;">${reply.avatar || '👤'}</div>
+                                                            <a href="/user-profile.html?id=${reply.user_id}" style="text-decoration: none;"><div style="width: 24px; height: 24px; background: #f5f5f5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 8px; font-size: 12px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">${reply.avatar || '👤'}</div></a>
                                                             <div style="flex: 1;">
-                                                                <div style="font-weight: bold; font-size: 12px; margin-bottom: 2px;">${reply.username || reply.name}</div>
+                                                                <a href="/user-profile.html?id=${reply.user_id}" style="text-decoration: none; color: inherit;"><div style="font-weight: bold; font-size: 12px; margin-bottom: 2px; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#1890ff'" onmouseout="this.style.color='#333'">${reply.username || reply.name}</div></a>
                                                                 <div style="font-size: 12px; color: #666; margin-bottom: 2px;">回复 @${reply.reply_to}</div>
                                                                 <div style="font-size: 12px; color: #333; line-height: 1.4;">${reply.content}</div>
                                                                 <div style="font-size: 10px; color: #999; margin-top: 2px;">${reply.timestamp || ''}</div>
