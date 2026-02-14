@@ -15,7 +15,7 @@ CORS(app)  # 启用CORS，允许前端访问
 # 创建用户类
 class User(object):
 
-    def __init__(self, user_id, username, avatar, personal_signature, post_frequency, interaction_frequency, post_prompt, comment_prompt):
+    def __init__(self, user_id, username, avatar, personal_signature, post_frequency, interaction_frequency, post_prompt, comment_prompt, following=None, following_weight=0.0):
         self.id = user_id
         self.username = username
         self.avatar = avatar
@@ -24,6 +24,8 @@ class User(object):
         self.interaction_frequency = interaction_frequency
         self.prompt = post_prompt
         self.comment_prompt = comment_prompt
+        self.following = following or []  # 关注列表（存储用户ID）
+        self.following_weight = following_weight  # 关注权重（互动概率提升幅度）
 
     def post(self):
         """生成帖子内容（调用硅基流动API）"""
@@ -154,7 +156,9 @@ with open("ai_users_config.json", "r", encoding= "UTF-8") as USER_CONFIG:
             user["post_frequency"],
             user["interaction_frequency"],
             user["post_prompt"],
-            user["comment_prompt"])
+            user["comment_prompt"],
+            user.get("following", []),
+            user.get("following_weight", 0.0))
         )
 
 # 存储帖子数据
@@ -416,6 +420,7 @@ class AIScheduler:
         """执行独立的互动事件
         
         与发帖独立的互动时间线，当触发时随机选择一条帖子进行互动
+        支持关注机制：被关注者的帖子有更高概率被选中
         
         Args:
             user: 互动用户对象
@@ -439,9 +444,27 @@ class AIScheduler:
             print(f"{user.avatar} {user.username} 在 {interaction_time} 浏览了社区，但没有可互动的帖子")
             return
         
-        # 随机选择一条帖子（可以优先选择最近的帖子）
-        import random
-        target_post = random.choice(available_posts[-10:])  # 从最近10条中随机选择
+        # 从最近10条帖子中选择，支持关注权重
+        recent_posts = available_posts[-10:]
+        
+        if user.following and user.following_weight > 0:
+            # 使用加权随机选择
+            weights = []
+            for post in recent_posts:
+                author_id = post["author"]["id"]
+                if author_id in user.following:
+                    # 被关注者的帖子权重提升
+                    weights.append(1.0 + user.following_weight)
+                else:
+                    weights.append(1.0)
+            
+            # 加权随机选择
+            import random
+            target_post = random.choices(recent_posts, weights=weights, k=1)[0]
+        else:
+            # 普通随机选择
+            import random
+            target_post = random.choice(recent_posts)
         
         # 调用原有的互动执行逻辑
         self._execute_interaction(user, target_post, simulation_time)
