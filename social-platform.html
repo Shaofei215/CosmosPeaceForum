@@ -750,10 +750,13 @@
             categories: []
         };
 
+        // API基础URL - 使用相对路径，自动适应当前服务器地址
+        const API_BASE_URL = '';
+        
         // 获取帖子数据
         async function fetchPosts() {
             try {
-                const response = await fetch('http://localhost:5000/api/posts');
+                const response = await fetch(`${API_BASE_URL}/api/posts`);
                 apiData.posts = await response.json();
                 console.log('获取到帖子数据:', apiData.posts);
             } catch (error) {
@@ -812,7 +815,7 @@
         // 获取热门话题数据
         async function fetchTrendingTopics() {
             try {
-                const response = await fetch('http://localhost:5000/api/trending');
+                const response = await fetch(`${API_BASE_URL}/api/trending`);
                 apiData.trendingTopics = await response.json();
             } catch (error) {
                 console.error('Error fetching trending topics:', error);
@@ -829,7 +832,7 @@
         // 获取分类数据
         async function fetchCategories() {
             try {
-                const response = await fetch('http://localhost:5000/api/categories');
+                const response = await fetch(`${API_BASE_URL}/api/categories`);
                 apiData.categories = await response.json();
             } catch (error) {
                 console.error('Error fetching categories:', error);
@@ -846,7 +849,7 @@
         // 获取评论数据
         async function fetchComments(postId) {
             try {
-                const response = await fetch(`http://localhost:5000/api/comments/${postId}`);
+                const response = await fetch(`${API_BASE_URL}/api/comments/${postId}`);
                 return await response.json();
             } catch (error) {
                 console.error('Error fetching comments:', error);
@@ -914,6 +917,43 @@
                     avatarHtml = `<div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px;">${avatar}</div>`;
                 }
                 
+                // 获取互动数据
+                const interactions = post.interactions || { likes: [], comments: [] };
+                const likeCount = interactions.likes?.length || post.stats?.likes || 0;
+                const commentCount = interactions.comments?.length || post.stats?.comments || 0;
+                
+                // 构建点赞用户列表HTML
+                let likesHtml = '';
+                if (interactions.likes && interactions.likes.length > 0) {
+                    const likeUsers = interactions.likes.slice(0, 3).map(l => l.username || l.name).join('、');
+                    const moreLikes = interactions.likes.length > 3 ? `等${interactions.likes.length}人` : '';
+                    likesHtml = `<div class="post-likes" style="margin-top: 10px; padding: 8px 12px; background: #f5f5f5; border-radius: 4px; font-size: 13px; color: #666;">
+                        <span>❤️</span> ${likeUsers}${moreLikes}赞了
+                    </div>`;
+                }
+                
+                // 构建评论列表HTML
+                let commentsHtml = '';
+                if (interactions.comments && interactions.comments.length > 0) {
+                    commentsHtml = `<div class="post-comments" style="margin-top: 10px;">`;
+                    interactions.comments.forEach(comment => {
+                        const commentAvatar = comment.avatar || '👤';
+                        commentsHtml += `
+                            <div class="comment-item" style="padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+                                <div style="display: flex; align-items: flex-start;">
+                                    <div style="width: 32px; height: 32px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 14px;">${commentAvatar}</div>
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: bold; font-size: 13px; margin-bottom: 2px;">${comment.username || comment.name}</div>
+                                        <div style="font-size: 13px; color: #333; line-height: 1.5;">${comment.content}</div>
+                                        <div style="font-size: 11px; color: #999; margin-top: 4px;">${comment.timestamp || ''}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    commentsHtml += `</div>`;
+                }
+                
                 postElement.innerHTML = `
                     <div class="post-header">
                         ${avatarHtml}
@@ -928,6 +968,18 @@
                         ${isLongContent ? `<span class="full-content" style="display: none;">${content}</span>` : ''}
                         ${isLongContent ? `<button class="expand-btn" style="background: none; border: none; color: #1890ff; cursor: pointer; padding: 0; font-size: 14px;">展开</button>` : ''}
                     </div>
+                    <div class="post-stats" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #f0f0f0;">
+                        <button class="stat-btn" style="margin-right: 20px;">
+                            <span>❤️</span>
+                            <span>${likeCount}</span>
+                        </button>
+                        <button class="stat-btn comment-btn" data-post-id="${post.id}">
+                            <span>💬</span>
+                            <span>${commentCount}</span>
+                        </button>
+                    </div>
+                    ${likesHtml}
+                    ${commentsHtml}
                 `;
                 
                 // 添加展开/收起事件监听
