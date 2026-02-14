@@ -909,12 +909,15 @@
                 // 构建帖子HTML
                 let avatarHtml = '';
                 const avatar = post.author?.avatar || '👤';
+                const authorId = post.author?.id || '';
+                const authorName = post.author?.name || '未知用户';
+                
                 if (avatar.startsWith('avatar/')) {
                     // 如果是图片路径，使用img标签
-                    avatarHtml = `<img src="${avatar}" alt="${post.author?.name || '未知用户'}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 10px;">`;
+                    avatarHtml = `<a href="/user-profile.html?id=${authorId}" style="text-decoration: none;"><img src="${avatar}" alt="${authorName}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 10px; cursor: pointer;"></a>`;
                 } else {
                     // 如果是表情符号，使用当前方式
-                    avatarHtml = `<div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px;">${avatar}</div>`;
+                    avatarHtml = `<a href="/user-profile.html?id=${authorId}" style="text-decoration: none;"><div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">${avatar}</div></a>`;
                 }
                 
                 // 获取互动数据
@@ -932,25 +935,60 @@
                     </div>`;
                 }
                 
-                // 构建评论列表HTML
+                // 构建评论列表HTML（支持两层评论）
                 let commentsHtml = '';
                 if (interactions.comments && interactions.comments.length > 0) {
+                    // 分离一级评论和二级评论
+                    const topLevelComments = interactions.comments.filter(c => !c.parent_id);
+                    const replies = interactions.comments.filter(c => c.parent_id);
+                    
                     commentsHtml = `<div class="post-comments" style="margin-top: 10px;">`;
-                    interactions.comments.forEach(comment => {
+                    
+                    topLevelComments.forEach((comment, index) => {
                         const commentAvatar = comment.avatar || '👤';
+                        // 获取该评论的回复
+                        const commentReplies = replies.filter(r => r.parent_id === comment.id);
+                        const hasReplies = commentReplies.length > 0;
+                        
+                        const likesCount = comment.likes_count || 0;
+                        
                         commentsHtml += `
-                            <div class="comment-item" style="padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+                            <div class="comment-item" style="padding: 10px 0; border-bottom: 1px solid #f0f0f0;" data-comment-id="${comment.id}">
                                 <div style="display: flex; align-items: flex-start;">
                                     <div style="width: 32px; height: 32px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 14px;">${commentAvatar}</div>
                                     <div style="flex: 1;">
                                         <div style="font-weight: bold; font-size: 13px; margin-bottom: 2px;">${comment.username || comment.name}</div>
                                         <div style="font-size: 13px; color: #333; line-height: 1.5;">${comment.content}</div>
-                                        <div style="font-size: 11px; color: #999; margin-top: 4px;">${comment.timestamp || ''}</div>
+                                        <div style="font-size: 11px; color: #999; margin-top: 4px;">
+                                            ${comment.timestamp || ''} · ❤️ ${likesCount}
+                                        </div>
+                                        
+                                        ${hasReplies ? `
+                                            <div class="replies-toggle" style="margin-top: 8px; cursor: pointer; color: #1890ff; font-size: 12px;" onclick="toggleReplies(${comment.id})">
+                                                💬 查看 ${commentReplies.length} 条回复
+                                            </div>
+                                            <div class="replies-container" id="replies-${comment.id}" style="display: none; margin-top: 10px; padding-left: 20px; border-left: 2px solid #e8e8e8;">
+                                                ${commentReplies.map(reply => `
+                                                    <div class="reply-item" style="padding: 8px 0;">
+                                                        <div style="display: flex; align-items: flex-start;">
+                                                            <div style="width: 24px; height: 24px; background: #f5f5f5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 8px; font-size: 12px;">${reply.avatar || '👤'}</div>
+                                                            <div style="flex: 1;">
+                                                                <div style="font-weight: bold; font-size: 12px; margin-bottom: 2px;">${reply.username || reply.name}</div>
+                                                                <div style="font-size: 12px; color: #666; margin-bottom: 2px;">回复 @${reply.reply_to}</div>
+                                                                <div style="font-size: 12px; color: #333; line-height: 1.4;">${reply.content}</div>
+                                                                <div style="font-size: 10px; color: #999; margin-top: 2px;">${reply.timestamp || ''}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : ''}
                                     </div>
                                 </div>
                             </div>
                         `;
                     });
+                    
                     commentsHtml += `</div>`;
                 }
                 
@@ -958,7 +996,7 @@
                     <div class="post-header">
                         ${avatarHtml}
                         <div>
-                            <div class="post-author">${post.author?.name || '未知用户'}</div>
+                            <a href="/user-profile.html?id=${authorId}" style="text-decoration: none; color: inherit;"><div class="post-author" style="cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#1890ff'" onmouseout="this.style.color='#333'">${authorName}</div></a>
                             ${post.author?.personal_signature ? `<div class="post-signature" style="font-size: 12px; color: #999; margin-top: 2px;">${post.author.personal_signature}</div>` : ''}
                             <div class="post-time">${postTime}</div>
                         </div>
@@ -1091,6 +1129,20 @@
                     }
                 });
             });
+        }
+
+        // 切换回复显示/隐藏
+        function toggleReplies(commentId) {
+            const repliesContainer = document.getElementById(`replies-${commentId}`);
+            const toggleBtn = event.target;
+            
+            if (repliesContainer.style.display === 'none') {
+                repliesContainer.style.display = 'block';
+                toggleBtn.textContent = toggleBtn.textContent.replace('查看', '收起');
+            } else {
+                repliesContainer.style.display = 'none';
+                toggleBtn.textContent = toggleBtn.textContent.replace('收起', '查看');
+            }
         }
 
         // 页面加载完成后渲染内容

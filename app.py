@@ -417,10 +417,15 @@ class AIScheduler:
                 print(f"{user.avatar} {user.username} 在 {interaction_time} 看到了 {author_name} 的帖子，但不做任何互动")
 
     def _execute_interaction_event(self, user, simulation_time):
-        """执行独立的互动事件
+        """执行独立的互动事件（完全自主决策版本 - 4独立开关）
         
-        与发帖独立的互动时间线，当触发时随机选择一条帖子进行互动
-        支持关注机制：被关注者的帖子有更高概率被选中
+        AI同时看到帖子和热门评论，通过4个独立开关自主决定如何互动：
+        - like_post: 是否点赞帖子
+        - comment_post: 是否评论帖子（内容）
+        - like_comment: 是否点赞某条评论
+        - reply_comment: 是否回复某条评论（包含comment_id和content）
+        
+        支持所有16种组合！
         
         Args:
             user: 互动用户对象
@@ -466,8 +471,365 @@ class AIScheduler:
             import random
             target_post = random.choice(recent_posts)
         
-        # 调用原有的互动执行逻辑
-        self._execute_interaction(user, target_post, simulation_time)
+        # 获取该帖子的一级评论（parent_id为null的评论）
+        top_level_comments = [c for c in target_post.get("interactions", {}).get("comments", []) if c.get("parent_id") is None]
+        
+        # 准备候选评论（最多3条热门评论）
+        candidate_comments = []
+        if top_level_comments:
+            # 按点赞数排序，选择前3条
+            sorted_comments = sorted(top_level_comments, key=lambda c: c.get("likes_count", 0), reverse=True)
+            candidate_comments = sorted_comments[:3]
+        
+        # 调用AI进行完全自主决策（4独立开关）
+        decision = self._get_full_interaction_decision(user, target_post, candidate_comments)
+        
+        if decision:
+            actions_performed = []
+            
+            # === 开关1: 点赞帖子 ===
+            if decision.get("like_post", False):
+                self._add_like_to_post(target_post, user, interaction_time)
+                actions_performed.append("赞了帖子")
+            
+            # === 开关2: 评论帖子 ===
+            post_comment = decision.get("comment_post", "").strip()
+            if post_comment:
+                self._add_comment_to_post(target_post, user, post_comment, interaction_time)
+                actions_performed.append(f"评论了帖子: {post_comment}")
+            
+            # === 开关3: 点赞多条评论 ===
+            liked_comment_ids = decision.get("liked_comment_ids", [])
+            if liked_comment_ids and isinstance(liked_comment_ids, list):
+                for comment_id in liked_comment_ids:
+                    target_comment = next((c for c in candidate_comments if c["id"] == comment_id), None)
+                    if target_comment:
+                        self._add_like_to_comment(target_post, target_comment, user, interaction_time)
+                        actions_performed.append(f"赞了 {target_comment['username']} 的评论")
+            
+            # === 开关4: 回复多条评论 ===
+            reply_list = decision.get("reply_comments", [])
+            if reply_list and isinstance(reply_list, list):
+                for reply_data in reply_list:
+                    if isinstance(reply_data, dict):
+                        reply_comment_id = reply_data.get("comment_id")
+                        reply_content = reply_data.get("content", "").strip()
+                        
+                        if reply_comment_id and reply_content:
+                            target_comment = next((c for c in candidate_comments if c["id"] == reply_comment_id), None)
+                            if target_comment:
+                                self._add_comment_to_post(
+                                    target_post, 
+                                    user, 
+                                    reply_content, 
+                                    interaction_time,
+                                    parent_comment_id=target_comment["id"],
+                                    reply_to_user=target_comment["username"]
+                                )
+                                actions_performed.append(f"回复了 {target_comment['username']} 的评论: {reply_content}")
+            
+            # 输出执行结果
+            if actions_performed:
+                actions_str = "，".join(actions_performed)
+                print(f"{user.avatar} {user.username} 在 {interaction_time} {actions_str}")
+            else:
+                print(f"{user.avatar} {user.username} 在 {interaction_time} 浏览了帖子，但没有互动")
+        else:
+            print(f"{user.avatar} {user.username} 在 {interaction_time} 浏览了帖子，但决策失败")
+
+    def _execute_comment_reply(self, user, target_post, target_comment, interaction_time):
+        """执行回复评论操作（两层评论机制）
+        
+        Args:
+            user: 互动用户对象
+            target_post: 目标帖子
+            target_comment: 要回复的目标评论
+            interaction_time: 互动时间
+        """
+        # 避免回复自己的评论
+        if target_comment["user_id"] == user.id:
+            return
+        
+        # 调用API获取回复决策
+        decision = self._get_comment_reply_decision(user, target_post, target_comment)
+        
+        if decision:
+            action = decision.get("action", "none")
+            reply_content = decision.get("content", "")
+            
+            if action == "reply" and reply_content:
+                # 添加二级评论
+                self._add_comment_to_post(
+                    target_post, 
+                    user, 
+                    reply_content, 
+                    interaction_time,
+                    parent_comment_id=target_comment["id"],
+                    reply_to_user=target_comment["username"]
+                )
+                print(f"{user.avatar} {user.username} 在 {interaction_time} 回复了 {target_comment['username']} 的评论: {reply_content}")
+            elif action == "like":
+                # 给评论点赞（可以扩展实现）
+                print(f"{user.avatar} {user.username} 在 {interaction_time} 赞了 {target_comment['username']} 的评论")
+            else:
+                # 不执行任何操作
+                print(f"{user.avatar} {user.username} 在 {interaction_time} 看到了 {target_comment['username']} 的评论，但没有回复")
+
+    def _get_comment_reply_decision(self, user, target_post, target_comment):
+        """调用API获取评论回复决策
+        
+        Args:
+            user: 用户对象
+            target_post: 目标帖子
+            target_comment: 目标评论
+            
+        Returns:
+            dict: 包含action和content的决策字典
+        """
+        import requests
+        
+        api_url = "https://api.siliconflow.cn/v1/chat/completions"
+        api_key = "sk-kookgpxohtivpdxotdnhgdgrjqidpsnhfptsmwrspjwiiukj"
+        
+        system_prompt = "你是一个社交平台用户，正在回复别人的评论。请结合原帖子和评论的上下文，根据你的个性决定是否回复以及回复什么。只输出JSON格式。"
+        user_prompt = f"""你的个性设定：{user.comment_prompt}
+
+【原帖子上下文】
+帖子作者：{target_post['author']['name']}
+帖子内容：{target_post['content']}
+
+【你要回复的评论】
+评论者：{target_comment['username']}
+评论内容：{target_comment['content']}
+
+请决定你的回复行为：
+1. reply - 回复这条评论
+2. like - 只点赞不回复
+3. none - 不做任何操作
+
+如果你选择回复，请写出回复内容。回复应该结合原帖子和评论的上下文，体现你的个性。
+
+请以JSON格式回复，格式如下：
+{{"action": "reply|like|none", "content": "回复内容（如果不需要回复则为空）"}}"""
+        
+        payload = {
+            "model": "Pro/moonshotai/Kimi-K2.5",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 150
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        try:
+            response = requests.post(api_url, json=payload, headers=headers)
+            response.raise_for_status()
+            
+            result = response.json()
+            ai_response = result["choices"][0]["message"]["content"].strip()
+            
+            # 解析JSON响应
+            import json
+            try:
+                json_start = ai_response.find("{")
+                json_end = ai_response.rfind("}") + 1
+                if json_start >= 0 and json_end > json_start:
+                    json_str = ai_response[json_start:json_end]
+                    decision = json.loads(json_str)
+                    return decision
+            except json.JSONDecodeError:
+                pass
+            
+            # 如果JSON解析失败，根据关键词判断
+            action = "none"
+            content = ""
+            
+            if "reply" in ai_response.lower() or "回复" in ai_response:
+                action = "reply"
+                lines = ai_response.split("\n")
+                for line in lines:
+                    if "content" in line.lower() or "回复" in line:
+                        content = line.split(":")[-1].strip().strip('"').strip("'}")
+                        break
+            elif "like" in ai_response.lower() or "点赞" in ai_response:
+                action = "like"
+            
+            return {"action": action, "content": content}
+            
+        except Exception as e:
+            print(f"评论回复决策API调用失败: {str(e)}")
+            return {"action": "none", "content": ""}
+
+    def _get_full_interaction_decision(self, user, target_post, candidate_comments):
+        """完全自主决策：AI同时决定如何与帖子和评论互动
+        
+        Args:
+            user: 用户对象
+            target_post: 目标帖子
+            candidate_comments: 候选评论列表（最多3条）
+            
+        Returns:
+            dict: 包含post_action, post_comment, comment_action, selected_comment_id, reply_content
+        """
+        import requests
+        import json
+        
+        api_url = "https://api.siliconflow.cn/v1/chat/completions"
+        api_key = "sk-kookgpxohtivpdxotdnhgdgrjqidpsnhfptsmwrspjwiiukj"
+        
+        # 构建候选评论文本
+        comments_text = ""
+        if candidate_comments:
+            comments_text = "\n【热门评论列表】"
+            for i, comment in enumerate(candidate_comments, 1):
+                likes = comment.get("likes_count", 0)
+                comments_text += f"\n{i}. {comment['username']}: {comment['content']} (👍{likes}) [ID:{comment['id']}]"
+        else:
+            comments_text = "\n【暂无评论】"
+        
+        # 获取帖子统计数据
+        post_likes = len(target_post.get("interactions", {}).get("likes", []))
+        post_comments = len(target_post.get("interactions", {}).get("comments", []))
+        
+        system_prompt = "你是一个社交平台用户，正在浏览帖子。请根据你的个性和帖子内容，自主决定如何互动。你可以对多条评论进行点赞和回复。只输出JSON格式。"
+        
+        user_prompt = f"""你的个性设定：{user.comment_prompt}
+
+【帖子信息】
+作者：{target_post['author']['name']}
+内容：{target_post['content']}
+点赞数：{post_likes} · 评论数：{post_comments}
+{comments_text}
+
+请自主决定你的互动行为：
+
+【对帖子的操作】
+- "like_post": true 或 false（是否点赞帖子）
+- "comment_post": "你的评论内容"（空字符串表示不评论）
+
+【对评论的操作】
+你可以对多条评论进行点赞和回复：
+
+- "liked_comment_ids": [评论ID1, 评论ID2, ...] 或 []
+  要点赞的评论ID列表，可以为空数组表示不点赞任何评论
+
+- "reply_comments": [
+    {{"comment_id": 评论ID, "content": "回复内容"}},
+    {{"comment_id": 评论ID, "content": "回复内容"}}
+  ] 或 []
+  要回复的评论列表，每条包含comment_id和content，可以为空数组
+
+请以JSON格式回复，格式如下：
+{{
+    "like_post": true/false,
+    "comment_post": "对帖子的评论内容（不评论则为空）",
+    "liked_comment_ids": [评论ID列表],
+    "reply_comments": [
+        {{"comment_id": 评论ID, "content": "回复内容"}}
+    ]
+}}
+
+重要提示：
+1. 你可以对多条评论进行点赞和回复
+2. 例如：可以同时点赞评论1和评论2，同时回复评论3
+3. 根据你的个性和当前内容，自由决定最自然的互动方式
+4. 如果没有想互动的，可以全部留空或设为false"""
+        
+        payload = {
+            "model": "Pro/moonshotai/Kimi-K2.5",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 300
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        try:
+            response = requests.post(api_url, json=payload, headers=headers)
+            response.raise_for_status()
+            
+            result = response.json()
+            ai_response = result["choices"][0]["message"]["content"].strip()
+            
+            # 解析JSON响应
+            try:
+                json_start = ai_response.find("{")
+                json_end = ai_response.rfind("}") + 1
+                if json_start >= 0 and json_end > json_start:
+                    json_str = ai_response[json_start:json_end]
+                    decision = json.loads(json_str)
+                    
+                    # 验证评论ID是否有效
+                    if decision.get("comment_action") in ["like", "reply", "like_and_reply"]:
+                        selected_id = decision.get("selected_comment_id")
+                        valid_ids = [c["id"] for c in candidate_comments] if candidate_comments else []
+                        if selected_id not in valid_ids:
+                            print(f"AI选择了无效的评论ID: {selected_id}，有效ID: {valid_ids}")
+                            decision["comment_action"] = "none"
+                    
+                    return decision
+            except json.JSONDecodeError as e:
+                print(f"JSON解析失败: {e}, 响应: {ai_response}")
+                pass
+            
+            # 如果JSON解析失败，返回空决策
+            return {
+                "post_action": "none",
+                "post_comment": "",
+                "comment_action": "none",
+                "selected_comment_id": None,
+                "reply_content": ""
+            }
+            
+        except Exception as e:
+            print(f"完全自主决策API调用失败: {str(e)}")
+            return {
+                "post_action": "none",
+                "post_comment": "",
+                "comment_action": "none",
+                "selected_comment_id": None,
+                "reply_content": ""
+            }
+
+    def _add_like_to_comment(self, target_post, target_comment, user, interaction_time):
+        """给评论添加点赞
+        
+        Args:
+            target_post: 目标帖子
+            target_comment: 目标评论
+            user: 点赞用户
+            interaction_time: 点赞时间
+        """
+        with posts_lock:
+            # 检查是否已点赞
+            existing_like = next((like for like in target_comment.get("likes", []) if like["user_id"] == user.id), None)
+            if existing_like:
+                return
+            
+            # 添加点赞记录
+            like_record = {
+                "user_id": user.id,
+                "username": user.username,
+                "avatar": user.avatar,
+                "timestamp": interaction_time
+            }
+            
+            if "likes" not in target_comment:
+                target_comment["likes"] = []
+            target_comment["likes"].append(like_record)
+            target_comment["likes_count"] = len(target_comment["likes"])
 
     def _get_interaction_decision(self, user, target_post):
         """调用API获取互动决策
@@ -587,22 +949,27 @@ class AIScheduler:
             target_post["interactions"]["likes"].append(like_record)
             target_post["stats"]["likes"] = len(target_post["interactions"]["likes"])
 
-    def _add_comment_to_post(self, target_post, user, content, interaction_time):
-        """为帖子添加评论
+    def _add_comment_to_post(self, target_post, user, content, interaction_time, parent_comment_id=None, reply_to_user=None):
+        """为帖子添加评论（支持两层评论）
         
         Args:
             target_post: 目标帖子
             user: 评论用户
             content: 评论内容
             interaction_time: 互动时间
+            parent_comment_id: 父评论ID（如果是回复评论）
+            reply_to_user: 被回复的用户名（用于显示"回复 @用户名"）
         """
         with posts_lock:
             comment_record = {
+                "id": len(target_post["interactions"]["comments"]) + 1,
                 "user_id": user.id,
                 "username": user.username,
                 "avatar": user.avatar,
                 "content": content,
-                "timestamp": interaction_time
+                "timestamp": interaction_time,
+                "parent_id": parent_comment_id,  # null表示一级评论，有值表示二级评论
+                "reply_to": reply_to_user  # 被回复的用户名
             }
             target_post["interactions"]["comments"].append(comment_record)
             target_post["stats"]["comments"] = len(target_post["interactions"]["comments"])
@@ -765,6 +1132,51 @@ def get_users():
             "personal_signature": user.personal_signature
         })
     return jsonify(user_list)
+
+
+@app.route('/api/users/<int:user_id>', methods=['GET'])
+def get_user_detail(user_id):
+    """获取用户详细信息"""
+    user = user_map.get(user_id)
+    if not user:
+        return jsonify({"error": "用户不存在"}), 404
+    
+    # 获取该用户的所有帖子
+    user_posts = [p for p in posts if p["author"]["id"] == user_id]
+    
+    # 获取关注者列表
+    followers = []
+    for u in users:
+        if user_id in u.following:
+            followers.append({
+                "id": u.id,
+                "username": u.username,
+                "avatar": u.avatar
+            })
+    
+    # 获取关注列表的详细信息
+    following_details = []
+    for following_id in user.following:
+        following_user = user_map.get(following_id)
+        if following_user:
+            following_details.append({
+                "id": following_user.id,
+                "username": following_user.username,
+                "avatar": following_user.avatar
+            })
+    
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "avatar": user.avatar,
+        "personal_signature": user.personal_signature,
+        "posts": user_posts,
+        "posts_count": len(user_posts),
+        "followers": followers,
+        "followers_count": len(followers),
+        "following": following_details,
+        "following_count": len(following_details)
+    })
 
 
 # 运行测试
