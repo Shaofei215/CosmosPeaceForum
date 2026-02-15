@@ -15,17 +15,42 @@ CORS(app)  # 启用CORS，允许前端访问
 # 创建用户类
 class User(object):
 
-    def __init__(self, user_id, username, avatar, personal_signature, post_frequency, interaction_frequency, post_prompt, comment_prompt, following=None, following_weight=0.0):
+    def __init__(self, user_id, username, avatar, personal_signature, 
+                 monthly_logins, posts_per_login_min, posts_per_login_max,
+                 interaction_tendency, post_tendency,
+                 post_prompt, comment_prompt, following=None):
         self.id = user_id
         self.username = username
         self.avatar = avatar
         self.personal_signature = personal_signature
-        self.frequency = post_frequency
-        self.interaction_frequency = interaction_frequency
+        
+        # 新架构配置：登录机制
+        self.monthly_logins = monthly_logins  # 每月登录次数
+        self.posts_per_login_min = posts_per_login_min  # 每次登录最少看帖数
+        self.posts_per_login_max = posts_per_login_max  # 每次登录最多看帖数
+        self.interaction_tendency = interaction_tendency  # 互动系数（0-1）
+        self.post_tendency = post_tendency  # 发帖系数（0-1）
+        
+        # 保留旧配置兼容（实际使用新配置）
+        self.frequency = monthly_logins  # 兼容旧代码
+        self.interaction_frequency = monthly_logins  # 兼容旧代码
+        
         self.prompt = post_prompt
         self.comment_prompt = comment_prompt
         self.following = following or []  # 关注列表（存储用户ID）
-        self.following_weight = following_weight  # 关注权重（互动概率提升幅度）
+
+    def get_daily_login_frequency(self):
+        """计算每日平均登录频率"""
+        return self.monthly_logins / 30  # 假设每月30天
+    
+    def get_hourly_login_lambda(self):
+        """计算每小时的登录泊松分布参数λ"""
+        daily_logins = self.get_daily_login_frequency()
+        return daily_logins / 24  # 每小时的平均登录数
+    
+    def get_random_posts_per_login(self):
+        """随机决定本次登录看多少条帖子"""
+        return random.randint(self.posts_per_login_min, self.posts_per_login_max)
 
     def post(self):
         """生成帖子内容（调用硅基流动API）"""
@@ -65,15 +90,6 @@ class User(object):
             # 错误处理，返回默认内容
             print(f"API调用失败: {str(e)}")
             return f"[{self.username}] 使用prompt: {self.prompt[:50]}..."
-
-    def get_daily_frequency(self):
-        """计算每日平均发帖频率"""
-        return self.frequency / 30  # 假设每月30天
-
-    def get_hourly_lambda(self):
-        """计算每小时的泊松分布参数λ"""
-        daily_freq = self.get_daily_frequency()
-        return daily_freq / 24  # 每小时的平均发帖数
 
     def poisson_probability(self, k, lambda_):
         """计算泊松分布的概率质量函数
@@ -133,15 +149,6 @@ class User(object):
         
         return -math.log(u) / lambda_
 
-    def get_daily_interaction_frequency(self):
-        """计算每日平均互动频率"""
-        return self.interaction_frequency / 30  # 假设每月30天
-
-    def get_hourly_interaction_lambda(self):
-        """计算每小时的互动泊松分布参数λ"""
-        daily_freq = self.get_daily_interaction_frequency()
-        return daily_freq / 24  # 每小时的平均互动数
-
 
 # 导入用户信息
 users = []
@@ -152,13 +159,15 @@ with open("ai_users_config.json", "r", encoding= "UTF-8") as USER_CONFIG:
             user["id"],
             user["username"],
             user["avatar"],
-            user["personal_signture"],
-            user["post_frequency"],
-            user["interaction_frequency"],
+            user["personal_signature"],
+            user["monthly_logins"],
+            user["posts_per_login_min"],
+            user["posts_per_login_max"],
+            user["interaction_tendency"],
+            user["post_tendency"],
             user["post_prompt"],
             user["comment_prompt"],
-            user.get("following", []),
-            user.get("following_weight", 0.0))
+            user.get("following", []))
         )
 
 # 存储帖子数据
@@ -169,6 +178,80 @@ posts_lock = threading.Lock()
 
 # 存储用户对象映射（用于快速查找）
 user_map = {user.id: user for user in users}
+
+# 初始化帖子（创建几条系统欢迎帖，让社区有内容可供互动）
+def initialize_posts():
+    """初始化帖子，创建几条系统欢迎帖"""
+    global posts
+    
+    initial_posts = [
+        {
+            "id": 1,
+            "author": {
+                "id": 0,
+                "name": "黑塔空间站官方",
+                "avatar": "🛰️",
+                "personal_signature": "黑塔女士的空间站"
+            },
+            "content": "🎉 黑塔社区正式启用啦！欢迎大家在这里分享生活、交流心得~",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "stats": {
+                "likes": 0,
+                "comments": 0,
+                "shares": 0
+            },
+            "interactions": {
+                "likes": [],
+                "comments": []
+            }
+        },
+        {
+            "id": 2,
+            "author": {
+                "id": 0,
+                "name": "星穹列车官方",
+                "avatar": "🚂",
+                "personal_signature": "愿此行，终抵群星！"
+            },
+            "content": "星穹列车已正式入驻黑塔社区。愿此行，终抵群星！",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "stats": {
+                "likes": 0,
+                "comments": 0,
+                "shares": 0
+            },
+            "interactions": {
+                "likes": [],
+                "comments": []
+            }
+        },
+        {
+            "id": 3,
+            "author": {
+                "id": 0,
+                "name": "贝洛伯格政府官方",
+                "avatar": "🏛️",
+                "personal_signature": "秩序与未来并行。"
+            },
+            "content": "贝洛伯格政府官方黑塔账号已开通。贝洛伯格永远欢迎每一位访客，愿冰雪之城带给你温暖与希望。❄️",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "stats": {
+                "likes": 0,
+                "comments": 0,
+                "shares": 0
+            },
+            "interactions": {
+                "likes": [],
+                "comments": []
+            }
+        }
+    ]
+    
+    posts = initial_posts
+    print(f"✅ 已初始化 {len(posts)} 条系统欢迎帖")
+
+# 调用初始化
+initialize_posts()
 
 
 class AIScheduler:
@@ -265,13 +348,15 @@ class AIScheduler:
         
         print("用户信息:")
         for user in self.users:
-            daily_freq = user.get_daily_frequency()
-            hourly_lambda = user.get_hourly_lambda()  # 每小时泊松分布参数λ
-            # 计算每小时发帖0次、1次、2次的概率
+            daily_login = user.get_daily_login_frequency()
+            hourly_lambda = user.get_hourly_login_lambda()
             p0 = user.poisson_probability(0, hourly_lambda)
             p1 = user.poisson_probability(1, hourly_lambda)
             p2 = user.poisson_probability(2, hourly_lambda)
-            print(f"{user.avatar} {user.username} - 每月发帖: {user.frequency}帖 - 每日平均: {daily_freq:.2f}帖 - 每小时λ: {hourly_lambda:.4f} - P(0): {p0:.4f}, P(1): {p1:.4f}, P(2+): {1-p0-p1:.4f}")
+            print(f"{user.avatar} {user.username} - 每月登录: {user.monthly_logins}次 - "
+                  f"每日平均: {daily_login:.2f}次 - 看帖: {user.posts_per_login_min}-{user.posts_per_login_max}条 - "
+                  f"互动系数: {user.interaction_tendency} - 发帖系数: {user.post_tendency} - "
+                  f"每小时λ: {hourly_lambda:.4f}")
         
         print("\n=== 开始随机发帖 ===")
         print("按Ctrl+C停止测试\n")
@@ -287,522 +372,6 @@ class AIScheduler:
             # 停止统计模块
             self.stop_statistics()
     
-    def _execute_post_poisson(self, user, simulation_time):
-        """执行基于泊松过程的发帖操作"""
-        # 计算显示的发帖时间（基于执行发帖操作时的系统时间，而非API返回时间）
-        if self.test_mode:
-            # 测试模式：test_hour_duration秒模拟1小时
-            # 计算模拟的小时数和分钟数
-            simulated_hours = int(simulation_time / self.test_hour_duration)
-            remaining_seconds = simulation_time % self.test_hour_duration
-            simulated_minutes = int((remaining_seconds / self.test_hour_duration) * 60)
-            display_hour = simulated_hours % 24  # 小时部分模24，超过23时归零
-            post_time = f"{display_hour:02d}:{simulated_minutes:02d}"
-        else:
-            # 正常模式：使用执行发帖操作时的实际系统时间
-            post_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 在API调用前记录统计（避免API延迟影响统计准确性）
-        self.record_post_statistics(user.id)
-        
-        # 生成帖子内容
-        content = user.post()
-        # 输出发帖信息（显示的是执行发帖操作时的时间，而非API返回时间）
-        print(f"{user.avatar} {user.username} 在 {post_time} 发帖: {content}")
-        
-        # 存储帖子到全局posts列表
-        global posts
-        post_id = len(posts) + 1
-        post = {
-            "id": post_id,
-            "author": {
-                        "id": user.id,
-                        "name": user.username,
-                        "avatar": user.avatar,
-                        "personal_signature": user.personal_signature
-                    },
-            "content": content,
-            "timestamp": post_time,
-            "stats": {
-                "likes": 0,
-                "comments": 0,
-                "shares": 0
-            },
-            "interactions": {
-                "likes": [],  # 点赞列表，存储点赞用户的信息
-                "comments": []  # 评论列表，存储评论详情
-            }
-        }
-        posts.append(post)
-
-    def _check_and_trigger_interaction(self, user, simulation_time, executor, pending_futures):
-        """检查并触发互动操作
-        
-        Args:
-            user: 当前用户对象
-            simulation_time: 当前模拟时间
-            executor: 线程池执行器
-            pending_futures: 待处理任务字典
-        """
-        # 计算互动概率（使用泊松分布）
-        if self.test_mode:
-            # 测试模式：test_hour_duration秒模拟1小时
-            time_scale_factor = 3600 / self.test_hour_duration
-            lambda_per_second = user.get_hourly_interaction_lambda() * time_scale_factor / 3600
-        else:
-            # 正常模式
-            lambda_per_second = user.get_hourly_interaction_lambda() / 3600
-        
-        # 生成指数分布的时间间隔，判断是否触发互动
-        interval = user.generate_exponential_interval(lambda_per_second)
-        
-        # 如果生成的间隔很小（在合理范围内），则触发互动
-        # 这里使用一个阈值来判断是否触发，可以根据需要调整
-        threshold = 3600 if not self.test_mode else self.test_hour_duration  # 正常模式1小时，测试模式使用配置的缩放
-        
-        if interval < threshold and len(posts) > 0:
-            # 获取最新的一条帖子进行互动
-            target_post = posts[-1]
-            
-            # 避免用户对自己的帖子互动
-            if target_post["author"]["id"] != user.id:
-                # 提交互动任务到线程池
-                future = executor.submit(self._execute_interaction, user, target_post, simulation_time)
-                pending_futures[f"interaction_{user.id}_{simulation_time}"] = future
-
-    def _execute_interaction(self, user, target_post, simulation_time):
-        """执行互动操作（点赞、评论或点赞并评论）
-        
-        Args:
-            user: 互动用户对象
-            target_post: 目标帖子
-            simulation_time: 当前模拟时间
-        """
-        # 计算互动时间
-        if self.test_mode:
-            simulated_hours = int(simulation_time / self.test_hour_duration)
-            remaining_seconds = simulation_time % self.test_hour_duration
-            simulated_minutes = int((remaining_seconds / self.test_hour_duration) * 60)
-            display_hour = simulated_hours % 24
-            interaction_time = f"{display_hour:02d}:{simulated_minutes:02d}"
-        else:
-            interaction_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 调用API进行互动决策
-        decision = self._get_interaction_decision(user, target_post)
-        
-        # 获取帖子作者名称
-        author_name = target_post.get('author', {}).get('name', '未知用户')
-        
-        if decision:
-            action = decision.get("action", "none")
-            comment_content = decision.get("content", "")
-            
-            # 执行相应的互动操作
-            if action == "like":
-                self._add_like_to_post(target_post, user, interaction_time)
-                print(f"{user.avatar} {user.username} 在 {interaction_time} 赞了 {author_name} 的帖子")
-                
-            elif action == "comment":
-                self._add_comment_to_post(target_post, user, comment_content, interaction_time)
-                print(f"{user.avatar} {user.username} 在 {interaction_time} 评论了 {author_name} 的帖子: {comment_content}")
-                
-            elif action == "like_and_comment":
-                self._add_like_to_post(target_post, user, interaction_time)
-                self._add_comment_to_post(target_post, user, comment_content, interaction_time)
-                print(f"{user.avatar} {user.username} 在 {interaction_time} 赞并评论了 {author_name} 的帖子: {comment_content}")
-                
-            elif action == "none" or action == "":
-                # 不执行任何互动，但打印浏览记录
-                print(f"{user.avatar} {user.username} 在 {interaction_time} 看到了 {author_name} 的帖子，但不做任何互动")
-
-    def _execute_interaction_event(self, user, simulation_time):
-        """执行独立的互动事件（完全自主决策版本 - 4独立开关）
-        
-        AI同时看到帖子和热门评论，通过4个独立开关自主决定如何互动：
-        - like_post: 是否点赞帖子
-        - comment_post: 是否评论帖子（内容）
-        - like_comment: 是否点赞某条评论
-        - reply_comment: 是否回复某条评论（包含comment_id和content）
-        
-        支持所有16种组合！
-        
-        Args:
-            user: 互动用户对象
-            simulation_time: 当前模拟时间
-        """
-        # 计算互动时间
-        if self.test_mode:
-            simulated_hours = int(simulation_time / self.test_hour_duration)
-            remaining_seconds = simulation_time % self.test_hour_duration
-            simulated_minutes = int((remaining_seconds / self.test_hour_duration) * 60)
-            display_hour = simulated_hours % 24
-            interaction_time = f"{display_hour:02d}:{simulated_minutes:02d}"
-        else:
-            interaction_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 随机选择一条帖子进行互动（排除自己的帖子）
-        with posts_lock:
-            available_posts = [p for p in posts if p["author"]["id"] != user.id]
-            
-        if not available_posts:
-            print(f"{user.avatar} {user.username} 在 {interaction_time} 浏览了社区，但没有可互动的帖子")
-            return
-        
-        # 从最近10条帖子中选择，支持关注权重
-        recent_posts = available_posts[-10:]
-        
-        if user.following and user.following_weight > 0:
-            # 使用加权随机选择
-            weights = []
-            for post in recent_posts:
-                author_id = post["author"]["id"]
-                if author_id in user.following:
-                    # 被关注者的帖子权重提升
-                    weights.append(1.0 + user.following_weight)
-                else:
-                    weights.append(1.0)
-            
-            # 加权随机选择
-            import random
-            target_post = random.choices(recent_posts, weights=weights, k=1)[0]
-        else:
-            # 普通随机选择
-            import random
-            target_post = random.choice(recent_posts)
-        
-        # 获取该帖子的一级评论（parent_id为null的评论）
-        top_level_comments = [c for c in target_post.get("interactions", {}).get("comments", []) if c.get("parent_id") is None]
-        
-        # 准备候选评论（最多3条热门评论）
-        candidate_comments = []
-        if top_level_comments:
-            # 按点赞数排序，选择前3条
-            sorted_comments = sorted(top_level_comments, key=lambda c: c.get("likes_count", 0), reverse=True)
-            candidate_comments = sorted_comments[:3]
-        
-        # 调用AI进行完全自主决策（4独立开关）
-        decision = self._get_full_interaction_decision(user, target_post, candidate_comments)
-        
-        if decision:
-            actions_performed = []
-            
-            # === 开关1: 点赞帖子 ===
-            if decision.get("like_post", False):
-                self._add_like_to_post(target_post, user, interaction_time)
-                actions_performed.append("赞了帖子")
-            
-            # === 开关2: 评论帖子 ===
-            post_comment = decision.get("comment_post", "").strip()
-            if post_comment:
-                self._add_comment_to_post(target_post, user, post_comment, interaction_time)
-                actions_performed.append(f"评论了帖子: {post_comment}")
-            
-            # === 开关3: 点赞多条评论 ===
-            liked_comment_ids = decision.get("liked_comment_ids", [])
-            if liked_comment_ids and isinstance(liked_comment_ids, list):
-                for comment_id in liked_comment_ids:
-                    target_comment = next((c for c in candidate_comments if c["id"] == comment_id), None)
-                    if target_comment:
-                        self._add_like_to_comment(target_post, target_comment, user, interaction_time)
-                        actions_performed.append(f"赞了 {target_comment['username']} 的评论")
-            
-            # === 开关4: 回复多条评论 ===
-            reply_list = decision.get("reply_comments", [])
-            if reply_list and isinstance(reply_list, list):
-                for reply_data in reply_list:
-                    if isinstance(reply_data, dict):
-                        reply_comment_id = reply_data.get("comment_id")
-                        reply_content = reply_data.get("content", "").strip()
-                        
-                        if reply_comment_id and reply_content:
-                            target_comment = next((c for c in candidate_comments if c["id"] == reply_comment_id), None)
-                            if target_comment:
-                                self._add_comment_to_post(
-                                    target_post, 
-                                    user, 
-                                    reply_content, 
-                                    interaction_time,
-                                    parent_comment_id=target_comment["id"],
-                                    reply_to_user=target_comment["username"]
-                                )
-                                actions_performed.append(f"回复了 {target_comment['username']} 的评论: {reply_content}")
-            
-            # 输出执行结果
-            if actions_performed:
-                actions_str = "，".join(actions_performed)
-                print(f"{user.avatar} {user.username} 在 {interaction_time} {actions_str}")
-            else:
-                print(f"{user.avatar} {user.username} 在 {interaction_time} 浏览了帖子，但没有互动")
-        else:
-            print(f"{user.avatar} {user.username} 在 {interaction_time} 浏览了帖子，但决策失败")
-
-    def _execute_comment_reply(self, user, target_post, target_comment, interaction_time):
-        """执行回复评论操作（两层评论机制）
-        
-        Args:
-            user: 互动用户对象
-            target_post: 目标帖子
-            target_comment: 要回复的目标评论
-            interaction_time: 互动时间
-        """
-        # 避免回复自己的评论
-        if target_comment["user_id"] == user.id:
-            return
-        
-        # 调用API获取回复决策
-        decision = self._get_comment_reply_decision(user, target_post, target_comment)
-        
-        if decision:
-            action = decision.get("action", "none")
-            reply_content = decision.get("content", "")
-            
-            if action == "reply" and reply_content:
-                # 添加二级评论
-                self._add_comment_to_post(
-                    target_post, 
-                    user, 
-                    reply_content, 
-                    interaction_time,
-                    parent_comment_id=target_comment["id"],
-                    reply_to_user=target_comment["username"]
-                )
-                print(f"{user.avatar} {user.username} 在 {interaction_time} 回复了 {target_comment['username']} 的评论: {reply_content}")
-            elif action == "like":
-                # 给评论点赞（可以扩展实现）
-                print(f"{user.avatar} {user.username} 在 {interaction_time} 赞了 {target_comment['username']} 的评论")
-            else:
-                # 不执行任何操作
-                print(f"{user.avatar} {user.username} 在 {interaction_time} 看到了 {target_comment['username']} 的评论，但没有回复")
-
-    def _get_comment_reply_decision(self, user, target_post, target_comment):
-        """调用API获取评论回复决策
-        
-        Args:
-            user: 用户对象
-            target_post: 目标帖子
-            target_comment: 目标评论
-            
-        Returns:
-            dict: 包含action和content的决策字典
-        """
-        import requests
-        
-        api_url = "https://api.siliconflow.cn/v1/chat/completions"
-        api_key = "sk-kookgpxohtivpdxotdnhgdgrjqidpsnhfptsmwrspjwiiukj"
-        
-        system_prompt = "你是一个社交平台用户，正在回复别人的评论。请结合原帖子和评论的上下文，根据你的个性决定是否回复以及回复什么。只输出JSON格式。"
-        user_prompt = f"""你的个性设定：{user.comment_prompt}
-
-【原帖子上下文】
-帖子作者：{target_post['author']['name']}
-帖子内容：{target_post['content']}
-
-【你要回复的评论】
-评论者：{target_comment['username']}
-评论内容：{target_comment['content']}
-
-请决定你的回复行为：
-1. reply - 回复这条评论
-2. like - 只点赞不回复
-3. none - 不做任何操作
-
-如果你选择回复，请写出回复内容。回复应该结合原帖子和评论的上下文，体现你的个性。
-
-请以JSON格式回复，格式如下：
-{{"action": "reply|like|none", "content": "回复内容（如果不需要回复则为空）"}}"""
-        
-        payload = {
-            "model": "Pro/moonshotai/Kimi-K2.5",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "temperature": 0.7,
-            "max_tokens": 150
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        
-        try:
-            response = requests.post(api_url, json=payload, headers=headers)
-            response.raise_for_status()
-            
-            result = response.json()
-            ai_response = result["choices"][0]["message"]["content"].strip()
-            
-            # 解析JSON响应
-            import json
-            try:
-                json_start = ai_response.find("{")
-                json_end = ai_response.rfind("}") + 1
-                if json_start >= 0 and json_end > json_start:
-                    json_str = ai_response[json_start:json_end]
-                    decision = json.loads(json_str)
-                    return decision
-            except json.JSONDecodeError:
-                pass
-            
-            # 如果JSON解析失败，根据关键词判断
-            action = "none"
-            content = ""
-            
-            if "reply" in ai_response.lower() or "回复" in ai_response:
-                action = "reply"
-                lines = ai_response.split("\n")
-                for line in lines:
-                    if "content" in line.lower() or "回复" in line:
-                        content = line.split(":")[-1].strip().strip('"').strip("'}")
-                        break
-            elif "like" in ai_response.lower() or "点赞" in ai_response:
-                action = "like"
-            
-            return {"action": action, "content": content}
-            
-        except Exception as e:
-            print(f"评论回复决策API调用失败: {str(e)}")
-            return {"action": "none", "content": ""}
-
-    def _get_full_interaction_decision(self, user, target_post, candidate_comments):
-        """完全自主决策：AI同时决定如何与帖子和评论互动
-        
-        Args:
-            user: 用户对象
-            target_post: 目标帖子
-            candidate_comments: 候选评论列表（最多3条）
-            
-        Returns:
-            dict: 包含post_action, post_comment, comment_action, selected_comment_id, reply_content
-        """
-        import requests
-        import json
-        
-        api_url = "https://api.siliconflow.cn/v1/chat/completions"
-        api_key = "sk-kookgpxohtivpdxotdnhgdgrjqidpsnhfptsmwrspjwiiukj"
-        
-        # 构建候选评论文本
-        comments_text = ""
-        if candidate_comments:
-            comments_text = "\n【热门评论列表】"
-            for i, comment in enumerate(candidate_comments, 1):
-                likes = comment.get("likes_count", 0)
-                comments_text += f"\n{i}. {comment['username']}: {comment['content']} (👍{likes}) [ID:{comment['id']}]"
-        else:
-            comments_text = "\n【暂无评论】"
-        
-        # 获取帖子统计数据
-        post_likes = len(target_post.get("interactions", {}).get("likes", []))
-        post_comments = len(target_post.get("interactions", {}).get("comments", []))
-        
-        system_prompt = "你是一个社交平台用户，正在浏览帖子。请根据你的个性和帖子内容，自主决定如何互动。你可以对多条评论进行点赞和回复。只输出JSON格式。"
-        
-        user_prompt = f"""你的个性设定：{user.comment_prompt}
-
-【帖子信息】
-作者：{target_post['author']['name']}
-内容：{target_post['content']}
-点赞数：{post_likes} · 评论数：{post_comments}
-{comments_text}
-
-请自主决定你的互动行为：
-
-【对帖子的操作】
-- "like_post": true 或 false（是否点赞帖子）
-- "comment_post": "你的评论内容"（空字符串表示不评论）
-
-【对评论的操作】
-你可以对多条评论进行点赞和回复：
-
-- "liked_comment_ids": [评论ID1, 评论ID2, ...] 或 []
-  要点赞的评论ID列表，可以为空数组表示不点赞任何评论
-
-- "reply_comments": [
-    {{"comment_id": 评论ID, "content": "回复内容"}},
-    {{"comment_id": 评论ID, "content": "回复内容"}}
-  ] 或 []
-  要回复的评论列表，每条包含comment_id和content，可以为空数组
-
-请以JSON格式回复，格式如下：
-{{
-    "like_post": true/false,
-    "comment_post": "对帖子的评论内容（不评论则为空）",
-    "liked_comment_ids": [评论ID列表],
-    "reply_comments": [
-        {{"comment_id": 评论ID, "content": "回复内容"}}
-    ]
-}}
-
-重要提示：
-1. 你可以对多条评论进行点赞和回复
-2. 例如：可以同时点赞评论1和评论2，同时回复评论3
-3. 根据你的个性和当前内容，自由决定最自然的互动方式
-4. 如果没有想互动的，可以全部留空或设为false"""
-        
-        payload = {
-            "model": "Pro/moonshotai/Kimi-K2.5",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "temperature": 0.7,
-            "max_tokens": 300
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        
-        try:
-            response = requests.post(api_url, json=payload, headers=headers)
-            response.raise_for_status()
-            
-            result = response.json()
-            ai_response = result["choices"][0]["message"]["content"].strip()
-            
-            # 解析JSON响应
-            try:
-                json_start = ai_response.find("{")
-                json_end = ai_response.rfind("}") + 1
-                if json_start >= 0 and json_end > json_start:
-                    json_str = ai_response[json_start:json_end]
-                    decision = json.loads(json_str)
-                    
-                    # 验证评论ID是否有效
-                    if decision.get("comment_action") in ["like", "reply", "like_and_reply"]:
-                        selected_id = decision.get("selected_comment_id")
-                        valid_ids = [c["id"] for c in candidate_comments] if candidate_comments else []
-                        if selected_id not in valid_ids:
-                            print(f"AI选择了无效的评论ID: {selected_id}，有效ID: {valid_ids}")
-                            decision["comment_action"] = "none"
-                    
-                    return decision
-            except json.JSONDecodeError as e:
-                print(f"JSON解析失败: {e}, 响应: {ai_response}")
-                pass
-            
-            # 如果JSON解析失败，返回空决策
-            return {
-                "post_action": "none",
-                "post_comment": "",
-                "comment_action": "none",
-                "selected_comment_id": None,
-                "reply_content": ""
-            }
-            
-        except Exception as e:
-            print(f"完全自主决策API调用失败: {str(e)}")
-            return {
-                "post_action": "none",
-                "post_comment": "",
-                "comment_action": "none",
-                "selected_comment_id": None,
-                "reply_content": ""
-            }
-
     def _add_like_to_comment(self, target_post, target_comment, user, interaction_time):
         """给评论添加点赞
         
@@ -830,100 +399,6 @@ class AIScheduler:
                 target_comment["likes"] = []
             target_comment["likes"].append(like_record)
             target_comment["likes_count"] = len(target_comment["likes"])
-
-    def _get_interaction_decision(self, user, target_post):
-        """调用API获取互动决策
-        
-        Args:
-            user: 用户对象
-            target_post: 目标帖子
-            
-        Returns:
-            dict: 包含action和content的决策字典
-        """
-        import requests
-        
-        api_url = "https://api.siliconflow.cn/v1/chat/completions"
-        api_key = "sk-kookgpxohtivpdxotdnhgdgrjqidpsnhfptsmwrspjwiiukj"
-        
-        system_prompt = "你是一个社交平台用户，正在浏览帖子并决定是否互动。请根据你的个性和帖子内容，做出互动决策。只输出JSON格式。"
-        user_prompt = f"""你的个性设定：{user.comment_prompt}
-
-帖子作者：{target_post['author']['name']}
-帖子内容：{target_post['content']}
-
-请决定你的互动行为，从以下选项中选择：
-1. like - 仅点赞
-2. comment - 仅评论
-3. like_and_comment - 点赞并评论
-4. none - 不互动
-
-请以JSON格式回复，格式如下：
-{{"action": "like|comment|like_and_comment|none", "content": "评论内容（如果不需要评论则为空）"}}"""
-        
-        payload = {
-            "model": "Pro/moonshotai/Kimi-K2.5",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "temperature": 0.7,
-            "max_tokens": 150
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        
-        try:
-            response = requests.post(api_url, json=payload, headers=headers)
-            response.raise_for_status()
-            
-            result = response.json()
-            ai_response = result["choices"][0]["message"]["content"].strip()
-            
-            # 解析JSON响应
-            import json
-            # 尝试提取JSON部分（模型可能会返回额外的文本）
-            try:
-                # 查找JSON开始和结束的位置
-                json_start = ai_response.find("{")
-                json_end = ai_response.rfind("}") + 1
-                if json_start >= 0 and json_end > json_start:
-                    json_str = ai_response[json_start:json_end]
-                    decision = json.loads(json_str)
-                    return decision
-            except json.JSONDecodeError:
-                pass
-            
-            # 如果JSON解析失败，根据关键词判断
-            action = "none"
-            content = ""
-            
-            if "like_and_comment" in ai_response.lower() or ("点赞" in ai_response and "评论" in ai_response):
-                action = "like_and_comment"
-                # 尝试提取评论内容
-                lines = ai_response.split("\n")
-                for line in lines:
-                    if "content" in line.lower() or "评论" in line:
-                        content = line.split(":")[-1].strip().strip('"').strip("'}")
-                        break
-            elif "comment" in ai_response.lower() or "评论" in ai_response:
-                action = "comment"
-                lines = ai_response.split("\n")
-                for line in lines:
-                    if "content" in line.lower() or "评论" in line:
-                        content = line.split(":")[-1].strip().strip('"').strip("'}")
-                        break
-            elif "like" in ai_response.lower() or "点赞" in ai_response:
-                action = "like"
-            
-            return {"action": action, "content": content}
-            
-        except Exception as e:
-            print(f"互动决策API调用失败: {str(e)}")
-            return {"action": "none", "content": ""}
 
     def _add_like_to_post(self, target_post, user, interaction_time):
         """为帖子添加点赞
@@ -974,47 +449,351 @@ class AIScheduler:
             target_post["interactions"]["comments"].append(comment_record)
             target_post["stats"]["comments"] = len(target_post["interactions"]["comments"])
 
-    def run_simulation(self):
-        """运行模拟（基于泊松过程）- 使用多线程避免API阻塞
+    def _execute_login_session(self, user, simulation_time):
+        """执行一次登录会话（新架构核心方法）
         
-        同时调度发帖和互动事件，两者有独立的时间线
+        模拟用户登录 -> 浏览帖子 -> 决策互动/发帖 -> 登出
+        
+        Args:
+            user: 用户对象
+            simulation_time: 当前模拟时间
         """
-        # 初始化每个用户的下次发帖时间和下次互动时间
-        next_post_times = {}
-        next_interaction_times = {}
+        # 计算登录时间
+        if self.test_mode:
+            simulated_hours = int(simulation_time / self.test_hour_duration)
+            remaining_seconds = simulation_time % self.test_hour_duration
+            simulated_minutes = int((remaining_seconds / self.test_hour_duration) * 60)
+            display_hour = simulated_hours % 24
+            login_time = f"{display_hour:02d}:{simulated_minutes:02d}"
+        else:
+            login_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 1. 随机决定本次登录看多少条帖子
+        posts_to_view = user.get_random_posts_per_login()
+        
+        # 2. 获取最近N条帖子（排除自己的）
+        with posts_lock:
+            available_posts = [p for p in posts if p["author"]["id"] != user.id]
+        
+        if not available_posts:
+            print(f"{user.avatar} {user.username} 在 {login_time} 登录了，但社区没有可浏览的帖子")
+            return
+        
+        # 获取最近posts_to_view条帖子
+        recent_posts = available_posts[-posts_to_view:]
+        
+        # 3. 为每个帖子准备候选评论
+        posts_with_comments = []
+        for post in recent_posts:
+            top_level_comments = [c for c in post.get("interactions", {}).get("comments", []) if c.get("parent_id") is None]
+            candidate_comments = []
+            if top_level_comments:
+                sorted_comments = sorted(top_level_comments, key=lambda c: c.get("likes_count", 0), reverse=True)
+                candidate_comments = sorted_comments[:3]
+            posts_with_comments.append({
+                "post": post,
+                "comments": candidate_comments
+            })
+        
+        # 4. 调用AI进行批量决策
+        decision = self._get_login_session_decision(user, posts_with_comments)
+        
+        if not decision:
+            print(f"{user.avatar} {user.username} 在 {login_time} 登录了，但决策失败")
+            return
+        
+        # 5. 执行决策
+        actions_performed = []
+        
+        # 5.1 执行帖子互动
+        post_interactions = decision.get("post_interactions", [])
+        for interaction in post_interactions:
+            post_id = interaction.get("post_id")
+            action = interaction.get("action", "none")
+            content = interaction.get("content", "").strip()
+            
+            # 找到对应的帖子
+            target_post = next((p for p in recent_posts if p["id"] == post_id), None)
+            if not target_post:
+                continue
+            
+            if action == "like":
+                self._add_like_to_post(target_post, user, login_time)
+                actions_performed.append(f"赞了 {target_post['author']['name']} 的帖子")
+            elif action == "comment" and content:
+                self._add_comment_to_post(target_post, user, content, login_time)
+                actions_performed.append(f"评论了 {target_post['author']['name']} 的帖子: {content}")
+            elif action == "like_and_comment" and content:
+                self._add_like_to_post(target_post, user, login_time)
+                self._add_comment_to_post(target_post, user, content, login_time)
+                actions_performed.append(f"赞并评论了 {target_post['author']['name']} 的帖子: {content}")
+        
+        # 5.2 执行评论互动
+        comment_interactions = decision.get("comment_interactions", [])
+        for interaction in comment_interactions:
+            post_id = interaction.get("post_id")
+            comment_id = interaction.get("comment_id")
+            action = interaction.get("action", "none")
+            content = interaction.get("content", "").strip()
+            
+            # 找到对应的帖子和评论
+            post_data = next((pd for pd in posts_with_comments if pd["post"]["id"] == post_id), None)
+            if not post_data:
+                continue
+            
+            target_comment = next((c for c in post_data["comments"] if c["id"] == comment_id), None)
+            if not target_comment:
+                continue
+            
+            if action == "like":
+                self._add_like_to_comment(post_data["post"], target_comment, user, login_time)
+                actions_performed.append(f"赞了 {target_comment['username']} 的评论")
+            elif action == "reply" and content:
+                self._add_comment_to_post(
+                    post_data["post"],
+                    user,
+                    content,
+                    login_time,
+                    parent_comment_id=target_comment["id"],
+                    reply_to_user=target_comment["username"]
+                )
+                actions_performed.append(f"回复了 {target_comment['username']} 的评论: {content}")
+            elif action == "like_and_reply" and content:
+                self._add_like_to_comment(post_data["post"], target_comment, user, login_time)
+                self._add_comment_to_post(
+                    post_data["post"],
+                    user,
+                    content,
+                    login_time,
+                    parent_comment_id=target_comment["id"],
+                    reply_to_user=target_comment["username"]
+                )
+                actions_performed.append(f"赞并回复了 {target_comment['username']} 的评论: {content}")
+        
+        # 5.3 执行发帖（如果有）
+        new_post = decision.get("new_post", {})
+        if new_post and new_post.get("should_post", False):
+            post_content = new_post.get("content", "").strip()
+            if post_content:
+                self.record_post_statistics(user.id)
+                
+                # 创建新帖子
+                with posts_lock:
+                    new_post_obj = {
+                        "id": len(posts) + 1,
+                        "author": {
+                            "id": user.id,
+                            "name": user.username,
+                            "avatar": user.avatar
+                        },
+                        "content": post_content,
+                        "timestamp": login_time,
+                        "interactions": {
+                            "likes": [],
+                            "comments": []
+                        },
+                        "stats": {
+                            "likes": 0,
+                            "comments": 0
+                        }
+                    }
+                    posts.append(new_post_obj)
+                
+                actions_performed.append(f"发布了新帖子: {post_content}")
+        
+        # 6. 输出登录会话结果
+        if actions_performed:
+            actions_str = "，".join(actions_performed)
+            print(f"{user.avatar} {user.username} 在 {login_time} 登录并: {actions_str}")
+        else:
+            print(f"{user.avatar} {user.username} 在 {login_time} 登录了，但只是浏览，没有互动")
+
+    def _get_login_session_decision(self, user, posts_with_comments):
+        """调用API获取登录会话的批量决策
+        
+        Args:
+            user: 用户对象
+            posts_with_comments: 包含帖子和评论的列表
+            
+        Returns:
+            dict: 包含post_interactions, comment_interactions, new_post的决策字典
+        """
+        import requests
+        import json
+        
+        api_url = "https://api.siliconflow.cn/v1/chat/completions"
+        api_key = "sk-kookgpxohtivpdxotdnhgdgrjqidpsnhfptsmwrspjwiiukj"
+        
+        # 构建帖子列表文本，标记关注状态
+        posts_text = ""
+        for i, post_data in enumerate(posts_with_comments, 1):
+            post = post_data["post"]
+            comments = post_data["comments"]
+            likes = len(post.get("interactions", {}).get("likes", []))
+            comments_count = len(post.get("interactions", {}).get("comments", []))
+            
+            # 检查是否是关注的人
+            is_following = post['author']['id'] in user.following
+            following_tag = " 【你关注的】" if is_following else ""
+            
+            posts_text += f"\n\n【帖子{i}】ID:{post['id']}{following_tag}"
+            posts_text += f"\n作者：{post['author']['name']}"
+            posts_text += f"\n内容：{post['content']}"
+            posts_text += f"\n点赞：{likes} · 评论：{comments_count}"
+            
+            if comments:
+                posts_text += "\n热门评论："
+                for j, comment in enumerate(comments, 1):
+                    comment_likes = comment.get("likes_count", 0)
+                    posts_text += f"\n  {j}. {comment['username']}: {comment['content']} (👍{comment_likes}) [评论ID:{comment['id']}]"
+        
+        # 构建关注列表文本
+        following_text = ""
+        if user.following:
+            following_names = []
+            for uid in user.following:
+                # 从user_map中查找用户名
+                followed_user = user_map.get(uid)
+                if followed_user:
+                    following_names.append(followed_user.username)
+            if following_names:
+                following_text = f"\n你关注的人：{', '.join(following_names)}"
+        
+        system_prompt = "你是一个社交平台用户，正在浏览多个帖子。请根据你的个性、互动系数和发帖系数，批量决定如何互动。你会优先关注你关注的人的动态。只输出JSON格式。"
+        
+        user_prompt = f"""你的个性设定：{user.comment_prompt}
+
+你的互动系数：{user.interaction_tendency}（0.0-1.0，越高越喜欢互动）
+你的发帖系数：{user.post_tendency}（0.0-1.0，越高越喜欢发帖）
+{following_text}
+
+系数参考：
+- 0.0-0.3：很少互动/发帖，喜欢潜水浏览
+- 0.4-0.6：偶尔互动/发帖，看心情
+- 0.7-1.0：活跃互动/发帖，话痨型
+
+你看到了以下{len(posts_with_comments)}条帖子：{posts_text}
+
+请批量决定你的行为：
+
+【对帖子的互动】post_interactions数组
+每个元素包含：
+- post_id: 帖子ID
+- action: "like"(点赞) / "comment"(评论) / "like_and_comment"(点赞+评论) / "none"(跳过)
+- content: 评论内容（如果action是comment或like_and_comment）
+
+【对评论的互动】comment_interactions数组
+每个元素包含：
+- post_id: 所属帖子ID
+- comment_id: 评论ID
+- action: "like"(点赞) / "reply"(回复) / "like_and_reply"(点赞+回复) / "none"(跳过)
+- content: 回复内容（如果action是reply或like_and_reply）
+
+【是否发帖】new_post对象
+- should_post: true/false（基于你的发帖系数{user.post_tendency}决定）
+- content: 帖子内容（如果should_post为true）
+
+请以JSON格式回复：
+{{
+    "post_interactions": [
+        {{"post_id": 1, "action": "like", "content": ""}},
+        {{"post_id": 2, "action": "comment", "content": "说得好！"}}
+    ],
+    "comment_interactions": [
+        {{"post_id": 1, "comment_id": 1, "action": "reply", "content": "同意！"}}
+    ],
+    "new_post": {{
+        "should_post": true/false,
+        "content": "你的帖子内容"
+    }}
+}}
+
+重要提示：
+1. 根据你的互动系数{user.interaction_tendency}决定互动多少条帖子/评论
+2. 根据你的发帖系数{user.post_tendency}决定是否发帖
+3. 系数低的可以全部跳过，系数高的可以多互动几条
+4. 标记为【你关注的】的帖子是你关注的人发的，你可能会更感兴趣，优先互动
+5. 保持自然，符合你的个性设定"""
+        
+        payload = {
+            "model": "Pro/moonshotai/Kimi-K2.5",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 800
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        try:
+            response = requests.post(api_url, json=payload, headers=headers)
+            response.raise_for_status()
+            
+            result = response.json()
+            ai_response = result["choices"][0]["message"]["content"].strip()
+            
+            # 解析JSON响应
+            try:
+                json_start = ai_response.find("{")
+                json_end = ai_response.rfind("}") + 1
+                if json_start >= 0 and json_end > json_start:
+                    json_str = ai_response[json_start:json_end]
+                    decision = json.loads(json_str)
+                    return decision
+            except json.JSONDecodeError as e:
+                print(f"JSON解析失败: {e}, 响应: {ai_response}")
+                pass
+            
+            # 如果JSON解析失败，返回空决策
+            return {
+                "post_interactions": [],
+                "comment_interactions": [],
+                "new_post": {"should_post": False, "content": ""}
+            }
+            
+        except Exception as e:
+            print(f"登录会话决策API调用失败: {str(e)}")
+            return {
+                "post_interactions": [],
+                "comment_interactions": [],
+                "new_post": {"should_post": False, "content": ""}
+            }
+
+    def run_simulation(self):
+        """运行模拟（新架构：基于登录机制）- 使用多线程避免API阻塞
+        
+        每个角色按泊松分布触发登录，登录后批量浏览帖子并决策互动/发帖
+        """
+        # 初始化每个用户的下次登录时间
+        next_login_times = {}
         simulation_time = 0  # 模拟时间（秒）
         real_start_time = time.time()  # 真实开始时间
         
-        # 为每个用户计算初始下次发帖时间和下次互动时间
+        # 为每个用户计算初始下次登录时间
         for user in self.users:
-            # 计算发帖lambda（每秒的事件率）
+            # 计算登录lambda（每秒的事件率）
             if self.test_mode:
                 # 测试模式：test_hour_duration秒模拟1小时
-                # 时间缩放因子：3600秒真实时间 / test_hour_duration秒模拟时间
                 time_scale_factor = 3600 / self.test_hour_duration
-                # 每小时lambda * 时间缩放因子 = 测试模式下每"模拟小时"的事件数
-                # 再除以3600转换为每秒的事件率
-                post_lambda_per_second = user.get_hourly_lambda() * time_scale_factor / 3600
-                interaction_lambda_per_second = user.get_hourly_interaction_lambda() * time_scale_factor / 3600
+                login_lambda_per_second = user.get_hourly_login_lambda() * time_scale_factor / 3600
             else:
                 # 正常模式：直接计算每秒的事件率
-                # 每小时lambda / 3600秒 = 每秒的事件率
-                post_lambda_per_second = user.get_hourly_lambda() / 3600
-                interaction_lambda_per_second = user.get_hourly_interaction_lambda() / 3600
+                login_lambda_per_second = user.get_hourly_login_lambda() / 3600
             
-            # 生成首次发帖时间间隔（秒），并转换为绝对时间
-            post_interval = user.generate_exponential_interval(post_lambda_per_second)
-            next_post_times[user.id] = simulation_time + post_interval
-            
-            # 生成首次互动时间间隔（秒），并转换为绝对时间
-            interaction_interval = user.generate_exponential_interval(interaction_lambda_per_second)
-            next_interaction_times[user.id] = simulation_time + interaction_interval
+            # 生成首次登录时间间隔（秒），并转换为绝对时间
+            login_interval = user.generate_exponential_interval(login_lambda_per_second)
+            next_login_times[user.id] = simulation_time + login_interval
         
-        print("\n=== 开始基于泊松过程的随机发帖和互动 ===\n")
+        print("\n=== 开始基于登录机制的AI社交模拟 ===\n")
         print("按Ctrl+C停止测试\n")
         
-        # 使用线程池处理发帖和互动任务
-        max_workers = min(len(self.users) * 3, 30)  # 增加线程数以处理更多并发
+        # 使用线程池处理登录会话任务
+        max_workers = min(len(self.users) * 2, 20)
         
         try:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -1022,24 +801,13 @@ class AIScheduler:
                 pending_futures = {}
                 
                 while self.running:
-                    # 找到最早的下次事件时间（发帖或互动）
-                    all_next_times = {}
-                    
-                    # 添加发帖时间
-                    for user_id, next_time in next_post_times.items():
-                        all_next_times[('post', user_id)] = next_time
-                    
-                    # 添加互动时间
-                    for user_id, next_time in next_interaction_times.items():
-                        all_next_times[('interaction', user_id)] = next_time
-                    
-                    if not all_next_times:
+                    # 找到最早的下次登录时间
+                    if not next_login_times:
                         break
                     
-                    # 找出最早的事件
-                    min_event = min(all_next_times, key=all_next_times.get)
-                    min_time = all_next_times[min_event]
-                    event_type, user_id = min_event
+                    # 找出最早的登录事件
+                    user_id = min(next_login_times, key=next_login_times.get)
+                    min_time = next_login_times[user_id]
                     
                     # 计算需要等待的真实时间
                     if self.test_mode:
@@ -1060,39 +828,22 @@ class AIScheduler:
                     # 获取对应的用户
                     user = user_map[user_id]
                     
-                    if event_type == 'post':
-                        # 执行发帖
-                        future = executor.submit(self._execute_post_poisson, user, simulation_time)
-                        pending_futures[f'post_{user_id}'] = future
-                        
-                        # 计算下一次发帖时间
-                        if self.test_mode:
-                            time_scale_factor = 3600 / self.test_hour_duration
-                            post_lambda_per_second = user.get_hourly_lambda() * time_scale_factor / 3600
-                        else:
-                            post_lambda_per_second = user.get_hourly_lambda() / 3600
-                        
-                        interval = user.generate_exponential_interval(post_lambda_per_second)
-                        next_post_times[user_id] = simulation_time + interval
-                        
-                    elif event_type == 'interaction':
-                        # 执行互动
-                        if len(posts) > 0:  # 确保有帖子可以互动
-                            future = executor.submit(self._execute_interaction_event, user, simulation_time)
-                            pending_futures[f'interaction_{user_id}'] = future
-                        
-                        # 计算下一次互动时间
-                        if self.test_mode:
-                            time_scale_factor = 3600 / self.test_hour_duration
-                            interaction_lambda_per_second = user.get_hourly_interaction_lambda() * time_scale_factor / 3600
-                        else:
-                            interaction_lambda_per_second = user.get_hourly_interaction_lambda() / 3600
-                        
-                        interval = user.generate_exponential_interval(interaction_lambda_per_second)
-                        next_interaction_times[user_id] = simulation_time + interval
+                    # 执行登录会话（新架构核心）
+                    future = executor.submit(self._execute_login_session, user, simulation_time)
+                    pending_futures[f'login_{user_id}'] = future
+                    
+                    # 计算下一次登录时间
+                    if self.test_mode:
+                        time_scale_factor = 3600 / self.test_hour_duration
+                        login_lambda_per_second = user.get_hourly_login_lambda() * time_scale_factor / 3600
+                    else:
+                        login_lambda_per_second = user.get_hourly_login_lambda() / 3600
+                    
+                    interval = user.generate_exponential_interval(login_lambda_per_second)
+                    next_login_times[user_id] = simulation_time + interval
                     
                     # 清理已完成的任务
-                    completed_tasks = [key for key, fut in pending_futures.items() if fut.done()]
+                    completed_tasks = [key for key, fut in list(pending_futures.items()) if fut.done()]
                     for key in completed_tasks:
                         del pending_futures[key]
                         
