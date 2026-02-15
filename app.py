@@ -18,7 +18,7 @@ class User(object):
     def __init__(self, user_id, username, avatar, personal_signature, 
                  monthly_logins, posts_per_login_min, posts_per_login_max,
                  interaction_tendency, post_tendency,
-                 post_prompt, comment_prompt, following=None):
+                 personality_prompt, following=None):
         self.id = user_id
         self.username = username
         self.avatar = avatar
@@ -35,8 +35,7 @@ class User(object):
         self.frequency = monthly_logins  # 兼容旧代码
         self.interaction_frequency = monthly_logins  # 兼容旧代码
         
-        self.prompt = post_prompt
-        self.comment_prompt = comment_prompt
+        self.personality_prompt = personality_prompt  # 角色个性描述
         self.following = following or []  # 关注列表（存储用户ID）
 
     def get_daily_login_frequency(self):
@@ -51,45 +50,6 @@ class User(object):
     def get_random_posts_per_login(self):
         """随机决定本次登录看多少条帖子"""
         return random.randint(self.posts_per_login_min, self.posts_per_login_max)
-
-    def post(self):
-        """生成帖子内容（调用硅基流动API）"""
-        import requests
-        
-        # 硅基流动API配置
-        api_url = "https://api.siliconflow.cn/v1/chat/completions"
-        api_key = "sk-kookgpxohtivpdxotdnhgdgrjqidpsnhfptsmwrspjwiiukj"  # 需要替换为实际的API密钥
-        
-        # API请求参数
-        payload = {
-            "model": "Pro/moonshotai/Kimi-K2.5",
-            "messages": [
-                {"role": "system", "content": "你是一个社交平台用户，根据给定的prompt生成自然的帖子内容。"},
-                {"role": "user", "content": self.prompt}
-            ],
-            "temperature": 1.0,
-            "max_tokens": 300
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        
-        try:
-            # 发送API请求
-            response = requests.post(api_url, json=payload, headers=headers)
-            response.raise_for_status()  # 检查响应状态
-            
-            # 解析响应
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-            
-            return f"{content}"
-        except Exception as e:
-            # 错误处理，返回默认内容
-            print(f"API调用失败: {str(e)}")
-            return f"[{self.username}] 使用prompt: {self.prompt[:50]}..."
 
     def poisson_probability(self, k, lambda_):
         """计算泊松分布的概率质量函数
@@ -165,8 +125,7 @@ with open("ai_users_config.json", "r", encoding= "UTF-8") as USER_CONFIG:
             user["posts_per_login_max"],
             user["interaction_tendency"],
             user["post_tendency"],
-            user["post_prompt"],
-            user["comment_prompt"],
+            user["personality_prompt"],
             user.get("following", []))
         )
 
@@ -260,7 +219,7 @@ class AIScheduler:
     # 类级别配置：测试模式下的时间缩放比例
     # 例如：test_hour_duration = 10 表示 10秒 = 1小时
     # 修改为 20 则表示 20秒 = 1小时
-    test_hour_duration = 20  # 测试模式下每小时的持续时间（秒），可自由调节
+    test_hour_duration = 30  # 测试模式下每小时的持续时间（秒），可自由调节
     
     def __init__(self, users):
         self.users = users
@@ -436,8 +395,13 @@ class AIScheduler:
             reply_to_user: 被回复的用户名（用于显示"回复 @用户名"）
         """
         with posts_lock:
+            # 确保parent_comment_id是数字或None
+            if parent_comment_id is not None:
+                parent_comment_id = int(parent_comment_id)
+            
+            comment_id = len(target_post["interactions"]["comments"]) + 1
             comment_record = {
-                "id": len(target_post["interactions"]["comments"]) + 1,
+                "id": comment_id,
                 "user_id": user.id,
                 "username": user.username,
                 "avatar": user.avatar,
@@ -584,7 +548,8 @@ class AIScheduler:
                         "author": {
                             "id": user.id,
                             "name": user.username,
-                            "avatar": user.avatar
+                            "avatar": user.avatar,
+                            "personal_signature": user.personal_signature
                         },
                         "content": post_content,
                         "timestamp": login_time,
@@ -661,7 +626,7 @@ class AIScheduler:
         
         system_prompt = "你是一个社交平台用户，正在浏览多个帖子。请根据你的个性、互动系数和发帖系数，批量决定如何互动。你会优先关注你关注的人的动态。只输出JSON格式。"
         
-        user_prompt = f"""你的个性设定：{user.comment_prompt}
+        user_prompt = f"""你的个性设定：{user.personality_prompt}
 
 你的互动系数：{user.interaction_tendency}（0.0-1.0，越高越喜欢互动）
 你的发帖系数：{user.post_tendency}（0.0-1.0，越高越喜欢发帖）
@@ -680,18 +645,18 @@ class AIScheduler:
 每个元素包含：
 - post_id: 帖子ID
 - action: "like"(点赞) / "comment"(评论) / "like_and_comment"(点赞+评论) / "none"(跳过)
-- content: 评论内容（如果action是comment或like_and_comment）
+- content: 评论内容（如果action是comment或like_and_comment，50字以下为宜）
 
 【对评论的互动】comment_interactions数组
 每个元素包含：
 - post_id: 所属帖子ID
 - comment_id: 评论ID
 - action: "like"(点赞) / "reply"(回复) / "like_and_reply"(点赞+回复) / "none"(跳过)
-- content: 回复内容（如果action是reply或like_and_reply）
+- content: 回复内容（如果action是reply或like_and_reply，50字以下字为宜）
 
 【是否发帖】new_post对象
 - should_post: true/false（基于你的发帖系数{user.post_tendency}决定）
-- content: 帖子内容（如果should_post为true）
+- content: 帖子内容（如果should_post为true，100字以下为宜）
 
 请以JSON格式回复：
 {{
@@ -713,7 +678,8 @@ class AIScheduler:
 2. 根据你的发帖系数{user.post_tendency}决定是否发帖
 3. 系数低的可以全部跳过，系数高的可以多互动几条
 4. 标记为【你关注的】的帖子是你关注的人发的，你可能会更感兴趣，优先互动
-5. 保持自然，符合你的个性设定"""
+5. 保持自然，符合你的个性设定
+6. 注意字数限制：评论30-50字，回复20-40字，帖子50-100字，简洁表达"""
         
         payload = {
             "model": "Pro/moonshotai/Kimi-K2.5",
@@ -746,7 +712,17 @@ class AIScheduler:
                     decision = json.loads(json_str)
                     return decision
             except json.JSONDecodeError as e:
-                print(f"JSON解析失败: {e}, 响应: {ai_response}")
+                print(f"JSON解析失败，尝试自动补全...")
+                # 尝试自动补全JSON
+                fixed_json = self._fix_truncated_json(ai_response)
+                if fixed_json:
+                    try:
+                        decision = json.loads(fixed_json)
+                        print(f"JSON自动补全成功")
+                        return decision
+                    except:
+                        pass
+                print(f"JSON解析失败: {e}, 响应: {ai_response[:200]}...")
                 pass
             
             # 如果JSON解析失败，返回空决策
@@ -764,6 +740,72 @@ class AIScheduler:
                 "new_post": {"should_post": False, "content": ""}
             }
 
+    def _fix_truncated_json(self, json_str):
+        """尝试修复被截断的JSON字符串
+        
+        Args:
+            json_str: 可能被截断的JSON字符串
+            
+        Returns:
+            str: 修复后的JSON字符串，如果无法修复则返回None
+        """
+        # 找到JSON开始的位置
+        start = json_str.find("{")
+        if start == -1:
+            return None
+        
+        # 提取JSON部分
+        json_content = json_str[start:]
+        
+        # 统计各种括号的数量
+        brace_count = 0  # {}
+        bracket_count = 0  # []
+        in_string = False
+        escape_next = False
+        
+        for char in json_content:
+            if escape_next:
+                escape_next = False
+                continue
+            
+            if char == "\\":
+                escape_next = True
+                continue
+            
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            
+            if not in_string:
+                if char == "{":
+                    brace_count += 1
+                elif char == "}":
+                    brace_count -= 1
+                elif char == "[":
+                    bracket_count += 1
+                elif char == "]":
+                    bracket_count -= 1
+        
+        # 修复JSON
+        fixed = json_content
+        
+        # 如果有未闭合的字符串（奇数个引号），添加闭合引号
+        quote_count = json_content.count('"') - json_content.count('\\"')
+        if quote_count % 2 == 1:
+            fixed += '"'
+        
+        # 关闭所有未闭合的数组
+        while bracket_count > 0:
+            fixed += "]"
+            bracket_count -= 1
+        
+        # 关闭所有未闭合的对象
+        while brace_count > 0:
+            fixed += "}"
+            brace_count -= 1
+        
+        return fixed
+
     def run_simulation(self):
         """运行模拟（新架构：基于登录机制）- 使用多线程避免API阻塞
         
@@ -774,13 +816,19 @@ class AIScheduler:
         simulation_time = 0  # 模拟时间（秒）
         real_start_time = time.time()  # 真实开始时间
         
+        # 用于统计每个用户的登录次数
+        login_count_per_user = {user.id: 0 for user in self.users}
+        # 记录上次统计时间（用于计算每日登录次数）
+        last_daily_reset = 0
+        # 一天的模拟时间（测试模式下：24 * test_hour_duration 秒）
+        day_duration = 24 * self.test_hour_duration if self.test_mode else 86400
+        
         # 为每个用户计算初始下次登录时间
         for user in self.users:
             # 计算登录lambda（每秒的事件率）
             if self.test_mode:
                 # 测试模式：test_hour_duration秒模拟1小时
-                time_scale_factor = 3600 / self.test_hour_duration
-                login_lambda_per_second = user.get_hourly_login_lambda() * time_scale_factor / 3600
+                login_lambda_per_second = user.get_hourly_login_lambda() / self.test_hour_duration
             else:
                 # 正常模式：直接计算每秒的事件率
                 login_lambda_per_second = user.get_hourly_login_lambda() / 3600
@@ -788,6 +836,8 @@ class AIScheduler:
             # 生成首次登录时间间隔（秒），并转换为绝对时间
             login_interval = user.generate_exponential_interval(login_lambda_per_second)
             next_login_times[user.id] = simulation_time + login_interval
+            
+            print(f"  {user.avatar} {user.username}: 每小时λ={user.get_hourly_login_lambda():.4f}, 每秒λ={login_lambda_per_second:.6f}, 首次登录间隔={login_interval:.1f}秒")
         
         print("\n=== 开始基于登录机制的AI社交模拟 ===\n")
         print("按Ctrl+C停止测试\n")
@@ -801,6 +851,20 @@ class AIScheduler:
                 pending_futures = {}
                 
                 while self.running:
+                    # 检查是否过了一天，重置每日统计
+                    if simulation_time - last_daily_reset >= day_duration:
+                        # 打印每日登录统计
+                        print(f"\n{'='*60}")
+                        print(f"每日登录统计 (模拟第 {int((simulation_time // day_duration) + 1)} 天)")
+                        print(f"{'='*60}")
+                        for user in self.users:
+                            count = login_count_per_user[user.id]
+                            print(f"  {user.avatar} {user.username}: {count} 次登录 (预期: {user.get_daily_login_frequency():.2f} 次/天)")
+                        print(f"{'='*60}\n")
+                        # 重置统计
+                        login_count_per_user = {user.id: 0 for user in self.users}
+                        last_daily_reset = simulation_time
+                    
                     # 找到最早的下次登录时间
                     if not next_login_times:
                         break
@@ -828,14 +892,16 @@ class AIScheduler:
                     # 获取对应的用户
                     user = user_map[user_id]
                     
+                    # 记录登录次数
+                    login_count_per_user[user_id] += 1
+                    
                     # 执行登录会话（新架构核心）
                     future = executor.submit(self._execute_login_session, user, simulation_time)
                     pending_futures[f'login_{user_id}'] = future
                     
                     # 计算下一次登录时间
                     if self.test_mode:
-                        time_scale_factor = 3600 / self.test_hour_duration
-                        login_lambda_per_second = user.get_hourly_login_lambda() * time_scale_factor / 3600
+                        login_lambda_per_second = user.get_hourly_login_lambda() / self.test_hour_duration
                     else:
                         login_lambda_per_second = user.get_hourly_login_lambda() / 3600
                     

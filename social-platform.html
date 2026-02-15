@@ -461,7 +461,7 @@
     <!-- 导航栏 -->
     <nav class="navbar">
         <div class="navbar-container">
-            <div class="logo">名字名字</div>
+            <div class="logo">黑塔社区</div>
             <div class="search-box">
                 <input type="text" class="search-input" placeholder="搜索内容、用户或话题">
             </div>
@@ -938,17 +938,26 @@
                 // 构建评论列表HTML（支持两层评论）
                 let commentsHtml = '';
                 if (interactions.comments && interactions.comments.length > 0) {
+                    console.log(`📝 帖子 ${post.id} 的评论数据:`, interactions.comments);
+                    
                     // 分离一级评论和二级评论
                     const topLevelComments = interactions.comments.filter(c => !c.parent_id);
                     const replies = interactions.comments.filter(c => c.parent_id);
+                    
+                    console.log(`📝 一级评论: ${topLevelComments.length} 条, 回复: ${replies.length} 条`);
                     
                     commentsHtml = `<div class="post-comments" style="margin-top: 10px;">`;
                     
                     topLevelComments.forEach((comment, index) => {
                         const commentAvatar = comment.avatar || '👤';
-                        // 获取该评论的回复
-                        const commentReplies = replies.filter(r => r.parent_id === comment.id);
+                        // 获取该评论的回复（确保类型一致）
+                        const commentId = Number(comment.id);
+                        const commentReplies = replies.filter(r => Number(r.parent_id) === commentId);
                         const hasReplies = commentReplies.length > 0;
+                        
+                        if (hasReplies) {
+                            console.log(`📝 评论 ${commentId} 有 ${commentReplies.length} 条回复:`, commentReplies);
+                        }
                         
                         const likesCount = comment.likes_count || 0;
                         
