@@ -4,13 +4,40 @@ import time
 import threading
 import math
 import os
+import sys
+from io import StringIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 # 创建Flask应用
-app = Flask(__name__, static_folder='.')
+app = Flask(__name__)
 CORS(app)  # 启用CORS，允许前端访问
+
+# 日志存储
+logs = []
+logs_lock = threading.Lock()
+max_logs = 500  # 最多保存500条日志
+
+# 自定义输出流，用于捕获print输出
+class LogCapture(StringIO):
+    def write(self, text):
+        if text.strip():
+            timestamp = time.strftime('%H:%M:%S')
+            with logs_lock:
+                logs.append({
+                    'timestamp': timestamp,
+                    'content': text.rstrip('\n')
+                })
+                # 保持日志数量在限制内
+                if len(logs) > max_logs:
+                    logs.pop(0)
+        # 同时输出到原stdout
+        return original_stdout.write(text)
+
+# 保存原始stdout并替换
+original_stdout = sys.stdout
+sys.stdout = LogCapture()
 
 # 创建用户类
 class User(object):
@@ -143,6 +170,7 @@ def initialize_posts():
     """初始化帖子，创建几条系统欢迎帖"""
     global posts
     
+    now = time.time()
     initial_posts = [
         {
             "id": 1,
@@ -153,7 +181,8 @@ def initialize_posts():
                 "personal_signature": "黑塔女士的空间站"
             },
             "content": "🎉 黑塔社区正式启用啦！欢迎大家在这里分享生活、交流心得~",
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": time.strftime("%H:%M"),
+            "full_timestamp": now,
             "stats": {
                 "likes": 0,
                 "comments": 0,
@@ -173,7 +202,8 @@ def initialize_posts():
                 "personal_signature": "愿此行，终抵群星！"
             },
             "content": "星穹列车已正式入驻黑塔社区。愿此行，终抵群星！",
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": time.strftime("%H:%M"),
+            "full_timestamp": now - 60,
             "stats": {
                 "likes": 0,
                 "comments": 0,
@@ -193,7 +223,8 @@ def initialize_posts():
                 "personal_signature": "秩序与未来并行。"
             },
             "content": "贝洛伯格政府官方黑塔账号已开通。贝洛伯格永远欢迎每一位访客，愿冰雪之城带给你温暖与希望。❄️",
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": time.strftime("%H:%M"),
+            "full_timestamp": now - 120,
             "stats": {
                 "likes": 0,
                 "comments": 0,
@@ -232,6 +263,12 @@ class AIScheduler:
         self.statistics_lock = threading.Lock()  # 统计操作的线程锁
         self.statistics_thread = None  # 统计线程
         self.statistics_running = True
+        # 热度计算相关属性
+        self.hot_posts = []  # 按热度排序的帖子列表（热度从高到低）
+        self.hot_posts_lock = threading.Lock()  # 热度列表的线程锁
+        self.hot_calculation_thread = None  # 热度计算线程
+        self.hot_calculation_running = True
+        self.hot_calculation_interval = 900  # 每15分钟计算一次（秒）
     
     def record_post_statistics(self, author_id):
         """记录发帖统计（在API调用前执行，避免延迟影响统计准确性）
@@ -297,6 +334,182 @@ class AIScheduler:
         if self.statistics_thread:
             self.statistics_thread.join(timeout=1.0)
     
+    def calculate_post_hotness(self, post, current_time):
+        """计算单个帖子的热度值
+        
+        公式：热度值 = (点赞数 + 2*评论数 + 3*转发数) * 时间衰减系数
+        
+        Args:
+            post: 帖子对象
+            current_time: 当前时间戳
+            
+        Returns:
+            float: 热度值
+        """
+        # 获取互动数据
+        likes = len(post.get("interactions", {}).get("likes", []))
+        comments = len(post.get("interactions", {}).get("comments", []))
+        shares = post.get("stats", {}).get("shares", 0)
+        
+        # 基础热度分
+        base_score = likes + 2 * comments + 3 * shares
+        
+        # 计算帖子年龄（小时）
+        post_time_str = post.get("timestamp", "")
+        try:
+            # 尝试解析时间戳
+            if ":" in post_time_str:
+                # 格式可能是 "HH:MM" 或 "YYYY-MM-DD HH:MM:SS"
+                if len(post_time_str) <= 5:  # "HH:MM"
+                    # 假设是同一天
+                    post_time = time.mktime(time.strptime(f"{time.strftime('%Y-%m-%d')} {post_time_str}", "%Y-%m-%d %H:%M"))
+                else:
+                    post_time = time.mktime(time.strptime(post_time_str, "%Y-%m-%d %H:%M:%S"))
+            else:
+                post_time = current_time
+        except:
+            post_time = current_time
+        
+        # 计算帖子年龄（小时）
+        age_hours = max(0, (current_time - post_time) / 3600)
+        
+        # 时间衰减系数：使用指数衰减，半衰期24小时
+        # 衰减公式：e^(-ln(2) * age / half_life)
+        half_life = 24  # 半衰期24小时
+        time_decay = math.exp(-math.log(2) * age_hours / half_life)
+        
+        # 最终热度值
+        hotness = base_score * time_decay
+        
+        return hotness
+    
+    def update_hot_posts(self):
+        """更新热度排序的帖子列表
+        
+        每15分钟调用一次，计算所有帖子的热度并排序
+        """
+        with posts_lock:
+            if not posts:
+                with self.hot_posts_lock:
+                    self.hot_posts = []
+                return
+            
+            current_time = time.time()
+            posts_with_hotness = []
+            
+            for post in posts:
+                hotness = self.calculate_post_hotness(post, current_time)
+                posts_with_hotness.append({
+                    "post": post,
+                    "hotness": hotness
+                })
+                # 将热度值保存到帖子中
+                post["hotness"] = hotness
+            
+            # 按热度从高到低排序
+            posts_with_hotness.sort(key=lambda x: x["hotness"], reverse=True)
+            
+            with self.hot_posts_lock:
+                self.hot_posts = posts_with_hotness
+            
+            # 打印热度最高的5条帖子
+            print(f"\n🔥 热度排行榜（{time.strftime('%H:%M:%S')}）:")
+            for i, item in enumerate(posts_with_hotness[:5], 1):
+                post = item["post"]
+                print(f"  {i}. {post['author']['name']}: {item['hotness']:.2f}分 - {post['content'][:30]}...")
+            print()
+    
+    def start_hot_calculation_timer(self):
+        """启动热度计算定时器"""
+        def timer_task():
+            while self.hot_calculation_running:
+                # 计算热度
+                self.update_hot_posts()
+                
+                # 等待15分钟
+                time.sleep(self.hot_calculation_interval)
+        
+        # 在新线程中运行定时器
+        self.hot_calculation_thread = threading.Thread(target=timer_task)
+        self.hot_calculation_thread.daemon = True
+        self.hot_calculation_thread.start()
+        print(f"✅ 热度计算定时器已启动（每{self.hot_calculation_interval/60:.0f}分钟计算一次）")
+    
+    def stop_hot_calculation(self):
+        """停止热度计算模块"""
+        self.hot_calculation_running = False
+        if self.hot_calculation_thread:
+            self.hot_calculation_thread.join(timeout=1.0)
+    
+    def get_recommended_posts(self, count, exclude_user_id=None):
+        """获取推荐帖子
+        
+        算法：70%高热度帖子 + 30%新帖子，打乱顺序
+        
+        Args:
+            count: 需要的帖子数量
+            exclude_user_id: 排除的用户ID（排除自己的帖子）
+            
+        Returns:
+            list: 推荐的帖子列表
+        """
+        with posts_lock:
+            if not posts:
+                return []
+            
+            # 复制帖子列表
+            all_posts = list(posts)
+            
+            # 排除自己的帖子
+            if exclude_user_id:
+                all_posts = [p for p in all_posts if p["author"]["id"] != exclude_user_id]
+            
+            if not all_posts:
+                return []
+            
+            # 确保所有帖子都有热度值
+            for post in all_posts:
+                if "hotness" not in post:
+                    post["hotness"] = 0
+            
+            # 按热度排序（从高到低）
+            sorted_by_hot = sorted(all_posts, key=lambda x: x["hotness"], reverse=True)
+            
+            # 按时间排序（从新到旧）
+            sorted_by_time = sorted(all_posts, key=lambda x: x.get("timestamp", ""), reverse=True)
+            
+            # 计算需要的高热度和新帖子数量
+            hot_count = max(1, int(count * 0.7))
+            new_count = max(1, count - hot_count)
+            
+            # 去重选择
+            selected_hot = []
+            selected_new = []
+            used_ids = set()
+            
+            # 选择高热度帖子
+            for post in sorted_by_hot:
+                if len(selected_hot) >= hot_count:
+                    break
+                if post["id"] not in used_ids:
+                    selected_hot.append(post)
+                    used_ids.add(post["id"])
+            
+            # 选择新帖子
+            for post in sorted_by_time:
+                if len(selected_new) >= new_count:
+                    break
+                if post["id"] not in used_ids:
+                    selected_new.append(post)
+                    used_ids.add(post["id"])
+            
+            # 合并并打乱顺序
+            selected = selected_hot + selected_new
+            random.shuffle(selected)
+            
+            # 截取需要的数量
+            return selected[:count]
+    
     def start(self):
         """启动调度器"""
         if self.test_mode:
@@ -323,6 +536,9 @@ class AIScheduler:
         # 启动统计定时器
         self.start_statistics_timer()
         
+        # 启动热度计算定时器
+        self.start_hot_calculation_timer()
+        
         # 启动模拟
         try:
             self.run_simulation()
@@ -330,6 +546,8 @@ class AIScheduler:
             print("\n测试已停止")
             # 停止统计模块
             self.stop_statistics()
+            # 停止热度计算模块
+            self.stop_hot_calculation()
     
     def _add_like_to_comment(self, target_post, target_comment, user, interaction_time):
         """给评论添加点赞
@@ -413,6 +631,135 @@ class AIScheduler:
             target_post["interactions"]["comments"].append(comment_record)
             target_post["stats"]["comments"] = len(target_post["interactions"]["comments"])
 
+    def _add_repost(self, original_post, user, repost_content, interaction_time, original_comment=None):
+        """转发帖子或评论（创建新帖子并引用）
+        
+        Args:
+            original_post: 原帖对象
+            user: 转发用户
+            repost_content: 转发语（可以为空）
+            interaction_time: 互动时间
+            original_comment: 原评论对象（如果是转发评论）
+        """
+        with posts_lock:
+            # 如果是转发评论，只更新评论的转发数
+            if original_comment:
+                if "shares" not in original_comment:
+                    original_comment["shares"] = 0
+                original_comment["shares"] += 1
+            # 如果是转发帖子，更新原帖的转发数
+            else:
+                if "shares" not in original_post["stats"]:
+                    original_post["stats"]["shares"] = 0
+                original_post["stats"]["shares"] += 1
+            
+            # 构建转发链
+            repost_chain = []
+            
+            # 如果原帖本身就是转发，先把之前的转发链加进来
+            if original_post.get("is_repost") and original_post.get("repost_chain"):
+                repost_chain.extend(original_post["repost_chain"])
+            
+            # 添加当前转发者到转发链
+            repost_chain.append({
+                "user_id": user.id,
+                "username": user.username,
+                "avatar": user.avatar,
+                "content": repost_content,
+                "timestamp": interaction_time
+            })
+            
+            # 找到原始源（最原始的帖子）- 带循环检测
+            def find_root_post(post, visited_ids=None):
+                """递归查找最原始的帖子（带循环检测）"""
+                if visited_ids is None:
+                    visited_ids = set()
+                post_id = int(post["id"])
+                if post_id in visited_ids:
+                    return post
+                visited_ids.add(post_id)
+                if post.get("is_repost") and post.get("repost"):
+                    original_id = int(post["repost"]["original_post_id"])
+                    for p in posts:
+                        if int(p["id"]) == original_id:
+                            return find_root_post(p, visited_ids)
+                return post
+            
+            root_post = find_root_post(original_post)
+            
+            # 创建新的转发帖子
+            new_post_obj = {
+                "id": len(posts) + 1,
+                "author": {
+                    "id": user.id,
+                    "name": user.username,
+                    "avatar": user.avatar,
+                    "personal_signature": user.personal_signature
+                },
+                "content": repost_content,
+                "timestamp": interaction_time,
+                "full_timestamp": time.time(),
+                "interactions": {
+                    "likes": [],
+                    "comments": []
+                },
+                "stats": {
+                    "likes": 0,
+                    "comments": 0,
+                    "shares": 0
+                },
+                "is_repost": True,
+                "repost": {
+                    "original_post_id": int(root_post["id"]),
+                    "original_author": root_post["author"],
+                    "original_content": root_post["content"],
+                    "original_timestamp": root_post.get("timestamp", "")
+                },
+                "repost_chain": repost_chain
+            }
+            
+            # 如果是转发评论，添加评论信息
+            if original_comment:
+                new_post_obj["repost_comment"] = {
+                    "comment_id": int(original_comment["id"]),
+                    "comment_user_id": int(original_comment["user_id"]),
+                    "comment_username": original_comment["username"],
+                    "comment_avatar": original_comment["avatar"],
+                    "comment_content": original_comment["content"],
+                    "comment_timestamp": original_comment.get("timestamp", "")
+                }
+            
+            posts.append(new_post_obj)
+            return new_post_obj
+
+    def _get_delayed_time(self, base_time, delay_seconds):
+        """根据基础时间和延迟秒数计算新的时间字符串（格式：hh:mm）
+        
+        Args:
+            base_time: 基础时间字符串（格式：hh:mm 或 YYYY-MM-DD hh:mm:ss）
+            delay_seconds: 延迟秒数
+            
+        Returns:
+            str: 延迟后的时间字符串（格式：hh:mm）
+        """
+        import datetime
+        
+        # 解析基础时间
+        if len(base_time) == 5 and ':' in base_time:  # hh:mm 格式
+            today = datetime.datetime.now()
+            base_dt = today.replace(hour=int(base_time[:2]), minute=int(base_time[3:5]), second=0, microsecond=0)
+        elif len(base_time) > 10:  # YYYY-MM-DD hh:mm:ss 格式
+            base_dt = datetime.datetime.strptime(base_time, "%Y-%m-%d %H:%M:%S")
+        else:
+            # 默认使用当前时间
+            base_dt = datetime.datetime.now()
+        
+        # 添加延迟
+        delayed_dt = base_dt + datetime.timedelta(seconds=delay_seconds)
+        
+        # 返回 hh:mm 格式
+        return delayed_dt.strftime("%H:%M")
+
     def _execute_login_session(self, user, simulation_time):
         """执行一次登录会话（新架构核心方法）
         
@@ -422,7 +769,7 @@ class AIScheduler:
             user: 用户对象
             simulation_time: 当前模拟时间
         """
-        # 计算登录时间
+        # 计算登录时间（格式：hh:mm）
         if self.test_mode:
             simulated_hours = int(simulation_time / self.test_hour_duration)
             remaining_seconds = simulation_time % self.test_hour_duration
@@ -430,21 +777,17 @@ class AIScheduler:
             display_hour = simulated_hours % 24
             login_time = f"{display_hour:02d}:{simulated_minutes:02d}"
         else:
-            login_time = time.strftime("%Y-%m-%d %H:%M:%S")
+            login_time = time.strftime("%H:%M")
         
         # 1. 随机决定本次登录看多少条帖子
         posts_to_view = user.get_random_posts_per_login()
         
-        # 2. 获取最近N条帖子（排除自己的）
-        with posts_lock:
-            available_posts = [p for p in posts if p["author"]["id"] != user.id]
+        # 2. 获取推荐帖子（70%高热度 + 30%新帖子，排除自己的）
+        recent_posts = self.get_recommended_posts(posts_to_view, exclude_user_id=user.id)
         
-        if not available_posts:
+        if not recent_posts:
             print(f"{user.avatar} {user.username} 在 {login_time} 登录了，但社区没有可浏览的帖子")
             return
-        
-        # 获取最近posts_to_view条帖子
-        recent_posts = available_posts[-posts_to_view:]
         
         # 3. 为每个帖子准备候选评论
         posts_with_comments = []
@@ -468,10 +811,16 @@ class AIScheduler:
         
         # 5. 执行决策
         actions_performed = []
+        current_delay = 0  # 累计延迟（秒）
         
         # 5.1 执行帖子互动
         post_interactions = decision.get("post_interactions", [])
         for interaction in post_interactions:
+            # 为每个操作添加随机延迟（10-300秒）
+            delay = random.randint(10, 300)
+            current_delay += delay
+            interaction_time = self._get_delayed_time(login_time, current_delay)
+            
             post_id = interaction.get("post_id")
             action = interaction.get("action", "none")
             content = interaction.get("content", "").strip()
@@ -482,19 +831,30 @@ class AIScheduler:
                 continue
             
             if action == "like":
-                self._add_like_to_post(target_post, user, login_time)
+                self._add_like_to_post(target_post, user, interaction_time)
                 actions_performed.append(f"赞了 {target_post['author']['name']} 的帖子")
             elif action == "comment" and content:
-                self._add_comment_to_post(target_post, user, content, login_time)
+                self._add_comment_to_post(target_post, user, content, interaction_time)
                 actions_performed.append(f"评论了 {target_post['author']['name']} 的帖子: {content}")
             elif action == "like_and_comment" and content:
-                self._add_like_to_post(target_post, user, login_time)
-                self._add_comment_to_post(target_post, user, content, login_time)
+                self._add_like_to_post(target_post, user, interaction_time)
+                self._add_comment_to_post(target_post, user, content, interaction_time)
                 actions_performed.append(f"赞并评论了 {target_post['author']['name']} 的帖子: {content}")
+            elif action == "repost":
+                self._add_repost(target_post, user, "", interaction_time)
+                actions_performed.append(f"转发了 {target_post['author']['name']} 的帖子")
+            elif action == "repost_with_comment":
+                self._add_repost(target_post, user, content, interaction_time)
+                actions_performed.append(f"转发了 {target_post['author']['name']} 的帖子并说: {content}")
         
         # 5.2 执行评论互动
         comment_interactions = decision.get("comment_interactions", [])
         for interaction in comment_interactions:
+            # 为每个操作添加随机延迟（10-300秒）
+            delay = random.randint(10, 300)
+            current_delay += delay
+            interaction_time = self._get_delayed_time(login_time, current_delay)
+            
             post_id = interaction.get("post_id")
             comment_id = interaction.get("comment_id")
             action = interaction.get("action", "none")
@@ -510,35 +870,46 @@ class AIScheduler:
                 continue
             
             if action == "like":
-                self._add_like_to_comment(post_data["post"], target_comment, user, login_time)
+                self._add_like_to_comment(post_data["post"], target_comment, user, interaction_time)
                 actions_performed.append(f"赞了 {target_comment['username']} 的评论")
             elif action == "reply" and content:
                 self._add_comment_to_post(
                     post_data["post"],
                     user,
                     content,
-                    login_time,
-                    parent_comment_id=target_comment["id"],
+                    interaction_time,
+                    parent_comment_id=int(target_comment["id"]),
                     reply_to_user=target_comment["username"]
                 )
                 actions_performed.append(f"回复了 {target_comment['username']} 的评论: {content}")
             elif action == "like_and_reply" and content:
-                self._add_like_to_comment(post_data["post"], target_comment, user, login_time)
+                self._add_like_to_comment(post_data["post"], target_comment, user, interaction_time)
                 self._add_comment_to_post(
                     post_data["post"],
                     user,
                     content,
-                    login_time,
-                    parent_comment_id=target_comment["id"],
+                    interaction_time,
+                    parent_comment_id=int(target_comment["id"]),
                     reply_to_user=target_comment["username"]
                 )
                 actions_performed.append(f"赞并回复了 {target_comment['username']} 的评论: {content}")
+            elif action == "repost_comment":
+                self._add_repost(post_data["post"], user, "", interaction_time, target_comment)
+                actions_performed.append(f"转发了 {target_comment['username']} 的评论")
+            elif action == "repost_comment_with_reply" and content:
+                self._add_repost(post_data["post"], user, content, interaction_time, target_comment)
+                actions_performed.append(f"转发了 {target_comment['username']} 的评论并说: {content}")
         
         # 5.3 执行发帖（如果有）
         new_post = decision.get("new_post", {})
         if new_post and new_post.get("should_post", False):
             post_content = new_post.get("content", "").strip()
             if post_content:
+                # 发帖也添加延迟
+                delay = random.randint(10, 300)
+                current_delay += delay
+                post_time = self._get_delayed_time(login_time, current_delay)
+                
                 self.record_post_statistics(user.id)
                 
                 # 创建新帖子
@@ -552,14 +923,16 @@ class AIScheduler:
                             "personal_signature": user.personal_signature
                         },
                         "content": post_content,
-                        "timestamp": login_time,
+                        "timestamp": post_time,
+                        "full_timestamp": time.time(),
                         "interactions": {
                             "likes": [],
                             "comments": []
                         },
                         "stats": {
                             "likes": 0,
-                            "comments": 0
+                            "comments": 0,
+                            "shares": 0
                         }
                     }
                     posts.append(new_post_obj)
@@ -596,6 +969,7 @@ class AIScheduler:
             comments = post_data["comments"]
             likes = len(post.get("interactions", {}).get("likes", []))
             comments_count = len(post.get("interactions", {}).get("comments", []))
+            reposts = post.get("stats", {}).get("shares", 0)
             
             # 检查是否是关注的人
             is_following = post['author']['id'] in user.following
@@ -604,7 +978,7 @@ class AIScheduler:
             posts_text += f"\n\n【帖子{i}】ID:{post['id']}{following_tag}"
             posts_text += f"\n作者：{post['author']['name']}"
             posts_text += f"\n内容：{post['content']}"
-            posts_text += f"\n点赞：{likes} · 评论：{comments_count}"
+            posts_text += f"\n点赞：{likes} · 评论：{comments_count} · 转发：{reposts}"
             
             if comments:
                 posts_text += "\n热门评论："
@@ -624,7 +998,7 @@ class AIScheduler:
             if following_names:
                 following_text = f"\n你关注的人：{', '.join(following_names)}"
         
-        system_prompt = "你是一个社交平台用户，正在浏览多个帖子。请根据你的个性、互动系数和发帖系数，批量决定如何互动。你会优先关注你关注的人的动态。只输出JSON格式。"
+        system_prompt = "你是一个社交平台用户，正在浏览多个帖子。请根据你的个性、互动系数和发帖系数，批量决定如何互动。你会优先关注你关注的人的动态。**非常重要：严格使用提供的帖子ID和评论ID，不要混淆！**只输出JSON格式。"
         
         user_prompt = f"""你的个性设定：{user.personality_prompt}
 
@@ -644,15 +1018,15 @@ class AIScheduler:
 【对帖子的互动】post_interactions数组
 每个元素包含：
 - post_id: 帖子ID
-- action: "like"(点赞) / "comment"(评论) / "like_and_comment"(点赞+评论) / "none"(跳过)
-- content: 评论内容（如果action是comment或like_and_comment，50字以下为宜）
+- action: "like"(点赞) / "comment"(评论) / "like_and_comment"(点赞+评论) / "repost"(转发) / "repost_with_comment"(转发+评论) / "none"(跳过)
+- content: 评论或转发语内容（如果action是comment/like_and_comment/repost_with_comment，50字以下为宜）
 
 【对评论的互动】comment_interactions数组
 每个元素包含：
 - post_id: 所属帖子ID
 - comment_id: 评论ID
-- action: "like"(点赞) / "reply"(回复) / "like_and_reply"(点赞+回复) / "none"(跳过)
-- content: 回复内容（如果action是reply或like_and_reply，50字以下字为宜）
+- action: "like"(点赞) / "reply"(回复) / "like_and_reply"(点赞+回复) / "repost_comment"(转发评论) / "repost_comment_with_reply"(转发评论并附评论) / "none"(跳过)
+- content: 回复或转发语内容（如果action是reply/like_and_reply/repost_comment_with_reply，50字以下字为宜）
 
 【是否发帖】new_post对象
 - should_post: true/false（基于你的发帖系数{user.post_tendency}决定）
@@ -661,11 +1035,11 @@ class AIScheduler:
 请以JSON格式回复：
 {{
     "post_interactions": [
-        {{"post_id": 1, "action": "like", "content": ""}},
-        {{"post_id": 2, "action": "comment", "content": "说得好！"}}
+        {{"post_id": 帖子1的真实ID, "action": "like", "content": ""}},
+        {{"post_id": 帖子2的真实ID, "action": "comment", "content": "说得好！"}}
     ],
     "comment_interactions": [
-        {{"post_id": 1, "comment_id": 1, "action": "reply", "content": "同意！"}}
+        {{"post_id": 对应帖子的真实ID, "comment_id": 评论的真实ID, "action": "reply", "content": "同意！"}}
     ],
     "new_post": {{
         "should_post": true/false,
@@ -674,20 +1048,25 @@ class AIScheduler:
 }}
 
 重要提示：
-1. 根据你的互动系数{user.interaction_tendency}决定互动多少条帖子/评论
-2. 根据你的发帖系数{user.post_tendency}决定是否发帖
-3. 系数低的可以全部跳过，系数高的可以多互动几条
-4. 标记为【你关注的】的帖子是你关注的人发的，你可能会更感兴趣，优先互动
-5. 保持自然，符合你的个性设定
-6. 注意字数限制：评论30-50字，回复20-40字，帖子50-100字，简洁表达"""
+1. **ID准确性重要！** 请严格使用提供的帖子ID和评论ID，不要混淆
+2. 根据你的互动系数{user.interaction_tendency}决定互动多少条帖子/评论
+3. 根据你的发帖系数{user.post_tendency}决定是否发帖
+4. 系数低的可以全部跳过，系数高的可以多互动几条
+5. 标记为【你关注的】的帖子是你关注的人发的，你可能会更感兴趣，优先互动
+6. 保持自然，符合你的个性设定
+7. 注意字数限制：评论宜50字以下，回复宜50字以下，帖子宜100字以下
+8. 互动行为优先级：点赞 > 评论/回复 > 转发。即：
+   - 优先选择点赞，点赞是最常见的互动方式
+   - 其次是评论或回复，频率低于点赞
+   - 转发在想要扩散给他人时才使用"""
         
         payload = {
-            "model": "Pro/moonshotai/Kimi-K2.5",
+            "model": "Pro/MiniMaxAI/MiniMax-M2.5",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "temperature": 0.7,
+            "temperature": 1.0,
             "max_tokens": 800
         }
         
@@ -733,7 +1112,7 @@ class AIScheduler:
             }
             
         except Exception as e:
-            print(f"登录会话决策API调用失败: {str(e)}")
+            print(f"API调用失败: {str(e)}")
             return {
                 "post_interactions": [],
                 "comment_interactions": [],
@@ -807,7 +1186,7 @@ class AIScheduler:
         return fixed
 
     def run_simulation(self):
-        """运行模拟（新架构：基于登录机制）- 使用多线程避免API阻塞
+        """运行模拟
         
         每个角色按泊松分布触发登录，登录后批量浏览帖子并决策互动/发帖
         """
@@ -917,25 +1296,140 @@ class AIScheduler:
             print("\n测试已停止")
             # 停止统计模块
             self.stop_statistics()
+            # 停止热度计算模块
+            self.stop_hot_calculation()
 
 
-# 根路由 - 返回前端页面
+# HTML 页面路由 - 明确为每个页面创建路由
 @app.route('/')
 def index():
-    """返回前端页面"""
+    """返回社区首页"""
     return send_from_directory('.', 'social-platform.html')
 
-# 静态文件服务
+@app.route('/social-platform.html')
+def social_platform():
+    """返回社区首页"""
+    return send_from_directory('.', 'social-platform.html')
+
+@app.route('/dashboard.html')
+def dashboard():
+    """返回仪表盘页面"""
+    return send_from_directory('.', 'dashboard.html')
+
+@app.route('/graph.html')
+def graph():
+    """返回关系图谱页面"""
+    return send_from_directory('.', 'graph.html')
+
+@app.route('/user-profile.html')
+def user_profile():
+    """返回用户资料页面"""
+    return send_from_directory('.', 'user-profile.html')
+
+# 静态资源服务（图片、配置文件等）
 @app.route('/<path:filename>')
 def serve_static(filename):
-    """提供静态文件服务"""
+    """提供静态资源服务"""
     return send_from_directory('.', filename)
 
 # API路由
 @app.route('/api/posts', methods=['GET'])
 def get_posts():
-    """获取所有帖子"""
+    """获取所有帖子（按时间排序，从旧到新）"""
     return jsonify(posts)
+
+@app.route('/api/posts/time', methods=['GET'])
+def get_posts_by_time():
+    """获取按时间排序的帖子（从新到旧）
+    
+    参数:
+        count: 需要的帖子数量，默认50
+    """
+    count = request.args.get('count', 50, type=int)
+    count = min(max(5, count), 100)
+    
+    with posts_lock:
+        sorted_posts = sorted(posts, key=lambda x: x.get("full_timestamp", 0), reverse=True)
+        return jsonify(sorted_posts[:count])
+
+@app.route('/api/posts/hot', methods=['GET'])
+def get_posts_by_hot():
+    """获取按热度排序的帖子（从高到低）
+    
+    参数:
+        count: 需要的帖子数量，默认50
+    """
+    count = request.args.get('count', 50, type=int)
+    count = min(max(5, count), 100)
+    
+    with posts_lock:
+        if posts:
+            # 确保所有帖子都有热度值
+            for post in posts:
+                if "hotness" not in post:
+                    post["hotness"] = 0
+            
+            sorted_posts = sorted(posts, key=lambda x: x["hotness"], reverse=True)
+            return jsonify(sorted_posts[:count])
+        return jsonify([])
+
+@app.route('/api/posts/recommended', methods=['GET'])
+def get_recommended_posts():
+    """获取推荐帖子（70%高热度 + 30%新帖子）
+    
+    参数:
+        count: 需要的帖子数量，默认20
+    """
+    count = request.args.get('count', 20, type=int)
+    count = min(max(5, count), 50)  # 限制在5-50之间
+    
+    recommended = []
+    with posts_lock:
+        if posts:
+            # 确保所有帖子都有热度值
+            for post in posts:
+                if "hotness" not in post:
+                    post["hotness"] = 0
+            
+            # 按热度排序（从高到低）
+            sorted_by_hot = sorted(posts, key=lambda x: x["hotness"], reverse=True)
+            
+            # 按时间排序（从新到旧）
+            sorted_by_time = sorted(posts, key=lambda x: x.get("full_timestamp", 0), reverse=True)
+            
+            # 计算需要的高热度和新帖子数量
+            hot_count = max(1, int(count * 0.7))
+            new_count = max(1, count - hot_count)
+            
+            # 去重选择
+            selected_hot = []
+            selected_new = []
+            used_ids = set()
+            
+            # 选择高热度帖子
+            for post in sorted_by_hot:
+                if len(selected_hot) >= hot_count:
+                    break
+                if post["id"] not in used_ids:
+                    selected_hot.append(post)
+                    used_ids.add(post["id"])
+            
+            # 选择新帖子
+            for post in sorted_by_time:
+                if len(selected_new) >= new_count:
+                    break
+                if post["id"] not in used_ids:
+                    selected_new.append(post)
+                    used_ids.add(post["id"])
+            
+            # 合并并打乱顺序
+            recommended = selected_hot + selected_new
+            random.shuffle(recommended)
+            
+            # 截取需要的数量
+            recommended = recommended[:count]
+    
+    return jsonify(recommended)
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
@@ -949,6 +1443,139 @@ def get_users():
             "personal_signature": user.personal_signature
         })
     return jsonify(user_list)
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    """获取系统日志
+    
+    参数:
+        limit: 返回的日志数量，默认100
+        offset: 从第几条开始，默认0
+    """
+    limit = request.args.get('limit', 100, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    
+    with logs_lock:
+        # 复制一份避免并发问题
+        logs_copy = list(logs)
+    
+    # 直接取最新的limit条日志（按时间顺序，最新的在最后）
+    result = logs_copy[-limit:] if limit > 0 else []
+    
+    return jsonify({
+        'total': len(logs_copy),
+        'logs': result
+    })
+
+@app.route('/api/graph', methods=['GET'])
+def get_graph_data():
+    """获取角色关系图谱数据"""
+    # 统计真实的用户互动数据
+    user_post_count = {}
+    user_like_count = {}
+    user_comment_count = {}
+    user_interaction_map = {}
+    
+    # 初始化统计
+    for user in users:
+        user_post_count[user.id] = 0
+        user_like_count[user.id] = 0
+        user_comment_count[user.id] = 0
+        user_interaction_map[user.id] = {}
+    
+    # 从帖子中统计真实数据
+    with posts_lock:
+        for post in posts:
+            author_id = int(post["author"]["id"])
+            
+            # 统计发帖数
+            if author_id in user_post_count:
+                user_post_count[author_id] += 1
+            
+            # 统计点赞关系
+            for like in post.get("interactions", {}).get("likes", []):
+                liker_id = int(like["user_id"])
+                if liker_id in user_like_count:
+                    user_like_count[liker_id] += 1
+                
+                # 记录互动关系
+                if liker_id in user_interaction_map and author_id != liker_id:
+                    if author_id not in user_interaction_map[liker_id]:
+                        user_interaction_map[liker_id][author_id] = 0
+                    user_interaction_map[liker_id][author_id] += 1
+            
+            # 统计评论关系
+            for comment in post.get("interactions", {}).get("comments", []):
+                commenter_id = int(comment["user_id"])
+                if commenter_id in user_comment_count:
+                    user_comment_count[commenter_id] += 1
+                
+                # 记录互动关系
+                if commenter_id in user_interaction_map and author_id != commenter_id:
+                    if author_id not in user_interaction_map[commenter_id]:
+                        user_interaction_map[commenter_id][author_id] = 0
+                    user_interaction_map[commenter_id][author_id] += 1
+    
+    # 构建节点数据（使用真实数据）
+    nodes = []
+    for user in users:
+        # 使用真实数据计算热力值
+        post_count = user_post_count.get(user.id, 0)
+        like_count = user_like_count.get(user.id, 0)
+        comment_count = user_comment_count.get(user.id, 0)
+        
+        # 热力值 = 发帖*20 + 点赞*5 + 评论*10
+        hotness = post_count * 20 + like_count * 5 + comment_count * 10
+        posts_24h = post_count
+        interactions_24h = like_count + comment_count
+        
+        nodes.append({
+            "id": user.id,
+            "name": user.username,
+            "avatar": user.avatar,
+            "hotness": hotness,
+            "posts_24h": posts_24h,
+            "interactions_24h": interactions_24h
+        })
+    
+    # 构建边数据
+    edges = []
+    
+    # 添加关注关系（真实数据，双向都要显示）
+    for user in users:
+        if user.following:
+            for following_id in user.following:
+                # 查找真实互动次数
+                interactions = user_interaction_map.get(user.id, {}).get(following_id, 0)
+                edges.append({
+                    "source": user.id,
+                    "target": following_id,
+                    "type": "follow",
+                    "interactions": max(1, interactions)
+                })
+    
+    # 添加互动关系（真实数据）
+    for source_id in user_interaction_map:
+        for target_id, interactions in user_interaction_map[source_id].items():
+            if interactions >= 2:  # 只显示有2次以上互动的
+                # 检查是否已经有关注关系
+                has_follow = False
+                for edge in edges:
+                    if (edge["source"] == source_id and edge["target"] == target_id and edge["type"] == "follow"):
+                        has_follow = True
+                        break
+                if not has_follow:
+                    edges.append({
+                        "source": source_id,
+                        "target": target_id,
+                        "type": "interaction",
+                        "interactions": interactions
+                    })
+    
+    return jsonify({
+        "nodes": nodes,
+        "edges": edges
+    })
 
 
 @app.route('/api/users/<int:user_id>', methods=['GET'])

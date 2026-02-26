@@ -228,6 +228,42 @@
             background-color: #40a9ff;
         }
         
+        /* 排序选项 */
+        .sort-options {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .sort-label {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .sort-btn {
+            background: none;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            padding: 6px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.2s;
+        }
+        
+        .sort-btn:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+        
+        .sort-btn.active {
+            background-color: #1890ff;
+            border-color: #1890ff;
+            color: white;
+        }
+        
         /* 帖子列表 */
         .post-list {
             padding: 20px;
@@ -466,9 +502,10 @@
                 <input type="text" class="search-input" placeholder="搜索内容、用户或话题">
             </div>
             <div class="nav-menu">
-                <div class="nav-item">首页</div>
+                <a href="/" class="nav-item" style="text-decoration: none; color: inherit;">首页</a>
                 <div class="nav-item">热门</div>
                 <div class="nav-item">最新</div>
+                <a href="/dashboard.html" class="nav-item" style="text-decoration: none; color: inherit;">📊 仪表盘</a>
             </div>
         </div>
     </nav>
@@ -490,15 +527,25 @@
                         <div class="menu-icon">📅</div>
                         <div>最新</div>
                     </div>
-                    <div class="menu-item">
-                        <div class="menu-icon">�</div>
-                        <div>搜索</div>
-                    </div>
+                    <a href="/dashboard.html" style="text-decoration: none; color: inherit;">
+                        <div class="menu-item">
+                            <div class="menu-icon">📊</div>
+                            <div>仪表盘</div>
+                        </div>
+                    </a>
                 </div>
             </aside>
             
             <!-- 中间内容区 -->
             <main class="content-area">
+            
+            <!-- 排序选项 -->
+            <div class="sort-options">
+                <span class="sort-label">排序方式：</span>
+                <button class="sort-btn active" data-sort="recommended" onclick="changeSort('recommended')">✨ 推荐</button>
+                <button class="sort-btn" data-sort="time" onclick="changeSort('time')">⏱️ 按时间</button>
+                <button class="sort-btn" data-sort="hot" onclick="changeSort('hot')">🔥 按热度</button>
+            </div>
             
             <!-- 帖子列表 -->
             <div class="post-list">
@@ -750,14 +797,28 @@
             categories: []
         };
 
+        // 当前排序方式：recommended（推荐）、time（按时间）或 hot（按热度）
+        let currentSort = 'recommended';
+
         // API基础URL - 使用相对路径，自动适应当前服务器地址
         const API_BASE_URL = '';
         
         // 获取帖子数据
         async function fetchPosts() {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/posts`);
-                apiData.posts = await response.json();
+                if (currentSort === 'recommended') {
+                    // 推荐算法（默认）：70%高热度 + 30%新帖子，随机打乱
+                    const response = await fetch(`${API_BASE_URL}/api/posts/recommended?count=30`);
+                    apiData.posts = await response.json();
+                } else if (currentSort === 'time') {
+                    // 纯按时间排序：从新到旧
+                    const response = await fetch(`${API_BASE_URL}/api/posts/time?count=50`);
+                    apiData.posts = await response.json();
+                } else if (currentSort === 'hot') {
+                    // 纯按热度排序：从高到低
+                    const response = await fetch(`${API_BASE_URL}/api/posts/hot?count=50`);
+                    apiData.posts = await response.json();
+                }
                 console.log('获取到帖子数据:', apiData.posts);
             } catch (error) {
                 console.error('Error fetching posts:', error);
@@ -810,6 +871,28 @@
                     }
                 ];
             }
+        }
+
+        // 切换排序方式
+        async function changeSort(sortType) {
+            if (currentSort === sortType) {
+                return;
+            }
+            
+            currentSort = sortType;
+            
+            // 更新按钮状态
+            document.querySelectorAll('.sort-btn').forEach(btn => {
+                if (btn.dataset.sort === sortType) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // 重新获取并渲染帖子
+            await fetchPosts();
+            renderPosts();
         }
 
         // 获取热门话题数据
@@ -874,6 +957,7 @@
         function renderPosts() {
             console.log('开始渲染帖子，帖子数量:', apiData.posts.length);
             console.log('帖子数据:', apiData.posts);
+            console.log('当前排序方式:', currentSort);
             
             const postList = document.querySelector('.post-list');
             if (!postList) {
@@ -888,10 +972,10 @@
                 return;
             }
             
-            // 反转帖子数组，使新帖子显示在上方
-            const reversedPosts = [...apiData.posts].reverse();
+            // 后端已返回正确排序的帖子，直接使用
+            const postsToRender = [...apiData.posts];
             
-            reversedPosts.forEach((post, index) => {
+            postsToRender.forEach((post, index) => {
                 console.log(`渲染第${index}个帖子:`, post);
                 
                 const postElement = document.createElement('div');
@@ -924,6 +1008,67 @@
                 const interactions = post.interactions || { likes: [], comments: [] };
                 const likeCount = interactions.likes?.length || post.stats?.likes || 0;
                 const commentCount = interactions.comments?.length || post.stats?.comments || 0;
+                const repostCount = post.stats?.shares || 0;
+                
+                // 构建微博式的转发链HTML
+                let repostHtml = '';
+                if (post.is_repost && post.repost) {
+                    const repost = post.repost;
+                    const repostComment = post.repost_comment;
+                    const repostChain = post.repost_chain || [];
+                    
+                    // 构建转发链文本
+                    let repostChainText = '';
+                    let repostChainDisplay = '';
+                    
+                    // 遍历转发链（注意：repost_chain是按时间顺序存储的，最上面的是最早的转发者）
+                    // 微博格式是：最新转发者的内容 //@上一个转发者：上一个的内容 //@作者：原内容
+                    if (repostChain.length > 0) {
+                        for (let i = repostChain.length - 1; i >= 0; i--) {
+                            const chainItem = repostChain[i];
+                            const content = chainItem.content || '';
+                            const username = chainItem.username || '未知用户';
+                            
+                            if (i === repostChain.length - 1) {
+                                // 最新的转发者（就是当前帖子的作者）
+                                if (content) {
+                                    repostChainText += content;
+                                }
+                            } else {
+                                // 之前的转发者
+                                repostChainText += `//@${username}`;
+                                if (content) {
+                                    repostChainText += `：${content}`;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 最后加上原帖
+                    repostChainText += `//@${repost.original_author?.name || '未知用户'}：${repost.original_content || ''}`;
+                    
+                    // 如果是转发评论，在前面加上评论的信息
+                    let commentPart = '';
+                    if (repostComment) {
+                        commentPart = `<div style="margin-bottom: 10px; padding: 10px; background: #fff0f6; border-radius: 6px; border-left: 2px solid #eb2f96;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 4px;">
+                                💬 ${repostComment.comment_username || '未知用户'} · ${repostComment.comment_timestamp || ''}
+                            </div>
+                            <div style="font-size: 13px; color: #333; line-height: 1.4;">
+                                ${repostComment.comment_content || ''}
+                            </div>
+                        </div>`;
+                    }
+                    
+                    repostHtml = `<div style="margin-top: 10px;">
+                        ${commentPart}
+                        <div style="padding: 12px; background: #f9f9f9; border-radius: 8px;">
+                            <div style="font-size: 13px; color: #666; line-height: 1.6;">
+                                ${repostChainText}
+                            </div>
+                        </div>
+                    </div>`;
+                }
                 
                 // 构建点赞用户列表HTML
                 let likesHtml = '';
@@ -962,7 +1107,7 @@
                         const likesCount = comment.likes_count || 0;
                         
                         commentsHtml += `
-                            <div class="comment-item" style="padding: 10px 0; border-bottom: 1px solid #f0f0f0;" data-comment-id="${comment.id}">
+                            <div class="comment-item" style="padding: 10px 0; border-bottom: 1px solid #f0f0f0;" data-comment-id="${commentId}">
                                 <div style="display: flex; align-items: flex-start;">
                                     <a href="/user-profile.html?id=${comment.user_id}" style="text-decoration: none;"><div style="width: 32px; height: 32px; background: #f0f0f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 14px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">${commentAvatar}</div></a>
                                     <div style="flex: 1;">
@@ -973,10 +1118,10 @@
                                         </div>
                                         
                                         ${hasReplies ? `
-                                            <div class="replies-toggle" style="margin-top: 8px; cursor: pointer; color: #1890ff; font-size: 12px;" onclick="toggleReplies(${comment.id})">
+                                            <div class="replies-toggle" style="margin-top: 8px; cursor: pointer; color: #1890ff; font-size: 12px;" onclick="toggleReplies(${commentId})">
                                                 💬 查看 ${commentReplies.length} 条回复
                                             </div>
-                                            <div class="replies-container" id="replies-${comment.id}" style="display: none; margin-top: 10px; padding-left: 20px; border-left: 2px solid #e8e8e8;">
+                                            <div class="replies-container" id="replies-${commentId}" style="display: none; margin-top: 10px; padding-left: 20px; border-left: 2px solid #e8e8e8;">
                                                 ${commentReplies.map(reply => `
                                                     <div class="reply-item" style="padding: 8px 0;">
                                                         <div style="display: flex; align-items: flex-start;">
@@ -1015,6 +1160,7 @@
                         ${isLongContent ? `<span class="full-content" style="display: none;">${content}</span>` : ''}
                         ${isLongContent ? `<button class="expand-btn" style="background: none; border: none; color: #1890ff; cursor: pointer; padding: 0; font-size: 14px;">展开</button>` : ''}
                     </div>
+                    ${repostHtml}
                     <div class="post-stats" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #f0f0f0;">
                         <button class="stat-btn" style="margin-right: 20px;">
                             <span>❤️</span>
@@ -1024,9 +1170,22 @@
                             <span>💬</span>
                             <span>${commentCount}</span>
                         </button>
+                        <button class="stat-btn" style="margin-right: 20px;">
+                            <span>🔄</span>
+                            <span>${repostCount}</span>
+                        </button>
                     </div>
                     ${likesHtml}
-                    ${commentsHtml}
+                    <div class="comments-container" style="margin-top: 10px;">
+                        ${commentCount > 0 ? `
+                            <div class="comments-toggle" style="cursor: pointer; color: #1890ff; font-size: 14px; padding: 8px 0; border-top: 1px solid #f0f0f0;" onclick="toggleComments(${post.id})">
+                                💬 查看 ${commentCount} 条评论
+                            </div>
+                            <div class="comments-wrapper" id="comments-${post.id}" style="display: none;">
+                                ${commentsHtml}
+                            </div>
+                        ` : ''}
+                    </div>
                 `;
                 
                 // 添加展开/收起事件监听
@@ -1051,32 +1210,6 @@
                 }
                 
                 postList.appendChild(postElement);
-            });
-        }
-
-        // 动态渲染评论内容
-        function renderComments(postId) {
-            const post = apiData.posts.find(p => p.id === postId);
-            const commentsSection = document.querySelector(`.comment-btn[data-post-id="${postId}"]`).closest('.post').querySelector('.comments-section');
-            
-            commentsSection.innerHTML = '';
-            
-            post.comments.forEach(comment => {
-                const commentElement = document.createElement('div');
-                commentElement.className = 'comment';
-                commentElement.innerHTML = `
-                    <div class="post-header">
-                        <div class="post-avatar">${comment.author.avatar}</div>
-                        <div>
-                            <div class="post-author">${comment.author.name}</div>
-                            <div class="post-time">${comment.timestamp}</div>
-                        </div>
-                    </div>
-                    <div class="comment-content">
-                        ${comment.content}
-                    </div>
-                `;
-                commentsSection.appendChild(commentElement);
             });
         }
 
@@ -1117,32 +1250,32 @@
             });
         }
 
-        // 绑定评论事件
-        function bindCommentEvents() {
-            const commentButtons = document.querySelectorAll('.comment-btn');
+
+
+        // 切换评论显示/隐藏
+        function toggleComments(postId) {
+            const commentsWrapper = document.getElementById(`comments-${postId}`);
+            const toggleBtn = event.target;
             
-            commentButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const postId = parseInt(this.dataset.postId);
-                    const post = this.closest('.post');
-                    const commentsSection = post.querySelector('.comments-section');
-                    
-                    if (commentsSection.style.display === 'none') {
-                        // 渲染评论内容
-                        renderComments(postId);
-                        commentsSection.style.display = 'block';
-                        this.querySelector('span:nth-child(1)').textContent = '🔽';
-                    } else {
-                        commentsSection.style.display = 'none';
-                        this.querySelector('span:nth-child(1)').textContent = '💬';
-                    }
-                });
-            });
+            if (commentsWrapper.style.display === 'none') {
+                commentsWrapper.style.display = 'block';
+                toggleBtn.textContent = toggleBtn.textContent.replace('查看', '收起');
+            } else {
+                commentsWrapper.style.display = 'none';
+                toggleBtn.textContent = toggleBtn.textContent.replace('收起', '查看');
+            }
         }
 
         // 切换回复显示/隐藏
         function toggleReplies(commentId) {
-            const repliesContainer = document.getElementById(`replies-${commentId}`);
+            const repliesContainerId = `replies-${Number(commentId)}`;
+            const repliesContainer = document.getElementById(repliesContainerId);
+            
+            if (!repliesContainer) {
+                console.error(`找不到回复容器: ${repliesContainerId}`);
+                return;
+            }
+            
             const toggleBtn = event.target;
             
             if (repliesContainer.style.display === 'none') {

@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户资料 - StarRail VibeTown</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+        
+        /* 导航栏 */
+        .navbar {
+            background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 0 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .navbar-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1890ff;
+            cursor: pointer;
+        }
+        
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .nav-item {
+            cursor: pointer;
+            color: #666;
+        }
+        
+        .nav-item:hover {
+            color: #1890ff;
+        }
+        
+        /* 主内容区 */
+        .main-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        /* 用户资料头部 */
+        .profile-header {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .profile-info {
+            display: flex;
+            align-items: flex-start;
+            gap: 30px;
+        }
+        
+        .profile-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            flex-shrink: 0;
+        }
+        
+        .profile-details {
+            flex: 1;
+        }
+        
+        .profile-name-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        
+        .profile-name {
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .profile-signature {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .profile-stats {
+            display: flex;
+            gap: 30px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            cursor: pointer;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+        
+        .stat-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* 内容标签页 */
+        .content-tabs {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .tabs-header {
+            display: flex;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 15px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+            transition: all 0.2s;
+        }
+        
+        .tab-btn:hover {
+            color: #1890ff;
+            background-color: #f5f5f5;
+        }
+        
+        .tab-btn.active {
+            color: #1890ff;
+            border-bottom: 2px solid #1890ff;
+            font-weight: 500;
+        }
+        
+        .tab-content {
+            padding: 20px;
+            min-height: 300px;
+        }
+        
+        .tab-panel {
+            display: none;
+        }
+        
+        .tab-panel.active {
+            display: block;
+        }
+        
+        /* 帖子列表 */
+        .post-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .post {
+            padding: 20px;
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        
+        .post-time {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 10px;
+        }
+        
+        .post-content {
+            font-size: 15px;
+            line-height: 1.6;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .post-stats {
+            display: flex;
+            gap: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .post-stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        /* 用户列表（关注/粉丝） */
+        .user-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .user-card {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .user-card:hover {
+            background-color: #f5f5f5;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .user-card-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        
+        .user-card-info {
+            flex: 1;
+        }
+        
+        .user-card-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .user-card-signature {
+            font-size: 12px;
+            color: #999;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* 加载状态 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #ff4d4f;
+        }
+        
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        /* 返回按钮 */
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 16px;
+            background-color: #f0f0f0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 20px;
+            transition: all 0.2s;
+        }
+        
+        .back-btn:hover {
+            background-color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="navbar-container">
+            <div class="logo" onclick="goHome()">黑塔社区</div>
+            <div class="nav-menu">
+                <div class="nav-item" onclick="goHome()">首页</div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 主内容区 -->
+    <div class="main-container">
+        <button class="back-btn" onclick="goHome()">← 返回首页</button>
+        
+        <div id="loading" class="loading">加载中...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="profile-content" style="display: none;">
+            <!-- 用户资料头部 -->
+            <div class="profile-header">
+                <div class="profile-info">
+                    <div class="profile-avatar" id="user-avatar"></div>
+                    <div class="profile-details">
+                        <div class="profile-name-section">
+                            <span class="profile-name" id="user-name"></span>
+                        </div>
+                        <div class="profile-signature" id="user-signature"></div>
+                        <div class="profile-stats">
+                            <div class="stat-item" onclick="switchTab('posts')">
+                                <div class="stat-number" id="posts-count">0</div>
+                                <div class="stat-label">帖子</div>
+                            </div>
+                            <div class="stat-item" onclick="switchTab('following')">
+                                <div class="stat-number" id="following-count">0</div>
+                                <div class="stat-label">关注</div>
+                            </div>
+                            <div class="stat-item" onclick="switchTab('followers')">
+                                <div class="stat-number" id="followers-count">0</div>
+                                <div class="stat-label">粉丝</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 内容标签页 -->
+            <div class="content-tabs">
+                <div class="tabs-header">
+                    <button class="tab-btn active" onclick="switchTab('posts')">帖子</button>
+                    <button class="tab-btn" onclick="switchTab('following')">关注</button>
+                    <button class="tab-btn" onclick="switchTab('followers')">粉丝</button>
+                </div>
+                
+                <div class="tab-content">
+                    <!-- 帖子列表 -->
+                    <div class="tab-panel active" id="posts-panel">
+                        <div class="post-list" id="posts-list"></div>
+                    </div>
+                    
+                    <!-- 关注列表 -->
+                    <div class="tab-panel" id="following-panel">
+                        <div class="user-list" id="following-list"></div>
+                    </div>
+                    
+                    <!-- 粉丝列表 -->
+                    <div class="tab-panel" id="followers-panel">
+                        <div class="user-list" id="followers-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 获取URL参数中的用户ID
+        function getUserIdFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id');
+        }
+        
+        // 返回首页
+        function goHome() {
+            window.location.href = '/';
+        }
+        
+        // 切换到指定标签页
+        function switchTab(tabName) {
+            // 更新按钮状态
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // 更新面板显示
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            document.getElementById(tabName + '-panel').classList.add('active');
+        }
+        
+        // 跳转到用户资料页
+        function goToUserProfile(userId) {
+            window.location.href = `/user-profile.html?id=${userId}`;
+        }
+        
+        // 渲染帖子列表
+        function renderPosts(posts) {
+            const container = document.getElementById('posts-list');
+            
+            if (posts.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📝</div>
+                        <div>还没有发布过帖子</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = posts.map(post => `
+                <div class="post">
+                    <div class="post-time">${post.timestamp || '未知时间'}</div>
+                    <div class="post-content">${post.content}</div>
+                    <div class="post-stats">
+                        <div class="post-stat">❤️ ${post.interactions?.likes?.length || 0}</div>
+                        <div class="post-stat">💬 ${post.interactions?.comments?.length || 0}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // 渲染用户列表
+        function renderUserList(users, containerId) {
+            const container = document.getElementById(containerId);
+            
+            if (users.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">👥</div>
+                        <div>暂无数据</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = users.map(user => `
+                <div class="user-card" onclick="goToUserProfile(${user.id})">
+                    <div class="user-card-avatar">${user.avatar}</div>
+                    <div class="user-card-info">
+                        <div class="user-card-name">${user.username}</div>
+                        <div class="user-card-signature">${user.personal_signature || ''}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // 加载用户资料
+        async function loadUserProfile() {
+            const userId = getUserIdFromUrl();
+            
+            if (!userId) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = '未指定用户ID';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/users/${userId}`);
+                
+                if (!response.ok) {
+                    throw new Error('用户不存在');
+                }
+                
+                const user = await response.json();
+                
+                // 隐藏加载状态，显示内容
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('profile-content').style.display = 'block';
+                
+                // 填充用户资料
+                document.getElementById('user-avatar').textContent = user.avatar;
+                document.getElementById('user-name').textContent = user.username;
+                document.getElementById('user-signature').textContent = user.personal_signature || '这个人很懒，什么都没写~';
+                
+                // 更新统计数据
+                document.getElementById('posts-count').textContent = user.posts_count;
+                document.getElementById('following-count').textContent = user.following_count;
+                document.getElementById('followers-count').textContent = user.followers_count;
+                
+                // 渲染帖子列表
+                renderPosts(user.posts);
+                
+                // 渲染关注列表
+                renderUserList(user.following, 'following-list');
+                
+                // 渲染粉丝列表
+                renderUserList(user.followers, 'followers-list');
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = error.message || '加载失败';
+            }
+        }
+        
+        // 页面加载时获取用户资料
+        document.addEventListener('DOMContentLoaded', loadUserProfile);
+    </script>
+</body>
+</html>
