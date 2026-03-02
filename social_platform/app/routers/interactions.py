@@ -202,6 +202,20 @@ def get_comment_replies(
     return replies
 
 
+@router.get("/replies/{reply_id}", response_model=schemas.ReplyResponse)
+def get_reply(reply_id: int, db: Session = Depends(get_db)):
+    """
+    获取单个回复信息
+    """
+    reply = crud.get_reply(db, reply_id=reply_id)
+    if not reply:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="回复不存在"
+        )
+    return reply
+
+
 @router.post("/replies/{reply_id}/update-hot-score")
 def refresh_reply_hot_score(reply_id: int, db: Session = Depends(get_db)):
     """

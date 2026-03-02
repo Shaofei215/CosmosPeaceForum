@@ -99,8 +99,8 @@ class AIBehaviorEngine:
                 # 2. 思考 - LLM 分析帖子
                 thoughts = self._think(posts, user_config)
                 
-                # 3. 决策 - LLM 决定行动
-                decisions = self._decide(thoughts, posts, user_config)
+                # 3. 决策 - LLM 决定行动（传入 user_id 以获取关注列表）
+                decisions = self._decide(thoughts, posts, user_config, platform_user_id)
                 
                 # 4. 行动 - 执行决策
                 action_results = self._act(decisions, platform_user_id)
@@ -424,7 +424,7 @@ class AIBehaviorEngine:
             return []
     
     def _decide(self, thoughts: List[Dict[str, Any]], posts: List[Dict[str, Any]], 
-                user_config: Dict[str, Any]) -> Dict[str, Any]:
+                user_config: Dict[str, Any], user_id: int) -> Dict[str, Any]:
         """
         决策阶段 - 使用 LLM 基于思考结果做最终决策
         
@@ -432,69 +432,106 @@ class AIBehaviorEngine:
             thoughts: 思考结果列表
             posts: 帖子列表
             user_config: 用户配置
+            user_id: 平台用户ID
             
         Returns:
             Dict: 决策结果
         """
         username = user_config.get("username", "Unknown")
-        personality = user_config.get("personality_prompt", "")
-        post_tendency = user_config.get("post_tendency", 0.5)
         
         print(f"\n[决策] [{username}] 正在决策...")
         
+        # 获取关注列表
+        following_list = self._get_following_list(user_id)
+        if following_list:
+            print(f"[{username}] 已关注 {len(following_list)} 位用户: {', '.join(following_list[:5])}{'...' if len(following_list) > 5 else ''}")
+        
         if self.use_llm and self.llm_client:
-            return self._decide_with_llm(thoughts, user_config)
+            return self._decide_with_llm(thoughts, user_config, following_list)
         else:
-            return self._decide_simulated(thoughts, user_config)
+            return self._decide_simulated(thoughts, user_config, following_list)
     
-    def _decide_with_llm(self, thoughts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> Dict[str, Any]:
-        """使用 LLM 进行决策"""
+    def _decide_with_llm(self, thoughts: List[Dict[str, Any]], user_config: Dict[str, Any], 
+                         following_list: List[str] = None) -> Dict[str, Any]:
+        """使用 LLM 进行决策 - 支持评论、回复、点赞帖子/评论/回复，考虑关注关系"""
         username = user_config.get("username", "Unknown")
         personality = user_config.get("personality_prompt", "")
-        post_tendency = user_config.get("post_tendency", 0.5)
-        interaction_tendency = user_config.get("interaction_tendency", 0.5)
         
-        system_prompt = f"""你是{username}，{personality}
+        # 构建关注信息
+        following_info = ""
+        if following_list:
+            following_info = f"\n你关注的用户: {', '.join(following_list)}\n你对关注用户的帖子/评论/回复会有更高的兴趣和互动意愿。"
+        
+        system_prompt = f"""你是{username}，{personality}{following_info}
 
-基于你对帖子的思考结果，决定你的行动。
+基于你对帖子的思考结果和阅读到的评论/回复，决定你的行动。
 
-可选行动：
-1. "post" - 发布新帖子（内容自拟）
-2. "comment" - 评论某条帖子（需要提供 post_id 和评论内容）
-3. "like" - 点赞某条帖子（需要提供 post_id）
-4. "follow" - 关注某用户（需要提供 user_id）
-5. "skip" - 什么都不做
+可选行动类型：
+1. "post" - 发布新帖子（需要提供content）
+2. "comment" - 评论某条帖子（需要提供post_id和content）
+3. "reply_to_comment" - 回复某条评论（需要提供comment_id和content）
+4. "reply_to_reply" - 回复某条回复（需要提供reply_id和content）
+5. "like_post" - 点赞帖子（需要提供post_id）
+6. "like_comment" - 点赞评论（需要提供comment_id）
+7. "like_reply" - 点赞回复（需要提供reply_id）
+8. "follow" - 关注某用户（需要提供user_id）
+9. "skip" - 什么都不做
 
-你的发帖倾向: {post_tendency}
-你的互动倾向: {interaction_tendency}
+【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记，不要包含任何解释性文字。
 
-【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记（如```json或```），不要包含任何解释性文字。
-
-输出格式必须严格如下：
-{{"actions":[{{"type":"comment","post_id":1,"content":"这条帖子说得很有道理！"}},{{"type":"like","post_id":2}}],"reason":"我觉得这些帖子很有趣"}}
+输出格式必须严格如下（单行JSON）：
+{{"actions":[{{"type":"comment","post_id":1,"content":"这条帖子说得很有道理！"}},{{"type":"like_comment","comment_id":2}},{{"type":"reply_to_comment","comment_id":3,"content":"我也这么觉得！"}}],"reason":"我觉得这些内容很有趣"}}
 
 规则：
-1. 只输出JSON，不要换行、不要缩进、不要markdown标记
+1. 只输出单行JSON，不要换行、不要缩进、不要markdown标记
 2. 确保JSON格式完整，所有引号、括号必须匹配
 3. actions数组可以为空（表示skip）
-4. content和reason字段使用纯文本，不要有特殊字符"""
+4. content和reason字段使用纯文本，不要有特殊字符
+5. 根据兴趣系数和关注关系决定行动：
+   - 对关注用户的帖子/评论/回复，兴趣系数自动提高
+   - 高兴趣可以评论/回复，中等兴趣可以点赞，低兴趣跳过"""
         
-        # 构建思考信息
+        # 构建思考信息，包含帖子和评论
         thoughts_info = []
         for t in thoughts:
-            thoughts_info.append({
+            post_data = {
                 "post_id": t["post"]["id"],
                 "author": t["post"]["author"]["username"],
-                "content": t["post"]["content"][:50],
+                "content": t["post"]["content"][:100],
                 "thinking": t["thinking"],
                 "interest_score": t["interest_score"]
-            })
+            }
+            
+            # 添加评论信息
+            if t.get("comments"):
+                post_data["comments"] = []
+                for comment in t["comments"]:
+                    comment_data = {
+                        "comment_id": comment.get("id"),
+                        "author": comment.get("author", {}).get("username", "Unknown"),
+                        "content": comment.get("content", "")[:80]
+                    }
+                    
+                    # 添加回复信息
+                    if comment.get("replies"):
+                        comment_data["replies"] = [
+                            {
+                                "reply_id": reply.get("id"),
+                                "author": reply.get("author", {}).get("username", "Unknown"),
+                                "content": reply.get("content", "")[:60]
+                            }
+                            for reply in comment["replies"][:3]  # 最多3条回复
+                        ]
+                    
+                    post_data["comments"].append(comment_data)
+            
+            thoughts_info.append(post_data)
         
-        user_prompt = f"""基于以下思考结果，决定你的行动：
+        user_prompt = f"""基于以下帖子和评论/回复的思考结果，决定你的行动：
 
-{json.dumps(thoughts_info, ensure_ascii=False, indent=2)}
+{json.dumps(thoughts_info, ensure_ascii=False)}
 
-请输出JSON格式的决策结果。"""
+请输出JSON格式的决策结果。可以针对帖子、评论或回复进行互动。"""
         
         try:
             result = self.llm_client.chat(user_prompt, system_prompt)
@@ -531,19 +568,19 @@ class AIBehaviorEngine:
             print(f"[{username}] LLM 决策失败: {e}，使用模拟决策")
             return self._decide_simulated(thoughts, user_config)
     
-    def _decide_simulated(self, thoughts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> Dict[str, Any]:
-        """模拟决策（Demo 模式）"""
+    def _decide_simulated(self, thoughts: List[Dict[str, Any]], user_config: Dict[str, Any],
+                          following_list: List[str] = None) -> Dict[str, Any]:
+        """模拟决策（Demo 模式）- 考虑关注关系"""
         username = user_config.get("username", "Unknown")
-        post_tendency = user_config.get("post_tendency", 0.5)
-        interaction_tendency = user_config.get("interaction_tendency", 0.5)
+        following_list = following_list or []
         
         decisions = {
             "actions": [],
-            "reason": "基于兴趣系数的模拟决策"
+            "reason": "基于兴趣系数和关注关系的模拟决策"
         }
         
-        # 决策 1: 是否发帖
-        if random.random() < post_tendency:
+        # 决策 1: 是否发帖（基于随机概率）
+        if random.random() < 0.3:  # 30% 概率发帖
             post_contents = [
                 "今天也是充满活力的一天！",
                 "刚刚想到了一些有趣的事情...",
@@ -556,33 +593,48 @@ class AIBehaviorEngine:
                 "content": random.choice(post_contents)
             })
         
-        # 决策 2: 基于兴趣系数选择互动帖子
-        if thoughts and random.random() < interaction_tendency:
-            # 按兴趣系数排序，选择最感兴趣的
-            sorted_thoughts = sorted(thoughts, key=lambda x: x["interest_score"], reverse=True)
+        # 决策 2: 基于兴趣系数和关注关系选择互动帖子
+        if thoughts:
+            # 为每条思考添加"有效兴趣系数"（考虑关注关系）
+            for thought in thoughts:
+                author = thought["post"]["author"]["username"]
+                base_score = thought["interest_score"]
+                # 如果是关注用户，兴趣系数提高
+                if author in following_list:
+                    thought["effective_score"] = min(1.0, base_score + 0.3)
+                    thought["is_following"] = True
+                else:
+                    thought["effective_score"] = base_score
+                    thought["is_following"] = False
+            
+            # 按有效兴趣系数排序
+            sorted_thoughts = sorted(thoughts, key=lambda x: x["effective_score"], reverse=True)
             
             for thought in sorted_thoughts[:2]:  # 最多互动2条
-                if thought["interest_score"] > 0.6:  # 兴趣系数阈值
+                if thought["effective_score"] > 0.5:  # 降低阈值
                     post = thought["post"]
+                    author = post["author"]["username"]
                     
-                    # 决定互动类型
-                    if random.random() < 0.5:
-                        decisions["actions"].append({
-                            "type": "like",
-                            "post_id": post["id"]
-                        })
-                    else:
+                    # 对关注用户更倾向于评论，非关注用户更倾向于点赞
+                    is_following = author in following_list
+                    
+                    if is_following and random.random() < 0.7:  # 关注用户70%概率评论
                         comments = [
-                            "说得太好了！",
-                            "完全同意你的观点",
-                            "这个观点很有意思",
-                            "感谢分享这么好的内容",
-                            "哈哈，确实如此"
+                            f"@{author} 说得太好了！",
+                            f"@{author} 完全同意你的观点",
+                            f"@{author} 这个观点很有意思",
+                            f"@{author} 感谢分享这么好的内容",
+                            f"@{author} 哈哈，确实如此"
                         ]
                         decisions["actions"].append({
                             "type": "comment",
                             "post_id": post["id"],
                             "content": random.choice(comments)
+                        })
+                    elif random.random() < 0.5:  # 50%概率点赞
+                        decisions["actions"].append({
+                            "type": "like_post",
+                            "post_id": post["id"]
                         })
         
         # 如果没有决策任何行动
@@ -619,14 +671,32 @@ class AIBehaviorEngine:
                 elif action_type == "comment":
                     result.update(self._create_comment(user_id, action.get("post_id"), 
                                                        action.get("content", "")))
-                elif action_type == "like":
+                elif action_type == "reply_to_comment":
+                    result.update(self._create_reply(user_id, action.get("comment_id"), 
+                                                    action.get("content", ""), None))
+                elif action_type == "reply_to_reply":
+                    result.update(self._create_reply(user_id, None, 
+                                                    action.get("content", ""), 
+                                                    action.get("reply_id")))
+                elif action_type == "like_post":
                     result.update(self._like_post(user_id, action.get("post_id")))
+                elif action_type == "like_comment":
+                    result.update(self._like_comment(user_id, action.get("comment_id")))
+                elif action_type == "like_reply":
+                    result.update(self._like_reply(user_id, action.get("reply_id")))
                 elif action_type == "follow":
                     result.update(self._follow_user(user_id, action.get("user_id")))
                 elif action_type == "skip":
                     result["success"] = True
                     result["message"] = "跳过本次行动"
                     print(f"   ⏭️  选择跳过")
+                else:
+                    # 兼容旧版类型
+                    if action_type == "like":
+                        result.update(self._like_post(user_id, action.get("post_id")))
+                    else:
+                        result["error"] = f"未知行动类型: {action_type}"
+                        print(f"   [警告] 未知行动类型: {action_type}")
                     
             except Exception as e:
                 result["error"] = str(e)
@@ -716,6 +786,110 @@ class AIBehaviorEngine:
                 
         except Exception as e:
             return {"success": False, "error": str(e)}
+    
+    def _create_reply(self, user_id: int, comment_id: Optional[int], 
+                     content: str, parent_reply_id: Optional[int]) -> Dict[str, Any]:
+        """创建回复（回复评论或回复回复）"""
+        try:
+            if not comment_id and not parent_reply_id:
+                return {"success": False, "error": "必须提供comment_id或parent_reply_id"}
+            
+            # 如果只有 parent_reply_id，需要先获取对应的 comment_id
+            if parent_reply_id and not comment_id:
+                # 通过 API 获取回复信息以找到对应的 comment_id
+                reply_info_url = f"{self.api_base_url}/replies/{parent_reply_id}"
+                try:
+                    reply_response = requests.get(reply_info_url, timeout=5)
+                    if reply_response.status_code == 200:
+                        reply_data = reply_response.json()
+                        comment_id = reply_data.get("comment_id")
+                    else:
+                        return {"success": False, "error": f"无法获取回复信息: HTTP {reply_response.status_code}"}
+                except:
+                    # 如果获取失败，尝试直接使用 comment_id=1（兜底方案）
+                    print(f"   [警告] 无法获取回复 {parent_reply_id} 的信息，尝试使用默认方案")
+                    # 这里我们需要一个更好的方案，暂时返回错误
+                    return {"success": False, "error": "回复回复功能需要comment_id"}
+            
+            # 使用 /comments/{comment_id}/replies 端点
+            url = f"{self.api_base_url}/comments/{comment_id}/replies"
+            
+            payload = {"content": content}
+            if parent_reply_id:
+                payload["parent_reply_id"] = parent_reply_id
+            
+            params = {"author_id": user_id}
+            
+            response = requests.post(url, json=payload, params=params, timeout=10)
+            
+            if response.status_code == 201:
+                reply = response.json()
+                target_desc = f"回复ID:{parent_reply_id}" if parent_reply_id else f"评论ID:{comment_id}"
+                print(f"   💬 回复成功 [{target_desc}]: {content[:40]}...")
+                return {"success": True, "reply_id": reply["id"]}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+                
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _like_comment(self, user_id: int, comment_id: int) -> Dict[str, Any]:
+        """点赞评论"""
+        try:
+            url = f"{self.api_base_url}/comments/{comment_id}/like"
+            params = {"user_id": user_id}
+            
+            response = requests.post(url, params=params, timeout=10)
+            
+            if response.status_code == 201:
+                print(f"   ❤️  点赞评论成功 [评论ID:{comment_id}]")
+                return {"success": True}
+            elif response.status_code == 400:
+                print(f"   [警告]  已经点赞过该评论 [评论ID:{comment_id}]")
+                return {"success": True, "message": "Already liked"}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+                
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _like_reply(self, user_id: int, reply_id: int) -> Dict[str, Any]:
+        """点赞回复"""
+        try:
+            url = f"{self.api_base_url}/replies/{reply_id}/like"
+            params = {"user_id": user_id}
+            
+            response = requests.post(url, params=params, timeout=10)
+            
+            if response.status_code == 201:
+                print(f"   ❤️  点赞回复成功 [回复ID:{reply_id}]")
+                return {"success": True}
+            elif response.status_code == 400:
+                print(f"   [警告]  已经点赞过该回复 [回复ID:{reply_id}]")
+                return {"success": True, "message": "Already liked"}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+                
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _get_following_list(self, user_id: int) -> List[str]:
+        """获取用户关注的用户列表（返回用户名列表）"""
+        try:
+            url = f"{self.api_base_url}/users/{user_id}/following"
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                following = response.json()
+                # 提取用户名列表
+                usernames = [user.get("username", "") for user in following if user.get("username")]
+                return usernames
+            else:
+                return []
+                
+        except Exception as e:
+            print(f"[行为引擎] 获取关注列表失败: {e}")
+            return []
     
     def get_stats(self) -> Dict[str, Any]:
         """获取行为统计"""
