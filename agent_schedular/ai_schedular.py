@@ -10,18 +10,21 @@ from datetime import datetime
 
 from .time_system import time_system
 from .ai_initial import AIUserInitializer
+from .ai_behavior import AIBehaviorEngine
 
 
 class AIUserThread(threading.Thread):
     """AI 用户线程类"""
     
-    def __init__(self, user_config: Dict[str, Any], scheduler: 'AIScheduler'):
+    def __init__(self, user_config: Dict[str, Any], scheduler: 'AIScheduler', 
+                 behavior_engine: Optional[AIBehaviorEngine] = None):
         """
         初始化 AI 用户线程
         
         Args:
             user_config: 用户配置信息
             scheduler: 调度器实例
+            behavior_engine: 行为引擎实例，可选
         """
         super().__init__(name=f"AIUser-{user_config.get('username', 'Unknown')}")
         self.user_config = user_config
@@ -36,6 +39,9 @@ class AIUserThread(threading.Thread):
         self.login_rate_per_hour = self.monthly_logins / (30 * 24)
         
         self._stop_event = threading.Event()
+        
+        # 行为引擎（用于登录后的活动）
+        self.behavior_engine = behavior_engine
         
         print(f"[{self.username}] 线程已创建，每月理想登录次数：{self.monthly_logins}")
     
@@ -92,17 +98,18 @@ class AIUserThread(threading.Thread):
         return delay_hours
     
     def _login(self):
-        """执行登录操作（MVP 版本仅打印信息）"""
+        """执行登录操作"""
         current_time = time_system.now()
         time_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
         
         print(f"\n[{time_str}] [{self.username}] 登录成功")
         
-        # MVP 版本：仅打印信息，不做后续操作
-        # TODO: 后续功能开发可在此处添加：
-        # 1. 浏览时间线
-        # 2. 发布帖子
-        # 3. 与其他用户互动
+        # 如果配置了行为引擎，执行完整的登录会话
+        if self.behavior_engine and self.platform_user_id:
+            self.behavior_engine.execute_login_session(self.user_config)
+        else:
+            # Demo 模式提示
+            print(f"[{self.username}] 未配置行为引擎，仅记录登录")
     
     def stop(self):
         """停止线程"""
@@ -113,17 +120,25 @@ class AIUserThread(threading.Thread):
 class AIScheduler:
     """AI 调度器类"""
     
-    def __init__(self, initializer: Optional[AIUserInitializer] = None):
+    def __init__(self, initializer: Optional[AIUserInitializer] = None,
+                 enable_behavior: bool = True):
         """
         初始化 AI 调度器
         
         Args:
             initializer: AI 用户初始化器实例，可选
+            enable_behavior: 是否启用行为引擎，默认 True
         """
         self.initializer = initializer or AIUserInitializer()
         self.user_threads: Dict[int, AIUserThread] = {}
         self._running = False
         self._scheduler_thread: Optional[threading.Thread] = None
+        
+        # 行为引擎
+        self.enable_behavior = enable_behavior
+        self.behavior_engine: Optional[AIBehaviorEngine] = None
+        if enable_behavior:
+            self.behavior_engine = AIBehaviorEngine()
         
         print("[调度器] 调度器已创建")
     
@@ -149,13 +164,16 @@ class AIScheduler:
             if not initialized_users:
                 print("[调度器] ❌ 没有成功初始化的用户，无法启动")
                 return
+            
+            # 创建初始帖子（冷启动保护）
+            self.initializer.initialize_initial_posts()
         
         # 为每个用户创建线程
         for user_config in self.initializer.get_all_users():
             user_id = user_config.get("id")
             
             if user_id not in self.user_threads:
-                user_thread = AIUserThread(user_config, self)
+                user_thread = AIUserThread(user_config, self, self.behavior_engine)
                 self.user_threads[user_id] = user_thread
         
         # 启动所有用户线程
@@ -167,6 +185,7 @@ class AIScheduler:
         print("=" * 60)
         print(f"[调度器] 调度器已启动，共 {len(self.user_threads)} 个 AI 用户")
         print(f"[调度器] 时间模式：{time_system.get_mode()}")
+        print(f"[调度器] 行为引擎：{'已启用' if self.enable_behavior else '已禁用'}")
         
         if time_system.get_mode() == "test":
             print(f"[调度器] 时间流速：1 秒 = {time_system._time_scale} 秒")
@@ -187,6 +206,10 @@ class AIScheduler:
             thread.join(timeout=5)
         
         print("[调度器] 调度器已停止")
+        
+        # 打印行为统计
+        if self.behavior_engine:
+            self.behavior_engine.print_stats()
     
     def get_user_thread(self, user_id: int) -> Optional[AIUserThread]:
         """

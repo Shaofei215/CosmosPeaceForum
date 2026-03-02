@@ -213,6 +213,100 @@ class AIUserInitializer:
             signature = user.get("personal_signature", "")[:28]
             
             print(f"{user_id:<6} {username:<15} {platform_id:<10} {signature:<30}")
+    
+    def initialize_initial_posts(self, posts_config_path: str = "initial_posts.json") -> int:
+        """
+        初始化预设帖子
+        在平台冷启动时创建一些初始帖子，避免时间线为空
+        
+        Args:
+            posts_config_path: 初始帖子配置文件路径
+            
+        Returns:
+            int: 成功创建的帖子数量
+        """
+        print("\n[AI 初始化] 检查是否需要创建初始帖子...")
+        
+        # 先检查是否已有帖子
+        try:
+            url = f"{self.api_base_url}/posts"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                existing_posts = response.json()
+                if existing_posts:
+                    print(f"[AI 初始化] 平台已有 {len(existing_posts)} 条帖子，跳过初始帖子创建")
+                    return 0
+        except Exception as e:
+            print(f"[AI 初始化] 检查现有帖子失败: {e}")
+            return 0
+        
+        # 加载初始帖子配置
+        posts_path = Path(posts_config_path)
+        if not posts_path.exists():
+            print(f"[AI 初始化] ⚠️ 初始帖子配置文件不存在：{posts_path}")
+            return 0
+        
+        try:
+            with open(posts_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+            
+            initial_posts = config_data.get("initial_posts", [])
+            
+            if not initial_posts:
+                print("[AI 初始化] ⚠️ 配置文件中没有初始帖子")
+                return 0
+            
+            print(f"\n[AI 初始化] 开始创建 {len(initial_posts)} 条初始帖子...")
+            print("=" * 60)
+            
+            created_count = 0
+            
+            for post_data in initial_posts:
+                username = post_data.get("username")
+                content = post_data.get("content")
+                
+                if not username or not content:
+                    continue
+                
+                # 查找用户
+                user = self.get_user_by_username(username)
+                if not user:
+                    print(f"[AI 初始化] ⚠️ 找不到用户 {username}，跳过此帖子")
+                    continue
+                
+                platform_user_id = user.get("platform_user_id")
+                if not platform_user_id:
+                    continue
+                
+                # 创建帖子
+                try:
+                    url = f"{self.api_base_url}/posts"
+                    payload = {"content": content}
+                    params = {"author_id": platform_user_id}
+                    
+                    response = requests.post(url, json=payload, params=params, timeout=5)
+                    
+                    if response.status_code == 201:
+                        created_post = response.json()
+                        print(f"[AI 初始化] ✅ {username}: {content[:40]}...")
+                        created_count += 1
+                    else:
+                        print(f"[AI 初始化] ❌ {username} 发帖失败: HTTP {response.status_code}")
+                        
+                except Exception as e:
+                    print(f"[AI 初始化] ❌ {username} 发帖出错: {e}")
+            
+            print("=" * 60)
+            print(f"[AI 初始化] 初始帖子创建完成：成功 {created_count}/{len(initial_posts)}")
+            
+            return created_count
+            
+        except json.JSONDecodeError as e:
+            print(f"[AI 初始化] ❌ 初始帖子 JSON 解析错误：{e}")
+            return 0
+        except Exception as e:
+            print(f"[AI 初始化] ❌ 创建初始帖子失败：{e}")
+            return 0
 
 
 if __name__ == "__main__":

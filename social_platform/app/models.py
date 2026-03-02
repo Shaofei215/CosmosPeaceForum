@@ -35,6 +35,10 @@ class Post(Base):
     author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # 热度相关字段
+    hot_score = Column(Integer, default=0, nullable=False, index=True)  # 热度分数
+    last_hot_update = Column(DateTime, default=datetime.utcnow, nullable=False)  # 上次热度更新时间
 
     author = relationship("User", back_populates="posts")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
@@ -52,6 +56,10 @@ class Comment(Base):
     author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # 热度相关字段
+    hot_score = Column(Integer, default=0, nullable=False, index=True)  # 热度分数
+    last_hot_update = Column(DateTime, default=datetime.utcnow, nullable=False)  # 上次热度更新时间
 
     post = relationship("Post", back_populates="comments")
     author = relationship("User", back_populates="comments")

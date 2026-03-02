@@ -35,6 +35,8 @@ class PostResponse(BaseModel):
     author_id: int
     content: str
     created_at: datetime
+    hot_score: int = 0
+    last_hot_update: Optional[datetime] = None
     author: Optional[UserResponse] = None
 
     class Config:
@@ -53,6 +55,8 @@ class CommentResponse(BaseModel):
     author_id: int
     content: str
     created_at: datetime
+    hot_score: int = 0
+    last_hot_update: Optional[datetime] = None
     author: Optional[UserResponse] = None
 
     class Config:

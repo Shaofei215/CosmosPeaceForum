@@ -93,6 +93,11 @@ def get_post_comments(db: Session, post_id: int) -> List[models.Comment]:
     )
 
 
+def get_comment(db: Session, comment_id: int) -> Optional[models.Comment]:
+    """获取单个评论"""
+    return db.query(models.Comment).filter(models.Comment.id == comment_id).first()
+
+
 def create_like(db: Session, user_id: int, post_id: int) -> models.Like:
     """创建点赞"""
     existing_like = (
