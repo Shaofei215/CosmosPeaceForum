@@ -63,11 +63,35 @@ class CommentResponse(BaseModel):
         from_attributes = True
 
 
+class ReplyCreate(BaseModel):
+    """创建回复请求"""
+    content: str
+    parent_reply_id: Optional[int] = None  # 如果是回复回复，则填写
+
+
+class ReplyResponse(BaseModel):
+    """回复响应"""
+    id: int
+    comment_id: int
+    parent_reply_id: Optional[int] = None
+    author_id: int
+    content: str
+    created_at: datetime
+    hot_score: int = 0
+    last_hot_update: Optional[datetime] = None
+    author: Optional[UserResponse] = None
+
+    class Config:
+        from_attributes = True
+
+
 class LikeResponse(BaseModel):
     """点赞响应"""
     id: int
     user_id: int
-    post_id: int
+    post_id: Optional[int] = None
+    comment_id: Optional[int] = None
+    reply_id: Optional[int] = None
     created_at: datetime
 
     class Config:

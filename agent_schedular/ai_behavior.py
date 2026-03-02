@@ -26,7 +26,7 @@ except ImportError:
 class AIBehaviorEngine:
     """AI 行为引擎 - 使用 LLM 进行智能决策"""
     
-    def __init__(self, api_base_url: str = "http://127.0.0.1:8000", 
+    def __init__(self, api_base_url: str = "http://127.0.0.1:8006", 
                  use_llm: bool = False,
                  llm_config_path: Optional[str] = None):
         """
@@ -46,7 +46,7 @@ class AIBehaviorEngine:
                 self.llm_client = LLMClient(config_path=llm_config_path)
                 print("[行为引擎] LLM 客户端初始化成功")
             except Exception as e:
-                print(f"[行为引擎] ⚠️ LLM 初始化失败: {e}，将使用 Demo 模式")
+                print(f"[行为引擎] [警告] LLM 初始化失败: {e}，将使用 Demo 模式")
                 self.use_llm = False
         
         self.session_stats = {
@@ -59,7 +59,7 @@ class AIBehaviorEngine:
         }
         
         print(f"[行为引擎] 初始化完成，API地址: {api_base_url}，LLM: {'已启用' if use_llm else '已禁用'}")
-    
+
     def execute_login_session(self, user_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         执行一次完整的登录会话
@@ -74,7 +74,7 @@ class AIBehaviorEngine:
         platform_user_id = user_config.get("platform_user_id")
         
         if not platform_user_id:
-            print(f"[{username}] ❌ 缺少平台用户ID，无法执行会话")
+            print(f"[{username}] [错误] 缺少平台用户ID，无法执行会话")
             return {"success": False, "error": "Missing platform_user_id"}
         
         print(f"\n{'='*60}")
@@ -87,7 +87,7 @@ class AIBehaviorEngine:
             "actions": [],
             "success": True
         }
-        
+
         try:
             # 1. 浏览 - 获取 n 条帖子
             posts = self._browse(user_config, platform_user_id)
@@ -121,11 +121,11 @@ class AIBehaviorEngine:
             
             self.session_stats["sessions_completed"] += 1
             
-            print(f"\n✅ [{username}] 会话完成")
+            print(f"\n[完成] [{username}] 会话完成")
             print(f"{'='*60}\n")
             
         except Exception as e:
-            print(f"[{username}] ❌ 会话执行出错: {e}")
+            print(f"[{username}] [错误] 会话执行出错: {e}")
             session_result["success"] = False
             session_result["error"] = str(e)
         
@@ -151,7 +151,7 @@ class AIBehaviorEngine:
         # 随机决定浏览帖子数量
         n = random.randint(posts_min, posts_max)
         
-        print(f"\n📖 [{username}] 正在浏览时间线...")
+        print(f"\n[浏览] [{username}] 正在浏览时间线...")
         print(f"[{username}] 计划浏览 {n} 条帖子 (范围: {posts_min}-{posts_max})")
         print(f"[{username}] 浏览策略: 70%热门 + 30%最新，顺序随机")
         
@@ -162,20 +162,20 @@ class AIBehaviorEngine:
                 "limit": n,
                 "hot_ratio": 0.7  # 70%热门，30%最新
             }
-            response = requests.get(url, params=params, timeout=5)
+            response = requests.get(url, params=params, timeout=10)
             
             if response.status_code == 200:
                 posts = response.json()
-                
+
                 print(f"[{username}] 获取到 {len(posts)} 条帖子")
-                
+
                 # 显示帖子摘要（包含热度信息）
                 for i, post in enumerate(posts):
                     content_preview = post.get("content", "")[:35] + "..."
                     author = post.get("author", {}).get("username", "Unknown")
                     hot_score = post.get("hot_score", 0)
-                    print(f"   [{i+1}] 🔥{hot_score:3d} {author}: {content_preview}")
-                
+                    print(f"   [{i+1}] [热度]{hot_score:3d} {author}: {content_preview}")
+
                 return posts
             else:
                 print(f"[行为引擎] 获取混合帖子失败: HTTP {response.status_code}")
@@ -183,7 +183,7 @@ class AIBehaviorEngine:
                 return self._browse_fallback(user_id, n, username)
                 
         except requests.exceptions.ConnectionError:
-            print(f"[行为引擎] ❌ 无法连接到社交平台 API")
+            print(f"[行为引擎] [错误] 无法连接到社交平台 API")
             return []
         except Exception as e:
             print(f"[行为引擎] 浏览时间线出错: {e}")
@@ -195,7 +195,7 @@ class AIBehaviorEngine:
         """
         try:
             url = f"{self.api_base_url}/feed/{user_id}"
-            response = requests.get(url, timeout=5)
+            response = requests.get(url, timeout=10)
             
             if response.status_code == 200:
                 all_posts = response.json()
@@ -243,16 +243,17 @@ class AIBehaviorEngine:
 1. 简单思考这条帖子内容
 2. 给出一个0-1之间的兴趣系数（0=完全不感兴趣，1=非常感兴趣）
 
-你必须以JSON格式输出，格式如下：
-{{
-    "thoughts": [
-        {{
-            "post_id": 帖子ID,
-            "thinking": "你对这条帖子的想法",
-            "interest_score": 0.8
-        }}
-    ]
-}}"""
+【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记（如```json或```），不要包含任何解释性文字。
+
+输出格式必须严格如下：
+{{"thoughts":[{{"post_id":1,"thinking":"这条帖子很有趣","interest_score":0.8}},{{"post_id":2,"thinking":"这个话题不太感兴趣","interest_score":0.3}}]}}
+
+规则：
+1. 只输出JSON，不要换行、不要缩进、不要markdown标记
+2. interest_score必须是0到1之间的数字
+3. thinking字段使用纯文本，不要有特殊字符
+4. 确保JSON格式完整，所有引号、括号必须匹配
+5. 必须包含所有帖子的思考结果"""
         
         # 构建帖子信息
         posts_info = []
@@ -274,7 +275,22 @@ class AIBehaviorEngine:
             result = self.llm_client.chat(user_prompt, system_prompt)
             self.session_stats["llm_calls"] += 1
             
+            # 检查结果是否为字典
+            if not isinstance(result, dict):
+                print(f"[{username}] LLM 返回格式错误: 期望字典，得到 {type(result).__name__}，使用模拟思考")
+                return self._think_simulated(posts, user_config)
+            
+            # 检查是否有解析错误
+            if "parse_error" in result:
+                print(f"[{username}] LLM 返回解析错误: {result.get('parse_error')}，使用模拟思考")
+                return self._think_simulated(posts, user_config)
+            
+            # 获取思考数据，支持多种可能的字段名
             thoughts_data = result.get("thoughts", [])
+            if not thoughts_data and "data" in result:
+                thoughts_data = result.get("data", [])
+            if not thoughts_data and isinstance(result, list):
+                thoughts_data = result
             
             # 将思考结果与帖子关联，并根据兴趣系数获取评论
             for thought in thoughts_data:
@@ -299,7 +315,7 @@ class AIBehaviorEngine:
             print(f"[{username}] LLM 思考完成，分析了 {len(thoughts)} 条帖子")
             for t in thoughts:
                 comments_info = f"[阅读了 {t['comments_read']} 条评论]" if t['comments_read'] > 0 else "[未阅读评论]"
-                print(f"   💭 {t['post']['author']['username']}: {t['thinking'][:25]}... (兴趣: {t['interest_score']:.2f}) {comments_info}")
+                print(f"   [思考] {t['post']['author']['username']}: {t['thinking'][:25]}... (兴趣: {t['interest_score']:.2f}) {comments_info}")
             
         except Exception as e:
             print(f"[{username}] LLM 思考失败: {e}，使用模拟思考")
@@ -362,7 +378,7 @@ class AIBehaviorEngine:
         print(f"[{username}] 模拟思考完成，分析了 {len(thoughts)} 条帖子")
         for t in thoughts:
             comments_info = f"[阅读了 {t['comments_read']} 条评论]" if t['comments_read'] > 0 else "[未阅读评论]"
-            print(f"   💭 {t['post']['author']['username']}: {t['thinking'][:25]}... (兴趣: {t['interest_score']:.2f}) {comments_info}")
+            print(f"   [思考] {t['post']['author']['username']}: {t['thinking'][:25]}... (兴趣: {t['interest_score']:.2f}) {comments_info}")
         
         return thoughts
     
@@ -394,7 +410,7 @@ class AIBehaviorEngine:
                 "mixed": "true",
                 "limit": comments_to_read
             }
-            response = requests.get(url, params=params, timeout=5)
+            response = requests.get(url, params=params, timeout=10)
             
             if response.status_code == 200:
                 comments = response.json()
@@ -424,7 +440,7 @@ class AIBehaviorEngine:
         personality = user_config.get("personality_prompt", "")
         post_tendency = user_config.get("post_tendency", 0.5)
         
-        print(f"\n🎯 [{username}] 正在决策...")
+        print(f"\n[决策] [{username}] 正在决策...")
         
         if self.use_llm and self.llm_client:
             return self._decide_with_llm(thoughts, user_config)
@@ -452,18 +468,16 @@ class AIBehaviorEngine:
 你的发帖倾向: {post_tendency}
 你的互动倾向: {interaction_tendency}
 
-请以JSON格式输出决策：
-{{
-    "actions": [
-        {{
-            "type": "行动类型",
-            "post_id": 帖子ID（如果是comment/like）,
-            "user_id": 用户ID（如果是follow）,
-            "content": "内容（如果是post/comment）"
-        }}
-    ],
-    "reason": "决策理由"
-}}"""
+【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记（如```json或```），不要包含任何解释性文字。
+
+输出格式必须严格如下：
+{{"actions":[{{"type":"comment","post_id":1,"content":"这条帖子说得很有道理！"}},{{"type":"like","post_id":2}}],"reason":"我觉得这些帖子很有趣"}}
+
+规则：
+1. 只输出JSON，不要换行、不要缩进、不要markdown标记
+2. 确保JSON格式完整，所有引号、括号必须匹配
+3. actions数组可以为空（表示skip）
+4. content和reason字段使用纯文本，不要有特殊字符"""
         
         # 构建思考信息
         thoughts_info = []
@@ -485,6 +499,28 @@ class AIBehaviorEngine:
         try:
             result = self.llm_client.chat(user_prompt, system_prompt)
             self.session_stats["llm_calls"] += 1
+            
+            # 检查结果是否为字典
+            if not isinstance(result, dict):
+                print(f"[{username}] LLM 返回格式错误: 期望字典，得到 {type(result).__name__}，使用模拟决策")
+                return self._decide_simulated(thoughts, user_config)
+            
+            # 检查是否有解析错误
+            if "parse_error" in result:
+                print(f"[{username}] LLM 返回解析错误: {result.get('parse_error')}，使用模拟决策")
+                return self._decide_simulated(thoughts, user_config)
+            
+            # 检查必要的字段，支持多种可能的字段名
+            actions = result.get("actions", [])
+            if not actions and "data" in result:
+                actions = result.get("data", [])
+            
+            if not actions:
+                print(f"[{username}] LLM 返回缺少 'actions' 字段，使用模拟决策")
+                return self._decide_simulated(thoughts, user_config)
+            
+            # 将处理后的 actions 放回 result
+            result["actions"] = actions
             
             print(f"[{username}] LLM 决策完成")
             print(f"[{username}] 决策: {json.dumps(result, ensure_ascii=False)}")
@@ -571,7 +607,7 @@ class AIBehaviorEngine:
         """
         results = []
         
-        print(f"\n🚀 开始执行行动...")
+        print(f"\n[执行] 开始执行行动...")
         
         for action in decisions.get("actions", []):
             action_type = action.get("type")
@@ -594,7 +630,7 @@ class AIBehaviorEngine:
                     
             except Exception as e:
                 result["error"] = str(e)
-                print(f"   ❌ 行动失败: {e}")
+                print(f"   [错误] 行动失败: {e}")
             
             results.append(result)
         
@@ -607,7 +643,7 @@ class AIBehaviorEngine:
             payload = {"content": content}
             params = {"author_id": user_id}
             
-            response = requests.post(url, json=payload, params=params, timeout=5)
+            response = requests.post(url, json=payload, params=params, timeout=10)
             
             if response.status_code == 201:
                 post = response.json()
@@ -626,11 +662,11 @@ class AIBehaviorEngine:
             payload = {"content": content}
             params = {"author_id": user_id}
             
-            response = requests.post(url, json=payload, params=params, timeout=5)
+            response = requests.post(url, json=payload, params=params, timeout=10)
             
             if response.status_code == 201:
                 comment = response.json()
-                print(f"   💬 评论成功 [帖子ID:{post_id}]: {content}")
+                print(f"   [评论] 评论成功 [帖子ID:{post_id}]: {content}")
                 return {"success": True, "comment_id": comment["id"]}
             else:
                 return {"success": False, "error": f"HTTP {response.status_code}"}
@@ -644,13 +680,13 @@ class AIBehaviorEngine:
             url = f"{self.api_base_url}/posts/{post_id}/like"
             params = {"user_id": user_id}
             
-            response = requests.post(url, params=params, timeout=5)
+            response = requests.post(url, params=params, timeout=10)
             
             if response.status_code == 201:
                 print(f"   ❤️  点赞成功 [帖子ID:{post_id}]")
                 return {"success": True}
             elif response.status_code == 400:
-                print(f"   ⚠️  已经点赞过 [帖子ID:{post_id}]")
+                print(f"   [警告]  已经点赞过 [帖子ID:{post_id}]")
                 return {"success": True, "message": "Already liked"}
             else:
                 return {"success": False, "error": f"HTTP {response.status_code}"}
@@ -667,13 +703,13 @@ class AIBehaviorEngine:
             url = f"{self.api_base_url}/users/{following_id}/follow"
             params = {"follower_id": follower_id}
             
-            response = requests.post(url, params=params, timeout=5)
+            response = requests.post(url, params=params, timeout=10)
             
             if response.status_code == 201:
                 print(f"   🤝 关注成功 [用户ID:{following_id}]")
                 return {"success": True}
             elif response.status_code == 400:
-                print(f"   ⚠️  已经关注过 [用户ID:{following_id}]")
+                print(f"   [警告]  已经关注过 [用户ID:{following_id}]")
                 return {"success": True, "message": "Already following"}
             else:
                 return {"success": False, "error": f"HTTP {response.status_code}"}
@@ -688,7 +724,7 @@ class AIBehaviorEngine:
     def print_stats(self):
         """打印行为统计"""
         print("\n" + "="*60)
-        print("📊 AI 行为统计")
+        print("[统计] AI 行为统计")
         print("="*60)
         print(f"完成会话数: {self.session_stats['sessions_completed']}")
         print(f"发布帖子数: {self.session_stats['posts_created']}")
@@ -706,7 +742,7 @@ if __name__ == "__main__":
     print("="*60)
     print("    AI 行为引擎测试")
     print("="*60)
-    print("\n⚠️  请确保社交平台后端已启动: uvicorn app.main:app --reload")
+    print("\n[警告]  请确保社交平台后端已启动: uvicorn app.main:app --reload")
     print("\n默认使用 Demo 模式（模拟 LLM）")
     print("如需使用真实 LLM，请配置 llm_config.json 并设置 use_llm=True\n")
     
@@ -733,4 +769,4 @@ if __name__ == "__main__":
     # 打印统计
     engine.print_stats()
     
-    print("\n✅ 测试完成!")
+    print("\n[完成] 测试完成!")

@@ -11,8 +11,10 @@ from app import crud, schemas
 from app.hot_score import (
     update_post_hot_score, 
     get_mixed_comments, 
+    get_mixed_replies,
     get_comments_by_interest,
-    update_comment_hot_score
+    update_comment_hot_score,
+    update_reply_hot_score
 )
 
 router = APIRouter(tags=["交互"])
@@ -126,6 +128,210 @@ def refresh_comment_hot_score(comment_id: int, db: Session = Depends(get_db)):
     
     new_score = update_comment_hot_score(db, comment_id)
     return {"comment_id": comment_id, "hot_score": new_score}
+
+
+# ==================== 回复相关 API ====================
+
+@router.post(
+    "/comments/{comment_id}/replies",
+    response_model=schemas.ReplyResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def create_reply(
+    comment_id: int,
+    reply: schemas.ReplyCreate,
+    author_id: int = Query(..., description="回复作者ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    为评论创建回复（支持楼中楼）
+    """
+    comment = crud.get_comment(db, comment_id=comment_id)
+    if not comment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="评论不存在"
+        )
+
+    author = crud.get_user(db, user_id=author_id)
+    if not author:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+
+    new_reply = crud.create_reply(
+        db=db, 
+        reply=reply, 
+        comment_id=comment_id, 
+        author_id=author_id,
+        parent_reply_id=reply.parent_reply_id
+    )
+    
+    # 更新评论热度
+    update_comment_hot_score(db, comment_id)
+    
+    return new_reply
+
+
+@router.get("/comments/{comment_id}/replies", response_model=List[schemas.ReplyResponse])
+def get_comment_replies(
+    comment_id: int, 
+    mixed: bool = Query(False, description="是否使用混合排序（70%热门+30%最新）"),
+    limit: int = Query(50, description="返回数量"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取评论的回复列表
+    支持混合排序：70%热门回复 + 30%最新回复，顺序随机
+    """
+    comment = crud.get_comment(db, comment_id=comment_id)
+    if not comment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="评论不存在"
+        )
+
+    if mixed:
+        # 使用混合排序
+        replies = get_mixed_replies(db, comment_id=comment_id, hot_ratio=0.7, total_limit=limit)
+    else:
+        # 使用默认排序（时间倒序）
+        replies = crud.get_comment_replies(db, comment_id=comment_id)
+    
+    return replies
+
+
+@router.post("/replies/{reply_id}/update-hot-score")
+def refresh_reply_hot_score(reply_id: int, db: Session = Depends(get_db)):
+    """
+    手动刷新回复热度分数
+    """
+    reply = crud.get_reply(db, reply_id=reply_id)
+    if not reply:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="回复不存在"
+        )
+    
+    new_score = update_reply_hot_score(db, reply_id)
+    return {"reply_id": reply_id, "hot_score": new_score}
+
+
+# ==================== 通用点赞 API ====================
+
+@router.post("/posts/{post_id}/like", response_model=schemas.LikeResponse, status_code=status.HTTP_201_CREATED)
+def like_post(
+    post_id: int,
+    user_id: int = Query(..., description="点赞用户ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    点赞帖子
+    """
+    post = crud.get_post(db, post_id=post_id)
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="帖子不存在"
+        )
+
+    user = crud.get_user(db, user_id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+
+    existing_like = crud.check_like_exists(db, user_id=user_id, post_id=post_id)
+    if existing_like:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="已点赞"
+        )
+
+    new_like = crud.create_like(db=db, user_id=user_id, post_id=post_id)
+    
+    # 更新帖子热度
+    update_post_hot_score(db, post_id)
+    
+    return new_like
+
+
+@router.post("/comments/{comment_id}/like", response_model=schemas.LikeResponse, status_code=status.HTTP_201_CREATED)
+def like_comment(
+    comment_id: int,
+    user_id: int = Query(..., description="点赞用户ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    点赞评论
+    """
+    comment = crud.get_comment(db, comment_id=comment_id)
+    if not comment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="评论不存在"
+        )
+
+    user = crud.get_user(db, user_id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+
+    existing_like = crud.check_comment_like_exists(db, user_id=user_id, comment_id=comment_id)
+    if existing_like:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="已点赞"
+        )
+
+    new_like = crud.create_comment_like(db=db, user_id=user_id, comment_id=comment_id)
+    
+    # 更新评论热度
+    update_comment_hot_score(db, comment_id)
+    
+    return new_like
+
+
+@router.post("/replies/{reply_id}/like", response_model=schemas.LikeResponse, status_code=status.HTTP_201_CREATED)
+def like_reply(
+    reply_id: int,
+    user_id: int = Query(..., description="点赞用户ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    点赞回复
+    """
+    reply = crud.get_reply(db, reply_id=reply_id)
+    if not reply:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="回复不存在"
+        )
+
+    user = crud.get_user(db, user_id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+
+    existing_like = crud.check_reply_like_exists(db, user_id=user_id, reply_id=reply_id)
+    if existing_like:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="已点赞"
+        )
+
+    new_like = crud.create_reply_like(db=db, user_id=user_id, reply_id=reply_id)
+    
+    # 更新回复热度
+    update_reply_hot_score(db, reply_id)
+    
+    return new_like
 
 
 @router.post("/posts/{post_id}/like", response_model=schemas.LikeResponse, status_code=status.HTTP_201_CREATED)

@@ -16,7 +16,7 @@ TEST_MODE = True  # True: 测试模式 (模拟时间), False: 正常模式 (系�
 # 测试模式配置
 SIMULATION_START_HOUR = 0  # 模拟时间起始点 (小时)
 SIMULATION_START_MINUTE = 0  # 模拟时间起始点 (分钟)
-TIME_SCALE = 60  # 时间流速倍率 (1 秒 = TIME_SCALE 秒真实时间，默认 60 倍即 1 分钟)
+TIME_SCALE = 20  # 时间流速倍率 (1 秒 = TIME_SCALE 秒真实时间，20 倍即 3秒=1分钟)
 # =================================================
 
 

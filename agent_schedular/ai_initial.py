@@ -12,7 +12,7 @@ class AIUserInitializer:
     """AI 用户初始化器"""
     
     def __init__(self, config_path: str = "ai_users_config.json", 
-                 api_base_url: str = "http://127.0.0.1:8000"):
+                 api_base_url: str = "http://127.0.0.1:8006"):
         """
         初始化 AI 用户初始化器
         
@@ -38,7 +38,7 @@ class AIUserInitializer:
         """
         try:
             if not self.config_path.exists():
-                print(f"[AI 初始化] ❌ 配置文件不存在：{self.config_path}")
+                print(f"[AI 初始化] [错误] 配置文件不存在：{self.config_path}")
                 return False
             
             with open(self.config_path, 'r', encoding='utf-8') as f:
@@ -47,17 +47,17 @@ class AIUserInitializer:
             self.users_config = config_data.get("ai_users", [])
             
             if not self.users_config:
-                print("[AI 初始化] ⚠️ 配置文件中没有 AI 用户配置")
+                print("[AI 初始化] [警告] 配置文件中没有 AI 用户配置")
                 return False
             
-            print(f"[AI 初始化] ✅ 成功加载 {len(self.users_config)} 个 AI 用户配置")
+            print(f"[AI 初始化] [成功] 成功加载 {len(self.users_config)} 个 AI 用户配置")
             return True
             
         except json.JSONDecodeError as e:
-            print(f"[AI 初始化] ❌ JSON 解析错误：{e}")
+            print(f"[AI 初始化] [错误] JSON 解析错误：{e}")
             return False
         except Exception as e:
-            print(f"[AI 初始化] ❌ 加载配置失败：{e}")
+            print(f"[AI 初始化] [错误] 加载配置失败：{e}")
             return False
     
     def create_ai_user(self, user_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -74,7 +74,7 @@ class AIUserInitializer:
         personal_signature = user_config.get("personal_signature", "")
         
         if not username:
-            print(f"[AI 初始化] ❌ 用户配置缺少用户名")
+            print(f"[AI 初始化] [错误] 用户配置缺少用户名")
             return None
         
         print(f"[AI 初始化] 正在创建用户：{username}")
@@ -92,27 +92,27 @@ class AIUserInitializer:
             if response.status_code == 201:
                 # 创建成功
                 created_user = response.json()
-                print(f"[AI 初始化] ✅ {username} 创建成功 - 平台 ID: {created_user['id']}")
+                print(f"[AI 初始化] [成功] {username} 创建成功 - 平台 ID: {created_user['id']}")
                 return {**user_config, "platform_user_id": created_user["id"]}
                 
             elif response.status_code == 400:
                 # 用户已存在，尝试获取现有用户
                 existing_user = self._find_existing_user(username)
                 if existing_user:
-                    print(f"[AI 初始化] ⚠️ {username} 已存在 - 平台 ID: {existing_user['id']}")
+                    print(f"[AI 初始化] [警告] {username} 已存在 - 平台 ID: {existing_user['id']}")
                     return {**user_config, "platform_user_id": existing_user["id"]}
                 else:
-                    print(f"[AI 初始化] ❌ {username} 创建失败，无法获取现有用户信息")
+                    print(f"[AI 初始化] [错误] {username} 创建失败，无法获取现有用户信息")
                     return None
             else:
-                print(f"[AI 初始化] ❌ {username} 创建失败 - HTTP {response.status_code}: {response.text}")
+                print(f"[AI 初始化] [错误] {username} 创建失败 - HTTP {response.status_code}: {response.text}")
                 return None
                 
         except requests.exceptions.ConnectionError:
-            print(f"[AI 初始化] ❌ 无法连接到社交平台 API，请确保后端已启动")
+            print(f"[AI 初始化] [错误] 无法连接到社交平台 API，请确保后端已启动")
             return None
         except Exception as e:
-            print(f"[AI 初始化] ❌ {username} 创建过程出错：{e}")
+            print(f"[AI 初始化] [错误] {username} 创建过程出错：{e}")
             return None
     
     def _find_existing_user(self, username: str) -> Optional[Dict[str, Any]]:
@@ -243,7 +243,7 @@ class AIUserInitializer:
         # 加载初始帖子配置
         posts_path = Path(posts_config_path)
         if not posts_path.exists():
-            print(f"[AI 初始化] ⚠️ 初始帖子配置文件不存在：{posts_path}")
+            print(f"[AI 初始化] [警告] 初始帖子配置文件不存在：{posts_path}")
             return 0
         
         try:
@@ -253,7 +253,7 @@ class AIUserInitializer:
             initial_posts = config_data.get("initial_posts", [])
             
             if not initial_posts:
-                print("[AI 初始化] ⚠️ 配置文件中没有初始帖子")
+                print("[AI 初始化] [警告] 配置文件中没有初始帖子")
                 return 0
             
             print(f"\n[AI 初始化] 开始创建 {len(initial_posts)} 条初始帖子...")
@@ -271,7 +271,7 @@ class AIUserInitializer:
                 # 查找用户
                 user = self.get_user_by_username(username)
                 if not user:
-                    print(f"[AI 初始化] ⚠️ 找不到用户 {username}，跳过此帖子")
+                    print(f"[AI 初始化] [警告] 找不到用户 {username}，跳过此帖子")
                     continue
                 
                 platform_user_id = user.get("platform_user_id")
@@ -288,13 +288,13 @@ class AIUserInitializer:
                     
                     if response.status_code == 201:
                         created_post = response.json()
-                        print(f"[AI 初始化] ✅ {username}: {content[:40]}...")
+                        print(f"[AI 初始化] [成功] {username}: {content[:40]}...")
                         created_count += 1
                     else:
-                        print(f"[AI 初始化] ❌ {username} 发帖失败: HTTP {response.status_code}")
+                        print(f"[AI 初始化] [错误] {username} 发帖失败: HTTP {response.status_code}")
                         
                 except Exception as e:
-                    print(f"[AI 初始化] ❌ {username} 发帖出错: {e}")
+                    print(f"[AI 初始化] [错误] {username} 发帖出错: {e}")
             
             print("=" * 60)
             print(f"[AI 初始化] 初始帖子创建完成：成功 {created_count}/{len(initial_posts)}")
@@ -302,10 +302,10 @@ class AIUserInitializer:
             return created_count
             
         except json.JSONDecodeError as e:
-            print(f"[AI 初始化] ❌ 初始帖子 JSON 解析错误：{e}")
+            print(f"[AI 初始化] [错误] 初始帖子 JSON 解析错误：{e}")
             return 0
         except Exception as e:
-            print(f"[AI 初始化] ❌ 创建初始帖子失败：{e}")
+            print(f"[AI 初始化] [错误] 创建初始帖子失败：{e}")
             return 0
 
 

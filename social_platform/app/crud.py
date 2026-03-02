@@ -70,6 +70,8 @@ def get_user_posts(db: Session, user_id: int, skip: int = 0, limit: int = 50) ->
     )
 
 
+# ==================== 评论相关 ====================
+
 def create_comment(
     db: Session, comment: schemas.CommentCreate, post_id: int, author_id: int
 ) -> models.Comment:
@@ -98,8 +100,57 @@ def get_comment(db: Session, comment_id: int) -> Optional[models.Comment]:
     return db.query(models.Comment).filter(models.Comment.id == comment_id).first()
 
 
+# ==================== 回复相关 ====================
+
+def create_reply(
+    db: Session, 
+    reply: schemas.ReplyCreate, 
+    comment_id: int, 
+    author_id: int,
+    parent_reply_id: Optional[int] = None
+) -> models.Reply:
+    """创建新回复（支持楼中楼）"""
+    db_reply = models.Reply(
+        comment_id=comment_id,
+        author_id=author_id,
+        content=reply.content,
+        parent_reply_id=parent_reply_id
+    )
+    db.add(db_reply)
+    db.commit()
+    db.refresh(db_reply)
+    return db_reply
+
+
+def get_comment_replies(db: Session, comment_id: int) -> List[models.Reply]:
+    """获取评论的回复列表"""
+    return (
+        db.query(models.Reply)
+        .filter(models.Reply.comment_id == comment_id)
+        .order_by(desc(models.Reply.created_at))
+        .all()
+    )
+
+
+def get_reply(db: Session, reply_id: int) -> Optional[models.Reply]:
+    """获取单个回复"""
+    return db.query(models.Reply).filter(models.Reply.id == reply_id).first()
+
+
+def get_reply_replies(db: Session, parent_reply_id: int) -> List[models.Reply]:
+    """获取回复的子回复列表"""
+    return (
+        db.query(models.Reply)
+        .filter(models.Reply.parent_reply_id == parent_reply_id)
+        .order_by(desc(models.Reply.created_at))
+        .all()
+    )
+
+
+# ==================== 点赞相关 ====================
+
 def create_like(db: Session, user_id: int, post_id: int) -> models.Like:
-    """创建点赞"""
+    """创建帖子点赞"""
     existing_like = (
         db.query(models.Like)
         .filter(models.Like.user_id == user_id, models.Like.post_id == post_id)
@@ -116,7 +167,7 @@ def create_like(db: Session, user_id: int, post_id: int) -> models.Like:
 
 
 def delete_like(db: Session, user_id: int, post_id: int) -> bool:
-    """删除点赞"""
+    """删除帖子点赞"""
     db_like = (
         db.query(models.Like)
         .filter(models.Like.user_id == user_id, models.Like.post_id == post_id)
@@ -130,7 +181,7 @@ def delete_like(db: Session, user_id: int, post_id: int) -> bool:
 
 
 def check_like_exists(db: Session, user_id: int, post_id: int) -> bool:
-    """检查用户是否已点赞"""
+    """检查用户是否已点赞帖子"""
     return (
         db.query(models.Like)
         .filter(models.Like.user_id == user_id, models.Like.post_id == post_id)
@@ -138,6 +189,90 @@ def check_like_exists(db: Session, user_id: int, post_id: int) -> bool:
         is not None
     )
 
+
+def create_comment_like(db: Session, user_id: int, comment_id: int) -> models.Like:
+    """创建评论点赞"""
+    existing_like = (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.comment_id == comment_id)
+        .first()
+    )
+    if existing_like:
+        return existing_like
+
+    db_like = models.Like(user_id=user_id, comment_id=comment_id)
+    db.add(db_like)
+    db.commit()
+    db.refresh(db_like)
+    return db_like
+
+
+def delete_comment_like(db: Session, user_id: int, comment_id: int) -> bool:
+    """删除评论点赞"""
+    db_like = (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.comment_id == comment_id)
+        .first()
+    )
+    if db_like:
+        db.delete(db_like)
+        db.commit()
+        return True
+    return False
+
+
+def check_comment_like_exists(db: Session, user_id: int, comment_id: int) -> bool:
+    """检查用户是否已点赞评论"""
+    return (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.comment_id == comment_id)
+        .first()
+        is not None
+    )
+
+
+def create_reply_like(db: Session, user_id: int, reply_id: int) -> models.Like:
+    """创建回复点赞"""
+    existing_like = (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.reply_id == reply_id)
+        .first()
+    )
+    if existing_like:
+        return existing_like
+
+    db_like = models.Like(user_id=user_id, reply_id=reply_id)
+    db.add(db_like)
+    db.commit()
+    db.refresh(db_like)
+    return db_like
+
+
+def delete_reply_like(db: Session, user_id: int, reply_id: int) -> bool:
+    """删除回复点赞"""
+    db_like = (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.reply_id == reply_id)
+        .first()
+    )
+    if db_like:
+        db.delete(db_like)
+        db.commit()
+        return True
+    return False
+
+
+def check_reply_like_exists(db: Session, user_id: int, reply_id: int) -> bool:
+    """检查用户是否已点赞回复"""
+    return (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.reply_id == reply_id)
+        .first()
+        is not None
+    )
+
+
+# ==================== 关注相关 ====================
 
 def create_follow(db: Session, follower_id: int, following_id: int) -> models.Follow:
     """创建关注关系"""

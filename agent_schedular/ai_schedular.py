@@ -2,6 +2,7 @@
 AI 用户线程调度器模块
 使用泊松过程计算登录间隔，调度 AI 用户线程
 """
+import os
 import threading
 import math
 import random
@@ -50,8 +51,16 @@ class AIUserThread(threading.Thread):
         print(f"[{self.username}] 线程启动")
         
         try:
-            # 首次登录等待一小段时间
-            time_system.sleep(2)
+            # 首次登录使用泊松分布计算延迟，避免所有用户同时登录
+            # 使用相同的 lambda 参数，但只计算一次（不是循环）
+            initial_delay_hours = self._calculate_next_login_delay()
+            initial_delay_seconds = initial_delay_hours * 3600
+            print(f"[{self.username}] 首次登录将在 {initial_delay_hours:.2f} 小时后（泊松分布）")
+            
+            if time_system.get_mode() == "test":
+                self._stop_event.wait(initial_delay_seconds / time_system._time_scale)
+            else:
+                self._stop_event.wait(initial_delay_seconds)
             
             while not self._stop_event.is_set():
                 # 执行登录操作
@@ -65,7 +74,10 @@ class AIUserThread(threading.Thread):
                 # 等待到下次登录时间
                 # 转换为秒（考虑时间流速）
                 delay_seconds = next_login_delay * 3600
-                self._stop_event.wait(delay_seconds / time_system._time_scale if time_system.get_mode() == "test" else delay_seconds)
+                if time_system.get_mode() == "test":
+                    self._stop_event.wait(delay_seconds / time_system._time_scale)
+                else:
+                    self._stop_event.wait(delay_seconds)
             
             print(f"[{self.username}] 线程停止")
             
@@ -138,7 +150,13 @@ class AIScheduler:
         self.enable_behavior = enable_behavior
         self.behavior_engine: Optional[AIBehaviorEngine] = None
         if enable_behavior:
-            self.behavior_engine = AIBehaviorEngine()
+            # 启用 LLM
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            llm_config_path = os.path.join(current_dir, "llm_config.json")
+            self.behavior_engine = AIBehaviorEngine(
+                use_llm=True,
+                llm_config_path=llm_config_path
+            )
         
         print("[调度器] 调度器已创建")
     
@@ -155,18 +173,23 @@ class AIScheduler:
         # 加载配置并初始化用户
         if auto_init:
             if not self.initializer.load_config():
-                print("[调度器] ❌ 加载配置失败，无法启动")
+                print("[调度器] [错误] 加载配置失败，无法启动")
                 return
             
             initialized_users = self.initializer.initialize_all_users()
             self.initializer.print_user_summary()
             
             if not initialized_users:
-                print("[调度器] ❌ 没有成功初始化的用户，无法启动")
+                print("[调度器] [错误] 没有成功初始化的用户，无法启动")
                 return
             
             # 创建初始帖子（冷启动保护）
-            self.initializer.initialize_initial_posts()
+            # 使用绝对路径
+            import os
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            posts_config_path = os.path.join(project_root, "initial_posts.json")
+            self.initializer.initialize_initial_posts(posts_config_path)
         
         # 为每个用户创建线程
         for user_config in self.initializer.get_all_users():
