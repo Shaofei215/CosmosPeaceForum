@@ -1,0 +1,239 @@
+"""
+AI 用户线程调度器模块
+使用泊松过程计算登录间隔，调度 AI 用户线程
+"""
+import threading
+import math
+import random
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+
+from .time_system import time_system
+from .ai_initial import AIUserInitializer
+
+
+class AIUserThread(threading.Thread):
+    """AI 用户线程类"""
+    
+    def __init__(self, user_config: Dict[str, Any], scheduler: 'AIScheduler'):
+        """
+        初始化 AI 用户线程
+        
+        Args:
+            user_config: 用户配置信息
+            scheduler: 调度器实例
+        """
+        super().__init__(name=f"AIUser-{user_config.get('username', 'Unknown')}")
+        self.user_config = user_config
+        self.scheduler = scheduler
+        self.username = user_config.get("username", "Unknown")
+        self.user_id = user_config.get("id", 0)
+        self.platform_user_id = user_config.get("platform_user_id")
+        self.monthly_logins = user_config.get("monthly_logins", 30)
+        
+        # 计算泊松分布的参数 lambda (每小时平均登录次数)
+        # 假设一个月 30 天，每天 24 小时
+        self.login_rate_per_hour = self.monthly_logins / (30 * 24)
+        
+        self._stop_event = threading.Event()
+        
+        print(f"[{self.username}] 线程已创建，每月理想登录次数：{self.monthly_logins}")
+    
+    def run(self):
+        """线程运行方法"""
+        print(f"[{self.username}] 线程启动")
+        
+        try:
+            # 首次登录等待一小段时间
+            time_system.sleep(2)
+            
+            while not self._stop_event.is_set():
+                # 执行登录操作
+                self._login()
+                
+                # 计算下次登录的时间间隔（泊松过程）
+                next_login_delay = self._calculate_next_login_delay()
+                
+                print(f"[{self.username}] 下次登录将在 {next_login_delay:.2f} 小时后")
+                
+                # 等待到下次登录时间
+                # 转换为秒（考虑时间流速）
+                delay_seconds = next_login_delay * 3600
+                self._stop_event.wait(delay_seconds / time_system._time_scale if time_system.get_mode() == "test" else delay_seconds)
+            
+            print(f"[{self.username}] 线程停止")
+            
+        except Exception as e:
+            print(f"[{self.username}] 线程异常：{e}")
+    
+    def _calculate_next_login_delay(self) -> float:
+        """
+        使用泊松过程计算下次登录的时间间隔（小时）
+        
+        泊松过程中，事件间隔服从指数分布：
+        P(T > t) = e^(-λt)
+        
+        生成指数分布随机数的公式：
+        t = -ln(U) / λ, 其中 U 是 (0,1) 均匀分布的随机数
+        
+        Returns:
+            float: 下次登录的时间间隔（小时）
+        """
+        # 生成 (0,1) 区间的均匀随机数
+        u = random.random()
+        
+        # 避免 ln(0)
+        if u < 1e-10:
+            u = 1e-10
+        
+        # 计算指数分布的时间间隔
+        delay_hours = -math.log(u) / self.login_rate_per_hour
+        
+        return delay_hours
+    
+    def _login(self):
+        """执行登录操作（MVP 版本仅打印信息）"""
+        current_time = time_system.now()
+        time_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        print(f"\n[{time_str}] [{self.username}] 登录成功")
+        
+        # MVP 版本：仅打印信息，不做后续操作
+        # TODO: 后续功能开发可在此处添加：
+        # 1. 浏览时间线
+        # 2. 发布帖子
+        # 3. 与其他用户互动
+    
+    def stop(self):
+        """停止线程"""
+        print(f"[{self.username}] 收到停止信号")
+        self._stop_event.set()
+
+
+class AIScheduler:
+    """AI 调度器类"""
+    
+    def __init__(self, initializer: Optional[AIUserInitializer] = None):
+        """
+        初始化 AI 调度器
+        
+        Args:
+            initializer: AI 用户初始化器实例，可选
+        """
+        self.initializer = initializer or AIUserInitializer()
+        self.user_threads: Dict[int, AIUserThread] = {}
+        self._running = False
+        self._scheduler_thread: Optional[threading.Thread] = None
+        
+        print("[调度器] 调度器已创建")
+    
+    def start(self, auto_init: bool = True):
+        """
+        启动调度器
+        
+        Args:
+            auto_init: 是否自动初始化用户
+        """
+        print("\n[调度器] 启动调度器...")
+        print("=" * 60)
+        
+        # 加载配置并初始化用户
+        if auto_init:
+            if not self.initializer.load_config():
+                print("[调度器] ❌ 加载配置失败，无法启动")
+                return
+            
+            initialized_users = self.initializer.initialize_all_users()
+            self.initializer.print_user_summary()
+            
+            if not initialized_users:
+                print("[调度器] ❌ 没有成功初始化的用户，无法启动")
+                return
+        
+        # 为每个用户创建线程
+        for user_config in self.initializer.get_all_users():
+            user_id = user_config.get("id")
+            
+            if user_id not in self.user_threads:
+                user_thread = AIUserThread(user_config, self)
+                self.user_threads[user_id] = user_thread
+        
+        # 启动所有用户线程
+        self._running = True
+        for user_id, thread in self.user_threads.items():
+            thread.start()
+            print(f"[调度器] 已启动用户线程：{thread.username}")
+        
+        print("=" * 60)
+        print(f"[调度器] 调度器已启动，共 {len(self.user_threads)} 个 AI 用户")
+        print(f"[调度器] 时间模式：{time_system.get_mode()}")
+        
+        if time_system.get_mode() == "test":
+            print(f"[调度器] 时间流速：1 秒 = {time_system._time_scale} 秒")
+            print("[调度器] 按 Ctrl+C 停止调度器")
+    
+    def stop(self):
+        """停止调度器"""
+        print("\n[调度器] 停止调度器...")
+        
+        self._running = False
+        
+        # 停止所有用户线程
+        for user_id, thread in self.user_threads.items():
+            thread.stop()
+        
+        # 等待所有线程结束
+        for thread in self.user_threads.values():
+            thread.join(timeout=5)
+        
+        print("[调度器] 调度器已停止")
+    
+    def get_user_thread(self, user_id: int) -> Optional[AIUserThread]:
+        """
+        获取指定用户的线程
+        
+        Args:
+            user_id: 用户 ID
+            
+        Returns:
+            Optional[AIUserThread]: 用户线程或 None
+        """
+        return self.user_threads.get(user_id)
+    
+    def get_all_threads(self) -> List[AIUserThread]:
+        """
+        获取所有用户线程
+        
+        Returns:
+            List[AIUserThread]: 线程列表
+        """
+        return list(self.user_threads.values())
+    
+    def print_status(self):
+        """打印调度器状态"""
+        print("\n[调度器] 当前状态:")
+        print(f"运行状态：{'运行中' if self._running else '已停止'}")
+        print(f"用户线程数：{len(self.user_threads)}")
+        print(f"时间模式：{time_system.get_mode()}")
+        
+        if time_system.get_mode() == "test":
+            print(f"当前模拟时间：{time_system.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+
+if __name__ == "__main__":
+    # 测试代码
+    print("=== AI 调度器测试 ===\n")
+    
+    scheduler = AIScheduler()
+    
+    try:
+        scheduler.start(auto_init=True)
+        
+        # 让调度器运行一段时间
+        while True:
+            time_system.sleep(10)
+            scheduler.print_status()
+            
+    except KeyboardInterrupt:
+        print("\n收到中断信号，停止调度器...")
+        scheduler.stop()
