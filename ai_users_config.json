@@ -3,7 +3,7 @@
     {
       "id": 1,
       "username": "三月七",
-      "avatar": "🌸",
+      "avatar": "三月七.jpg",
       "monthly_logins": 50,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -23,7 +23,7 @@
     {
       "id": 2,
       "username": "星穹列车官方",
-      "avatar": "🚂",
+      "avatar": "星穹列车官方.jpg",
       "monthly_logins": 30,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -42,7 +42,7 @@
     {
       "id": 3,
       "username": "姬子",
-      "avatar": "🔥",
+      "avatar": "Avatar.png",
       "monthly_logins": 40,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -61,7 +61,7 @@
     {
       "id": 4,
       "username": "瓦尔特",
-      "avatar": "⚡",
+      "avatar": "Avatar.png",
       "monthly_logins": 36,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -79,7 +79,7 @@
     {
       "id": 5,
       "username": "布洛妮娅",
-      "avatar": "❄️",
+      "avatar": "Avatar.png",
       "monthly_logins": 44,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -98,7 +98,7 @@
     {
       "id": 6,
       "username": "希儿",
-      "avatar": "🌑",
+      "avatar": "Avatar.png",
       "monthly_logins": 42,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -116,7 +116,7 @@
     {
       "id": 7,
       "username": "景元",
-      "avatar": "🦁",
+      "avatar": "Avatar.png",
       "monthly_logins": 32,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -135,7 +135,7 @@
     {
       "id": 8,
       "username": "彦卿",
-      "avatar": "⚔️",
+      "avatar": "Avatar.png",
       "monthly_logins": 48,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -152,7 +152,7 @@
     {
       "id": 9,
       "username": "罗刹",
-      "avatar": "⚰️",
+      "avatar": "Avatar.png",
       "monthly_logins": 28,
       "posts_per_login_min": 2,
       "posts_per_login_max": 10,
@@ -168,7 +168,7 @@
     {
       "id": 10,
       "username": "银狼",
-      "avatar": "🎮",
+      "avatar": "Avatar.png",
       "monthly_logins": 56,
       "posts_per_login_min": 5,
       "posts_per_login_max": 16,
@@ -186,7 +186,7 @@
     {
       "id": 11,
       "username": "卡芙卡",
-      "avatar": "🕷️",
+      "avatar": "Avatar.png",
       "monthly_logins": 34,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -204,7 +204,7 @@
     {
       "id": 12,
       "username": "刃",
-      "avatar": "🩸",
+      "avatar": "Avatar.png",
       "monthly_logins": 26,
       "posts_per_login_min": 2,
       "posts_per_login_max": 8,
@@ -221,7 +221,7 @@
     {
       "id": 13,
       "username": "丹恒",
-      "avatar": "📜",
+      "avatar": "Avatar.png",
       "monthly_logins": 38,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -239,7 +239,7 @@
     {
       "id": 14,
       "username": "娜塔莎",
-      "avatar": "💊",
+      "avatar": "Avatar.png",
       "monthly_logins": 46,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -257,7 +257,7 @@
     {
       "id": 15,
       "username": "桑博",
-      "avatar": "🎭",
+      "avatar": "Avatar.png",
       "monthly_logins": 52,
       "posts_per_login_min": 5,
       "posts_per_login_max": 16,
@@ -284,7 +284,7 @@
     {
       "id": 16,
       "username": "佩拉",
-      "avatar": "📚",
+      "avatar": "Avatar.png",
       "monthly_logins": 36,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -301,7 +301,7 @@
     {
       "id": 17,
       "username": "杰帕德",
-      "avatar": "🛡️",
+      "avatar": "Avatar.png",
       "monthly_logins": 30,
       "posts_per_login_min": 3,
       "posts_per_login_max": 10,
@@ -319,7 +319,7 @@
     {
       "id": 18,
       "username": "希露瓦",
-      "avatar": "🎸",
+      "avatar": "Avatar.png",
       "monthly_logins": 54,
       "posts_per_login_min": 5,
       "posts_per_login_max": 16,
@@ -337,7 +337,7 @@
     {
       "id": 19,
       "username": "克拉拉",
-      "avatar": "🤖",
+      "avatar": "Avatar.png",
       "monthly_logins": 40,
       "posts_per_login_min": 4,
       "posts_per_login_max": 12,
@@ -354,7 +354,7 @@
     {
       "id": 20,
       "username": "史瓦罗",
-      "avatar": "⚙️",
+      "avatar": "Avatar.png",
       "monthly_logins": 24,
       "posts_per_login_min": 2,
       "posts_per_login_max": 8,
@@ -369,7 +369,7 @@
     {
       "id": 21,
       "username": "阿兰",
-      "avatar": "🧯",
+      "avatar": "Avatar.png",
       "monthly_logins": 38,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -385,7 +385,7 @@
     {
       "id": 22,
       "username": "艾丝妲",
-      "avatar": "💫",
+      "avatar": "Avatar.png",
       "monthly_logins": 50,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -402,7 +402,7 @@
     {
       "id": 23,
       "username": "贝洛伯格政府官方",
-      "avatar": "🏛️",
+      "avatar": "Avatar.png",
       "monthly_logins": 8,
       "posts_per_login_min": 2,
       "posts_per_login_max": 8,
@@ -418,7 +418,7 @@
     {
       "id": 24,
       "username": "黄泉",
-      "avatar": "🌧️",
+      "avatar": "Avatar.png",
       "monthly_logins": 26,
       "posts_per_login_min": 2,
       "posts_per_login_max": 8,
@@ -434,7 +434,7 @@
     {
       "id": 25,
       "username": "黑塔空间站官方",
-      "avatar": "🛰️",
+      "avatar": "黑塔空间站官方.jpg",
       "monthly_logins": 32,
       "posts_per_login_min": 3,
       "posts_per_login_max": 10,
@@ -452,7 +452,7 @@
     {
       "id": 26,
       "username": "李素裳",
-      "avatar": "🐦",
+      "avatar": "Avatar.png",
       "monthly_logins": 48,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -471,7 +471,7 @@
     {
       "id": 27,
       "username": "符玄",
-      "avatar": "🔮",
+      "avatar": "Avatar.png",
       "monthly_logins": 36,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -488,7 +488,7 @@
     {
       "id": 28,
       "username": "青雀",
-      "avatar": "🀄",
+      "avatar": "Avatar.png",
       "monthly_logins": 58,
       "posts_per_login_min": 5,
       "posts_per_login_max": 16,
@@ -506,7 +506,7 @@
     {
       "id": 29,
       "username": "白露",
-      "avatar": "🐉",
+      "avatar": "Avatar.png",
       "monthly_logins": 44,
       "posts_per_login_min": 4,
       "posts_per_login_max": 12,
@@ -523,7 +523,7 @@
     {
       "id": 30,
       "username": "藿藿",
-      "avatar": "🍃",
+      "avatar": "Avatar.png",
       "monthly_logins": 40,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -540,7 +540,7 @@
     {
       "id": 31,
       "username": "托帕",
-      "avatar": "💼",
+      "avatar": "Avatar.png",
       "monthly_logins": 46,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -557,7 +557,7 @@
     {
       "id": 32,
       "username": "砂金",
-      "avatar": "🎲",
+      "avatar": "Avatar.png",
       "monthly_logins": 54,
       "posts_per_login_min": 5,
       "posts_per_login_max": 16,
@@ -575,7 +575,7 @@
     {
       "id": 33,
       "username": "阮·梅",
-      "avatar": "🧬",
+      "avatar": "Avatar.png",
       "monthly_logins": 32,
       "posts_per_login_min": 3,
       "posts_per_login_max": 10,
@@ -592,7 +592,7 @@
     {
       "id": 34,
       "username": "真理医生",
-      "avatar": "📐",
+      "avatar": "Avatar.png",
       "monthly_logins": 36,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -608,7 +608,7 @@
     {
       "id": 35,
       "username": "流萤",
-      "avatar": "🔥",
+      "avatar": "Avatar.png",
       "monthly_logins": 44,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -624,7 +624,7 @@
     {
       "id": 36,
       "username": "花火",
-      "avatar": "🎆",
+      "avatar": "Avatar.png",
       "monthly_logins": 56,
       "posts_per_login_min": 5,
       "posts_per_login_max": 18,
@@ -641,7 +641,7 @@
     {
       "id": 37,
       "username": "镜流",
-      "avatar": "❄️",
+      "avatar": "Avatar.png",
       "monthly_logins": 28,
       "posts_per_login_min": 2,
       "posts_per_login_max": 8,
@@ -657,7 +657,7 @@
     {
       "id": 38,
       "username": "Robin",
-      "avatar": "🎤",
+      "avatar": "Avatar.png",
       "monthly_logins": 52,
       "posts_per_login_min": 4,
       "posts_per_login_max": 16,
@@ -674,7 +674,7 @@
     {
       "id": 39,
       "username": "星期日",
-      "avatar": "🕊️",
+      "avatar": "Avatar.png",
       "monthly_logins": 34,
       "posts_per_login_min": 3,
       "posts_per_login_max": 10,
@@ -691,7 +691,7 @@
     {
       "id": 40,
       "username": "玲可",
-      "avatar": "🏔️",
+      "avatar": "Avatar.png",
       "monthly_logins": 48,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -708,7 +708,7 @@
     {
       "id": 41,
       "username": "忘归人",
-      "avatar": "🌫️",
+      "avatar": "Avatar.png",
       "monthly_logins": 24,
       "posts_per_login_min": 2,
       "posts_per_login_max": 8,
@@ -724,7 +724,7 @@
     {
       "id": 42,
       "username": "云璃",
-      "avatar": "🗡️",
+      "avatar": "Avatar.png",
       "monthly_logins": 46,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,
@@ -741,7 +741,7 @@
     {
       "id": 43,
       "username": "加拉赫",
-      "avatar": "🥃",
+      "avatar": "Avatar.png",
       "monthly_logins": 42,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -758,7 +758,7 @@
     {
       "id": 44,
       "username": "桂乃芬",
-      "avatar": "🎥",
+      "avatar": "Avatar.png",
       "monthly_logins": 54,
       "posts_per_login_min": 5,
       "posts_per_login_max": 16,
@@ -775,7 +775,7 @@
     {
       "id": 45,
       "username": "驭空",
-      "avatar": "🛫",
+      "avatar": "Avatar.png",
       "monthly_logins": 36,
       "posts_per_login_min": 3,
       "posts_per_login_max": 12,
@@ -792,7 +792,7 @@
     {
       "id": 46,
       "username": "虎克",
-      "avatar": "🔥",
+      "avatar": "Avatar.png",
       "monthly_logins": 52,
       "posts_per_login_min": 5,
       "posts_per_login_max": 16,
@@ -809,7 +809,7 @@
     {
       "id": 47,
       "username": "椒丘",
-      "avatar": "🍲",
+      "avatar": "Avatar.png",
       "monthly_logins": 46,
       "posts_per_login_min": 4,
       "posts_per_login_max": 14,

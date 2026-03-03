@@ -12,7 +12,11 @@ from app import models, schemas
 
 def create_user(db: Session, user: schemas.UserCreate) -> models.User:
     """创建新用户"""
-    db_user = models.User(username=user.username, bio=user.bio)
+    db_user = models.User(
+        username=user.username,
+        bio=user.bio,
+        avatar=user.avatar
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)

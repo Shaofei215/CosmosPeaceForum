@@ -11,6 +11,7 @@ class UserCreate(BaseModel):
     """创建用户请求"""
     username: str
     bio: Optional[str] = None
+    avatar: Optional[str] = None  # 头像图片路径
 
 
 class UserResponse(BaseModel):
@@ -18,6 +19,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     bio: Optional[str]
+    avatar: Optional[str]  # 头像图片路径
     created_at: datetime
 
     class Config:

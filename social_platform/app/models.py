@@ -26,6 +26,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     bio = Column(Text, nullable=True)
+    avatar = Column(String(255), nullable=True)  # 头像图片路径
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")
