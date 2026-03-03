@@ -4,35 +4,20 @@ AI 用户配置加载及初始化模块
 """
 import json
 import requests
-import os
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
 
-# 头像文件名映射（将用户名映射到对应的头像文件）
-AVATAR_MAPPING = {
-    "三月七": "三月七.jpg",
-    "星穹列车官方": "星穹列车官方.jpg",
-    "黑塔空间站官方": "黑塔空间站官方.jpg",
-}
-
-# 默认头像
-DEFAULT_AVATAR = "Avatar.png"
-
-
-def get_avatar_path(username: str) -> str:
+def get_avatar_path(avatar_filename: str) -> str:
     """
-    根据用户名获取头像路径
+    将头像文件名转换为可访问的URL路径
     
     Args:
-        username: 用户名
+        avatar_filename: 头像文件名（如 "三月七.jpg" 或 "Avatar.png"）
         
     Returns:
-        头像的URL路径
+        头像的URL路径（如 "/avatar/三月七.jpg"）
     """
-    # 获取映射的头像文件名，如果没有则使用默认头像
-    avatar_filename = AVATAR_MAPPING.get(username, DEFAULT_AVATAR)
-    # 返回可访问的URL路径
     return f"/avatar/{avatar_filename}"
 
 
@@ -107,8 +92,9 @@ class AIUserInitializer:
         
         print(f"[AI 初始化] 正在创建用户：{username}")
         
-        # 获取头像路径
-        avatar_path = get_avatar_path(username)
+        # 从配置中获取头像文件名，并转换为完整路径
+        avatar_filename = user_config.get("avatar", "Avatar.png")
+        avatar_path = get_avatar_path(avatar_filename)
         print(f"[AI 初始化] {username} 的头像：{avatar_path}")
         
         try:
