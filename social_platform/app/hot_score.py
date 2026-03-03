@@ -242,6 +242,9 @@ def get_hot_posts(db: Session, limit: int = 50, offset: int = 0) -> list:
         post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
         post.reposts_count = 0
         post.views_count = post.hot_score
+        # 获取点赞用户列表（最多 3 个）
+        likers = db.query(models.Like).filter(models.Like.post_id == post.id).limit(3).all()
+        post.likers = [like.user for like in likers if like.user]
     
     return posts
 
@@ -347,6 +350,9 @@ def get_mixed_posts(db: Session, user_id: Optional[int] = None,
         post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
         post.reposts_count = 0
         post.views_count = post.hot_score
+        # 获取点赞用户列表（最多 3 个）
+        likers = db.query(models.Like).filter(models.Like.post_id == post.id).limit(3).all()
+        post.likers = [like.user for like in likers if like.user]
 
     # 记录这次浏览的帖子为已读
     if user_id and mixed_posts:

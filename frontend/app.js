@@ -85,6 +85,8 @@ function createPostCard(post) {
     const username = post.author?.username || '未知用户';
     const bio = post.author?.bio || '';
     const time = formatTime(post.created_at);
+    const likesCount = post.likes_count || 0;
+    const likers = post.likers || [];
     
     return `
         <div class="post-card" id="post-${post.id}">
@@ -97,10 +99,21 @@ function createPostCard(post) {
                 </div>
             </div>
             <div class="post-content">${escapeHtml(post.content)}</div>
+            ${likers.length > 0 ? `
+                <div class="post-likers">
+                    ${likers.map(liker => `
+                        <span class="liker-item" onclick="showUserDetail(${liker.id})">
+                            <img src="${API_BASE_URL}${liker.avatar}" alt="${liker.username}" class="liker-avatar" onerror="this.onerror=null; this.src='${API_BASE_URL}/avatar/Avatar.png'">
+                            <span class="liker-name">${escapeHtml(liker.username)}</span>
+                        </span>
+                    `).join('')}
+                    ${likesCount > 3 ? `<span class="more-likers">等${likesCount}人点赞</span>` : '<span class="more-likers">赞了</span>'}
+                </div>
+            ` : ''}
             <div class="post-stats">
                 <div class="stat-item likes">
                     <span class="stat-icon">❤️</span>
-                    <span>${post.likes_count || 0}</span>
+                    <span>${likesCount}</span>
                 </div>
                 <div class="stat-item comments" onclick="toggleComments(${post.id})">
                     <span class="stat-icon">💬</span>

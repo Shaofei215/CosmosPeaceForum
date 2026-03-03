@@ -62,6 +62,7 @@ class PostResponse(BaseModel):
     comments_count: int = 0
     reposts_count: int = 0
     views_count: int = 0
+    likers: Optional[List[UserResponse]] = None
 
     class Config:
         from_attributes = True

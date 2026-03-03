@@ -396,6 +396,51 @@ body {
     }
 }
 
+/* 点赞用户展示 */
+.post-likers {
+    margin: 12px 0 8px 0;
+    padding: 6px 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.liker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+    padding: 4px 8px;
+    border-radius: 12px;
+    background-color: var(--secondary-bg);
+}
+
+.liker-item:hover {
+    background-color: var(--card-bg-hover);
+}
+
+.liker-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.liker-name {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.more-likers {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* 帖子统计信息 */
+
 .post-comments-section .comments-list {
     display: flex;
     flex-direction: column;

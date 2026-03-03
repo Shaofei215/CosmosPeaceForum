@@ -48,7 +48,7 @@ def create_post(db: Session, post: schemas.PostCreate, author_id: int) -> models
 
 
 def get_post(db: Session, post_id: int) -> Optional[models.Post]:
-    """根据ID获取帖子"""
+    """根据 ID 获取帖子"""
     post = db.query(models.Post).filter(models.Post.id == post_id).first()
     if post:
         # 动态添加统计属性
@@ -56,6 +56,9 @@ def get_post(db: Session, post_id: int) -> Optional[models.Post]:
         post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post_id).count()
         post.reposts_count = 0  # 暂不支持转发功能
         post.views_count = post.hot_score  # 用热度分数作为浏览量估算
+        # 获取点赞用户列表（最多 3 个）
+        likers = db.query(models.Like).filter(models.Like.post_id == post_id).limit(3).all()
+        post.likers = [like.user for like in likers if like.user]
     return post
 
 
@@ -74,6 +77,9 @@ def get_posts(db: Session, skip: int = 0, limit: int = 50) -> List[models.Post]:
         post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
         post.reposts_count = 0
         post.views_count = post.hot_score
+        # 获取点赞用户列表（最多 3 个）
+        likers = db.query(models.Like).filter(models.Like.post_id == post.id).limit(3).all()
+        post.likers = [like.user for like in likers if like.user]
     return posts
 
 
