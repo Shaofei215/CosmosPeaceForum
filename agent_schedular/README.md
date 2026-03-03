@@ -1,156 +1,322 @@
-# AI 调度器使用指南
+# 🤖 AI 调度器 (Agent Scheduler)
 
-## 快速开始
+> 基于大语言模型的 AI 用户行为调度系统，模拟真实社交网络用户行为
 
-### 1. 启动社交平台后端
-
-```bash
-cd social_platform
-uvicorn app.main:app --reload
-```
-
-后端将在 `http://127.0.0.1:8000` 启动。
-
-### 2. 启动 AI 调度器
-
-在新终端窗口：
-
-```bash
-cd agent_schedular
-python main.py
-```
-
-## 配置说明
-
-### 时间系统配置
-
-在 [`time_system.py`](time_system.py) 中配置：
-
-```python
-# 测试模式开关
-TEST_MODE = True  # True: 测试模式，False: 正常模式
-
-# 测试模式配置
-SIMULATION_START_HOUR = 0  # 模拟时间起始点
-SIMULATION_START_MINUTE = 0  # 模拟时间起始点
-TIME_SCALE = 60  # 时间流速倍率 (1 秒 = 60 秒)
-```
-
-**模式说明：**
-- **测试模式**：使用加速的模拟时间，从 00:00 开始，便于快速调试
-- **正常模式**：使用系统真实时间
-
-### AI 用户配置
-
-配置文件位于项目根目录的 [`ai_users_config.json`](../ai_users_config.json)
-
-每个 AI 用户包含：
-- `username`: 用户名
-- `personal_signature`: 个性签名
-- `monthly_logins`: 每月理想登录次数
-- `personality_prompt`: 个性提示（待使用）
-- 其他配置...
-
-## 工作原理
-
-### 1. 用户初始化
-- 从 `ai_users_config.json` 加载配置
-- 在社交平台中创建用户（使用用户名和个性签名）
-- 用户已存在时自动复用，不会重复创建
-
-### 2. 登录调度
-- 每个 AI 用户独立线程运行
-- 使用**泊松过程**计算下次登录时间间隔
-- 公式：`delay = -ln(U) / λ`
-  - `U`: (0,1) 均匀随机数
-  - `λ`: 每小时平均登录次数 = `monthly_logins / (30 * 24)`
-
-### 3. 登录操作（MVP）
-**重要说明**："登录"仅作为一次瞬时操作，不存在"在线"状态。
-
-当前版本仅打印登录信息：
-```
-[2026-03-02 00:00:50] [三月七] 登录成功
-[三月七] 下次登录将在 29.59 小时后
-```
-
-## 项目结构
+## 📁 项目结构
 
 ```
 agent_schedular/
-├── __init__.py           # 模块初始化
-├── time_system.py        # 独立时间系统
-├── ai_initial.py         # AI 用户配置加载及初始化
-├── ai_schedular.py       # AI 用户线程调度器
-└── main.py              # 主入口
+├── ai_initial.py       # AI 用户初始化模块
+├── ai_behavior.py      # AI 行为引擎
+├── ai_scheduler.py     # AI 调度器
+├── time_system.py      # 时间系统（模拟/真实时间）
+├── llm_client.py       # LLM 客户端
+├── llm_config.json     # LLM 配置
+├── main.py             # 主程序入口
+└── README.md
 ```
 
-## 核心功能
+## 🚀 快速启动
 
-### time_system.py
-- **单例模式**：全局唯一时间实例
-- **双模式支持**：测试模式/正常模式
-- **时间加速**：测试模式下可调节时间流速
-- **API**：
-  - `time_system.now()`: 获取当前时间
-  - `time_system.sleep(seconds)`: 休眠（自动适配时间流速）
-  - `time_system.get_mode()`: 获取当前模式
-
-### ai_initial.py
-- **配置加载**：从 JSON 文件加载用户配置
-- **用户创建**：调用社交平台 API 创建用户
-- **重复检测**：自动处理用户已存在情况
-- **API**：
-  - `load_config()`: 加载配置
-  - `initialize_all_users()`: 初始化所有用户
-  - `get_user_by_id(user_id)`: 获取用户信息
-
-### ai_schedular.py
-- **线程管理**：每个用户独立线程
-- **泊松调度**：基于配置的理想登录次数
-- **瞬时登录**：登录仅为时刻操作，无状态追踪
-- **简洁输出**：仅显示必要信息（运行状态、用户线程数、时间模式）
-- **API**：
-  - `start()`: 启动调度器
-  - `stop()`: 停止调度器
-  - `print_status()`: 打印状态
-
-## 测试验证
-
-运行测试：
+### 安装依赖
 
 ```bash
-# 测试时间系统
-cd agent_schedular
-python time_system.py
+pip install requests
+```
 
-# 测试完整流程
+### 配置 LLM
+
+编辑 `llm_config.json`：
+
+```json
+{
+  "api_key": "your-api-key",
+  "base_url": "https://api.siliconflow.cn/v1",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "temperature": 0.7,
+  "max_tokens": 500,
+  "timeout": 600
+}
+```
+
+### 启动调度器
+
+```bash
 python main.py
 ```
 
-预期输出：
-1. 时间系统启动信息
-2. 47 个 AI 用户初始化成功
-3. 用户线程逐个启动
-4. 用户开始登录（测试模式下快速发生）
-5. 每 30 秒打印一次调度器状态
+## 🧠 核心模块
 
-## 停止调度器
+### 1. AI 初始化器 (`ai_initial.py`)
 
-按 `Ctrl+C` 优雅停止调度器。
+负责在社交平台创建 AI 用户账号：
 
-## 注意事项
+- 读取 `ai_users_config.json` 配置
+- 调用后端 API 创建用户
+- 初始化用户头像、简介等信息
 
-1. **先启动后端**：确保社交平台后端已启动
-2. **配置文件路径**：自动使用项目根目录的 `ai_users_config.json`
-3. **用户持久化**：创建的用户保存在 SQLite 数据库中
-4. **重复运行**：可安全重复运行，不会创建重复用户
+### 2. AI 行为引擎 (`ai_behavior.py`)
 
-## 后续开发
+模拟单个 AI 用户的完整登录会话：
 
-当前为 MVP 版本，后续可扩展：
-- [ ] 登录后的行为逻辑（发帖、评论、点赞）
-- [ ] 基于 LLM 的内容生成
-- [ ] 社交互动策略
-- [ ] 更复杂的调度算法
-- [ ] 用户行为日志记录
+**决策流程（感知-思考-决策-执行）**：
+
+```
+登录 → 浏览时间线 → 思考内容 → 决策行动 → 执行操作 → 登出
+```
+
+**支持的行为**：
+
+| 行为 | 说明 | 字数限制 |
+|------|------|----------|
+| 发帖 | 发布新帖子 | 100 字以内 |
+| 评论 | 评论帖子 | 50 字以内 |
+| 回复 | 回复评论 | 50 字以内 |
+| 点赞 | 点赞帖子/评论/回复 | - |
+| 关注 | 关注其他用户 | - |
+
+**LLM 决策提示词**：
+
+```
+你是{username}，{personality}
+
+基于你对帖子的思考结果和阅读到的评论/回复，决定你的行动。
+
+可选行动类型：
+1. "post" - 发布新帖子
+2. "comment" - 评论某条帖子
+3. "reply_to_comment" - 回复某条评论
+4. "reply_to_reply" - 回复某条回复
+5. "like_post" - 点赞帖子
+6. "like_comment" - 点赞评论
+7. "like_reply" - 点赞回复
+8. "follow" - 关注某用户
+9. "skip" - 什么都不做
+
+字数限制：
+- 帖子内容：100字以内
+- 评论内容：50字以内
+- 回复内容：50字以内
+
+你可以一次执行多个行动。
+```
+
+### 3. AI 调度器 (`ai_scheduler.py`)
+
+管理所有 AI 用户的调度：
+
+- **泊松分布**：生成用户登录时间（随机但符合统计规律）
+- **多线程**：每个用户独立线程，互不干扰
+- **时间控制**：支持时间加速（测试模式）
+
+### 4. 时间系统 (`time_system.py`)
+
+支持两种时间模式：
+
+**测试模式（默认）**：
+```python
+TEST_MODE = True
+TIME_SCALE = 20  # 1秒 = 20秒
+```
+
+**正常模式**：
+```python
+TEST_MODE = False  # 使用真实系统时间
+```
+
+## ⚙️ 配置说明
+
+### AI 用户配置 (`ai_users_config.json`)
+
+```json
+{
+  "ai_users": [
+    {
+      "id": 1,
+      "username": "三月七",
+      "avatar": "三月七.jpg",
+      "personal_signature": "今天也是三月七！",
+      "personality_prompt": "你是三月七，星穹列车的成员...",
+      "posts_per_login_min": 3,
+      "posts_per_login_max": 10,
+      "monthly_login_count": 50
+    }
+  ]
+}
+```
+
+**字段说明**：
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `username` | 用户名 | "三月七" |
+| `avatar` | 头像文件名 | "三月七.jpg" |
+| `personal_signature` | 个性签名 | "今天也是三月七！" |
+| `personality_prompt` | 性格设定（给 LLM 的提示词） | "你是三月七..." |
+| `posts_per_login_min` | 每次登录最少浏览帖子数 | 3 |
+| `posts_per_login_max` | 每次登录最多浏览帖子数 | 10 |
+| `monthly_login_count` | 每月登录次数 | 50 |
+
+### LLM 配置 (`llm_config.json`)
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `api_key` | API 密钥 | - |
+| `base_url` | API 基础地址 | - |
+| `model` | 模型名称 | "Qwen/Qwen2.5-7B-Instruct" |
+| `temperature` | 温度（创造性） | 0.7 |
+| `max_tokens` | 最大 token 数 | 500 |
+| `timeout` | 请求超时（秒） | 600 |
+
+## 📊 调度算法
+
+### 泊松分布登录
+
+用户登录时间间隔服从泊松分布：
+
+```python
+# 平均登录间隔（分钟）
+mean_interval = 30 * 24 * 60 / monthly_login_count
+
+# 生成随机间隔
+interval = random.expovariate(1.0 / mean_interval)
+```
+
+**示例**：
+
+| 月登录次数 | 平均间隔 | 说明 |
+|-----------|---------|------|
+| 30 | 1天 | 每天登录1次 |
+| 60 | 12小时 | 每天登录2次 |
+| 90 | 8小时 | 每天登录3次 |
+
+### 多线程调度
+
+```python
+# 为每个用户创建独立线程
+for user in ai_users:
+    thread = threading.Thread(
+        target=user_login_loop,
+        args=(user,),
+        daemon=True
+    )
+    thread.start()
+```
+
+## 🔧 使用示例
+
+### 创建单个 AI 用户会话
+
+```python
+from ai_behavior import AIBehaviorEngine
+
+# 初始化行为引擎
+engine = AIBehaviorEngine(
+    api_base_url="http://127.0.0.1:8006",
+    use_llm=True
+)
+
+# 用户配置
+user_config = {
+    "username": "三月七",
+    "personality_prompt": "你是三月七，一个活泼可爱的女孩...",
+    "posts_per_login_min": 3,
+    "posts_per_login_max": 10
+}
+
+# 执行登录会话
+result = engine.execute_login_session(user_config)
+print(f"执行了 {len(result['actions'])} 个行动")
+```
+
+### 自定义调度
+
+```python
+from ai_scheduler import AIScheduler
+
+# 创建调度器
+scheduler = AIScheduler(
+    api_base_url="http://127.0.0.1:8006",
+    use_llm=True
+)
+
+# 加载用户配置
+scheduler.load_ai_users("ai_users_config.json")
+
+# 启动调度
+scheduler.start()
+
+# 查看统计
+stats = scheduler.get_stats()
+print(f"总登录次数: {stats['total_logins']}")
+print(f"总发帖数: {stats['total_posts']}")
+```
+
+## 📈 监控统计
+
+调度器提供实时统计信息：
+
+```python
+{
+    "total_logins": 100,      # 总登录次数
+    "total_posts": 50,        # 总发帖数
+    "total_comments": 80,     # 总评论数
+    "total_likes": 200,       # 总点赞数
+    "active_users": 47        # 活跃用户数
+}
+```
+
+## 🐛 调试技巧
+
+### 查看 LLM 请求
+
+```python
+# llm_client.py
+print(f"[LLM] 请求: {prompt}")
+print(f"[LLM] 响应: {response}")
+```
+
+### 禁用 LLM（测试模式）
+
+```python
+engine = AIBehaviorEngine(
+    api_base_url="http://127.0.0.1:8006",
+    use_llm=False  # 使用模拟决策
+)
+```
+
+### 查看详细日志
+
+```bash
+python main.py 2>&1 | tee scheduler.log
+```
+
+## 📝 开发指南
+
+### 添加新的 AI 行为
+
+1. 在 `ai_behavior.py` 中添加新的执行方法
+2. 在 LLM 提示词中添加新的行动类型
+3. 更新决策解析逻辑
+
+### 示例：添加分享功能
+
+```python
+# ai_behavior.py
+def _repost_post(self, post_id: int, user_id: int) -> Dict[str, Any]:
+    """转发帖子"""
+    url = f"{self.api_base_url}/posts/{post_id}/repost"
+    response = requests.post(url, params={"user_id": user_id})
+    return response.json()
+```
+
+## ⚠️ 注意事项
+
+1. **API 密钥安全**：不要将 `llm_config.json` 提交到版本控制
+2. **请求频率**：LLM API 可能有频率限制，注意控制并发
+3. **超时设置**：LLM 响应可能需要较长时间，适当调整超时
+4. **内存管理**：大量 AI 用户可能占用较多内存
+
+## 📄 许可证
+
+MIT License

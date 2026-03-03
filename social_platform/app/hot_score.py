@@ -230,11 +230,20 @@ def get_hot_posts(db: Session, limit: int = 50, offset: int = 0) -> list:
     """获取热门帖子列表（按热度排序）"""
     update_all_hot_scores(db)
     
-    return db.query(models.Post) \
+    posts = db.query(models.Post) \
              .order_by(desc(models.Post.hot_score)) \
              .offset(offset) \
              .limit(limit) \
              .all()
+    
+    # 为每个帖子添加统计属性
+    for post in posts:
+        post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
+        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        post.reposts_count = 0
+        post.views_count = post.hot_score
+    
+    return posts
 
 
 def get_mixed_posts(db: Session, user_id: Optional[int] = None,
@@ -332,6 +341,13 @@ def get_mixed_posts(db: Session, user_id: Optional[int] = None,
     # 最后随机打乱顺序
     random.shuffle(mixed_posts)
 
+    # 为每个帖子添加统计属性
+    for post in mixed_posts:
+        post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
+        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        post.reposts_count = 0
+        post.views_count = post.hot_score
+
     # 记录这次浏览的帖子为已读
     if user_id and mixed_posts:
         post_ids = [post.id for post in mixed_posts]
@@ -400,6 +416,16 @@ def get_mixed_comments(db: Session, post_id: int, hot_ratio: float = 0.7,
 
     # 最后随机打乱顺序
     random.shuffle(mixed_comments)
+
+    # 为每条评论添加统计属性和回复
+    for comment in mixed_comments:
+        comment.likes_count = db.query(models.Like).filter(models.Like.comment_id == comment.id).count()
+        replies = db.query(models.Reply).filter(models.Reply.comment_id == comment.id).all()
+        comment.replies_count = len(replies)
+        # 为每个回复添加点赞数
+        for reply in replies:
+            reply.likes_count = db.query(models.Like).filter(models.Like.reply_id == reply.id).count()
+        comment.replies = replies
 
     return mixed_comments[:total_limit]
 

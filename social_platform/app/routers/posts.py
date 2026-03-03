@@ -75,11 +75,32 @@ def create_post(
 
 
 @router.get("", response_model=List[schemas.PostResponse])
-def list_posts(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+def list_posts(
+    skip: int = 0, 
+    limit: int = 50, 
+    sort: str = Query("recommended", description="排序方式：recommended=推荐算法，latest=最新，hot=最热"),
+    user_id: int = Query(None, description="用户 ID，用于推荐算法过滤已读帖子"),
+    db: Session = Depends(get_db)
+):
     """
-    获取帖子列表（全局时间线）
+    获取帖子列表（支持多种排序方式）
+    - sort=recommended: 推荐算法（40% 热门 + 30% 最新 + 30% 随机）
+    - sort=latest: 按时间倒序
+    - sort=hot: 按热度排序
     """
-    posts = crud.get_posts(db, skip=skip, limit=limit)
+    if sort == "recommended":
+        # 使用推荐算法（混合排序）
+        posts = get_mixed_posts(db, user_id=user_id, total_limit=limit)
+    elif sort == "latest":
+        # 按时间倒序
+        posts = crud.get_posts(db, skip=skip, limit=limit)
+    elif sort == "hot":
+        # 按热度排序
+        posts = get_hot_posts(db, limit=limit)
+    else:
+        # 默认使用推荐算法
+        posts = get_mixed_posts(db, user_id=user_id, total_limit=limit)
+    
     return posts
 
 

@@ -49,23 +49,37 @@ def create_post(db: Session, post: schemas.PostCreate, author_id: int) -> models
 
 def get_post(db: Session, post_id: int) -> Optional[models.Post]:
     """根据ID获取帖子"""
-    return db.query(models.Post).filter(models.Post.id == post_id).first()
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if post:
+        # 动态添加统计属性
+        post.likes_count = db.query(models.Like).filter(models.Like.post_id == post_id).count()
+        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post_id).count()
+        post.reposts_count = 0  # 暂不支持转发功能
+        post.views_count = post.hot_score  # 用热度分数作为浏览量估算
+    return post
 
 
 def get_posts(db: Session, skip: int = 0, limit: int = 50) -> List[models.Post]:
     """获取帖子列表（按时间倒序）"""
-    return (
+    posts = (
         db.query(models.Post)
         .order_by(desc(models.Post.created_at))
         .offset(skip)
         .limit(limit)
         .all()
     )
+    # 为每个帖子添加统计属性
+    for post in posts:
+        post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
+        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        post.reposts_count = 0
+        post.views_count = post.hot_score
+    return posts
 
 
 def get_user_posts(db: Session, user_id: int, skip: int = 0, limit: int = 50) -> List[models.Post]:
     """获取用户的帖子列表"""
-    return (
+    posts = (
         db.query(models.Post)
         .filter(models.Post.author_id == user_id)
         .order_by(desc(models.Post.created_at))
@@ -73,6 +87,13 @@ def get_user_posts(db: Session, user_id: int, skip: int = 0, limit: int = 50) ->
         .limit(limit)
         .all()
     )
+    # 为每个帖子添加统计属性
+    for post in posts:
+        post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
+        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        post.reposts_count = 0
+        post.views_count = post.hot_score
+    return posts
 
 
 def create_comment(db: Session, comment: schemas.CommentCreate, post_id: int, author_id: int) -> models.Comment:
@@ -93,9 +114,9 @@ def get_comment(db: Session, comment_id: int) -> Optional[models.Comment]:
     return db.query(models.Comment).filter(models.Comment.id == comment_id).first()
 
 
-def get_post_comments(db: Session, post_id: int, skip: int = 0, limit: int = 50) -> List[models.Comment]:
+def get_post_comments(db: Session, post_id: int, skip: int = 0, limit: int = 50, include_replies: bool = True) -> List[models.Comment]:
     """获取帖子的评论列表"""
-    return (
+    comments = (
         db.query(models.Comment)
         .filter(models.Comment.post_id == post_id)
         .order_by(desc(models.Comment.created_at))
@@ -103,6 +124,17 @@ def get_post_comments(db: Session, post_id: int, skip: int = 0, limit: int = 50)
         .limit(limit)
         .all()
     )
+    # 为每条评论添加统计属性和回复
+    for comment in comments:
+        comment.likes_count = db.query(models.Like).filter(models.Like.comment_id == comment.id).count()
+        replies = db.query(models.Reply).filter(models.Reply.comment_id == comment.id).all()
+        comment.replies_count = len(replies)
+        if include_replies:
+            # 为每个回复添加作者信息
+            for reply in replies:
+                reply.likes_count = db.query(models.Like).filter(models.Like.reply_id == reply.id).count()
+            comment.replies = replies
+    return comments
 
 
 def create_reply(
