@@ -208,3 +208,15 @@ __marimo__/
 
 # LLM Configuration (contains API keys)
 llm_config.json
+
+# Project specific files
+*.log
+social_platform.db
+agent_schedular.db
+
+# IDE settings
+.idea/
+.vscode/
+
+# Test files
+test_venv.py
