@@ -4,7 +4,7 @@ AI 行为引擎模块 (LLM 版本)
 登录 → 浏览 → 思考(LLM) → 决策(LLM) → 行动 → 等待下次登录
 
 LLM 集成版本功能：
-1. 浏览 - 获取最新的 n 条帖子（n 在 posts_per_login_min/max 之间随机）
+1. 浏览 - 获取n条推荐帖子，n为ai_user_config.json中的posts_per_login_min/max间的随机整数
 2. 思考 - 将 n 条帖子传给 LLM，进行思考和兴趣系数测定
 3. 决策 - 将帖子对象和思考结果传入 LLM 进行最终决策
 4. 行动 - 将决策结果应用于 social_platform
