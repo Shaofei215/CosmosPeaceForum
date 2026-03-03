@@ -12,7 +12,7 @@ import random
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
 from . import models
 
@@ -237,59 +237,106 @@ def get_hot_posts(db: Session, limit: int = 50, offset: int = 0) -> list:
              .all()
 
 
-def get_mixed_posts(db: Session, hot_ratio: float = 0.7,
-                    total_limit: int = 50) -> list:
-    """获取混合帖子（热门+最新）"""
+def get_mixed_posts(db: Session, user_id: Optional[int] = None,
+                    hot_ratio: float = 0.4, fresh_ratio: float = 0.3, 
+                    random_ratio: float = 0.3, total_limit: int = 50) -> list:
+    """
+    获取三层混合帖子（40%热门 + 30%最新 + 30%随机），支持按用户过滤已读
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户ID（可选），如果提供则排除该用户已读的帖子
+        hot_ratio: 热门帖子比例（默认40%）
+        fresh_ratio: 最新帖子比例（默认30%）
+        random_ratio: 随机帖子比例（默认30%）
+        total_limit: 返回帖子总数
+        
+    Returns:
+        混合排序的帖子列表
+    """
+    from app import crud
+    
     update_all_hot_scores(db)
 
+    # 计算各类帖子数量
     hot_count = int(total_limit * hot_ratio)
-    fresh_count = total_limit - hot_count
+    fresh_count = int(total_limit * fresh_ratio)
+    random_count = total_limit - hot_count - fresh_count  # 剩余为随机
 
-    # 获取热门帖子（获取更多以确保去重后仍有足够数量）
-    hot_posts = db.query(models.Post) \
-                  .order_by(desc(models.Post.hot_score)) \
-                  .limit(hot_count * 3) \
-                  .all()
+    # 获取用户的已读帖子ID（如果提供了user_id）
+    read_post_ids = set()
+    if user_id:
+        read_post_ids = set(crud.get_user_read_post_ids(db, user_id))
+        if read_post_ids:
+            print(f"[推荐算法] 用户 {user_id} 已读 {len(read_post_ids)} 条帖子，将过滤")
 
-    # 获取最新帖子（获取更多以确保去重后仍有足够数量）
+    # 获取热门帖子
+    hot_posts_query = db.query(models.Post).order_by(desc(models.Post.hot_score))
+    if read_post_ids:
+        hot_posts_query = hot_posts_query.filter(~models.Post.id.in_(read_post_ids))
+    hot_posts = hot_posts_query.limit(hot_count * 3).all()
+
+    # 获取最新帖子
     freshness_window = timedelta(hours=HOT_SCORE_CONFIG["freshness_window"])
     fresh_cutoff = datetime.utcnow() - freshness_window
 
-    fresh_posts = db.query(models.Post) \
-                    .filter(models.Post.created_at >= fresh_cutoff) \
-                    .order_by(desc(models.Post.created_at)) \
-                    .limit(fresh_count * 3) \
-                    .all()
+    fresh_posts_query = db.query(models.Post) \
+                          .filter(models.Post.created_at >= fresh_cutoff) \
+                          .order_by(desc(models.Post.created_at))
+    if read_post_ids:
+        fresh_posts_query = fresh_posts_query.filter(~models.Post.id.in_(read_post_ids))
+    fresh_posts = fresh_posts_query.limit(fresh_count * 3).all()
+
+    # 获取随机帖子（排除已读）
+    random_posts_query = db.query(models.Post).order_by(func.random())
+    if read_post_ids:
+        random_posts_query = random_posts_query.filter(~models.Post.id.in_(read_post_ids))
+    random_posts = random_posts_query.limit(random_count * 3).all()
 
     # 使用集合追踪已选择的帖子ID，确保完全不重复
     selected_ids = set()
     mixed_posts = []
 
-    # 先从热门帖子中选择（不重复）
+    # 1. 先从热门帖子中选择
     random.shuffle(hot_posts)
     for post in hot_posts:
         if post.id not in selected_ids and len(mixed_posts) < hot_count:
             mixed_posts.append(post)
             selected_ids.add(post.id)
 
-    # 再从最新帖子中选择（不重复）
+    # 2. 再从最新帖子中选择
     random.shuffle(fresh_posts)
     for post in fresh_posts:
+        if post.id not in selected_ids and len(mixed_posts) < hot_count + fresh_count:
+            mixed_posts.append(post)
+            selected_ids.add(post.id)
+
+    # 3. 最后从随机帖子中选择
+    random.shuffle(random_posts)
+    for post in random_posts:
         if post.id not in selected_ids and len(mixed_posts) < total_limit:
             mixed_posts.append(post)
             selected_ids.add(post.id)
 
-    # 如果仍然不足，从其他帖子中补充（排除已选择的）
+    # 如果仍然不足，从其他帖子中补充（排除已选择的和已读的）
     if len(mixed_posts) < total_limit:
-        additional = db.query(models.Post) \
-                       .filter(~models.Post.id.in_(selected_ids)) \
-                       .order_by(desc(models.Post.created_at)) \
-                       .limit(total_limit - len(mixed_posts)) \
-                       .all()
+        additional_query = db.query(models.Post) \
+                             .filter(~models.Post.id.in_(selected_ids))
+        if read_post_ids:
+            additional_query = additional_query.filter(~models.Post.id.in_(read_post_ids))
+        additional = additional_query.order_by(func.random()) \
+                                     .limit(total_limit - len(mixed_posts)) \
+                                     .all()
         mixed_posts.extend(additional)
 
     # 最后随机打乱顺序
     random.shuffle(mixed_posts)
+
+    # 记录这次浏览的帖子为已读
+    if user_id and mixed_posts:
+        post_ids = [post.id for post in mixed_posts]
+        crud.mark_posts_as_read(db, user_id, post_ids)
+        print(f"[推荐算法] 用户 {user_id} 本次浏览 {len(post_ids)} 条帖子（{hot_count}热门+{fresh_count}最新+{random_count}随机），已记录为已读")
 
     return mixed_posts[:total_limit]
 

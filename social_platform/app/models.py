@@ -137,3 +137,21 @@ class Follow(Base):
     follower_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     following_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class UserReadPost(Base):
+    """
+    用户已读帖子记录模型
+    用于记录用户阅读过哪些帖子，实现个性化推荐去重
+    """
+    __tablename__ = "user_read_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    post_id = Column(Integer, ForeignKey("posts.id"), nullable=False, index=True)
+    read_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # 联合唯一约束，防止重复记录
+    __table_args__ = (
+        {'sqlite_autoincrement': True},
+    )

@@ -59,6 +59,7 @@ class AIBehaviorEngine:
         }
         
         print(f"[行为引擎] 初始化完成，API地址: {api_base_url}，LLM: {'已启用' if use_llm else '已禁用'}")
+        # 注意：已读记录现在由服务端管理，客户端无需维护
 
     def execute_login_session(self, user_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -134,7 +135,8 @@ class AIBehaviorEngine:
     
     def _browse(self, user_config: Dict[str, Any], user_id: int) -> List[Dict[str, Any]]:
         """
-        浏览 - 获取混合帖子（70%热门 + 30%最新，顺序随机）
+        浏览 - 获取三层混合帖子（40%热门 + 30%最新 + 30%随机）
+        服务端会自动过滤已读帖子并记录新的已读
         n 在 posts_per_login_min 和 posts_per_login_max 之间随机
         
         Args:
@@ -153,20 +155,23 @@ class AIBehaviorEngine:
         
         print(f"\n[浏览] [{username}] 正在浏览时间线...")
         print(f"[{username}] 计划浏览 {n} 条帖子 (范围: {posts_min}-{posts_max})")
-        print(f"[{username}] 浏览策略: 70%热门 + 30%最新，顺序随机")
+        print(f"[{username}] 浏览策略: 40%热门 + 30%最新 + 30%随机，服务端过滤已读")
         
         try:
-            # 使用新的混合帖子 API
+            # 直接请求 n 条，服务端会处理已读过滤
             url = f"{self.api_base_url}/posts/mixed"
             params = {
                 "limit": n,
-                "hot_ratio": 0.7  # 70%热门，30%最新
+                "hot_ratio": 0.4,   # 40%热门
+                "fresh_ratio": 0.3, # 30%最新
+                "random_ratio": 0.3,# 30%随机
+                "user_id": user_id  # 传入用户ID，服务端过滤已读
             }
             response = requests.get(url, params=params, timeout=10)
             
             if response.status_code == 200:
                 posts = response.json()
-
+                
                 print(f"[{username}] 获取到 {len(posts)} 条帖子")
 
                 # 显示帖子摘要（包含热度信息）
@@ -506,13 +511,13 @@ class AIBehaviorEngine:
 【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记，不要包含任何解释性文字。
 
 输出格式必须严格如下（单行JSON）：
-{{"actions":[{{"type":"post","content":"今天天气真不错，想出去走走"}},{{"type":"comment","post_id":1,"content":"说得太对了！"}},{{"type":"like_post","post_id":2}},{{"type":"reply_to_comment","comment_id":3,"content":"我也这么觉得"}}],"reason":"看了大家的内容很有感触，想分享自己的想法并互动"}}
+{{"actions":[{{"type":"post","content":"今天天气真不错，想出去走走"}},{{"type":"comment","post_id":1,"content":"说得太对了！"}},{{"type":"like_post","post_id":2}},{{"type":"reply_to_comment","comment_id":3,"content":"我也这么觉得"}}]}}
 
 规则：
 1. 只输出单行JSON，不要换行、不要缩进、不要markdown标记
 2. 确保JSON格式完整，所有引号、括号必须匹配
 3. actions数组可以为空（表示skip）
-4. content和reason字段使用纯文本，不要有特殊字符
+4. content字段使用纯文本，不要有特殊字符
 5. 根据兴趣系数和关注关系决定行动：
    - 对关注用户的帖子/评论/回复，兴趣系数自动提高
    - 高兴趣可以评论/回复，中等兴趣可以点赞，低兴趣跳过
