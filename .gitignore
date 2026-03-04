@@ -211,12 +211,10 @@ llm_config.json
 
 # Project specific files
 *.log
-social_platform.db
-agent_schedular.db
 
 # IDE settings
 .idea/
 .vscode/
 
-# Test files
-test_venv.py
+# Test files (keep them for testing purposes)
+!test_*.py
