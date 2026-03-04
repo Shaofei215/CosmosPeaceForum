@@ -8,6 +8,19 @@ from typing import Dict, List, Any, Optional
 from pathlib import Path
 
 
+def get_avatar_path(avatar_filename: str) -> str:
+    """
+    将头像文件名转换为可访问的URL路径
+    
+    Args:
+        avatar_filename: 头像文件名（如 "三月七.jpg" 或 "Avatar.png"）
+        
+    Returns:
+        头像的URL路径（如 "/avatar/三月七.jpg"）
+    """
+    return f"/avatar/{avatar_filename}"
+
+
 class AIUserInitializer:
     """AI 用户初始化器"""
     
@@ -79,12 +92,18 @@ class AIUserInitializer:
         
         print(f"[AI 初始化] 正在创建用户：{username}")
         
+        # 从配置中获取头像文件名，并转换为完整路径
+        avatar_filename = user_config.get("avatar", "Avatar.png")
+        avatar_path = get_avatar_path(avatar_filename)
+        print(f"[AI 初始化] {username} 的头像：{avatar_path}")
+        
         try:
             # 构造 API 请求
             url = f"{self.api_base_url}/users"
             payload = {
                 "username": username,
-                "bio": personal_signature
+                "bio": personal_signature,
+                "avatar": avatar_path
             }
             
             response = requests.post(url, json=payload, timeout=5)

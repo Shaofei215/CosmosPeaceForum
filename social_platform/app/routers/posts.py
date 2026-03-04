@@ -25,14 +25,25 @@ def list_hot_posts(limit: int = 50, db: Session = Depends(get_db)):
 @router.get("/mixed", response_model=List[schemas.PostResponse])
 def list_mixed_posts(
     limit: int = 50,
-    hot_ratio: float = Query(0.7, ge=0.0, le=1.0, description="热门帖子比例"),
+    hot_ratio: float = Query(0.4, ge=0.0, le=1.0, description="热门帖子比例（默认40%）"),
+    fresh_ratio: float = Query(0.3, ge=0.0, le=1.0, description="最新帖子比例（默认30%）"),
+    random_ratio: float = Query(0.3, ge=0.0, le=1.0, description="随机帖子比例（默认30%）"),
+    user_id: int = Query(None, description="用户ID，用于过滤已读帖子"),
     db: Session = Depends(get_db)
 ):
     """
-    获取混合帖子（热门+最新，顺序随机）
-    默认70%热门内容 + 30%最新内容
+    获取三层混合帖子（热门+最新+随机，顺序随机）
+    默认40%热门 + 30%最新 + 30%随机
+    如果提供user_id，将过滤该用户已读的帖子
     """
-    posts = get_mixed_posts(db, hot_ratio=hot_ratio, total_limit=limit)
+    posts = get_mixed_posts(
+        db, 
+        user_id=user_id, 
+        hot_ratio=hot_ratio,
+        fresh_ratio=fresh_ratio,
+        random_ratio=random_ratio,
+        total_limit=limit
+    )
     return posts
 
 
@@ -64,11 +75,32 @@ def create_post(
 
 
 @router.get("", response_model=List[schemas.PostResponse])
-def list_posts(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+def list_posts(
+    skip: int = 0, 
+    limit: int = 50, 
+    sort: str = Query("recommended", description="排序方式：recommended=推荐算法，latest=最新，hot=最热"),
+    user_id: int = Query(None, description="用户 ID，用于推荐算法过滤已读帖子"),
+    db: Session = Depends(get_db)
+):
     """
-    获取帖子列表（全局时间线）
+    获取帖子列表（支持多种排序方式）
+    - sort=recommended: 推荐算法（40% 热门 + 30% 最新 + 30% 随机）
+    - sort=latest: 按时间倒序
+    - sort=hot: 按热度排序
     """
-    posts = crud.get_posts(db, skip=skip, limit=limit)
+    if sort == "recommended":
+        # 使用推荐算法（混合排序）
+        posts = get_mixed_posts(db, user_id=user_id, total_limit=limit)
+    elif sort == "latest":
+        # 按时间倒序
+        posts = crud.get_posts(db, skip=skip, limit=limit)
+    elif sort == "hot":
+        # 按热度排序
+        posts = get_hot_posts(db, limit=limit)
+    else:
+        # 默认使用推荐算法
+        posts = get_mixed_posts(db, user_id=user_id, total_limit=limit)
+    
     return posts
 
 

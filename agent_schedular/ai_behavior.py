@@ -59,6 +59,7 @@ class AIBehaviorEngine:
         }
         
         print(f"[行为引擎] 初始化完成，API地址: {api_base_url}，LLM: {'已启用' if use_llm else '已禁用'}")
+        # 注意：已读记录现在由服务端管理，客户端无需维护
 
     def execute_login_session(self, user_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -134,7 +135,8 @@ class AIBehaviorEngine:
     
     def _browse(self, user_config: Dict[str, Any], user_id: int) -> List[Dict[str, Any]]:
         """
-        浏览 - 获取混合帖子（70%热门 + 30%最新，顺序随机）
+        浏览 - 获取三层混合帖子（40%热门 + 30%最新 + 30%随机）
+        服务端会自动过滤已读帖子并记录新的已读
         n 在 posts_per_login_min 和 posts_per_login_max 之间随机
         
         Args:
@@ -153,20 +155,23 @@ class AIBehaviorEngine:
         
         print(f"\n[浏览] [{username}] 正在浏览时间线...")
         print(f"[{username}] 计划浏览 {n} 条帖子 (范围: {posts_min}-{posts_max})")
-        print(f"[{username}] 浏览策略: 70%热门 + 30%最新，顺序随机")
+        print(f"[{username}] 浏览策略: 40%热门 + 30%最新 + 30%随机，服务端过滤已读")
         
         try:
-            # 使用新的混合帖子 API
+            # 直接请求 n 条，服务端会处理已读过滤
             url = f"{self.api_base_url}/posts/mixed"
             params = {
                 "limit": n,
-                "hot_ratio": 0.7  # 70%热门，30%最新
+                "hot_ratio": 0.4,   # 40%热门
+                "fresh_ratio": 0.3, # 30%最新
+                "random_ratio": 0.3,# 30%随机
+                "user_id": user_id  # 传入用户ID，服务端过滤已读
             }
             response = requests.get(url, params=params, timeout=10)
             
             if response.status_code == 200:
                 posts = response.json()
-
+                
                 print(f"[{username}] 获取到 {len(posts)} 条帖子")
 
                 # 显示帖子摘要（包含热度信息）
@@ -477,19 +482,46 @@ class AIBehaviorEngine:
 8. "follow" - 关注某用户（需要提供user_id）
 9. "skip" - 什么都不做
 
+【发帖指导】
+当你选择 "post" 时，表示你想要发布一条新帖子。适合发帖的情况：
+- 浏览的内容给了你灵感，想要分享自己的想法或经历
+- 想要主动开启一个新话题，与大家讨论
+- 有想要表达的情感、观点或日常生活分享
+- 不需要针对特定帖子，而是想独立发表内容
+
+发帖内容应该：
+- 符合你的性格和身份
+- 可以是原创内容，也可以是对浏览内容的感悟
+- 长度适中，像真实的社交媒体帖子
+- 不需要每条都发，有表达欲望时再发
+
+【字数限制】
+- 帖子内容：100字以内为宜
+- 评论内容：50字以内为宜
+- 回复内容：50字以内为宜
+- 保持简洁，像真实社交媒体一样
+
+【多行动说明】
+你一次登录可以执行多个行动，actions数组可以包含多个行动。例如：
+- 可以既发帖又评论
+- 可以点赞多条内容
+- 可以评论后再回复
+根据你的兴趣和意愿自由组合。
+
 【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记，不要包含任何解释性文字。
 
 输出格式必须严格如下（单行JSON）：
-{{"actions":[{{"type":"comment","post_id":1,"content":"这条帖子说得很有道理！"}},{{"type":"like_comment","comment_id":2}},{{"type":"reply_to_comment","comment_id":3,"content":"我也这么觉得！"}}],"reason":"我觉得这些内容很有趣"}}
+{{"actions":[{{"type":"post","content":"今天天气真不错，想出去走走"}},{{"type":"comment","post_id":1,"content":"说得太对了！"}},{{"type":"like_post","post_id":2}},{{"type":"reply_to_comment","comment_id":3,"content":"我也这么觉得"}}]}}
 
 规则：
 1. 只输出单行JSON，不要换行、不要缩进、不要markdown标记
 2. 确保JSON格式完整，所有引号、括号必须匹配
 3. actions数组可以为空（表示skip）
-4. content和reason字段使用纯文本，不要有特殊字符
+4. content字段使用纯文本，不要有特殊字符
 5. 根据兴趣系数和关注关系决定行动：
    - 对关注用户的帖子/评论/回复，兴趣系数自动提高
-   - 高兴趣可以评论/回复，中等兴趣可以点赞，低兴趣跳过"""
+   - 高兴趣可以评论/回复，中等兴趣可以点赞，低兴趣跳过
+6. 发帖是可选的，不要每条都发，有灵感时才发"""
         
         # 构建思考信息，包含帖子和评论
         thoughts_info = []

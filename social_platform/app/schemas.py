@@ -2,7 +2,7 @@
 Pydantic模型定义
 用于API请求和响应的数据校验
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from typing import Optional, List
 
@@ -11,6 +11,7 @@ class UserCreate(BaseModel):
     """创建用户请求"""
     username: str
     bio: Optional[str] = None
+    avatar: Optional[str] = None  # 头像图片路径
 
 
 class UserResponse(BaseModel):
@@ -18,7 +19,26 @@ class UserResponse(BaseModel):
     id: int
     username: str
     bio: Optional[str]
+    avatar: Optional[str]  # 头像图片路径
     created_at: datetime
+
+    @field_validator('avatar', mode='before')
+    @classmethod
+    def format_avatar_path(cls, v):
+        """确保头像路径格式正确，添加/avatar前缀"""
+        if v is None:
+            return '/avatar/Avatar.png'
+        if isinstance(v, str):
+            # 如果已经是完整路径，直接返回
+            if v.startswith('/avatar/'):
+                return v
+            # 如果包含路径分隔符，只取文件名
+            if '/' in v:
+                v = v.split('/')[-1]
+            if '\\' in v:
+                v = v.split('\\')[-1]
+            return f'/avatar/{v}'
+        return v
 
     class Config:
         from_attributes = True
@@ -38,6 +58,11 @@ class PostResponse(BaseModel):
     hot_score: int = 0
     last_hot_update: Optional[datetime] = None
     author: Optional[UserResponse] = None
+    likes_count: int = 0
+    comments_count: int = 0
+    reposts_count: int = 0
+    views_count: int = 0
+    likers: Optional[List[UserResponse]] = None
 
     class Config:
         from_attributes = True
@@ -58,6 +83,9 @@ class CommentResponse(BaseModel):
     hot_score: int = 0
     last_hot_update: Optional[datetime] = None
     author: Optional[UserResponse] = None
+    likes_count: int = 0
+    replies_count: int = 0
+    replies: Optional[List["ReplyResponse"]] = None
 
     class Config:
         from_attributes = True
@@ -80,6 +108,7 @@ class ReplyResponse(BaseModel):
     hot_score: int = 0
     last_hot_update: Optional[datetime] = None
     author: Optional[UserResponse] = None
+    likes_count: int = 0
 
     class Config:
         from_attributes = True
@@ -107,3 +136,7 @@ class FollowResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# 重建模型以处理前向引用
+CommentResponse.model_rebuild()

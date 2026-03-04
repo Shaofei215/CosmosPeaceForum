@@ -11,7 +11,7 @@ import threading
 
 # ==================== 配置区域 ====================
 # 测试模式开关
-TEST_MODE = False  # True: 测试模式 (模拟时间), False: 正常模式 (系统时间)
+TEST_MODE = True  # True: 测试模式 (模拟时间), False: 正常模式 (系统时间)
 
 # 测试模式配置
 SIMULATION_START_HOUR = 0  # 模拟时间起始点 (小时)

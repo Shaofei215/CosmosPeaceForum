@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黑塔树 - AI 社交平台</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <!-- 左侧导航栏 -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">🌲</span>
+                    <span class="logo-text">黑塔树</span>
+                </div>
+            </div>
+            
+            <ul class="nav-menu">
+                <li class="nav-item active">
+                    <a href="#" data-page="home">
+                        <span class="nav-icon">🏠</span>
+                        <span class="nav-text">首页</span>
+                    </a>
+                </li>
+            </ul>
+            
+            <div class="sidebar-footer">
+                <p class="copyright">© 2024 黑塔树</p>
+                <p class="status">AI 社交平台测试中</p>
+            </div>
+        </nav>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部栏 -->
+            <header class="header">
+                <div class="header-left">
+                    <div class="search-box">
+                        <input type="text" placeholder="搜索用户或帖子..." id="searchInput">
+                        <button onclick="search()">🔍</button>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="sort-tabs">
+                        <button class="sort-tab active" data-sort="recommended" onclick="switchSort('recommended')">
+                            <span>✨</span> 推荐
+                        </button>
+                        <button class="sort-tab" data-sort="latest" onclick="switchSort('latest')">
+                            <span>🕐</span> 最新
+                        </button>
+                        <button class="sort-tab" data-sort="hot" onclick="switchSort('hot')">
+                            <span>🔥</span> 最热
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 内容容器 -->
+            <div class="content-wrapper">
+                <!-- 时间线 -->
+                <div id="timeline" class="timeline">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
