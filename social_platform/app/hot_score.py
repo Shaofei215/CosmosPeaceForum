@@ -144,7 +144,10 @@ def update_post_hot_score(db: Session, post_id: int) -> int:
         return 0
     
     likes_count = db.query(models.Like).filter(models.Like.post_id == post_id).count()
-    comments_count = db.query(models.Comment).filter(models.Comment.post_id == post_id).count()
+    # 评论数 = 评论数 + 回复数
+    comment_count = db.query(models.Comment).filter(models.Comment.post_id == post_id).count()
+    reply_count = db.query(models.Reply).join(models.Comment).filter(models.Comment.post_id == post_id).count()
+    comments_count = comment_count + reply_count
     
     new_score = calculate_hot_score(
         likes_count=likes_count,
@@ -239,7 +242,10 @@ def get_hot_posts(db: Session, limit: int = 50, offset: int = 0) -> list:
     # 为每个帖子添加统计属性
     for post in posts:
         post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
-        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        # 评论数 = 评论数 + 回复数
+        comment_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        reply_count = db.query(models.Reply).join(models.Comment).filter(models.Comment.post_id == post.id).count()
+        post.comments_count = comment_count + reply_count
         post.reposts_count = 0
         post.views_count = post.hot_score
         # 获取点赞用户列表（最多 3 个）
@@ -347,7 +353,10 @@ def get_mixed_posts(db: Session, user_id: Optional[int] = None,
     # 为每个帖子添加统计属性
     for post in mixed_posts:
         post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
-        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        # 评论数 = 评论数 + 回复数
+        comment_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        reply_count = db.query(models.Reply).join(models.Comment).filter(models.Comment.post_id == post.id).count()
+        post.comments_count = comment_count + reply_count
         post.reposts_count = 0
         post.views_count = post.hot_score
         # 获取点赞用户列表（最多 3 个）

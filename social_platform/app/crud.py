@@ -53,7 +53,10 @@ def get_post(db: Session, post_id: int) -> Optional[models.Post]:
     if post:
         # 动态添加统计属性
         post.likes_count = db.query(models.Like).filter(models.Like.post_id == post_id).count()
-        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post_id).count()
+        # 评论数 = 评论数 + 回复数
+        comment_count = db.query(models.Comment).filter(models.Comment.post_id == post_id).count()
+        reply_count = db.query(models.Reply).join(models.Comment).filter(models.Comment.post_id == post_id).count()
+        post.comments_count = comment_count + reply_count
         post.reposts_count = 0  # 暂不支持转发功能
         post.views_count = post.hot_score  # 用热度分数作为浏览量估算
         # 获取点赞用户列表（最多 3 个）
@@ -74,7 +77,10 @@ def get_posts(db: Session, skip: int = 0, limit: int = 50) -> List[models.Post]:
     # 为每个帖子添加统计属性
     for post in posts:
         post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
-        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        # 评论数 = 评论数 + 回复数
+        comment_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        reply_count = db.query(models.Reply).join(models.Comment).filter(models.Comment.post_id == post.id).count()
+        post.comments_count = comment_count + reply_count
         post.reposts_count = 0
         post.views_count = post.hot_score
         # 获取点赞用户列表（最多 3 个）
@@ -96,7 +102,10 @@ def get_user_posts(db: Session, user_id: int, skip: int = 0, limit: int = 50) ->
     # 为每个帖子添加统计属性
     for post in posts:
         post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
-        post.comments_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        # 评论数 = 评论数 + 回复数
+        comment_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
+        reply_count = db.query(models.Reply).join(models.Comment).filter(models.Comment.post_id == post.id).count()
+        post.comments_count = comment_count + reply_count
         post.reposts_count = 0
         post.views_count = post.hot_score
     return posts

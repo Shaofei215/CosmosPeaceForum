@@ -164,8 +164,8 @@ async function toggleComments(postId) {
     // 显示评论区域
     commentsSection.style.display = 'block';
     
-    // 加载评论
-    const comments = await fetchAPI(`/posts/${postId}/comments`) || [];
+    // 加载评论（使用热度混合排序）
+    const comments = await fetchAPI(`/posts/${postId}/comments?mixed=true`) || [];
     
     if (comments.length === 0) {
         commentsSection.innerHTML = '<div class="empty-text" style="padding: 16px; color: #8899a6;">暂无评论</div>';
@@ -200,7 +200,13 @@ function createCommentHTML(comment) {
                 </div>
                 ${replies.length > 0 ? `
                     <div class="replies">
-                        ${replies.map(reply => createReplyHTML(reply)).join('')}
+                        ${replies.map((reply, index) => {
+                            // 获取父级回复（如果是回复的回复）
+                            const parentReply = reply.parent_reply_id && index > 0 
+                                ? replies.find(r => r.id === reply.parent_reply_id) 
+                                : null;
+                            return createReplyHTML(reply, parentReply);
+                        }).join('')}
                     </div>
                 ` : ''}
             </div>
@@ -208,17 +214,25 @@ function createCommentHTML(comment) {
     `;
 }
 
-function createReplyHTML(reply) {
+function createReplyHTML(reply, parentReply = null) {
     const avatar = reply.author?.avatar || '/avatar/Avatar.png';
     const username = reply.author?.username || '未知用户';
+    const time = formatTime(reply.created_at);
+    
+    // 如果有父级回复，显示 "回复 @xxx"
+    const replyToText = parentReply ? `回复 <span class="reply-to">@${escapeHtml(parentReply.author?.username || '用户')}</span>` : '';
     
     return `
         <div class="reply-item">
-            <div class="comment-header">
-                <span class="comment-author">${username}</span>
-                <span class="comment-time">${formatTime(reply.created_at)}</span>
+            <img src="${API_BASE_URL}${avatar}" alt="${username}" class="reply-avatar" onerror="this.onerror=null; this.src='${API_BASE_URL}/avatar/Avatar.png'">
+            <div class="reply-content">
+                <div class="reply-header">
+                    <span class="reply-author">${username}</span>
+                    <span class="reply-time">${time}</span>
+                    ${replyToText ? `<span class="reply-to-text">${replyToText}</span>` : ''}
+                </div>
+                <div class="reply-text">${escapeHtml(reply.content)}</div>
             </div>
-            <div class="comment-text">${escapeHtml(reply.content)}</div>
         </div>
     `;
 }

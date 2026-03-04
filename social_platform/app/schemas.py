@@ -85,7 +85,7 @@ class CommentResponse(BaseModel):
     author: Optional[UserResponse] = None
     likes_count: int = 0
     replies_count: int = 0
-    replies: Optional[list] = None
+    replies: Optional[List["ReplyResponse"]] = None
 
     class Config:
         from_attributes = True
@@ -136,3 +136,7 @@ class FollowResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# 重建模型以处理前向引用
+CommentResponse.model_rebuild()
