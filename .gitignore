@@ -216,5 +216,5 @@ llm_config.json
 .idea/
 .vscode/
 
-# Test files (keep them for testing purposes)
-!test_*.py
+# Test files (do not upload to GitHub)
+test_*.py
