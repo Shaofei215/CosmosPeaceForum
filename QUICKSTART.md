@@ -11,9 +11,13 @@
 
 ## Linux/Mac 系统
 
-### 1️⃣ 赋予执行权限
+### 1️⃣ 首次使用 - 安装依赖
 ```bash
-chmod +x start.sh stop.sh
+# 赋予执行权限
+chmod +x setup.sh start.sh stop.sh
+
+# 安装所有依赖
+./setup.sh
 ```
 
 ### 2️⃣ 启动所有服务
@@ -27,18 +31,27 @@ chmod +x start.sh stop.sh
 ```
 
 ### 4️⃣ 查看日志
+
+#### 实时查看所有日志
 ```bash
-# 实时查看所有日志
-tail -f logs/*.log
+# Linux/Mac
+./logs.sh
 
-# 查看后端日志
-tail -f logs/backend.log
+# Windows
+logs.bat
+```
 
-# 查看前端日志
-tail -f logs/frontend.log
+#### 查看特定日志
+```bash
+# Linux/Mac
+tail -f logs/backend.log      # 后端日志
+tail -f logs/frontend.log     # 前端日志
+tail -f logs/agent.log        # AI 调度器日志
 
-# 查看 AI 调度器日志
-tail -f logs/agent.log
+# Windows
+type logs\backend.log
+type logs\frontend.log
+type logs\agent.log
 ```
 
 ---

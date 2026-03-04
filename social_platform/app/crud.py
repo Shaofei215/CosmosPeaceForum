@@ -417,7 +417,7 @@ def clear_user_read_history(db: Session, user_id: int) -> int:
     
     Args:
         db: 数据库会话
-        user_id: 用户ID
+        user_id: 用户 ID
         
     Returns:
         删除的记录数
@@ -429,3 +429,97 @@ def clear_user_read_history(db: Session, user_id: int) -> int:
     )
     db.commit()
     return result
+
+
+def check_comment_like_exists(db: Session, user_id: int, comment_id: int) -> bool:
+    """
+    检查用户是否已点赞评论
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户 ID
+        comment_id: 评论 ID
+        
+    Returns:
+        是否已点赞
+    """
+    return (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.comment_id == comment_id)
+        .first()
+        is not None
+    )
+
+
+def check_reply_like_exists(db: Session, user_id: int, reply_id: int) -> bool:
+    """
+    检查用户是否已点赞回复
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户 ID
+        reply_id: 回复 ID
+        
+    Returns:
+        是否已点赞
+    """
+    return (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.reply_id == reply_id)
+        .first()
+        is not None
+    )
+
+
+def create_comment_like(db: Session, user_id: int, comment_id: int) -> models.Like:
+    """
+    创建评论点赞
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户 ID
+        comment_id: 评论 ID
+        
+    Returns:
+        点赞记录
+    """
+    existing_like = (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.comment_id == comment_id)
+        .first()
+    )
+    if existing_like:
+        return existing_like
+
+    db_like = models.Like(user_id=user_id, comment_id=comment_id)
+    db.add(db_like)
+    db.commit()
+    db.refresh(db_like)
+    return db_like
+
+
+def create_reply_like(db: Session, user_id: int, reply_id: int) -> models.Like:
+    """
+    创建回复点赞
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户 ID
+        reply_id: 回复 ID
+        
+    Returns:
+        点赞记录
+    """
+    existing_like = (
+        db.query(models.Like)
+        .filter(models.Like.user_id == user_id, models.Like.reply_id == reply_id)
+        .first()
+    )
+    if existing_like:
+        return existing_like
+
+    db_like = models.Like(user_id=user_id, reply_id=reply_id)
+    db.add(db_like)
+    db.commit()
+    db.refresh(db_like)
+    return db_like
