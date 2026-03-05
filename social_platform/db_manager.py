@@ -4,9 +4,11 @@
 """
 import sqlite3
 from pathlib import Path
+import os
 
-# 数据库文件路径
-DB_PATH = Path(__file__).parent / "social_platform.db"
+# 数据库文件路径 - 使用相对路径，相对于当前工作目录
+# 服务器启动时在 social_platform 目录，所以数据库在 ./social_platform.db
+DB_PATH = Path("./social_platform.db")
 
 
 def get_connection():
