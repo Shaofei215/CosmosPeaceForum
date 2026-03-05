@@ -121,6 +121,19 @@ def create_comment(db: Session, comment: schemas.CommentCreate, post_id: int, au
     db.add(db_comment)
     db.commit()
     db.refresh(db_comment)
+    
+    # 创建通知：通知帖子作者
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if post and post.author_id != author_id:
+        create_notification(
+            db=db,
+            user_id=post.author_id,
+            actor_id=author_id,
+            notification_type=models.NotificationType.COMMENT,
+            post_id=post_id,
+            comment_id=db_comment.id
+        )
+    
     return db_comment
 
 
@@ -169,6 +182,33 @@ def create_reply(
     db.add(db_reply)
     db.commit()
     db.refresh(db_reply)
+    
+    # 创建通知：通知评论作者或父回复作者
+    comment = db.query(models.Comment).filter(models.Comment.id == comment_id).first()
+    if comment:
+        # 如果是回复评论，通知评论作者
+        if comment.author_id != author_id:
+            create_notification(
+                db=db,
+                user_id=comment.author_id,
+                actor_id=author_id,
+                notification_type=models.NotificationType.REPLY,
+                comment_id=comment_id,
+                reply_id=db_reply.id
+            )
+        # 如果是回复回复，通知父回复作者
+        elif parent_reply_id:
+            parent_reply = db.query(models.Reply).filter(models.Reply.id == parent_reply_id).first()
+            if parent_reply and parent_reply.author_id != author_id:
+                create_notification(
+                    db=db,
+                    user_id=parent_reply.author_id,
+                    actor_id=author_id,
+                    notification_type=models.NotificationType.REPLY,
+                    comment_id=comment_id,
+                    reply_id=db_reply.id
+                )
+    
     return db_reply
 
 
@@ -203,6 +243,18 @@ def create_like(db: Session, user_id: int, post_id: int) -> models.Like:
     db.add(db_like)
     db.commit()
     db.refresh(db_like)
+    
+    # 创建通知：通知帖子作者
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if post and post.author_id != user_id:
+        create_notification(
+            db=db,
+            user_id=post.author_id,
+            actor_id=user_id,
+            notification_type=models.NotificationType.LIKE_POST,
+            post_id=post_id
+        )
+    
     return db_like
 
 
@@ -247,6 +299,15 @@ def create_follow(db: Session, follower_id: int, following_id: int) -> models.Fo
     db.add(db_follow)
     db.commit()
     db.refresh(db_follow)
+    
+    # 创建通知：通知被关注者
+    create_notification(
+        db=db,
+        user_id=following_id,
+        actor_id=follower_id,
+        notification_type=models.NotificationType.FOLLOW
+    )
+    
     return db_follow
 
 
@@ -504,6 +565,18 @@ def create_comment_like(db: Session, user_id: int, comment_id: int) -> models.Li
     db.add(db_like)
     db.commit()
     db.refresh(db_like)
+    
+    # 创建通知：通知评论作者
+    comment = db.query(models.Comment).filter(models.Comment.id == comment_id).first()
+    if comment and comment.author_id != user_id:
+        create_notification(
+            db=db,
+            user_id=comment.author_id,
+            actor_id=user_id,
+            notification_type=models.NotificationType.LIKE_COMMENT,
+            comment_id=comment_id
+        )
+    
     return db_like
 
 
@@ -531,4 +604,168 @@ def create_reply_like(db: Session, user_id: int, reply_id: int) -> models.Like:
     db.add(db_like)
     db.commit()
     db.refresh(db_like)
+    
+    # 创建通知：通知回复作者
+    reply = db.query(models.Reply).filter(models.Reply.id == reply_id).first()
+    if reply and reply.author_id != user_id:
+        create_notification(
+            db=db,
+            user_id=reply.author_id,
+            actor_id=user_id,
+            notification_type=models.NotificationType.LIKE_REPLY,
+            reply_id=reply_id
+        )
+    
     return db_like
+
+
+# ==================== 通知相关操作 ====================
+
+def create_notification(
+    db: Session,
+    user_id: int,
+    actor_id: int,
+    notification_type: models.NotificationType,
+    post_id: int = None,
+    comment_id: int = None,
+    reply_id: int = None
+) -> models.Notification:
+    """
+    创建通知
+    
+    Args:
+        db: 数据库会话
+        user_id: 接收者用户 ID
+        actor_id: 发起者用户 ID
+        notification_type: 通知类型
+        post_id: 关联的帖子 ID（可选）
+        comment_id: 关联的评论 ID（可选）
+        reply_id: 关联的回复 ID（可选）
+        
+    Returns:
+        通知记录
+    """
+    # 不通知自己
+    if user_id == actor_id:
+        print(f"[DEBUG] 跳过通知：user_id={user_id} == actor_id={actor_id}")
+        return None
+    
+    notification = models.Notification(
+        user_id=user_id,
+        actor_id=actor_id,
+        type=notification_type,
+        post_id=post_id,
+        comment_id=comment_id,
+        reply_id=reply_id
+    )
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+    print(f"[DEBUG] 通知创建成功：user_id={user_id}, type={notification_type.value}")
+    return notification
+
+
+def get_user_notifications(
+    db: Session,
+    user_id: int,
+    limit: int = 20,
+    is_read: bool = None
+) -> list:
+    """
+    获取用户的通知列表（按时间倒序）
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户 ID
+        limit: 最大返回数量
+        is_read: 是否只返回已读/未读（None 表示全部）
+        
+    Returns:
+        通知列表
+    """
+    query = db.query(models.Notification).filter(models.Notification.user_id == user_id)
+    
+    if is_read is not None:
+        query = query.filter(models.Notification.is_read == is_read)
+    
+    notifications = (
+        query
+        .order_by(models.Notification.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    
+    # 为每个通知加载关联对象
+    for notif in notifications:
+        if notif.post_id:
+            notif.post = db.query(models.Post).filter(models.Post.id == notif.post_id).first()
+        if notif.comment_id:
+            notif.comment = db.query(models.Comment).filter(models.Comment.id == notif.comment_id).first()
+        if notif.reply_id:
+            notif.reply = db.query(models.Reply).filter(models.Reply.id == notif.reply_id).first()
+        notif.actor = db.query(models.User).filter(models.User.id == notif.actor_id).first()
+    
+    return notifications
+
+
+def mark_notification_read(db: Session, notification_id: int) -> models.Notification:
+    """
+    标记通知为已读
+    
+    Args:
+        db: 数据库会话
+        notification_id: 通知 ID
+        
+    Returns:
+        通知记录
+    """
+    notification = db.query(models.Notification).filter(models.Notification.id == notification_id).first()
+    if notification:
+        notification.is_read = True
+        db.commit()
+        db.refresh(notification)
+    return notification
+
+
+def mark_all_notifications_read(db: Session, user_id: int) -> int:
+    """
+    标记用户的所有通知为已读
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户 ID
+        
+    Returns:
+        标记的数量
+    """
+    result = (
+        db.query(models.Notification)
+        .filter(
+            models.Notification.user_id == user_id,
+            models.Notification.is_read == False
+        )
+        .update({"is_read": True})
+    )
+    db.commit()
+    return result
+
+
+def get_unread_notifications_count(db: Session, user_id: int) -> int:
+    """
+    获取用户的未读通知数量
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户 ID
+        
+    Returns:
+        未读通知数量
+    """
+    return (
+        db.query(models.Notification)
+        .filter(
+            models.Notification.user_id == user_id,
+            models.Notification.is_read == False
+        )
+        .count()
+    )

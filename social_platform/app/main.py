@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 from app.database import engine, Base
-from app.routers import users, posts, interactions
+from app.routers import users, posts, interactions, notifications
 
 Base.metadata.create_all(bind=engine)
 
@@ -39,6 +39,7 @@ else:
 app.include_router(users.router)
 app.include_router(posts.router)
 app.include_router(interactions.router)
+app.include_router(notifications.router)
 
 
 @app.get("/")

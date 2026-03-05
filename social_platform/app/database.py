@@ -1,6 +1,6 @@
 """
 数据库配置模块
-提供SQLAlchemy引擎和会话管理
+提供 SQLAlchemy 引擎和会话管理
 """
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -21,7 +21,7 @@ Base = declarative_base()
 def get_db():
     """
     获取数据库会话的依赖函数
-    用于FastAPI的Depends注入
+    用于 FastAPI 的 Depends 注入
     """
     db = SessionLocal()
     try:
