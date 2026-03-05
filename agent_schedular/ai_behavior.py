@@ -97,14 +97,26 @@ class AIBehaviorEngine:
                 print(f"[{username}] 时间线为空，跳过本次会话")
                 session_result["actions"].append({"type": "skip", "reason": "Empty timeline"})
             else:
-                # 2. 思考 - LLM 分析帖子
-                thoughts = self._think(posts, user_config)
+                # 2. 思考 - LLM 分析帖子（包含发帖思考）
+                result = self._think(posts, user_config)
+                thoughts = result.get("thoughts", [])
+                post_reflection = result.get("post_reflection")
                 
                 # 3. 决策 - LLM 决定行动（传入 user_id 以获取关注列表）
-                decisions = self._decide(thoughts, posts, user_config, platform_user_id)
+                decisions = self._decide(thoughts, post_reflection, posts, user_config, platform_user_id)
+                
+                # 3.5 生成帖子内容（如果决定发帖）
+                post_content = None
+                if decisions.get("decide_to_post") and post_reflection:
+                    post_content = self._generate_post_content(post_reflection, thoughts, user_config)
                 
                 # 4. 行动 - 执行决策
                 action_results = self._act(decisions, platform_user_id)
+                
+                # 4.5 如果有帖子内容，执行发帖
+                if post_content:
+                    post_result = self._create_post(platform_user_id, post_content)
+                    action_results.append(post_result)
                 session_result["actions"] = action_results
                 
                 # 统计行动结果
@@ -211,7 +223,7 @@ class AIBehaviorEngine:
         except:
             return []
     
-    def _think(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _think(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> tuple:
         """
         思考阶段 - 使用 LLM 分析每条帖子并测定兴趣系数
         
@@ -220,7 +232,9 @@ class AIBehaviorEngine:
             user_config: 用户配置
             
         Returns:
-            List[Dict]: 每条帖子的思考结果，包含 interest_score (0-1)
+            tuple: (thoughts, post_reflection)
+                - thoughts: 每条帖子的思考结果列表
+                - post_reflection: 发帖思考结果（可选）
         """
         username = user_config.get("username", "Unknown")
         personality = user_config.get("personality_prompt", "")
@@ -228,9 +242,14 @@ class AIBehaviorEngine:
         print(f"\n🤔 [{username}] 正在思考...")
         
         if self.use_llm and self.llm_client:
-            return self._think_with_llm(posts, user_config)
+            result = self._think_with_llm(posts, user_config)
         else:
-            return self._think_simulated(posts, user_config)
+            result = self._think_simulated(posts, user_config)
+        
+        thoughts = result.get("thoughts", [])
+        post_reflection = result.get("post_reflection")
+        
+        return thoughts, post_reflection
     
     def _think_with_llm(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> List[Dict[str, Any]]:
         """使用 LLM 进行思考分析，并根据兴趣系数获取评论"""
@@ -243,22 +262,31 @@ class AIBehaviorEngine:
         
         system_prompt = f"""你是{username}，{personality}
 
-你的任务是对看到的帖子进行思考和兴趣评估。
+你的任务是对看到的帖子进行思考和兴趣评估，并思考是否有发帖的冲动。
+
+【任务1：帖子思考】
 对于每条帖子，你需要：
 1. 简单思考这条帖子内容
 2. 给出一个0-1之间的兴趣系数（0=完全不感兴趣，1=非常感兴趣）
 
+【任务2：发帖思考】
+浏览这些内容后，你是否有想要表达的欲望？
+- 有冲动不一定要发，只是内心的表达欲
+- 想分享什么主题？（经历/观点/情感/日常生活）
+- 注意：只需要确定主题方向，不需要生成具体内容
+
 【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记（如```json或```），不要包含任何解释性文字。
 
 输出格式必须严格如下：
-{{"thoughts":[{{"post_id":1,"thinking":"这条帖子很有趣","interest_score":0.8}},{{"post_id":2,"thinking":"这个话题不太感兴趣","interest_score":0.3}}]}}
+{{"thoughts":[{{"post_id":1,"thinking":"这条帖子很有趣","interest_score":0.8}}],"post_reflection":{{"has_intention":true,"theme":"想分享今天遇到的有趣事情"}}}}
 
 规则：
 1. 只输出JSON，不要换行、不要缩进、不要markdown标记
 2. interest_score必须是0到1之间的数字
 3. thinking字段使用纯文本，不要有特殊字符
-4. 确保JSON格式完整，所有引号、括号必须匹配
-5. 必须包含所有帖子的思考结果"""
+4. post_reflection是可选的，如果没有发帖冲动可以省略
+5. 确保JSON格式完整，所有引号、括号必须匹配
+6. 必须包含所有帖子的思考结果"""
         
         # 构建帖子信息
         posts_info = []
@@ -297,6 +325,9 @@ class AIBehaviorEngine:
             if not thoughts_data and isinstance(result, list):
                 thoughts_data = result
             
+            # 获取发帖思考结果
+            post_reflection = result.get("post_reflection")
+            
             # 将思考结果与帖子关联，并根据兴趣系数获取评论
             for thought in thoughts_data:
                 post_id = thought.get("post_id")
@@ -325,8 +356,9 @@ class AIBehaviorEngine:
         except Exception as e:
             print(f"[{username}] LLM 思考失败: {e}，使用模拟思考")
             thoughts = self._think_simulated(posts, user_config)
+            post_reflection = None
         
-        return thoughts
+        return {"thoughts": thoughts, "post_reflection": post_reflection}
     
     def _think_simulated(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> List[Dict[str, Any]]:
         """模拟思考（Demo 模式），并根据兴趣系数获取评论"""
@@ -385,7 +417,7 @@ class AIBehaviorEngine:
             comments_info = f"[阅读了 {t['comments_read']} 条评论]" if t['comments_read'] > 0 else "[未阅读评论]"
             print(f"   [思考] {t['post']['author']['username']}: {t['thinking'][:25]}... (兴趣: {t['interest_score']:.2f}) {comments_info}")
         
-        return thoughts
+        return {"thoughts": thoughts, "post_reflection": None}
     
     def _get_comments_by_interest(self, post_id: int, interest_score: float) -> List[Dict[str, Any]]:
         """
@@ -456,13 +488,15 @@ class AIBehaviorEngine:
             print(f"[行为引擎] 获取评论失败: {e}")
             return []
     
-    def _decide(self, thoughts: List[Dict[str, Any]], posts: List[Dict[str, Any]], 
+    def _decide(self, thoughts: List[Dict[str, Any]], post_reflection: Optional[Dict[str, Any]], 
+                posts: List[Dict[str, Any]], 
                 user_config: Dict[str, Any], user_id: int) -> Dict[str, Any]:
         """
         决策阶段 - 使用 LLM 基于思考结果做最终决策
         
         Args:
             thoughts: 思考结果列表
+            post_reflection: 发帖思考结果
             posts: 帖子列表
             user_config: 用户配置
             user_id: 平台用户ID
@@ -480,11 +514,12 @@ class AIBehaviorEngine:
             print(f"[{username}] 已关注 {len(following_list)} 位用户: {', '.join(following_list[:5])}{'...' if len(following_list) > 5 else ''}")
         
         if self.use_llm and self.llm_client:
-            return self._decide_with_llm(thoughts, user_config, following_list)
+            return self._decide_with_llm(thoughts, post_reflection, user_config, following_list)
         else:
             return self._decide_simulated(thoughts, user_config, following_list)
     
-    def _decide_with_llm(self, thoughts: List[Dict[str, Any]], user_config: Dict[str, Any], 
+    def _decide_with_llm(self, thoughts: List[Dict[str, Any]], post_reflection: Optional[Dict[str, Any]], 
+                         user_config: Dict[str, Any], 
                          following_list: List[str] = None) -> Dict[str, Any]:
         """使用 LLM 进行决策 - 支持评论、回复、点赞帖子/评论/回复，考虑关注关系"""
         username = user_config.get("username", "Unknown")
@@ -495,33 +530,31 @@ class AIBehaviorEngine:
         if following_list:
             following_info = f"\n你关注的用户: {', '.join(following_list)}\n你对关注用户的帖子/评论/回复会有更高的兴趣和互动意愿。"
         
-        system_prompt = f"""你是{username}，{personality}{following_info}
+        # 构建发帖思考信息
+        post_reflection_info = ""
+        if post_reflection and post_reflection.get("has_intention"):
+            theme = post_reflection.get("theme", "")
+            post_reflection_info = f"\n\n【发帖冲动】\n浏览内容后，你产生了发帖的冲动：\n- 主题：{theme}\n- 注意：有冲动不一定要发，可以选择发或不发"
+        
+        system_prompt = f"""你是{username}，{personality}{following_info}{post_reflection_info}
 
 基于你对帖子的思考结果和阅读到的评论/回复，决定你的行动。
 
-可选行动类型：
-1. "post" - 发布新帖子（需要提供content）
-2. "comment" - 评论某条帖子（需要提供post_id和content）
-3. "reply_to_comment" - 回复某条评论（需要提供comment_id和content）
-4. "reply_to_reply" - 回复某条回复（需要提供reply_id和content）
-5. "like_post" - 点赞帖子（需要提供post_id）
-6. "like_comment" - 点赞评论（需要提供comment_id）
-7. "like_reply" - 点赞回复（需要提供reply_id）
-8. "follow" - 关注某用户（需要提供user_id）
-9. "skip" - 什么都不做
+可选行动类型（不包含发帖，发帖决策单独处理）：
+1. "comment" - 评论某条帖子（需要提供post_id和content）
+2. "reply_to_comment" - 回复某条评论（需要提供comment_id和content）
+3. "reply_to_reply" - 回复某条回复（需要提供reply_id和content）
+4. "like_post" - 点赞帖子（需要提供post_id）
+5. "like_comment" - 点赞评论（需要提供comment_id）
+6. "like_reply" - 点赞回复（需要提供reply_id）
+7. "follow" - 关注某用户（需要提供user_id）
+8. "skip" - 什么都不做
 
-【发帖指导】
-当你选择 "post" 时，表示你想要发布一条新帖子。适合发帖的情况：
-- 浏览的内容给了你灵感，想要分享自己的想法或经历
-- 想要主动开启一个新话题，与大家讨论
-- 有想要表达的情感、观点或日常生活分享
-- 不需要针对特定帖子，而是想独立发表内容
-
-发帖内容应该：
-- 符合你的性格和身份
-- 可以是原创内容，也可以是对浏览内容的感悟
-- 长度适中，像真实的社交媒体帖子
-- 不需要每条都发，有表达欲望时再发
+【发帖决策】
+如果你有发帖冲动，现在需要决定是否真的发帖：
+- 有冲动不一定要发，根据你的人设和当前情境决定
+- 如果决定发帖，设置 "decide_to_post": true
+- 如果不发帖，设置 "decide_to_post": false
 
 【字数限制】
 - 帖子内容：100字以内为宜
@@ -539,7 +572,7 @@ class AIBehaviorEngine:
 【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记，不要包含任何解释性文字。
 
 输出格式必须严格如下（单行JSON）：
-{{"actions":[{{"type":"post","content":"今天天气真不错，想出去走走"}},{{"type":"comment","post_id":1,"content":"说得太对了！"}},{{"type":"like_post","post_id":2}},{{"type":"reply_to_comment","comment_id":3,"content":"我也这么觉得"}}]}}
+{{"actions":[{{"type":"comment","post_id":1,"content":"说得太对了！"}},{{"type":"like_post","post_id":2}}],"decide_to_post":false}}
 
 规则：
 1. 只输出单行JSON，不要换行、不要缩进、不要markdown标记
@@ -549,7 +582,7 @@ class AIBehaviorEngine:
 5. 根据兴趣系数和关注关系决定行动：
    - 对关注用户的帖子/评论/回复，兴趣系数自动提高
    - 高兴趣可以评论/回复，中等兴趣可以点赞，低兴趣跳过
-6. 发帖是可选的，不要每条都发，有灵感时才发"""
+6. decide_to_post 必须为 true 或 false，表示是否决定发帖"""
         
         # 构建思考信息，包含帖子和评论
         thoughts_info = []
@@ -636,24 +669,15 @@ class AIBehaviorEngine:
         
         decisions = {
             "actions": [],
+            "decide_to_post": False,
             "reason": "基于兴趣系数和关注关系的模拟决策"
         }
         
-        # 决策 1: 是否发帖（基于随机概率）
-        if random.random() < 0.3:  # 30% 概率发帖
-            post_contents = [
-                "今天也是充满活力的一天！",
-                "刚刚想到了一些有趣的事情...",
-                "大家最近都在忙什么呢？",
-                "分享一个今天的小感悟",
-                "天气不错，心情也很好~"
-            ]
-            decisions["actions"].append({
-                "type": "post",
-                "content": random.choice(post_contents)
-            })
+        # 决策: 是否发帖（基于随机概率）
+        if random.random() < 0.3:  # 30% 概率决定发帖
+            decisions["decide_to_post"] = True
         
-        # 决策 2: 基于兴趣系数和关注关系选择互动帖子
+        # 决策: 基于兴趣系数和关注关系选择互动帖子
         if thoughts:
             # 为每条思考添加"有效兴趣系数"（考虑关注关系）
             for thought in thoughts:
@@ -706,6 +730,112 @@ class AIBehaviorEngine:
         
         return decisions
     
+    def _generate_post_content(self, post_reflection: Dict[str, Any], 
+                              thoughts: List[Dict[str, Any]], 
+                              user_config: Dict[str, Any]) -> Optional[str]:
+        """
+        生成帖子内容 - 独立的 LLM 调用
+        
+        Args:
+            post_reflection: 发帖思考结果
+            thoughts: 思考结果列表
+            user_config: 用户配置
+            
+        Returns:
+            str: 帖子内容
+        """
+        username = user_config.get("username", "Unknown")
+        personality = user_config.get("personality_prompt", "")
+        
+        theme = post_reflection.get("theme", "")
+        
+        print(f"[{username}] 正在生成帖子内容...")
+        
+        system_prompt = f"""你是{username}，{personality}
+
+基于你的发帖冲动，生成一条原创帖子。
+
+【发帖主题】
+{theme}
+
+【要求】
+- 符合你的性格和身份
+- 可以是原创内容，也可以是对浏览内容的感悟
+- 长度 100 字以内
+- 像真实的社交媒体帖子
+
+【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记，不要包含任何解释性文字。
+
+输出格式必须严格如下：
+{{"content":"帖子内容"}}"""
+        
+        user_prompt = f"""请基于以下发帖冲动生成帖子：
+
+发帖主题：{theme}
+
+请生成你的帖子内容。"""
+        
+        try:
+            result = self.llm_client.chat(user_prompt, system_prompt)
+            self.session_stats["llm_calls"] += 1
+            
+            if isinstance(result, dict):
+                content = result.get("content", "")
+                if content:
+                    print(f"[{username}] 帖子内容生成成功: {content[:30]}...")
+                    return content
+            
+            print(f"[{username}] LLM 返回格式错误，使用默认内容")
+            return None
+            
+        except Exception as e:
+            print(f"[{username}] 生成帖子内容失败: {e}")
+            return None
+    
+    def _create_post(self, user_id: int, content: str) -> Dict[str, Any]:
+        """
+        执行发帖操作
+        
+        Args:
+            user_id: 用户 ID
+            content: 帖子内容
+            
+        Returns:
+            Dict: 操作结果
+        """
+        try:
+            url = f"{self.api_base_url}/posts/"
+            data = {
+                "user_id": user_id,
+                "content": content
+            }
+            response = requests.post(url, json=data, timeout=10)
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"[用户 {user_id}] 发帖成功: {content[:30]}...")
+                return {
+                    "type": "post",
+                    "success": True,
+                    "post_id": result.get("id"),
+                    "content": content
+                }
+            else:
+                print(f"[用户 {user_id}] 发帖失败: {response.status_code}")
+                return {
+                    "type": "post",
+                    "success": False,
+                    "error": f"HTTP {response.status_code}"
+                }
+                
+        except Exception as e:
+            print(f"[用户 {user_id}] 发帖异常: {e}")
+            return {
+                "type": "post",
+                "success": False,
+                "error": str(e)
+            }
+    
     def _act(self, decisions: Dict[str, Any], user_id: int) -> List[Dict[str, Any]]:
         """
         行动阶段 - 执行决策
@@ -726,9 +856,7 @@ class AIBehaviorEngine:
             result = {"type": action_type, "success": False}
             
             try:
-                if action_type == "post":
-                    result.update(self._create_post(user_id, action.get("content", "")))
-                elif action_type == "comment":
+                if action_type == "comment":
                     result.update(self._create_comment(user_id, action.get("post_id"), 
                                                        action.get("content", "")))
                 elif action_type == "reply_to_comment":
