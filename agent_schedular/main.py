@@ -7,8 +7,9 @@ import sys
 import os
 
 # 添加项目根目录到 Python 路径
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
+# 使用 __file__ 计算相对路径，确保迁移后也能正常工作
+current_dir = os.path.dirname(os.path.abspath(__file__))  # agent_schedular 目录
+project_root = os.path.dirname(current_dir)  # 项目根目录
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -33,6 +34,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     
     # 创建调度器（指定配置文件路径）
+    # 配置文件在项目根目录：ai_users_config.json
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
     config_path = os.path.join(project_root, "ai_users_config.json")
