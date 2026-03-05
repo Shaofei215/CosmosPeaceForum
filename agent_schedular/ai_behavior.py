@@ -389,38 +389,66 @@ class AIBehaviorEngine:
     
     def _get_comments_by_interest(self, post_id: int, interest_score: float) -> List[Dict[str, Any]]:
         """
-        根据兴趣系数获取评论
+        根据兴趣系数获取评论和回复
         
         阅读评论数 = floor(兴趣系数 × 7)
-        例如：兴趣系数0.6 → 阅读4条评论
+        每条评论的回复数 = floor(兴趣系数 × 7)
+        例如：兴趣系数 0.6 → 阅读 4 条评论，每条评论阅读 4 条回复
+        
+        评论排序：70% 最热 + 30% 最新
+        回复排序：70% 最热 + 30% 最新
         
         Args:
-            post_id: 帖子ID
+            post_id: 帖子 ID
             interest_score: 兴趣系数（0-1）
             
         Returns:
-            List[Dict]: 评论列表
+            List[Dict]: 评论列表（包含回复）
         """
-        # 计算需要阅读多少条评论
-        max_comments = 7
-        comments_to_read = int(interest_score * max_comments)
+        # 计算需要阅读多少条评论和每条评论的回复数
+        max_items = 7
+        comments_to_read = int(interest_score * max_items)
+        replies_per_comment = int(interest_score * max_items)  # 每条评论阅读的回复数
         
         if comments_to_read <= 0:
             return []
         
         try:
-            # 调用 API 获取评论（使用混合排序）
+            # 1. 获取评论（使用混合排序：70% 最热 + 30% 最新）
             url = f"{self.api_base_url}/posts/{post_id}/comments"
             params = {
                 "mixed": "true",
-                "limit": comments_to_read
+                "limit": comments_to_read * 2  # 获取更多以确保去重后足够
             }
             response = requests.get(url, params=params, timeout=10)
             
             if response.status_code == 200:
-                comments = response.json()
-                # 只取前 N 条
-                return comments[:comments_to_read]
+                all_comments = response.json()
+                # 只取前 N 条评论
+                selected_comments = all_comments[:comments_to_read]
+                
+                # 2. 为每条评论获取回复（也使用兴趣系数控制数量和混合排序）
+                if replies_per_comment > 0:
+                    for comment in selected_comments:
+                        comment_id = comment.get("id")
+                        # 获取该评论的所有回复（使用混合排序：70% 最热 + 30% 最新）
+                        reply_url = f"{self.api_base_url}/comments/{comment_id}/replies"
+                        reply_params = {
+                            "mixed": "true",
+                            "limit": replies_per_comment * 2  # 获取更多以确保去重后足够
+                        }
+                        reply_response = requests.get(reply_url, params=reply_params, timeout=10)
+                        
+                        if reply_response.status_code == 200:
+                            all_replies = reply_response.json()
+                            # 只取前 N 条回复
+                            comment["replies"] = all_replies[:replies_per_comment]
+                        else:
+                            comment["replies"] = []
+                    
+                    print(f"[兴趣阅读] 兴趣系数 {interest_score:.2f} → 阅读 {comments_to_read} 条评论，每条评论最多 {replies_per_comment} 条回复")
+                
+                return selected_comments
             else:
                 return []
                 
@@ -920,7 +948,7 @@ class AIBehaviorEngine:
                 return []
                 
         except Exception as e:
-            print(f"[行为引擎] 获取关注列表失败: {e}")
+            print(f"[行为引擎] 获取评论失败：{e}")
             return []
     
     def get_stats(self) -> Dict[str, Any]:
