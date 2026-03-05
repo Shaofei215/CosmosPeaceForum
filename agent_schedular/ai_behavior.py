@@ -127,7 +127,7 @@ class AIBehaviorEngine:
                             self.session_stats["posts_created"] += 1
                         elif action_type == "comment":
                             self.session_stats["comments_created"] += 1
-                        elif action_type == "like":
+                        elif action_type in ["like_post", "like_comment", "like_reply"]:
                             self.session_stats["likes_given"] += 1
                         elif action_type == "follow":
                             self.session_stats["follows_done"] += 1
@@ -557,16 +557,16 @@ class AIBehaviorEngine:
 - 如果不发帖，设置 "decide_to_post": false
 
 【字数限制】
-- 帖子内容：100字以内为宜
 - 评论内容：50字以内为宜
 - 回复内容：50字以内为宜
 - 保持简洁，像真实社交媒体一样
 
 【多行动说明】
 你一次登录可以执行多个行动，actions数组可以包含多个行动。例如：
-- 可以既发帖又评论
+- 可以既点赞又评论
 - 可以点赞多条内容
 - 可以评论后再回复
+- ...
 根据你的兴趣和意愿自由组合。
 
 【极其重要】你的响应必须是一个合法的JSON对象，不要包含任何markdown代码块标记，不要包含任何解释性文字。
@@ -580,8 +580,8 @@ class AIBehaviorEngine:
 3. actions数组可以为空（表示skip）
 4. content字段使用纯文本，不要有特殊字符
 5. 根据兴趣系数和关注关系决定行动：
-   - 对关注用户的帖子/评论/回复，兴趣系数自动提高
-   - 高兴趣可以评论/回复，中等兴趣可以点赞，低兴趣跳过
+   - 对关注用户的帖子/评论/回复，更感兴趣
+   - 高兴趣可以多互动，低兴趣可以少互动甚至跳过
 6. decide_to_post 必须为 true 或 false，表示是否决定发帖"""
         
         # 构建思考信息，包含帖子和评论
@@ -605,7 +605,7 @@ class AIBehaviorEngine:
                         "content": comment.get("content", "")[:80]
                     }
                     
-                    # 添加回复信息
+                    # 添加回复信息（使用已获取的所有回复）
                     if comment.get("replies"):
                         comment_data["replies"] = [
                             {
@@ -613,7 +613,7 @@ class AIBehaviorEngine:
                                 "author": reply.get("author", {}).get("username", "Unknown"),
                                 "content": reply.get("content", "")[:60]
                             }
-                            for reply in comment["replies"][:3]  # 最多3条回复
+                            for reply in comment["replies"]
                         ]
                     
                     post_data["comments"].append(comment_data)
@@ -753,7 +753,7 @@ class AIBehaviorEngine:
         
         system_prompt = f"""你是{username}，{personality}
 
-基于你的发帖冲动，生成一条原创帖子。
+基于你浏览社交平台的发帖冲动，生成一条原创帖子。
 
 【发帖主题】
 {theme}
