@@ -647,6 +647,7 @@ def create_notification(
     """
     # 不通知自己
     if user_id == actor_id:
+        print(f"[DEBUG] 跳过通知：user_id={user_id} == actor_id={actor_id}")
         return None
     
     notification = models.Notification(
@@ -660,6 +661,7 @@ def create_notification(
     db.add(notification)
     db.commit()
     db.refresh(notification)
+    print(f"[DEBUG] 通知创建成功：user_id={user_id}, type={notification_type.value}")
     return notification
 
 

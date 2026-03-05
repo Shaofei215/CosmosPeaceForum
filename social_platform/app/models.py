@@ -1,8 +1,8 @@
 """
 数据库模型定义
-定义所有数据表结构：User, Post, Comment, Reply, Like, Follow
+定义所有数据表结构：User, Post, Comment, Reply, Like, Follow, Notification
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
