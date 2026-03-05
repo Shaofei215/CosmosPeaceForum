@@ -90,7 +90,28 @@ class AIBehaviorEngine:
         }
 
         try:
-            # 1. 浏览 - 获取 n 条帖子
+            # ========== 第一阶段：处理互动消息（优先级最高） ==========
+            print(f"\n📬 第一阶段：处理互动消息")
+            notifications = self._browse_notifications(user_config, platform_user_id)
+            
+            if notifications:
+                # LLM 决策如何回应
+                notification_actions = self._process_notifications(
+                    user_config, notifications, platform_user_id
+                )
+                
+                # 执行回应行动（使用独立的方法）
+                if notification_actions:
+                    action_results = self._act_notifications(notification_actions, platform_user_id)
+                    session_result["actions"].extend(action_results)
+                    
+                    # 标记消息为已读
+                    self._mark_notifications_as_read(platform_user_id, notifications)
+            else:
+                print(f"[{username}] 没有新的互动消息")
+            
+            # ========== 第二阶段：浏览时间线 ==========
+            print(f"\n📖 第二阶段：浏览时间线")
             posts = self._browse(user_config, platform_user_id)
             
             if not posts:
@@ -117,7 +138,7 @@ class AIBehaviorEngine:
                 if post_content:
                     post_result = self._create_post(platform_user_id, post_content)
                     action_results.append(post_result)
-                session_result["actions"] = action_results
+                session_result["actions"].extend(action_results)
                 
                 # 统计行动结果
                 for action in action_results:
@@ -222,6 +243,242 @@ class AIBehaviorEngine:
             return []
         except:
             return []
+    
+    def _browse_notifications(self, user_config: Dict[str, Any], user_id: int) -> List[Dict[str, Any]]:
+        """
+        浏览互动消息（调用后端 API）
+        随机决定浏览多少条消息（1-15 条），由 AI 决定数量
+        
+        Args:
+            user_config: 用户配置
+            user_id: 平台用户 ID
+            
+        Returns:
+            List[Dict]: 通知消息列表
+        """
+        username = user_config.get("username", "Unknown")
+        
+        # 随机决定浏览多少条消息（1-15）
+        messages_to_read = random.randint(1, 15)
+        
+        print(f"\n📬 [{username}] 正在查看互动消息...")
+        print(f"[{username}] 计划查看 {messages_to_read} 条消息")
+        
+        try:
+            url = f"{self.api_base_url}/notifications"
+            params = {
+                "user_id": user_id,
+                "limit": messages_to_read,
+                "is_read": False  # 只看未读
+            }
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                notifications = response.json()
+                
+                print(f"[{username}] 获取到 {len(notifications)} 条未读消息")
+                
+                # 显示消息摘要（只显示前 5 条）
+                for i, notif in enumerate(notifications[:5]):
+                    actor = notif.get("actor", {}).get("username", "未知用户")
+                    notif_type = notif.get("type", "")
+                    time_str = notif.get("created_at", "")[:16]
+                    
+                    type_map = {
+                        "like_post": "点赞了你的帖子",
+                        "like_comment": "点赞了你的评论",
+                        "like_reply": "点赞了你的回复",
+                        "comment": "评论了你的帖子",
+                        "reply": "回复了你的评论",
+                        "follow": "关注了你"
+                    }
+                    
+                    print(f"   [{i+1}] {actor} {type_map.get(notif_type, notif_type)} - {time_str}")
+                
+                if len(notifications) > 5:
+                    print(f"   ... 还有 {len(notifications) - 5} 条消息")
+                
+                return notifications
+            else:
+                print(f"[{username}] 获取通知失败：HTTP {response.status_code}")
+                return []
+                
+        except Exception as e:
+            print(f"[{username}] 获取通知异常：{e}")
+            return []
+    
+    def _process_notifications(
+        self,
+        user_config: Dict[str, Any],
+        notifications: List[Dict[str, Any]],
+        user_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        使用 LLM 处理互动消息，决定如何回应
+        
+        Args:
+            user_config: 用户配置
+            notifications: 通知消息列表
+            user_id: 平台用户 ID
+            
+        Returns:
+            List[Dict]: 决策结果（行动列表）
+        """
+        username = user_config.get("username", "Unknown")
+        personality = user_config.get("personality_prompt", "")
+        
+        print(f"\n🤖 [{username}] 正在思考如何回应互动消息...")
+        
+        if not self.use_llm or not self.llm_client:
+            return self._process_notifications_simulated(user_config, notifications)
+        
+        # 构建消息信息（结构化数据）
+        notifications_info = []
+        for notif in notifications:
+            actor = notif.get("actor", {}).get("username", "未知用户")
+            actor_id = notif.get("actor_id")
+            notif_type = notif.get("type", "")
+            created_at = notif.get("created_at", "")
+            comment_id = notif.get("comment_id")
+            reply_id = notif.get("reply_id")
+            
+            # 获取原内容
+            original_content = ""
+            if notif.get("post"):
+                original_content = f"原帖：\"{notif['post'].get('content', '')[:50]}...\""
+            elif notif.get("comment"):
+                original_content = f"原评论：\"{notif['comment'].get('content', '')[:50]}...\""
+            elif notif.get("reply"):
+                original_content = f"原回复：\"{notif['reply'].get('content', '')[:50]}...\""
+            
+            # 构建消息数据
+            notif_data = {
+                "type": notif_type,
+                "actor": actor,
+                "actor_id": actor_id,
+                "original": original_content,
+                "time": created_at[:16] if created_at else ""
+            }
+            
+            # 根据类型添加对应的 ID
+            if comment_id:
+                notif_data["comment_id"] = comment_id
+            if reply_id:
+                notif_data["reply_id"] = reply_id
+            
+            notifications_info.append(notif_data)
+        
+        # 构建系统提示词（人设）
+        system_prompt = f"""你是{username}，{personality}
+
+你在社交平台收到了 {len(notifications)} 条互动消息，请根据你的性格和兴趣决定如何回应。"""
+
+        # 构建用户提示词（任务说明 + 数据）
+        user_prompt = f"""请对以下互动消息决定如何回应：
+
+【消息列表】
+{json.dumps(notifications_info, ensure_ascii=False, indent=2)}
+
+【可选行动类型】
+1. "reply_to_comment" - 回复评论（需要提供 comment_id 和 content，50 字以内）
+2. "reply_to_reply" - 回复回复（需要提供 reply_id 和 content，50 字以内）
+3. "like_comment" - 点赞评论（需要提供 comment_id）
+4. "like_reply" - 点赞回复（需要提供 reply_id）
+5. "follow_back" - 回关（需要提供 user_id，即消息中的 actor_id）
+6. "skip" - 不回应
+
+【说明】
+- 你不需要回应所有消息，根据你的兴趣和性格选择
+- 回复内容要简洁（50 字以内），符合你的性格
+- 对于关注，可以选择回关或不回关
+- 对于点赞，通常不需要回应，除非你特别感兴趣
+- 对于评论和回复，可以选择文字回应或点赞
+
+【极其重要】你的响应必须是一个合法的 JSON 对象，不要包含任何 markdown 代码块标记。
+
+输出格式：
+{{"actions":[{{"type":"reply_to_comment","comment_id":1,"content":"谢谢！"}},{{"type":"follow_back","user_id":2}},{{"type":"like_comment","comment_id":3}}]}}
+
+请输出 JSON 格式的决策结果。"""
+
+        try:
+            result = self.llm_client.chat(user_prompt, system_prompt)
+            self.session_stats["llm_calls"] += 1
+            
+            if isinstance(result, dict):
+                actions = result.get("actions", [])
+                print(f"[{username}] LLM 决策完成，将执行 {len(actions)} 个行动")
+                return actions
+            
+            print(f"[{username}] LLM 返回格式错误，使用模拟决策")
+            return self._process_notifications_simulated(user_config, notifications)
+            
+        except Exception as e:
+            print(f"[{username}] LLM 处理消息失败：{e}，使用模拟决策")
+            return self._process_notifications_simulated(user_config, notifications)
+    
+    def _process_notifications_simulated(
+        self,
+        user_config: Dict[str, Any],
+        notifications: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """模拟决策（Demo 模式）"""
+        username = user_config.get("username", "Unknown")
+        personality = user_config.get("personality_prompt", "")
+        
+        actions = []
+        
+        # 根据性格决定回应概率
+        if "活泼" in personality or "开朗" in personality:
+            respond_rate = 0.7
+        elif "冷静" in personality or "理性" in personality:
+            respond_rate = 0.3
+        else:
+            respond_rate = 0.5
+        
+        for notif in notifications:
+            if random.random() > respond_rate:
+                continue  # 不回应
+            
+            notif_type = notif.get("type", "")
+            actor_id = notif.get("actor_id")
+            comment_id = notif.get("comment_id")
+            reply_id = notif.get("reply_id")
+            
+            if notif_type == "comment" and comment_id:
+                actions.append({
+                    "type": "reply_to_comment",
+                    "comment_id": comment_id,
+                    "content": random.choice(["谢谢！", "哈哈", "确实如此", "你说得对"])
+                })
+            elif notif_type == "reply" and reply_id:
+                actions.append({
+                    "type": "reply_to_reply",
+                    "reply_id": reply_id,
+                    "content": random.choice(["是的！", "对", "没错"])
+                })
+            elif notif_type == "follow":
+                if random.random() < 0.5:  # 50% 概率回关
+                    actions.append({
+                        "type": "follow_back",
+                        "user_id": actor_id
+                    })
+        
+        return actions
+    
+    def _mark_notifications_as_read(
+        self,
+        user_id: int,
+        notifications: List[Dict[str, Any]]
+    ):
+        """标记处理过的消息为已读"""
+        try:
+            url = f"{self.api_base_url}/notifications/read-all"
+            params = {"user_id": user_id}
+            requests.post(url, params=params, timeout=5)
+            print(f"[用户 {user_id}] 已标记 {len(notifications)} 条消息为已读")
+        except Exception as e:
+            print(f"[警告] 标记已读失败：{e}")
     
     def _think(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -858,6 +1115,170 @@ class AIBehaviorEngine:
                 "error": str(e)
             }
     
+    def _act_notifications(
+        self,
+        actions: List[Dict[str, Any]],
+        user_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        执行通知消息处理阶段的行动
+        
+        Args:
+            actions: 行动列表
+            user_id: 平台用户 ID
+            
+        Returns:
+            List[Dict]: 执行结果列表
+        """
+        username = self._get_username_by_user_id(user_id)
+        results = []
+        
+        print(f"\n[执行] 开始执行通知回应行动...")
+        
+        for i, action in enumerate(actions, 1):
+            action_type = action.get("type")
+            result = {"action_index": i, "type": action_type, "success": False}
+            
+            try:
+                if action_type == "reply_to_comment":
+                    comment_id = action.get("comment_id")
+                    content = action.get("content")
+                    if not comment_id or not content:
+                        result["error"] = "Missing comment_id or content"
+                        print(f"   [错误] 回复评论缺少必要参数")
+                    else:
+                        # 获取评论所属的帖子 ID
+                        comment_url = f"{self.api_base_url}/comments/{comment_id}"
+                        comment_resp = requests.get(comment_url, timeout=5)
+                        if comment_resp.status_code == 200:
+                            comment_data = comment_resp.json()
+                            post_id = comment_data.get("post_id")
+                            
+                            # 调用回复 API
+                            reply_url = f"{self.api_base_url}/comments/{comment_id}/replies"
+                            reply_data = {
+                                "content": content,
+                                "author_id": user_id,
+                                "parent_reply_id": None
+                            }
+                            reply_resp = requests.post(reply_url, json=reply_data, timeout=10)
+                            
+                            if reply_resp.status_code == 200:
+                                result["success"] = True
+                                result["reply_id"] = reply_resp.json().get("id")
+                                print(f"   [回复] 回复评论成功 [评论 ID:{comment_id}]: {content[:20]}...")
+                            else:
+                                result["error"] = f"API error: {reply_resp.status_code}"
+                                print(f"   [错误] 回复评论失败：HTTP {reply_resp.status_code}")
+                        else:
+                            result["error"] = "Comment not found"
+                            print(f"   [错误] 获取评论信息失败")
+                
+                elif action_type == "reply_to_reply":
+                    reply_id = action.get("reply_id")
+                    content = action.get("content")
+                    if not reply_id or not content:
+                        result["error"] = "Missing reply_id or content"
+                        print(f"   [错误] 回复回复缺少必要参数")
+                    else:
+                        # 获取回复所属的评论 ID
+                        reply_url = f"{self.api_base_url}/replies/{reply_id}"
+                        reply_resp = requests.get(reply_url, timeout=5)
+                        if reply_resp.status_code == 200:
+                            reply_data = reply_resp.json()
+                            comment_id = reply_data.get("comment_id")
+                            
+                            # 调用回复 API（父回复 ID 设为当前回复 ID）
+                            post_url = f"{self.api_base_url}/comments/{comment_id}/replies"
+                            post_data = {
+                                "content": content,
+                                "author_id": user_id,
+                                "parent_reply_id": reply_id
+                            }
+                            post_resp = requests.post(post_url, json=post_data, timeout=10)
+                            
+                            if post_resp.status_code == 200:
+                                result["success"] = True
+                                result["new_reply_id"] = post_resp.json().get("id")
+                                print(f"   [回复] 回复回复成功 [回复 ID:{reply_id}]: {content[:20]}...")
+                            else:
+                                result["error"] = f"API error: {post_resp.status_code}"
+                                print(f"   [错误] 回复回复失败：HTTP {post_resp.status_code}")
+                        else:
+                            result["error"] = "Reply not found"
+                            print(f"   [错误] 获取回复信息失败")
+                
+                elif action_type == "like_comment":
+                    comment_id = action.get("comment_id")
+                    if not comment_id:
+                        result["error"] = "Missing comment_id"
+                        print(f"   [错误] 点赞评论缺少 comment_id")
+                    else:
+                        url = f"{self.api_base_url}/comments/{comment_id}/like"
+                        data = {"user_id": user_id}
+                        response = requests.post(url, json=data, timeout=10)
+                        
+                        if response.status_code == 200:
+                            result["success"] = True
+                            result["like_id"] = response.json().get("id")
+                            print(f"   [点赞] 点赞评论成功 [评论 ID:{comment_id}]")
+                        else:
+                            result["error"] = f"API error: {response.status_code}"
+                            print(f"   [错误] 点赞评论失败：HTTP {response.status_code}")
+                
+                elif action_type == "like_reply":
+                    reply_id = action.get("reply_id")
+                    if not reply_id:
+                        result["error"] = "Missing reply_id"
+                        print(f"   [错误] 点赞回复缺少 reply_id")
+                    else:
+                        url = f"{self.api_base_url}/replies/{reply_id}/like"
+                        data = {"user_id": user_id}
+                        response = requests.post(url, json=data, timeout=10)
+                        
+                        if response.status_code == 200:
+                            result["success"] = True
+                            result["like_id"] = response.json().get("id")
+                            print(f"   [点赞] 点赞回复成功 [回复 ID:{reply_id}]")
+                        else:
+                            result["error"] = f"API error: {response.status_code}"
+                            print(f"   [错误] 点赞回复失败：HTTP {response.status_code}")
+                
+                elif action_type == "follow_back":
+                    target_user_id = action.get("user_id")
+                    if not target_user_id:
+                        result["error"] = "Missing user_id"
+                        print(f"   [错误] 回关缺少 user_id")
+                    else:
+                        url = f"{self.api_base_url}/users/{target_user_id}/follow"
+                        data = {"follower_id": user_id}
+                        response = requests.post(url, json=data, timeout=10)
+                        
+                        if response.status_code == 200:
+                            result["success"] = True
+                            result["follow_id"] = response.json().get("id")
+                            print(f"   [关注] 回关成功 [用户 ID:{target_user_id}]")
+                        else:
+                            result["error"] = f"API error: {response.status_code}"
+                            print(f"   [错误] 回关失败：HTTP {response.status_code}")
+                
+                elif action_type == "skip":
+                    result["success"] = True
+                    result["message"] = "跳过本次行动"
+                    print(f"   ⏭️  选择跳过")
+                
+                else:
+                    result["error"] = f"未知行动类型：{action_type}"
+                    print(f"   [警告] 未知行动类型：{action_type}")
+                
+            except Exception as e:
+                result["error"] = str(e)
+                print(f"   [错误] 执行行动异常：{e}")
+            
+            results.append(result)
+        
+        return results
+    
     def _act(self, decisions: Dict[str, Any], user_id: int) -> List[Dict[str, Any]]:
         """
         行动阶段 - 执行决策
@@ -895,6 +1316,9 @@ class AIBehaviorEngine:
                 elif action_type == "like_reply":
                     result.update(self._like_reply(user_id, action.get("reply_id")))
                 elif action_type == "follow":
+                    result.update(self._follow_user(user_id, action.get("user_id")))
+                elif action_type == "follow_back":
+                    # 回关（只是 follow 的别名）
                     result.update(self._follow_user(user_id, action.get("user_id")))
                 elif action_type == "skip":
                     result["success"] = True

@@ -17,6 +17,16 @@ class LikeTargetType(str, enum.Enum):
     REPLY = "reply"
 
 
+class NotificationType(str, enum.Enum):
+    """通知类型"""
+    LIKE_POST = "like_post"       # 点赞帖子
+    LIKE_COMMENT = "like_comment"   # 点赞评论
+    LIKE_REPLY = "like_reply"      # 点赞回复
+    COMMENT = "comment"            # 评论帖子
+    REPLY = "reply"               # 回复评论
+    FOLLOW = "follow"              # 关注
+
+
 class User(Base):
     """
     用户模型
@@ -156,3 +166,33 @@ class UserReadPost(Base):
     __table_args__ = (
         {'sqlite_autoincrement': True},
     )
+
+
+class Notification(Base):
+    """
+    通知消息模型
+    用于记录用户收到的互动消息（点赞、评论、回复、关注等）
+    """
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)  # 接收者
+    actor_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)  # 发起者
+    
+    # 通知类型
+    type = Column(Enum(NotificationType), nullable=False, index=True)
+    
+    # 关联对象（根据类型三选一）
+    post_id = Column(Integer, ForeignKey("posts.id"), nullable=True, index=True)
+    comment_id = Column(Integer, ForeignKey("comments.id"), nullable=True, index=True)
+    reply_id = Column(Integer, ForeignKey("replies.id"), nullable=True, index=True)
+    
+    is_read = Column(Boolean, default=False, nullable=False, index=True)  # 是否已读
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # 关系
+    user = relationship("User", foreign_keys=[user_id], backref="notifications")
+    actor = relationship("User", foreign_keys=[actor_id])
+    post = relationship("Post", foreign_keys=[post_id])
+    comment = relationship("Comment", foreign_keys=[comment_id])
+    reply = relationship("Reply", foreign_keys=[reply_id])
