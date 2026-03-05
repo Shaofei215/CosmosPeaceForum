@@ -223,7 +223,7 @@ class AIBehaviorEngine:
         except:
             return []
     
-    def _think(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> tuple:
+    def _think(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         思考阶段 - 使用 LLM 分析每条帖子并测定兴趣系数
         
@@ -232,9 +232,10 @@ class AIBehaviorEngine:
             user_config: 用户配置
             
         Returns:
-            tuple: (thoughts, post_reflection)
-                - thoughts: 每条帖子的思考结果列表
-                - post_reflection: 发帖思考结果（可选）
+            Dict: {
+                "thoughts": List[Dict],  # 每条帖子的思考结果
+                "post_reflection": Dict | None  # 发帖思考结果
+            }
         """
         username = user_config.get("username", "Unknown")
         personality = user_config.get("personality_prompt", "")
@@ -246,13 +247,22 @@ class AIBehaviorEngine:
         else:
             result = self._think_simulated(posts, user_config)
         
-        thoughts = result.get("thoughts", [])
-        post_reflection = result.get("post_reflection")
-        
-        return thoughts, post_reflection
+        return result
     
-    def _think_with_llm(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """使用 LLM 进行思考分析，并根据兴趣系数获取评论"""
+    def _think_with_llm(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        使用 LLM 进行思考分析，并根据兴趣系数获取评论
+        
+        Args:
+            posts: 帖子列表
+            user_config: 用户配置
+            
+        Returns:
+            Dict: {
+                "thoughts": List[Dict],  # 每条帖子的思考结果
+                "post_reflection": Dict | None  # 发帖思考结果
+            }
+        """
         username = user_config.get("username", "Unknown")
         personality = user_config.get("personality_prompt", "")
         
@@ -360,8 +370,20 @@ class AIBehaviorEngine:
         
         return {"thoughts": thoughts, "post_reflection": post_reflection}
     
-    def _think_simulated(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """模拟思考（Demo 模式），并根据兴趣系数获取评论"""
+    def _think_simulated(self, posts: List[Dict[str, Any]], user_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        模拟思考（Demo 模式），并根据兴趣系数获取评论
+        
+        Args:
+            posts: 帖子列表
+            user_config: 用户配置
+            
+        Returns:
+            Dict: {
+                "thoughts": List[Dict],  # 每条帖子的思考结果
+                "post_reflection": None  # 模拟模式无发帖思考
+            }
+        """
         username = user_config.get("username", "Unknown")
         personality = user_config.get("personality_prompt", "")
         
@@ -477,8 +499,6 @@ class AIBehaviorEngine:
                             comment["replies"] = all_replies[:replies_per_comment]
                         else:
                             comment["replies"] = []
-                    
-                    print(f"[兴趣阅读] 兴趣系数 {interest_score:.2f} → 阅读 {comments_to_read} 条评论，每条评论最多 {replies_per_comment} 条回复")
                 
                 return selected_comments
             else:
@@ -516,7 +536,7 @@ class AIBehaviorEngine:
         if self.use_llm and self.llm_client:
             return self._decide_with_llm(thoughts, post_reflection, user_config, following_list)
         else:
-            return self._decide_simulated(thoughts, user_config, following_list)
+            return self._decide_simulated(thoughts, post_reflection, user_config, following_list)
     
     def _decide_with_llm(self, thoughts: List[Dict[str, Any]], post_reflection: Optional[Dict[str, Any]], 
                          user_config: Dict[str, Any], 
@@ -658,10 +678,11 @@ class AIBehaviorEngine:
             return result
             
         except Exception as e:
-            print(f"[{username}] LLM 决策失败: {e}，使用模拟决策")
-            return self._decide_simulated(thoughts, user_config)
+            print(f"[{username}] LLM 决策失败：{e}，使用模拟决策")
+            return self._decide_simulated(thoughts, post_reflection, user_config)
     
-    def _decide_simulated(self, thoughts: List[Dict[str, Any]], user_config: Dict[str, Any],
+    def _decide_simulated(self, thoughts: List[Dict[str, Any]], post_reflection: Optional[Dict[str, Any]], 
+                          user_config: Dict[str, Any],
                           following_list: List[str] = None) -> Dict[str, Any]:
         """模拟决策（Demo 模式）- 考虑关注关系"""
         username = user_config.get("username", "Unknown")
