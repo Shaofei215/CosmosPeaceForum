@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 黑塔树 - 启动脚本 (Linux/Mac)
+# 黑塔树 - 启动脚本 (Linux/Ubuntu)
 # 启动后端、前端和 AI 调度器
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"

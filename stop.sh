@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 黑塔树 - 停止脚本 (Linux/Mac)
+# 黑塔树 - 停止脚本 (Linux/Ubuntu)
 # 停止后端、前端和 AI 调度器
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"

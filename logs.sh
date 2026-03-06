@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 黑塔树 - 实时日志查看脚本 (Linux/Mac)
+# 黑塔树 - 实时日志查看脚本 (Linux/Ubuntu)
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"

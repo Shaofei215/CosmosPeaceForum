@@ -384,20 +384,18 @@ class AIBehaviorEngine:
 2. "reply_to_reply" - 回复回复（需要提供 reply_id 和 content，50 字以内）
 3. "like_comment" - 点赞评论（需要提供 comment_id）
 4. "like_reply" - 点赞回复（需要提供 reply_id）
-5. "follow_back" - 回关（需要提供 user_id，即消息中的 actor_id）
-6. "skip" - 不回应
+5. "skip" - 不回应
 
 【说明】
 - 你不需要回应所有消息，根据你的兴趣和性格选择
 - 回复内容要简洁（50 字以内），符合你的性格
-- 对于关注，可以选择回关或不回关
 - 对于点赞，通常不需要回应，除非你特别感兴趣
 - 对于评论和回复，可以选择文字回应或点赞
 
 【极其重要】你的响应必须是一个合法的 JSON 对象，不要包含任何 markdown 代码块标记。
 
 输出格式：
-{{"actions":[{{"type":"reply_to_comment","comment_id":1,"content":"谢谢！"}},{{"type":"follow_back","user_id":2}},{{"type":"like_comment","comment_id":3}}]}}
+{{"actions":[{{"type":"reply_to_comment","comment_id":1,"content":"谢谢！"}},{{"type":"like_comment","comment_id":3}}]}}
 
 请输出 JSON 格式的决策结果。"""
 
@@ -457,12 +455,6 @@ class AIBehaviorEngine:
                     "reply_id": reply_id,
                     "content": random.choice(["是的！", "对", "没错"])
                 })
-            elif notif_type == "follow":
-                if random.random() < 0.5:  # 50% 概率回关
-                    actions.append({
-                        "type": "follow_back",
-                        "user_id": actor_id
-                    })
         
         return actions
     
@@ -824,8 +816,7 @@ class AIBehaviorEngine:
 4. "like_post" - 点赞帖子（需要提供post_id）
 5. "like_comment" - 点赞评论（需要提供comment_id）
 6. "like_reply" - 点赞回复（需要提供reply_id）
-7. "follow" - 关注某用户（需要提供user_id）
-8. "skip" - 什么都不做
+7. "skip" - 什么都不做
 
 【发帖决策】
 如果你有发帖冲动，现在需要决定是否真的发帖：
@@ -1130,7 +1121,6 @@ class AIBehaviorEngine:
         Returns:
             List[Dict]: 执行结果列表
         """
-        username = self._get_username_by_user_id(user_id)
         results = []
         
         print(f"\n[执行] 开始执行通知回应行动...")
@@ -1156,14 +1146,14 @@ class AIBehaviorEngine:
                             
                             # 调用回复 API
                             reply_url = f"{self.api_base_url}/comments/{comment_id}/replies"
+                            params = {"author_id": user_id}
                             reply_data = {
                                 "content": content,
-                                "author_id": user_id,
                                 "parent_reply_id": None
                             }
-                            reply_resp = requests.post(reply_url, json=reply_data, timeout=10)
+                            reply_resp = requests.post(reply_url, json=reply_data, params=params, timeout=10)
                             
-                            if reply_resp.status_code == 200:
+                            if reply_resp.status_code == 201:
                                 result["success"] = True
                                 result["reply_id"] = reply_resp.json().get("id")
                                 print(f"   [回复] 回复评论成功 [评论 ID:{comment_id}]: {content[:20]}...")
@@ -1190,14 +1180,14 @@ class AIBehaviorEngine:
                             
                             # 调用回复 API（父回复 ID 设为当前回复 ID）
                             post_url = f"{self.api_base_url}/comments/{comment_id}/replies"
+                            params = {"author_id": user_id}
                             post_data = {
                                 "content": content,
-                                "author_id": user_id,
                                 "parent_reply_id": reply_id
                             }
-                            post_resp = requests.post(post_url, json=post_data, timeout=10)
+                            post_resp = requests.post(post_url, json=post_data, params=params, timeout=10)
                             
-                            if post_resp.status_code == 200:
+                            if post_resp.status_code == 201:
                                 result["success"] = True
                                 result["new_reply_id"] = post_resp.json().get("id")
                                 print(f"   [回复] 回复回复成功 [回复 ID:{reply_id}]: {content[:20]}...")
@@ -1251,8 +1241,8 @@ class AIBehaviorEngine:
                         print(f"   [错误] 回关缺少 user_id")
                     else:
                         url = f"{self.api_base_url}/users/{target_user_id}/follow"
-                        data = {"follower_id": user_id}
-                        response = requests.post(url, json=data, timeout=10)
+                        params = {"follower_id": user_id}
+                        response = requests.post(url, params=params, timeout=10)
                         
                         if response.status_code == 200:
                             result["success"] = True

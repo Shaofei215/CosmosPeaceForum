@@ -3,16 +3,22 @@
 提供帖子、评论、回复的热度计算、衰减和更新功能
 
 热度公式:
-- 帖子: score = (点赞数*1 + 评论数*2) * 时间衰减系数 + 新鲜度加成
-- 评论: score = (点赞数*1 + 回复数*2) * 时间衰减系数
-- 回复: score = (点赞数*1 + 子回复数*2) * 时间衰减系数
+- 帖子：score = (点赞数*1 + 评论数*2) * 时间衰减系数 + 新鲜度加成
+- 评论：score = (点赞数*1 + 回复数*2) * 时间衰减系数
+- 回复：score = (点赞数*1 + 子回复数*2) * 时间衰减系数
+
+推荐算法（2026-03-06 更新）:
+- 不再使用"数量混合"（40% 热门 +30% 最新 +30% 随机）
+- 改用"热度排序 + 新鲜度加成 + 随机扰动"
+- 核心思想：所有内容包括基础热度分，新内容获得额外加成，部分获得随机扰动
+- 优势：真正按质量排序，同时保证新内容和长尾内容的曝光机会
 """
 import math
 import random
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc
 
 from . import models
 
@@ -259,99 +265,73 @@ def get_mixed_posts(db: Session, user_id: Optional[int] = None,
                     hot_ratio: float = 0.4, fresh_ratio: float = 0.3, 
                     random_ratio: float = 0.3, total_limit: int = 50) -> list:
     """
-    获取三层混合帖子（40%热门 + 30%最新 + 30%随机），支持按用户过滤已读
+    获取推荐帖子列表 - 基于热度排序 + 新鲜度加成 + 随机扰动
+    
+    新算法核心思想：
+    1. 所有帖子按基础热度排序
+    2. 新帖子获得新鲜度加成（fresh_ratio 权重，默认 30%）
+    3. 部分帖子获得随机扰动（random_ratio 权重，默认 30%）
+    4. 最终按综合得分排序
     
     Args:
         db: 数据库会话
-        user_id: 用户ID（可选），如果提供则排除该用户已读的帖子
-        hot_ratio: 热门帖子比例（默认40%）
-        fresh_ratio: 最新帖子比例（默认30%）
-        random_ratio: 随机帖子比例（默认30%）
+        user_id: 用户 ID（可选），如果提供则排除该用户已读的帖子
+        hot_ratio: 热度权重（实际不直接使用，体现在 base_score 中）
+        fresh_ratio: 新鲜度加成权重（默认 30%）
+        random_ratio: 随机扰动权重（默认 30%）
         total_limit: 返回帖子总数
         
     Returns:
-        混合排序的帖子列表
+        排序后的帖子列表
     """
     from app import crud
     
     update_all_hot_scores(db)
 
-    # 计算各类帖子数量
-    hot_count = int(total_limit * hot_ratio)
-    fresh_count = int(total_limit * fresh_ratio)
-    random_count = total_limit - hot_count - fresh_count  # 剩余为随机
-
-    # 获取用户的已读帖子ID（如果提供了user_id）
+    # 获取用户的已读帖子 ID（如果提供了 user_id）
     read_post_ids = set()
     if user_id:
         read_post_ids = set(crud.get_user_read_post_ids(db, user_id))
         if read_post_ids:
             print(f"[推荐算法] 用户 {user_id} 已读 {len(read_post_ids)} 条帖子，将过滤")
 
-    # 获取热门帖子
-    hot_posts_query = db.query(models.Post).order_by(desc(models.Post.hot_score))
+    # 1. 获取所有帖子（排除已读）
+    query = db.query(models.Post)
     if read_post_ids:
-        hot_posts_query = hot_posts_query.filter(~models.Post.id.in_(read_post_ids))
-    hot_posts = hot_posts_query.limit(hot_count * 3).all()
+        query = query.filter(~models.Post.id.in_(read_post_ids))
+    all_posts = query.all()
 
-    # 获取最新帖子
+    # 2. 为每个帖子计算综合得分
     freshness_window = timedelta(hours=HOT_SCORE_CONFIG["freshness_window"])
     fresh_cutoff = datetime.utcnow() - freshness_window
+    
+    scored_posts = []
+    for post in all_posts:
+        base_score = post.hot_score
+        final_score = base_score
+        
+        # 新鲜度加成：新帖子获得额外分数（最高增加 base_score * fresh_ratio）
+        if post.created_at >= fresh_cutoff:
+            hours_old = (datetime.utcnow() - post.created_at).total_seconds() / 3600
+            freshness_factor = 1 - (hours_old / HOT_SCORE_CONFIG["freshness_window"])
+            freshness_bonus = int(base_score * freshness_factor * fresh_ratio)
+            final_score += freshness_bonus
+        
+        # 随机扰动：给 random_ratio 概率的帖子额外加分（让低热度帖子也有机会）
+        if random.random() < random_ratio:
+            random_bonus = random.randint(0, int(base_score * random_ratio))
+            final_score += random_bonus
+        
+        scored_posts.append((final_score, post))
 
-    fresh_posts_query = db.query(models.Post) \
-                          .filter(models.Post.created_at >= fresh_cutoff) \
-                          .order_by(desc(models.Post.created_at))
-    if read_post_ids:
-        fresh_posts_query = fresh_posts_query.filter(~models.Post.id.in_(read_post_ids))
-    fresh_posts = fresh_posts_query.limit(fresh_count * 3).all()
+    # 3. 按综合得分降序排序
+    scored_posts.sort(key=lambda x: x[0], reverse=True)
 
-    # 获取随机帖子（排除已读）
-    random_posts_query = db.query(models.Post).order_by(func.random())
-    if read_post_ids:
-        random_posts_query = random_posts_query.filter(~models.Post.id.in_(read_post_ids))
-    random_posts = random_posts_query.limit(random_count * 3).all()
+    # 4. 取前 N 条
+    sorted_posts = [p[1] for p in scored_posts[:total_limit]]
 
-    # 使用集合追踪已选择的帖子ID，确保完全不重复
-    selected_ids = set()
-    mixed_posts = []
-
-    # 1. 先从热门帖子中选择
-    random.shuffle(hot_posts)
-    for post in hot_posts:
-        if post.id not in selected_ids and len(mixed_posts) < hot_count:
-            mixed_posts.append(post)
-            selected_ids.add(post.id)
-
-    # 2. 再从最新帖子中选择
-    random.shuffle(fresh_posts)
-    for post in fresh_posts:
-        if post.id not in selected_ids and len(mixed_posts) < hot_count + fresh_count:
-            mixed_posts.append(post)
-            selected_ids.add(post.id)
-
-    # 3. 最后从随机帖子中选择
-    random.shuffle(random_posts)
-    for post in random_posts:
-        if post.id not in selected_ids and len(mixed_posts) < total_limit:
-            mixed_posts.append(post)
-            selected_ids.add(post.id)
-
-    # 如果仍然不足，从其他帖子中补充（排除已选择的和已读的）
-    if len(mixed_posts) < total_limit:
-        additional_query = db.query(models.Post) \
-                             .filter(~models.Post.id.in_(selected_ids))
-        if read_post_ids:
-            additional_query = additional_query.filter(~models.Post.id.in_(read_post_ids))
-        additional = additional_query.order_by(func.random()) \
-                                     .limit(total_limit - len(mixed_posts)) \
-                                     .all()
-        mixed_posts.extend(additional)
-
-    # 最后随机打乱顺序
-    random.shuffle(mixed_posts)
-
-    # 为每个帖子添加统计属性
-    for post in mixed_posts:
+    # 5. 为每个帖子添加统计属性
+    for post in sorted_posts:
         post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
         # 评论数 = 评论数 + 回复数
         comment_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
@@ -363,77 +343,66 @@ def get_mixed_posts(db: Session, user_id: Optional[int] = None,
         likers = db.query(models.Like).filter(models.Like.post_id == post.id).limit(3).all()
         post.likers = [like.user for like in likers if like.user]
 
-    # 记录这次浏览的帖子为已读
-    if user_id and mixed_posts:
-        post_ids = [post.id for post in mixed_posts]
+    # 6. 记录已读
+    if user_id and sorted_posts:
+        post_ids = [post.id for post in sorted_posts]
         crud.mark_posts_as_read(db, user_id, post_ids)
-        print(f"[推荐算法] 用户 {user_id} 本次浏览 {len(post_ids)} 条帖子（{hot_count}热门+{fresh_count}最新+{random_count}随机），已记录为已读")
+        print(f"[推荐算法] 用户 {user_id} 本次浏览 {len(post_ids)} 条帖子（热度排序 + 新鲜度加成 + 随机扰动），已记录为已读")
 
-    return mixed_posts[:total_limit]
+    return sorted_posts
 
 
 def get_mixed_comments(db: Session, post_id: int, hot_ratio: float = 0.7,
                        total_limit: int = 50) -> list:
-    """获取帖子的混合评论（热门+最新）"""
-    # 更新该帖子所有评论的热度
+    """
+    获取帖子的评论列表 - 基于热度排序 + 新鲜度加成
+    
+    新算法核心思想：
+    1. 所有评论按基础热度排序
+    2. 新评论获得新鲜度加成（hot_ratio 控制，默认 70% 热度 +30% 新鲜度）
+    3. 最终按综合得分排序
+    
+    Args:
+        db: 数据库会话
+        post_id: 帖子 ID
+        hot_ratio: 热度权重（实际体现为 1-hot_ratio 的新鲜度加成权重）
+        total_limit: 返回评论总数
+        
+    Returns:
+        排序后的评论列表
+    """
+    # 1. 更新该帖子所有评论的热度
     comments = db.query(models.Comment).filter(models.Comment.post_id == post_id).all()
     for comment in comments:
         update_comment_hot_score(db, comment.id)
 
-    hot_count = int(total_limit * hot_ratio)
-    fresh_count = total_limit - hot_count
-
-    # 获取热门评论（获取更多以确保去重后仍有足够数量）
-    hot_comments = db.query(models.Comment) \
-                     .filter(models.Comment.post_id == post_id) \
-                     .order_by(desc(models.Comment.hot_score)) \
-                     .limit(hot_count * 3) \
-                     .all()
-
-    # 获取最新评论（获取更多以确保去重后仍有足够数量）
+    # 2. 为每条评论计算综合得分
     freshness_window = timedelta(hours=HOT_SCORE_CONFIG["comment_decay_half_life"])
     fresh_cutoff = datetime.utcnow() - freshness_window
+    
+    scored_comments = []
+    for comment in comments:
+        base_score = comment.hot_score
+        final_score = base_score
+        
+        # 新鲜度加成：新评论获得额外分数
+        if comment.created_at >= fresh_cutoff:
+            hours_old = (datetime.utcnow() - comment.created_at).total_seconds() / 3600
+            freshness_factor = 1 - (hours_old / HOT_SCORE_CONFIG["comment_decay_half_life"])
+            # 新鲜度加成权重 = 1 - hot_ratio（默认 30%）
+            freshness_bonus = int(base_score * freshness_factor * (1 - hot_ratio))
+            final_score += freshness_bonus
+        
+        scored_comments.append((final_score, comment))
 
-    fresh_comments = db.query(models.Comment) \
-                       .filter(models.Comment.post_id == post_id) \
-                       .filter(models.Comment.created_at >= fresh_cutoff) \
-                       .order_by(desc(models.Comment.created_at)) \
-                       .limit(fresh_count * 3) \
-                       .all()
+    # 3. 按综合得分降序排序
+    scored_comments.sort(key=lambda x: x[0], reverse=True)
 
-    # 使用集合追踪已选择的评论ID，确保完全不重复
-    selected_ids = set()
-    mixed_comments = []
+    # 4. 取前 N 条
+    sorted_comments = [c[1] for c in scored_comments[:total_limit]]
 
-    # 先从热门评论中选择（不重复）
-    random.shuffle(hot_comments)
-    for comment in hot_comments:
-        if comment.id not in selected_ids and len(mixed_comments) < hot_count:
-            mixed_comments.append(comment)
-            selected_ids.add(comment.id)
-
-    # 再从最新评论中选择（不重复）
-    random.shuffle(fresh_comments)
-    for comment in fresh_comments:
-        if comment.id not in selected_ids and len(mixed_comments) < total_limit:
-            mixed_comments.append(comment)
-            selected_ids.add(comment.id)
-
-    # 如果仍然不足，从其他评论中补充（排除已选择的）
-    if len(mixed_comments) < total_limit:
-        additional = db.query(models.Comment) \
-                       .filter(models.Comment.post_id == post_id) \
-                       .filter(~models.Comment.id.in_(selected_ids)) \
-                       .order_by(desc(models.Comment.created_at)) \
-                       .limit(total_limit - len(mixed_comments)) \
-                       .all()
-        mixed_comments.extend(additional)
-
-    # 最后随机打乱顺序
-    random.shuffle(mixed_comments)
-
-    # 为每条评论添加统计属性和回复
-    for comment in mixed_comments:
+    # 5. 为每条评论添加统计属性和回复
+    for comment in sorted_comments:
         comment.likes_count = db.query(models.Like).filter(models.Like.comment_id == comment.id).count()
         replies = db.query(models.Reply).filter(models.Reply.comment_id == comment.id).all()
         comment.replies_count = len(replies)
@@ -442,70 +411,59 @@ def get_mixed_comments(db: Session, post_id: int, hot_ratio: float = 0.7,
             reply.likes_count = db.query(models.Like).filter(models.Like.reply_id == reply.id).count()
         comment.replies = replies
 
-    return mixed_comments[:total_limit]
+    return sorted_comments
 
 
 def get_mixed_replies(db: Session, comment_id: int, hot_ratio: float = 0.7,
                       total_limit: int = 50) -> list:
-    """获取评论的混合回复（热门+最新）"""
-    # 更新该评论所有回复的热度
+    """
+    获取评论的回复列表 - 基于热度排序 + 新鲜度加成
+    
+    新算法核心思想：
+    1. 所有回复按基础热度排序
+    2. 新回复获得新鲜度加成（hot_ratio 控制，默认 70% 热度 +30% 新鲜度）
+    3. 最终按综合得分排序
+    
+    Args:
+        db: 数据库会话
+        comment_id: 评论 ID
+        hot_ratio: 热度权重（实际体现为 1-hot_ratio 的新鲜度加成权重）
+        total_limit: 返回回复总数
+        
+    Returns:
+        排序后的回复列表
+    """
+    # 1. 更新该评论所有回复的热度
     replies = db.query(models.Reply).filter(models.Reply.comment_id == comment_id).all()
     for reply in replies:
         update_reply_hot_score(db, reply.id)
 
-    hot_count = int(total_limit * hot_ratio)
-    fresh_count = total_limit - hot_count
-
-    # 获取热门回复（获取更多以确保去重后仍有足够数量）
-    hot_replies = db.query(models.Reply) \
-                    .filter(models.Reply.comment_id == comment_id) \
-                    .order_by(desc(models.Reply.hot_score)) \
-                    .limit(hot_count * 3) \
-                    .all()
-
-    # 获取最新回复（获取更多以确保去重后仍有足够数量）
+    # 2. 为每条回复计算综合得分
     freshness_window = timedelta(hours=HOT_SCORE_CONFIG["reply_decay_half_life"])
     fresh_cutoff = datetime.utcnow() - freshness_window
+    
+    scored_replies = []
+    for reply in replies:
+        base_score = reply.hot_score
+        final_score = base_score
+        
+        # 新鲜度加成：新回复获得额外分数
+        if reply.created_at >= fresh_cutoff:
+            hours_old = (datetime.utcnow() - reply.created_at).total_seconds() / 3600
+            freshness_factor = 1 - (hours_old / HOT_SCORE_CONFIG["reply_decay_half_life"])
+            # 新鲜度加成权重 = 1 - hot_ratio（默认 30%）
+            freshness_bonus = int(base_score * freshness_factor * (1 - hot_ratio))
+            final_score += freshness_bonus
+        
+        scored_replies.append((final_score, reply))
 
-    fresh_replies = db.query(models.Reply) \
-                      .filter(models.Reply.comment_id == comment_id) \
-                      .filter(models.Reply.created_at >= fresh_cutoff) \
-                      .order_by(desc(models.Reply.created_at)) \
-                      .limit(fresh_count * 3) \
-                      .all()
+    # 3. 按综合得分降序排序
+    scored_replies.sort(key=lambda x: x[0], reverse=True)
 
-    # 使用集合追踪已选择的回复ID，确保完全不重复
-    selected_ids = set()
-    mixed_replies = []
+    # 4. 取前 N 条
+    sorted_replies = [r[1] for r in scored_replies[:total_limit]]
 
-    # 先从热门回复中选择（不重复）
-    random.shuffle(hot_replies)
-    for reply in hot_replies:
-        if reply.id not in selected_ids and len(mixed_replies) < hot_count:
-            mixed_replies.append(reply)
-            selected_ids.add(reply.id)
-
-    # 再从最新回复中选择（不重复）
-    random.shuffle(fresh_replies)
-    for reply in fresh_replies:
-        if reply.id not in selected_ids and len(mixed_replies) < total_limit:
-            mixed_replies.append(reply)
-            selected_ids.add(reply.id)
-
-    # 如果仍然不足，从其他回复中补充（排除已选择的）
-    if len(mixed_replies) < total_limit:
-        additional = db.query(models.Reply) \
-                       .filter(models.Reply.comment_id == comment_id) \
-                       .filter(~models.Reply.id.in_(selected_ids)) \
-                       .order_by(desc(models.Reply.created_at)) \
-                       .limit(total_limit - len(mixed_replies)) \
-                       .all()
-        mixed_replies.extend(additional)
-
-    # 最后随机打乱顺序
-    random.shuffle(mixed_replies)
-
-    return mixed_replies[:total_limit]
+    return sorted_replies
 
 
 def get_comments_by_interest(db: Session, post_id: int, interest_score: float,
