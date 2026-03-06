@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app import crud, schemas
+from app import crud, schemas, models
 from app.hot_score import (
     update_post_hot_score, 
     get_mixed_comments, 
@@ -112,6 +112,30 @@ def get_post_comments_by_interest(
     )
     
     return comments
+
+
+@router.get("/comments/{comment_id}", response_model=schemas.CommentResponse)
+def get_comment(
+    comment_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    获取单个评论详情
+    """
+    comment = crud.get_comment(db, comment_id=comment_id)
+    if not comment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="评论不存在"
+        )
+    
+    # 添加统计属性
+    comment.likes_count = db.query(models.Like).filter(models.Like.comment_id == comment_id).count()
+    replies = db.query(models.Reply).filter(models.Reply.comment_id == comment_id).all()
+    comment.replies_count = len(replies)
+    comment.replies = replies
+    
+    return comment
 
 
 @router.post("/comments/{comment_id}/update-hot-score")
