@@ -12,6 +12,7 @@ from typing import TypedDict, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 import random
 import requests
+import json
 
 # 导入项目现有模块
 try:
@@ -20,6 +21,176 @@ try:
 except ImportError:
     from time_system import time_system
     from llm import LLMClient
+
+
+# ==================== API 客户端 ====================
+
+class SocialPlatformAPI:
+    """社交平台 API 客户端"""
+    
+    def __init__(self, base_url: str = "http://127.0.0.1:8006"):
+        self.base_url = base_url
+    
+    def get_comments_by_interest(self, post_id: int, interest_score: float) -> List[Dict]:
+        """
+        根据兴趣系数获取评论和回复
+        
+        阅读评论数 = floor(兴趣系数 × 5)
+        每条评论的回复数 = floor(兴趣系数 × 5)
+        例如：兴趣系数 0.6 → 阅读 3 条评论，每条评论阅读 3 条回复，总共 12 条（3 条评论 + 9 条回复）
+        
+        评论排序：70% 最热 + 30% 最新
+        回复排序：70% 最热 + 30% 最新
+        
+        Args:
+            post_id: 帖子 ID
+            interest_score: 兴趣系数（0-1）
+            
+        Returns:
+            List[Dict]: 评论列表（包含回复）
+        """
+        # 计算需要阅读多少条评论和每条评论的回复数
+        max_items = 5
+        comments_to_read = int(interest_score * max_items)
+        replies_per_comment = int(interest_score * max_items)
+        
+        if comments_to_read <= 0:
+            return []
+        
+        try:
+            # 1. 获取评论（使用混合排序：70% 最热 + 30% 最新）
+            url = f"{self.base_url}/posts/{post_id}/comments"
+            params = {
+                "mixed": "true",
+                "limit": comments_to_read * 2  # 获取更多以确保去重后足够
+            }
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                all_comments = response.json()
+                # 只取前 N 条评论
+                selected_comments = all_comments[:comments_to_read]
+                
+                # 2. 为每条评论获取回复（也使用兴趣系数控制数量）
+                if replies_per_comment > 0:
+                    for comment in selected_comments:
+                        comment_id = comment.get("id")
+                        # 获取该评论的所有回复（使用混合排序）
+                        reply_url = f"{self.base_url}/comments/{comment_id}/replies"
+                        reply_params = {
+                            "mixed": "true",
+                            "limit": replies_per_comment * 2
+                        }
+                        reply_response = requests.get(reply_url, params=reply_params, timeout=10)
+                        
+                        if reply_response.status_code == 200:
+                            all_replies = reply_response.json()
+                            # 只取前 N 条回复
+                            comment["replies"] = all_replies[:replies_per_comment]
+                        else:
+                            comment["replies"] = []
+                
+                return selected_comments
+            else:
+                return []
+                
+        except Exception as e:
+            print(f"[API] 获取评论失败：{e}")
+            return []
+    
+    def create_comment(self, post_id: int, user_id: int, content: str) -> Dict:
+        """创建评论"""
+        url = f"{self.base_url}/posts/{post_id}/comments"
+        params = {"author_id": user_id}
+        data = {"content": content}
+        try:
+            response = requests.post(url, params=params, json=data, timeout=10)
+            if response.status_code == 201:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def create_reply(self, comment_id: int, user_id: int, content: str) -> Dict:
+        """创建回复"""
+        url = f"{self.base_url}/comments/{comment_id}/replies"
+        params = {"author_id": user_id}
+        data = {"content": content}
+        try:
+            response = requests.post(url, params=params, json=data, timeout=10)
+            if response.status_code == 201:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def like_post(self, post_id: int, user_id: int) -> Dict:
+        """点赞帖子"""
+        url = f"{self.base_url}/posts/{post_id}/like"
+        params = {"user_id": user_id}
+        try:
+            response = requests.post(url, params=params, timeout=10)
+            if response.status_code in [200, 201]:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def like_comment(self, comment_id: int, user_id: int) -> Dict:
+        """点赞评论"""
+        url = f"{self.base_url}/comments/{comment_id}/like"
+        params = {"user_id": user_id}
+        try:
+            response = requests.post(url, params=params, timeout=10)
+            if response.status_code in [200, 201]:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def like_reply(self, reply_id: int, user_id: int) -> Dict:
+        """点赞回复"""
+        url = f"{self.base_url}/replies/{reply_id}/like"
+        params = {"user_id": user_id}
+        try:
+            response = requests.post(url, params=params, timeout=10)
+            if response.status_code in [200, 201]:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def follow_user(self, user_id: int, follower_id: int) -> Dict:
+        """关注用户"""
+        url = f"{self.base_url}/users/{user_id}/follow"
+        params = {"follower_id": follower_id}
+        try:
+            response = requests.post(url, params=params, timeout=10)
+            if response.status_code in [200, 201]:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def create_post(self, user_id: int, content: str) -> Dict:
+        """创建帖子"""
+        url = f"{self.base_url}/posts"
+        params = {"author_id": user_id}
+        data = {"content": content}
+        try:
+            response = requests.post(url, params=params, json=data, timeout=10)
+            if response.status_code == 201:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
 
 # ==================== 1. 定义状态池 ====================
@@ -81,11 +252,15 @@ def check_notifications_node(state: AISessionState) -> Dict:
             notifications = response.json()
             print(f"[{username}] 获取到 {len(notifications)} 条未读消息")
             
-            # 显示摘要
-            for i, notif in enumerate(notifications[:5]):
+            # 显示所有消息
+            for i, notif in enumerate(notifications, 1):
                 actor = notif.get("actor", {}).get("username", "未知")
                 notif_type = notif.get("type", "")
-                print(f"   [{i+1}] {actor} - {notif_type}")
+                content_preview = notif.get("content", "")[:30] if notif.get("content") else ""
+                if content_preview:
+                    print(f"   [{i}] {actor} - {notif_type}: {content_preview}...")
+                else:
+                    print(f"   [{i}] {actor} - {notif_type}")
             
             return {"notifications": notifications}
         else:
@@ -324,9 +499,42 @@ def think_node(state: AISessionState) -> Dict:
             thoughts = result.get("thoughts", [])
             post_reflection = result.get("post_reflection")
             
+            # 创建 API 客户端
+            api = SocialPlatformAPI()
+            
+            # 根据兴趣系数获取评论和回复
+            print(f"[{username}] 正在根据兴趣系数获取评论和回复...")
+            for t in thoughts:
+                post_id = t.get("post_id")
+                interest_score = t.get("interest_score", 0.5)
+                
+                # 根据兴趣系数获取评论
+                comments = api.get_comments_by_interest(post_id, interest_score)
+                
+                # 找到对应的帖子
+                post = None
+                for p in posts:
+                    if p["id"] == post_id:
+                        post = p
+                        break
+                
+                if post:
+                    # 将完整的帖子信息和评论添加到思考结果中
+                    t["post"] = post
+                    t["comments"] = comments
+                    t["comments_read"] = len(comments)
+                    
+                    # 计算总阅读回复数
+                    total_replies = sum(len(c.get("replies", [])) for c in comments)
+                    t["replies_read"] = total_replies
+            
             print(f"[{username}] LLM 思考完成，分析了 {len(thoughts)} 条帖子")
-            for t in thoughts[:3]:
-                print(f"   - {t.get('thinking', '')[:30]}... (兴趣：{t.get('interest_score', 0):.2f})")
+            for i, t in enumerate(thoughts, 1):
+                comments_info = f"[阅读了 {t.get('comments_read', 0)} 条评论"
+                if t.get('replies_read', 0) > 0:
+                    comments_info += f" + {t.get('replies_read', 0)} 条回复"
+                comments_info += "]"
+                print(f"   [{i}] {t.get('thinking', '')[:50]}... (兴趣：{t.get('interest_score', 0):.2f}) {comments_info}")
             
             return {"thoughts": thoughts, "post_reflection": post_reflection}
         
@@ -349,6 +557,7 @@ def decide_node(state: AISessionState) -> Dict:
     user_config = state["user_config"]
     thoughts = state["thoughts"]
     post_reflection = state["post_reflection"]
+    posts = state.get("posts", [])
     username = user_config.get("username", "Unknown")
     
     print(f"\n[决策] [{username}] 正在决策...")
@@ -423,36 +632,44 @@ def decide_node(state: AISessionState) -> Dict:
 7. 点赞：最简单的互动，优先级较高，表示赞同该内容 评论/回复：优先级次之，仅想表达更多观点时使用"""
     
     # 构建思考信息，包含帖子和评论
+    # thoughts 已经包含 post 和 comments 信息
     thoughts_info = []
     for t in thoughts:
+        post = t.get("post", {})
+        
         post_data = {
-            "post_id": t["post"]["id"],
-            "author": t["post"]["author"]["username"],
-            "content": t["post"]["content"][:100],
+            "post_id": post.get("id", t.get("post_id")),
+            "author": post.get("author", {}).get("username", "Unknown"),
+            "content": post.get("content", "")[:100],
+            "likes_count": post.get("likes_count", 0),
+            "comments_count": post.get("comments_count", 0),
             "thinking": t["thinking"],
             "interest_score": t["interest_score"]
         }
         
-        # 添加评论信息
+        # 添加评论信息（已经在 think_node 中获取）
         if t.get("comments"):
             post_data["comments"] = []
             for comment in t["comments"]:
                 comment_data = {
                     "comment_id": comment.get("id"),
                     "author": comment.get("author", {}).get("username", "Unknown"),
-                    "content": comment.get("content", "")[:80]
+                    "content": comment.get("content", "")[:80],
+                    "likes_count": comment.get("likes_count", 0),
+                    "replies_count": len(comment.get("replies", []))
                 }
                 
                 # 添加回复信息
                 if comment.get("replies"):
-                    comment_data["replies"] = [
-                        {
+                    comment_data["replies"] = []
+                    for reply in comment["replies"]:
+                        reply_data = {
                             "reply_id": reply.get("id"),
                             "author": reply.get("author", {}).get("username", "Unknown"),
-                            "content": reply.get("content", "")[:60]
+                            "content": reply.get("content", "")[:60],
+                            "likes_count": reply.get("likes_count", 0)
                         }
-                        for reply in comment["replies"]
-                    ]
+                        comment_data["replies"].append(reply_data)
                 
                 post_data["comments"].append(comment_data)
         
@@ -472,8 +689,35 @@ def decide_node(state: AISessionState) -> Dict:
             actions = result.get("actions", [])
             decide_to_post = result.get("decide_to_post", False)
             
-            print(f"[{username}] LLM 决策完成")
-            print(f"[{username}] 决策：{len(actions)} 个行动，发帖：{decide_to_post}")
+            print(f"\n[决策] [{username}] LLM 决策完成")
+            print(f"[决策] [{username}] 计划执行 {len(actions)} 个行动，发帖：{decide_to_post}")
+            
+            # 详细打印每个行动
+            if actions:
+                print(f"\n[决策] [{username}] 行动列表:")
+                for i, action in enumerate(actions, 1):
+                    action_type = action.get("type", "unknown")
+                    if action_type == "comment":
+                        print(f"   [{i}] 📝 评论帖子 ID={action.get('post_id')}：\"{action.get('content', '')[:30]}...\"")
+                    elif action_type == "reply_to_comment":
+                        print(f"   [{i}] 💬 回复评论 ID={action.get('comment_id')}：\"{action.get('content', '')[:30]}...\"")
+                    elif action_type == "reply_to_reply":
+                        print(f"   [{i}] 💬 回复回复 ID={action.get('reply_id')}：\"{action.get('content', '')[:30]}...\"")
+                    elif action_type == "like_post":
+                        print(f"   [{i}] 👍 点赞帖子 ID={action.get('post_id')}")
+                    elif action_type == "like_comment":
+                        print(f"   [{i}] 👍 点赞评论 ID={action.get('comment_id')}")
+                    elif action_type == "like_reply":
+                        print(f"   [{i}] 👍 点赞回复 ID={action.get('reply_id')}")
+                    elif action_type == "follow":
+                        print(f"   [{i}] ➕ 关注用户 ID={action.get('user_id')}")
+                    else:
+                        print(f"   [{i}] ❓ 未知行动：{action_type}")
+            
+            if decide_to_post:
+                print(f"\n[决策] [{username}] ✅ 决定发帖")
+            else:
+                print(f"\n[决策] [{username}] ❌ 不发帖")
             
             return {"decisions": {"actions": actions, "decide_to_post": decide_to_post}}
         
@@ -554,32 +798,161 @@ def execute_actions_node(state: AISessionState) -> Dict:
     
     对应原代码：AIBehaviorEngine._act()
     """
+    import time
+    
     user_config = state["user_config"]
     decisions = state["decisions"]
     post_content = state.get("post_content")
     username = user_config.get("username", "Unknown")
     user_id = state["platform_user_id"]
     
-    print(f"\n[执行] [{username}] 开始执行行动...")
+    # 创建 API 客户端
+    api = SocialPlatformAPI()
+    
+    print(f"\n{'='*60}")
+    print(f"[执行] [{username}] 开始执行行动...")
+    print(f"{'='*60}")
     
     actions = decisions.get("actions", [])
     results = []
+    success_count = 0
     
     for i, action in enumerate(actions, 1):
         action_type = action.get("type")
-        print(f"   [{i}] 执行：{action_type}")
+        result = {"type": action_type, "success": False}
         
-        # 简化执行（实际项目中需要完整实现）
-        result = {"type": action_type, "success": True}
+        # 详细打印行动信息
+        if action_type == "comment":
+            post_id = action.get('post_id')
+            content = action.get('content', '')
+            print(f"\n   [{i}/{len(actions)}] 📝 评论帖子")
+            print(f"       目标：帖子 ID={post_id}")
+            print(f"       内容：\"{content}\"")
+            
+            # 调用 API
+            api_result = api.create_comment(post_id, user_id, content)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+                
+        elif action_type == "reply_to_comment":
+            comment_id = action.get('comment_id')
+            content = action.get('content', '')
+            print(f"\n   [{i}/{len(actions)}] 💬 回复评论")
+            print(f"       目标：评论 ID={comment_id}")
+            print(f"       内容：\"{content}\"")
+            
+            # 调用 API
+            api_result = api.create_reply(comment_id, user_id, content)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+                
+        elif action_type == "reply_to_reply":
+            # 暂时简化处理，回复回复也使用 create_reply
+            comment_id = action.get('comment_id', action.get('reply_id'))
+            content = action.get('content', '')
+            print(f"\n   [{i}/{len(actions)}] 💬 回复回复")
+            print(f"       目标：评论 ID={comment_id}")
+            print(f"       内容：\"{content}\"")
+            
+            # 调用 API
+            api_result = api.create_reply(comment_id, user_id, content)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+                
+        elif action_type == "like_post":
+            post_id = action.get('post_id')
+            print(f"\n   [{i}/{len(actions)}] 👍 点赞帖子")
+            print(f"       目标：帖子 ID={post_id}")
+            
+            # 调用 API
+            api_result = api.like_post(post_id, user_id)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+                
+        elif action_type == "like_comment":
+            comment_id = action.get('comment_id')
+            print(f"\n   [{i}/{len(actions)}] 👍 点赞评论")
+            print(f"       目标：评论 ID={comment_id}")
+            
+            # 调用 API
+            api_result = api.like_comment(comment_id, user_id)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+                
+        elif action_type == "like_reply":
+            reply_id = action.get('reply_id')
+            print(f"\n   [{i}/{len(actions)}] 👍 点赞回复")
+            print(f"       目标：回复 ID={reply_id}")
+            
+            # 调用 API
+            api_result = api.like_reply(reply_id, user_id)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+                
+        elif action_type == "follow":
+            target_user_id = action.get('user_id')
+            print(f"\n   [{i}/{len(actions)}] ➕ 关注用户")
+            print(f"       目标：用户 ID={target_user_id}")
+            
+            # 调用 API
+            api_result = api.follow_user(target_user_id, user_id)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+        else:
+            print(f"\n   [{i}/{len(actions)}] ❓ 执行未知行动：{action_type}")
+            print(f"       状态：⚠️ 跳过")
+        
         results.append(result)
+        # 避免请求过快
+        time.sleep(0.3)
     
     # 如果有帖子内容，执行发帖
     if post_content:
-        print(f"   [发帖] 发布：{post_content[:30]}...")
-        # 简化发帖（实际项目中需要调用 API）
-        results.append({"type": "post", "content": post_content, "success": True})
+        print(f"\n   [发帖] 📝 发布新帖子")
+        print(f"       内容：\"{post_content}\"")
+        
+        # 调用 API
+        api_result = api.create_post(user_id, post_content)
+        if api_result["success"]:
+            results.append({"type": "post", "content": post_content, "success": True})
+            success_count += 1
+            print(f"       状态：✅ 成功")
+        else:
+            results.append({"type": "post", "content": post_content, "success": False})
+            print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
     
-    print(f"[{username}] 执行完成，共 {len(results)} 个行动")
+    print(f"\n{'='*60}")
+    print(f"[执行] [{username}] 执行完成")
+    print(f"[执行] 成功：{success_count}/{len(actions) + (1 if post_content else 0)} 个行动")
+    print(f"{'='*60}")
     
     return {"actions": results}
 

@@ -5,7 +5,7 @@ AI 调度器模块
 from .time_system import TimeSystem, time_system
 from .ai_initial import AIUserInitializer
 from .ai_schedular import AIScheduler
-from .ai_behavior import AIBehaviorEngine
+from .langgraph_behavior import LangGraphBehaviorEngine
 from .llm import LLMClient
 
 __all__ = [
@@ -13,6 +13,6 @@ __all__ = [
     "time_system",
     "AIUserInitializer", 
     "AIScheduler",
-    "AIBehaviorEngine",
+    "LangGraphBehaviorEngine",
     "LLMClient"
 ]
