@@ -41,6 +41,7 @@ def main():
     
     from agent_schedular.ai_initial import AIUserInitializer
     initializer = AIUserInitializer(config_path=config_path)
+    # 使用 LangGraph 版本的行为引擎（已完全迁移）
     scheduler = AIScheduler(initializer=initializer)
     
     try:

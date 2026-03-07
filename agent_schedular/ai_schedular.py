@@ -11,14 +11,15 @@ from datetime import datetime
 
 from .time_system import time_system
 from .ai_initial import AIUserInitializer
-from .ai_behavior import AIBehaviorEngine
+# 使用 LangGraph 版本的行为引擎（已完全迁移）
+from .langgraph_behavior import LangGraphBehaviorEngine
 
 
 class AIUserThread(threading.Thread):
     """AI 用户线程类"""
     
     def __init__(self, user_config: Dict[str, Any], scheduler: 'AIScheduler', 
-                 behavior_engine: Optional[AIBehaviorEngine] = None):
+                 behavior_engine: Optional[LangGraphBehaviorEngine] = None):
         """
         初始化 AI 用户线程
         
@@ -118,7 +119,7 @@ class AIUserThread(threading.Thread):
         
         # 如果配置了行为引擎，执行完整的登录会话
         if self.behavior_engine and self.platform_user_id:
-            self.behavior_engine.execute_login_session(self.user_config)
+            self.behavior_engine.execute_login_session(self.user_config, self.platform_user_id)
         else:
             # Demo 模式提示
             print(f"[{self.username}] 未配置行为引擎，仅记录登录")
@@ -146,17 +147,16 @@ class AIScheduler:
         self._running = False
         self._scheduler_thread: Optional[threading.Thread] = None
         
-        # 行为引擎
+        # 行为引擎（已完全迁移到 LangGraph）
         self.enable_behavior = enable_behavior
-        self.behavior_engine: Optional[AIBehaviorEngine] = None
+        self.behavior_engine = None
+        
         if enable_behavior:
-            # 启用 LLM
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            llm_config_path = os.path.join(current_dir, "llm_config.json")
-            self.behavior_engine = AIBehaviorEngine(
-                use_llm=True,
-                llm_config_path=llm_config_path
+            # 使用 LangGraph 版本
+            self.behavior_engine = LangGraphBehaviorEngine(
+                use_llm=True
             )
+            print("[调度器] [LangGraph] LangGraph 行为引擎已创建")
         
         print("[调度器] 调度器已创建")
     
