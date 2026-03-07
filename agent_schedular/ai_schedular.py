@@ -12,6 +12,9 @@ from datetime import datetime
 from .time_system import time_system
 from .ai_initial import AIUserInitializer
 from .ai_behavior import AIBehaviorEngine
+# 可选：使用 LangGraph 版本的行为引擎
+# 取消下面这行的注释来启用 LangGraph 版本
+# from .langgraph_behavior import LangGraphBehaviorEngine
 
 
 class AIUserThread(threading.Thread):
@@ -133,13 +136,15 @@ class AIScheduler:
     """AI 调度器类"""
     
     def __init__(self, initializer: Optional[AIUserInitializer] = None,
-                 enable_behavior: bool = True):
+                 enable_behavior: bool = True,
+                 use_langgraph: bool = False):
         """
         初始化 AI 调度器
         
         Args:
             initializer: AI 用户初始化器实例，可选
             enable_behavior: 是否启用行为引擎，默认 True
+            use_langgraph: 是否使用 LangGraph 版本的行为引擎，默认 False
         """
         self.initializer = initializer or AIUserInitializer()
         self.user_threads: Dict[int, AIUserThread] = {}
@@ -148,15 +153,36 @@ class AIScheduler:
         
         # 行为引擎
         self.enable_behavior = enable_behavior
-        self.behavior_engine: Optional[AIBehaviorEngine] = None
+        self.use_langgraph = use_langgraph
+        self.behavior_engine = None
+        
         if enable_behavior:
-            # 启用 LLM
             current_dir = os.path.dirname(os.path.abspath(__file__))
             llm_config_path = os.path.join(current_dir, "llm_config.json")
-            self.behavior_engine = AIBehaviorEngine(
-                use_llm=True,
-                llm_config_path=llm_config_path
-            )
+            
+            if use_langgraph:
+                # 使用 LangGraph 版本
+                try:
+                    from .langgraph_behavior import LangGraphBehaviorEngine
+                    self.behavior_engine = LangGraphBehaviorEngine(
+                        use_llm=True
+                    )
+                    print("[调度器] [LangGraph] LangGraph 行为引擎已创建")
+                except ImportError as e:
+                    print(f"[调度器] [警告] LangGraph 引擎导入失败：{e}")
+                    print("[调度器] [警告] 将使用原版行为引擎")
+                    self.use_langgraph = False
+                    self.behavior_engine = AIBehaviorEngine(
+                        use_llm=True,
+                        llm_config_path=llm_config_path
+                    )
+            else:
+                # 使用原版
+                self.behavior_engine = AIBehaviorEngine(
+                    use_llm=True,
+                    llm_config_path=llm_config_path
+                )
+                print("[调度器] 原版行为引擎已创建")
         
         print("[调度器] 调度器已创建")
     
