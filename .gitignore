@@ -218,3 +218,11 @@ llm_config.json
 
 # Test files (do not upload to GitHub)
 test_*.py
+
+# Database files (SQLite and other)
+*.db
+*.sqlite
+*.sqlite3
+*-journal
+*-wal
+*-shm
