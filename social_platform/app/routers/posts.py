@@ -4,7 +4,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict
 
 from app.database import get_db
 from app import crud, schemas
@@ -132,3 +132,112 @@ def refresh_post_hot_score(post_id: int, db: Session = Depends(get_db)):
     
     new_score = update_post_hot_score(db, post_id)
     return {"post_id": post_id, "hot_score": new_score}
+
+
+@router.post("/quote", response_model=schemas.PostResponse, status_code=status.HTTP_201_CREATED)
+def create_quote_post(
+    quote_from_id: int = Query(..., description="被转发的原帖 ID"),
+    content: str = Query(..., description="转发评论（原创内容）"),
+    author_id: int = Query(..., description="转发者 ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    创建引用转发帖子（Twitter 式转发）
+    - 创建独立帖子
+    - 关联原帖
+    - 转发评论作为帖子内容
+    """
+    try:
+        post = crud.create_quote_post(
+            db=db,
+            quote_from_id=quote_from_id,
+            author_id=author_id,
+            content=content
+        )
+        return post
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.get("/{post_id}/quotes", response_model=List[schemas.PostResponse])
+def get_post_quotes(
+    post_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """
+    获取帖子的所有转发
+    支持分页和排序
+    """
+    quotes = crud.get_post_quotes(db, post_id=post_id, skip=skip, limit=limit)
+    return quotes
+
+
+@router.post("/comment-with-repost", response_model=Dict[str, schemas.PostResponse], status_code=status.HTTP_201_CREATED)
+def create_comment_with_repost(
+    post_id: int = Query(..., description="被评论的帖子 ID"),
+    content: str = Query(..., description="评论内容"),
+    author_id: int = Query(..., description="评论者 ID"),
+    quote_from_id: int = Query(..., description="被转发的帖子 ID（通常与 post_id 相同）"),
+    db: Session = Depends(get_db)
+):
+    """
+    创建评论并同时转发
+    - 创建评论
+    - 创建转发帖子（使用评论内容作为正文）
+    - 关联原帖和评论
+    """
+    try:
+        comment, post = crud.create_comment_with_repost(
+            db=db,
+            post_id=post_id,
+            author_id=author_id,
+            content=content,
+            quote_from_id=quote_from_id
+        )
+        return {
+            "comment": comment,
+            "repost": post
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.post("/reply-with-repost", response_model=Dict[str, schemas.PostResponse], status_code=status.HTTP_201_CREATED)
+def create_reply_with_repost(
+    comment_id: int = Query(..., description="被回复的评论 ID"),
+    content: str = Query(..., description="回复内容"),
+    author_id: int = Query(..., description="回复者 ID"),
+    quote_from_id: int = Query(..., description="被转发的帖子 ID"),
+    db: Session = Depends(get_db)
+):
+    """
+    创建回复并同时转发
+    - 创建回复
+    - 创建转发帖子（使用回复内容作为正文）
+    - 关联原帖和回复
+    """
+    try:
+        reply, post = crud.create_reply_with_repost(
+            db=db,
+            comment_id=comment_id,
+            author_id=author_id,
+            content=content,
+            quote_from_id=quote_from_id
+        )
+        return {
+            "reply": reply,
+            "repost": post
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )

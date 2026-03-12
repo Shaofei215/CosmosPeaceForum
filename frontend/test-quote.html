@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>转发功能测试</title>
+    <style>
+        :root {
+            --primary-bg: #0a0a0f;
+            --secondary-bg: #12121a;
+            --card-bg: #1a1a2e;
+            --card-bg-hover: #252542;
+            --border-color: #2d2d44;
+            --border-light: #3d3d5c;
+            --primary-purple: #6b4ee6;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0b0;
+            --text-muted: #6b6b7b;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+            padding: 20px;
+            margin: 0;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        /* 帖子卡片 */
+        .post-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .post-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background-color: var(--secondary-bg);
+            border: 2px solid var(--border-color);
+        }
+        
+        .username {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-primary);
+            display: block;
+        }
+        
+        .post-time {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        
+        /* 转发评论 */
+        .quote-comment {
+            background-color: var(--secondary-bg);
+            border-left: 3px solid var(--primary-purple);
+            padding: 12px 16px;
+            margin: 12px 0;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+        
+        .quote-comment-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        
+        .quote-comment-text {
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        /* 原帖卡片 */
+        .quoted-post-card {
+            background-color: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-top: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .quoted-post-card:hover {
+            background-color: var(--card-bg-hover);
+            border-color: var(--border-light);
+            transform: translateY(-1px);
+        }
+        
+        .quoted-post-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .quoted-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+        }
+        
+        .quoted-username {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        
+        .quoted-time {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .quoted-post-content {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+        
+        .quoted-post-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .quoted-stat {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        /* 统计 */
+        .post-stats {
+            display: flex;
+            gap: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+            margin-top: 16px;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .stat-item:hover {
+            color: var(--text-primary);
+        }
+        
+        .stat-icon {
+            font-size: 18px;
+        }
+        
+        .label {
+            background: var(--primary-purple);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 转发功能展示测试</h1>
+        
+        <h2>示例 1：原创帖子</h2>
+        <div class="post-card">
+            <div class="post-header">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Herta" alt="Herta" class="avatar">
+                <div>
+                    <span class="username">黑塔</span>
+                    <span class="post-time">2 小时前</span>
+                </div>
+            </div>
+            <div class="post-content">
+                今天测试了新的空间站设备，效果不错！转圈圈～ 🌀
+            </div>
+            <div class="post-stats">
+                <div class="stat-item">
+                    <span class="stat-icon">❤️</span>
+                    <span>120</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">💬</span>
+                    <span>45</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">🔄</span>
+                    <span>30</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">📝</span>
+                    <span>转发</span>
+                </div>
+            </div>
+        </div>
+        
+        <h2>示例 2：转发帖子（带评论）</h2>
+        <div class="post-card">
+            <div class="post-header">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Bronya" alt="Bronya" class="avatar">
+                <div>
+                    <span class="username">布洛妮娅</span>
+                    <span class="post-time">1 小时前</span>
+                </div>
+            </div>
+            <div class="quote-comment">
+                <div class="quote-comment-label">💬 转发评论：</div>
+                <div class="quote-comment-text">
+                    黑塔女士总是这么有活力。布洛妮娅会继续协助空间站的科研工作。
+                </div>
+            </div>
+            <div class="quoted-post-card">
+                <div class="quoted-post-header">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Herta" alt="Herta" class="quoted-avatar">
+                    <div>
+                        <span class="quoted-username">黑塔</span>
+                        <span class="quoted-time">2 小时前</span>
+                    </div>
+                </div>
+                <div class="quoted-post-content">
+                    今天测试了新的空间站设备，效果不错！转圈圈～ 🌀
+                </div>
+                <div class="quoted-post-stats">
+                    <span class="quoted-stat">❤️ 120</span>
+                    <span class="quoted-stat">💬 45</span>
+                    <span class="quoted-stat">🔄 30</span>
+                </div>
+            </div>
+            <div class="post-stats">
+                <div class="stat-item">
+                    <span class="stat-icon">❤️</span>
+                    <span>85</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">💬</span>
+                    <span>22</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">🔄</span>
+                    <span>15</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">📝</span>
+                    <span>转发</span>
+                </div>
+            </div>
+        </div>
+        
+        <h2>示例 3：嵌套转发（转发链）</h2>
+        <div class="post-card">
+            <div class="post-header">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Seele" alt="Seele" class="avatar">
+                <div>
+                    <span class="username">希儿</span>
+                    <span class="post-time">30 分钟前</span>
+                </div>
+            </div>
+            <div class="quote-comment">
+                <div class="quote-comment-label">💬 转发评论：</div>
+                <div class="quote-comment-text">
+                    希儿也觉得黑塔姐姐很厉害！我也要更加努力才行！
+                </div>
+            </div>
+            <div class="quoted-post-card">
+                <div class="quoted-post-header">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Bronya" alt="Bronya" class="quoted-avatar">
+                    <div>
+                        <span class="quoted-username">布洛妮娅</span>
+                        <span class="quoted-time">1 小时前</span>
+                    </div>
+                </div>
+                <div class="quoted-post-content">
+                    黑塔女士总是这么有活力。布洛妮娅会继续协助空间站的科研工作。
+                </div>
+                <div class="quoted-post-stats">
+                    <span class="quoted-stat">❤️ 85</span>
+                    <span class="quoted-stat">💬 22</span>
+                    <span class="quoted-stat">🔄 15</span>
+                </div>
+            </div>
+            <div class="post-stats">
+                <div class="stat-item">
+                    <span class="stat-icon">❤️</span>
+                    <span>42</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">💬</span>
+                    <span>8</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">🔄</span>
+                    <span>3</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">📝</span>
+                    <span>转发</span>
+                </div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 40px; padding: 20px; background: var(--card-bg); border-radius: var(--radius-lg);">
+            <h3 style="margin-bottom: 16px;">✨ 转发功能特点</h3>
+            <ul style="text-align: left; line-height: 2; color: var(--text-secondary);">
+                <li>✅ <strong>独立帖子</strong>：每条转发都是独立记录</li>
+                <li>✅ <strong>嵌套展示</strong>：原帖和转发评论清晰分离</li>
+                <li>✅ <strong>转发链</strong>：支持多级转发（A→B→C）</li>
+                <li>✅ <strong>统计独立</strong>：每条转发有自己的点赞、评论、转发数</li>
+                <li>✅ <strong>热度加权</strong>：转发在热度计算中权重×3</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

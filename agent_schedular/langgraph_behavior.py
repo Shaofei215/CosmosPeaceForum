@@ -191,6 +191,62 @@ class SocialPlatformAPI:
                 return {"success": False, "error": f"HTTP {response.status_code}"}
         except Exception as e:
             return {"success": False, "error": str(e)}
+    
+    def create_quote_post(self, quote_from_id: int, user_id: int, content: str) -> Dict:
+        """创建直接转发帖子"""
+        url = f"{self.base_url}/posts/quote"
+        params = {
+            "quote_from_id": quote_from_id,
+            "author_id": user_id,
+            "content": content
+        }
+        try:
+            response = requests.post(url, params=params, timeout=10)
+            if response.status_code == 201:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def create_comment_with_repost(self, post_id: int, user_id: int, content: str) -> Dict:
+        """创建评论并转发"""
+        url = f"{self.base_url}/posts/comment-with-repost"
+        params = {
+            "post_id": post_id,
+            "author_id": user_id,
+            "content": content,
+            "quote_from_id": post_id  # 通常与被评论的帖子相同
+        }
+        try:
+            response = requests.post(url, params=params, timeout=10)
+            if response.status_code == 201:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def create_reply_with_repost(self, comment_id: int, user_id: int, content: str, quote_from_id: int = None) -> Dict:
+        """创建回复并转发"""
+        url = f"{self.base_url}/posts/reply-with-repost"
+        params = {
+            "comment_id": comment_id,
+            "author_id": user_id,
+            "content": content
+        }
+        # 如果提供了 quote_from_id，使用它；否则后端会根据 comment_id 推断
+        if quote_from_id:
+            params["quote_from_id"] = quote_from_id
+        
+        try:
+            response = requests.post(url, params=params, timeout=10)
+            if response.status_code == 201:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
 
 # ==================== 1. 定义状态池 ====================
@@ -256,11 +312,32 @@ def check_notifications_node(state: AISessionState) -> Dict:
             for i, notif in enumerate(notifications, 1):
                 actor = notif.get("actor", {}).get("username", "未知")
                 notif_type = notif.get("type", "")
-                content_preview = notif.get("content", "")[:30] if notif.get("content") else ""
-                if content_preview:
-                    print(f"   [{i}] {actor} - {notif_type}: {content_preview}...")
+                
+                # 特殊处理转发通知：只展示直接转发
+                if notif_type == "quote":
+                    post = notif.get("post", {})
+                    quote_from_id = post.get("quote_from_id")
+                    original_post_id = post.get("original_post_id")
+                    
+                    # 只展示直接转发（quote_from_id == original_post_id）
+                    if quote_from_id != original_post_id:
+                        print(f"   [{i}] {actor} - 间接转发（已过滤）")
+                        continue
+                    
+                    # 展示直接转发的详细信息
+                    original_post = post.get("original_post", {})
+                    original_content = original_post.get("content", "")[:30] if original_post else ""
+                    quote_comment = post.get("quote_comment", "")[:30] if post else ""
+                    print(f"   [{i}] 🔄 {actor} 转发了你的帖子")
+                    print(f"       原帖：\"{original_content}...\"")
+                    print(f"       转发评论：\"{quote_comment}...\"")
                 else:
-                    print(f"   [{i}] {actor} - {notif_type}")
+                    # 其他类型通知
+                    content_preview = notif.get("content", "")[:30] if notif.get("content") else ""
+                    if content_preview:
+                        print(f"   [{i}] {actor} - {notif_type}: {content_preview}...")
+                    else:
+                        print(f"   [{i}] {actor} - {notif_type}")
             
             return {"notifications": notifications}
         else:
@@ -660,7 +737,10 @@ def decide_node(state: AISessionState) -> Dict:
 4. "like_post" - 点赞帖子（需要提供 post_id）
 5. "like_comment" - 点赞评论（需要提供 comment_id）
 6. "like_reply" - 点赞回复（需要提供 reply_id）
-7. "skip" - 什么都不做
+7. "quote_post" - 直接转发某条帖子（需要提供 post_id 和 reason，reason 是转发原因/想法，会进入生成阶段基于此生成转发评论）
+8. "comment_with_repost" - 评论并转发（需要提供 post_id 和 content）
+9. "reply_with_repost" - 回复并转发（需要提供 comment_id 和 content）
+10. "skip" - 什么都不做
 
 【发帖决策】
 如果你有发帖冲动，现在需要决定是否真的发帖：
@@ -695,7 +775,7 @@ def decide_node(state: AISessionState) -> Dict:
    - 对关注用户的帖子/评论/回复，更感兴趣
    - 高兴趣可以多互动，低兴趣可以少互动甚至跳过
 6. decide_to_post 必须为 true 或 false，表示是否决定发帖
-7. 点赞：最简单的互动，优先级较高，表示赞同该内容 评论/回复：优先级次之，仅想表达更多观点时使用"""
+7. 点赞：最简单的互动，优先级较高，表示赞同该内容 评论/回复：优先级次之，仅想表达更多观点时使用 转发：在想要将内容分享给他人时使用"""
     
     # 构建思考信息，包含帖子和评论
     # thoughts 已经包含 post 和 comments 信息
@@ -791,6 +871,16 @@ def decide_node(state: AISessionState) -> Dict:
                         print(f"   [{i}] 👍 点赞评论 ID={action.get('comment_id')}")
                     elif action_type == "like_reply":
                         print(f"   [{i}] 👍 点赞回复 ID={action.get('reply_id')}")
+                    elif action_type == "quote_post":
+                        post_id = action.get('post_id')
+                        reason = action.get('reason', '')
+                        reason_preview = f"（原因：{reason[:30]}...）" if reason else ""
+                        print(f"   [{i}] 🔄 直接转发帖子 ID={post_id}{reason_preview}")
+                        print(f"       将基于此原因生成转发评论")
+                    elif action_type == "comment_with_repost":
+                        print(f"   [{i}] 🔄 评论并转发帖子 ID={action.get('post_id')}：\"{action.get('content', '')[:30]}...\"")
+                    elif action_type == "reply_with_repost":
+                        print(f"   [{i}] 🔄 回复并转发评论 ID={action.get('comment_id')}：\"{action.get('content', '')[:30]}...\"")
                     elif action_type == "follow":
                         print(f"   [{i}] ➕ 关注用户 ID={action.get('user_id')}")
                     else:
@@ -815,17 +905,117 @@ def decide_node(state: AISessionState) -> Dict:
 
 def generate_post_node(state: AISessionState) -> Dict:
     """
-    节点 6：生成帖子内容（条件节点）
+    节点 6：生成内容（条件节点）
     
-    对应原代码：AIBehaviorEngine._generate_post_content()
+    两种情况：
+    1. 决定发帖 → 生成原创帖子
+    2. 决定直接转发 → 生成转发评论
     """
     import json
     
     user_config = state["user_config"]
     post_reflection = state["post_reflection"]
+    decisions = state.get("decisions", {})
     thoughts = state["thoughts"]
     username = user_config.get("username", "Unknown")
     
+    # 检查是否有直接转发的决策
+    quote_decision = None
+    actions = decisions.get("actions", [])
+    for action in actions:
+        if action.get("type") == "quote_post":
+            quote_decision = action
+            break
+    
+    # 如果有直接转发决策，生成转发评论
+    if quote_decision:
+        post_id = quote_decision.get("post_id")
+        reason = quote_decision.get("reason", "")  # 获取转发原因
+        
+        # 找到对应的帖子信息
+        target_post = None
+        for t in thoughts:
+            if t.get("post", {}).get("id") == post_id:
+                target_post = t["post"]
+                break
+        
+        if not target_post:
+            print(f"[{username}] ⚠️ 找不到要转发的帖子 ID={post_id}，跳过生成")
+            return {"post_content": None}
+        
+        print(f"\n🔄 [{username}] 正在生成转发评论...")
+        print(f"   转发原因：{reason[:50] if reason else '无'}...")
+        
+        personality = user_config.get("personality_prompt", "")
+        post_content = target_post.get("content", "")[:200]
+        post_author = target_post.get("author", {}).get("username", "未知")
+        
+        system_prompt = f"""你是{username}，{personality}
+
+你要转发一条帖子，请根据你的转发原因生成具体的转发评论。
+
+【被转发的帖子】
+作者：{post_author}
+内容：{post_content}
+
+【你的转发原因】
+{reason if reason else '想分享这个内容'}
+
+【要求】
+- 基于你的转发原因生成具体的转发评论
+- 符合你的性格和身份
+- 可以是赞同、补充、吐槽、感慨等
+- 长度 50 字以内
+- 像真实的社交媒体转发评论
+
+【极其重要】你的响应必须是一个合法的 JSON 对象，不要包含任何 markdown 代码块标记，不要包含任何解释性文字。
+
+输出格式必须严格如下：
+{{"content":"转发评论内容"}}"""
+        
+        user_prompt = f"""请基于以下信息生成转发评论：
+
+【帖子信息】
+作者：{post_author}
+内容：{post_content}
+
+【你的转发原因】
+{reason if reason else '想分享这个内容'}
+
+请生成你的转发评论，要体现你的转发原因。"""
+        
+        try:
+            llm_client = LLMClient()
+            result = llm_client.chat(user_prompt, system_prompt)
+            
+            # 检查 LLM 自我修复是否失败
+            if isinstance(result, dict) and result.get("success") == False:
+                print(f"[{username}] ⚠️ LLM JSON 解析失败：{result.get('parse_error', '未知错误')}")
+                return {"post_content": None}
+            
+            if isinstance(result, dict) and result.get("content"):
+                content = result["content"]
+                # 确保 content 是字符串
+                if not isinstance(content, str):
+                    print(f"[{username}] ⚠️ content 不是字符串类型")
+                    return {"post_content": None}
+                print(f"[{username}] 转发评论生成成功：{content[:30]}...")
+                
+                # 将生成的内容添加到决策中
+                quote_decision["generated_content"] = content
+                
+                return {"post_content": content}
+            
+            print(f"[{username}] LLM 返回格式错误或无内容：{type(result)}")
+            return {"post_content": None}
+            
+        except Exception as e:
+            print(f"[{username}] 生成转发评论失败：{e}")
+            import traceback
+            traceback.print_exc()
+            return {"post_content": None}
+    
+    # 如果没有转发决策，检查是否有发帖冲动
     if not post_reflection or not post_reflection.get("has_intention"):
         print(f"[{username}] 没有发帖冲动，跳过")
         return {"post_content": None}
@@ -1021,6 +1211,56 @@ def execute_actions_node(state: AISessionState) -> Dict:
                 print(f"       状态：✅ 成功")
             else:
                 print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+        
+        elif action_type == "quote_post":
+            post_id = action.get('post_id')
+            content = action.get('generated_content', '')  # 从生成阶段获取
+            print(f"\n   [{i}/{len(actions)}] 🔄 直接转发帖子")
+            print(f"       目标：帖子 ID={post_id}")
+            print(f"       转发评论：\"{content}\"")
+            
+            # 调用 API
+            api_result = api.create_quote_post(post_id, user_id, content)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+        
+        elif action_type == "comment_with_repost":
+            post_id = action.get('post_id')
+            content = action.get('content', '')
+            print(f"\n   [{i}/{len(actions)}] 🔄 评论并转发")
+            print(f"       目标：帖子 ID={post_id}")
+            print(f"       评论内容：\"{content}\"")
+            
+            # 调用 API
+            api_result = api.create_comment_with_repost(post_id, user_id, content)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+        
+        elif action_type == "reply_with_repost":
+            comment_id = action.get('comment_id')
+            content = action.get('content', '')
+            quote_from_id = action.get('quote_from_id', comment_id)  # 默认使用 comment_id，后端会处理
+            print(f"\n   [{i}/{len(actions)}] 🔄 回复并转发")
+            print(f"       目标：评论 ID={comment_id}")
+            print(f"       回复内容：\"{content}\"")
+            
+            # 调用 API
+            api_result = api.create_reply_with_repost(comment_id, user_id, content, quote_from_id)
+            if api_result["success"]:
+                result["success"] = True
+                success_count += 1
+                print(f"       状态：✅ 成功")
+            else:
+                print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
+        
         else:
             print(f"\n   [{i}/{len(actions)}] ❓ 执行未知行动：{action_type}")
             print(f"       状态：⚠️ 跳过")
@@ -1071,12 +1311,26 @@ def has_posts(state: AISessionState) -> str:
 
 
 def should_generate_post(state: AISessionState) -> str:
-    """条件：是否要发帖"""
+    """
+    条件：是否要生成内容
+    
+    两种情况需要进入生成阶段：
+    1. 决定发帖（decide_to_post=True）
+    2. 决定直接转发（quote_post 行动）- 需要生成转发评论
+    """
     decisions = state.get("decisions", {})
+    
+    # 检查是否决定发帖
     if decisions.get("decide_to_post", False):
         return "generate"
-    else:
-        return "execute"
+    
+    # 检查是否有直接转发的决策
+    actions = decisions.get("actions", [])
+    for action in actions:
+        if action.get("type") == "quote_post":
+            return "generate"
+    
+    return "execute"
 
 
 # ==================== 4. 构建图 ====================

@@ -80,6 +80,28 @@ async function loadTimeline() {
     timeline.innerHTML = posts.map(post => createPostCard(post)).join('');
 }
 
+function createQuotedPostHTML(post) {
+    const avatar = post.author?.avatar || '/avatar/Avatar.png';
+    const username = post.author?.username || '未知用户';
+    const time = formatTime(post.created_at);
+    
+    return `
+        <div class="quoted-post-header">
+            <img src="${API_BASE_URL}${avatar}" alt="${username}" class="quoted-avatar" onerror="this.onerror=null; this.src='${API_BASE_URL}/avatar/Avatar.png'">
+            <div class="quoted-post-meta">
+                <span class="quoted-username">${username}</span>
+                <span class="quoted-time">${time}</span>
+            </div>
+        </div>
+        <div class="quoted-post-content">${escapeHtml(post.content)}</div>
+        <div class="quoted-post-stats">
+            <span class="quoted-stat">❤️ ${post.likes_count || 0}</span>
+            <span class="quoted-stat">💬 ${post.comments_count || 0}</span>
+            <span class="quoted-stat">🔄 ${post.reposts_count || 0}</span>
+        </div>
+    `;
+}
+
 function createPostCard(post) {
     const avatar = post.author?.avatar || '/avatar/Avatar.png';
     const username = post.author?.username || '未知用户';
@@ -87,48 +109,102 @@ function createPostCard(post) {
     const time = formatTime(post.created_at);
     const likesCount = post.likes_count || 0;
     const likers = post.likers || [];
+    const isQuote = post.post_type === 'quote';
+    const originalPost = post.original_post;
     
-    return `
-        <div class="post-card" id="post-${post.id}">
-            <div class="post-header">
-                <img src="${API_BASE_URL}${avatar}" alt="${username}" class="avatar" onerror="this.onerror=null; this.src='${API_BASE_URL}/avatar/Avatar.png'">
-                <div class="post-meta">
-                    <a href="#" class="username" onclick="event.stopPropagation(); showUserDetail(${post.author_id})">${username}</a>
-                    ${bio ? `<div class="post-bio">${escapeHtml(bio)}</div>` : ''}
-                    <div class="post-time">${time}</div>
+    // 如果是转发帖，需要分离正文和小卡片
+    if (isQuote && originalPost) {
+        // 正文 = post.content（转发者的评论）
+        // 小卡片 = originalPost（最底层的原帖）
+        
+        return `
+            <div class="post-card" id="post-${post.id}">
+                <div class="post-header">
+                    <img src="${API_BASE_URL}${avatar}" alt="${username}" class="avatar" onerror="this.onerror=null; this.src='${API_BASE_URL}/avatar/Avatar.png'">
+                    <div class="post-meta">
+                        <a href="#" class="username" onclick="event.stopPropagation(); showUserDetail(${post.author_id})">${username}</a>
+                        ${bio ? `<div class="post-bio">${escapeHtml(bio)}</div>` : ''}
+                        <div class="post-time">${time}</div>
+                    </div>
+                </div>
+                <div class="post-content">${escapeHtml(post.content)}</div>
+                ${likers.length > 0 ? `
+                    <div class="post-likers">
+                        ${likers.map(liker => `
+                            <span class="liker-item" onclick="showUserDetail(${liker.id})">
+                                <img src="${API_BASE_URL}${liker.avatar}" alt="${liker.username}" class="liker-avatar" onerror="this.onerror=null; this.src='${API_BASE_URL}/avatar/Avatar.png'">
+                                <span class="liker-name">${escapeHtml(liker.username)}</span>
+                            </span>
+                        `).join('')}
+                        ${likesCount > 3 ? `<span class="more-likers">等${likesCount}人点赞</span>` : '<span class="more-likers">赞了</span>'}
+                    </div>
+                ` : ''}
+                <div class="post-stats">
+                    <div class="stat-item likes">
+                        <span class="stat-icon">❤️</span>
+                        <span>${likesCount}</span>
+                    </div>
+                    <div class="stat-item comments" onclick="toggleComments(${post.id})">
+                        <span class="stat-icon">💬</span>
+                        <span>${post.comments_count || 0}</span>
+                    </div>
+                    <div class="stat-item reposts">
+                        <span class="stat-icon">🔄</span>
+                        <span>${post.reposts_count || 0}</span>
+                    </div>
+                </div>
+                <div class="quoted-post-card" onclick="showPostDetail(${originalPost.id})">
+                    ${createQuotedPostHTML(originalPost)}
+                </div>
+                <div class="post-comments-section" id="comments-${post.id}" style="display: none;">
+                    <div class="comments-loading">加载评论中...</div>
                 </div>
             </div>
-            <div class="post-content">${escapeHtml(post.content)}</div>
-            ${likers.length > 0 ? `
-                <div class="post-likers">
-                    ${likers.map(liker => `
-                        <span class="liker-item" onclick="showUserDetail(${liker.id})">
-                            <img src="${API_BASE_URL}${liker.avatar}" alt="${liker.username}" class="liker-avatar" onerror="this.onerror=null; this.src='${API_BASE_URL}/avatar/Avatar.png'">
-                            <span class="liker-name">${escapeHtml(liker.username)}</span>
-                        </span>
-                    `).join('')}
-                    ${likesCount > 3 ? `<span class="more-likers">等${likesCount}人点赞</span>` : '<span class="more-likers">赞了</span>'}
+        `;
+    } else {
+        // 原创帖子，正常展示
+        return `
+            <div class="post-card" id="post-${post.id}">
+                <div class="post-header">
+                    <img src="${API_BASE_URL}${avatar}" alt="${username}" class="avatar" onerror="this.onerror=null; this.src='${API_BASE_URL}/avatar/Avatar.png'">
+                    <div class="post-meta">
+                        <a href="#" class="username" onclick="event.stopPropagation(); showUserDetail(${post.author_id})">${username}</a>
+                        ${bio ? `<div class="post-bio">${escapeHtml(bio)}</div>` : ''}
+                        <div class="post-time">${time}</div>
+                    </div>
                 </div>
-            ` : ''}
-            <div class="post-stats">
-                <div class="stat-item likes">
-                    <span class="stat-icon">❤️</span>
-                    <span>${likesCount}</span>
+                <div class="post-content">${escapeHtml(post.content)}</div>
+                ${likers.length > 0 ? `
+                    <div class="post-likers">
+                        ${likers.map(liker => `
+                            <span class="liker-item" onclick="showUserDetail(${liker.id})">
+                                <img src="${API_BASE_URL}${liker.avatar}" alt="${liker.username}" class="liker-avatar" onerror="this.onerror=null; this.src='${API_BASE_URL}/avatar/Avatar.png'">
+                                <span class="liker-name">${escapeHtml(liker.username)}</span>
+                            </span>
+                        `).join('')}
+                        ${likesCount > 3 ? `<span class="more-likers">等${likesCount}人点赞</span>` : '<span class="more-likers">赞了</span>'}
+                    </div>
+                ` : ''}
+                <div class="post-stats">
+                    <div class="stat-item likes">
+                        <span class="stat-icon">❤️</span>
+                        <span>${likesCount}</span>
+                    </div>
+                    <div class="stat-item comments" onclick="toggleComments(${post.id})">
+                        <span class="stat-icon">💬</span>
+                        <span>${post.comments_count || 0}</span>
+                    </div>
+                    <div class="stat-item reposts">
+                        <span class="stat-icon">🔄</span>
+                        <span>${post.reposts_count || 0}</span>
+                    </div>
                 </div>
-                <div class="stat-item comments" onclick="toggleComments(${post.id})">
-                    <span class="stat-icon">💬</span>
-                    <span>${post.comments_count || 0}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-icon">🔄</span>
-                    <span>${post.reposts_count || 0}</span>
+                <div class="post-comments-section" id="comments-${post.id}" style="display: none;">
+                    <div class="comments-loading">加载评论中...</div>
                 </div>
             </div>
-            <div class="post-comments-section" id="comments-${post.id}" style="display: none;">
-                <div class="comments-loading">加载评论中...</div>
-            </div>
-        </div>
-    `;
+        `;
+    }
 }
 
 // ==================== 排序切换 ====================
@@ -239,6 +315,12 @@ function createReplyHTML(reply, parentReply = null) {
 
 async function showUserDetail(userId) {
     alert('用户详情功能开发中... 用户 ID: ' + userId);
+}
+
+async function showPostDetail(postId) {
+    window.open(`/post/${postId}`, '_blank');
+    // 或者加载帖子详情页
+    alert('帖子详情功能开发中... 帖子 ID: ' + postId);
 }
 
 // ==================== 工具函数 ====================
