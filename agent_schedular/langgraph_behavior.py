@@ -363,16 +363,66 @@ def process_notifications_node(state: AISessionState) -> Dict:
         llm_client = LLMClient()
         result = llm_client.chat(user_prompt, system_prompt)
         
+        # 检查 LLM 自我修复是否失败
+        if isinstance(result, dict) and result.get("success") == False:
+            print(f"[{username}] ⚠️ LLM JSON 解析失败：{result.get('parse_error', '未知错误')}")
+            return {"actions": []}
+        
         if isinstance(result, dict):
             actions = result.get("actions", [])
-            print(f"[{username}] LLM 决策完成，将执行 {len(actions)} 个行动")
+            # 确保 actions 是列表
+            if not isinstance(actions, list):
+                print(f"[{username}] ⚠️ actions 不是列表类型，设为空列表")
+                actions = []
+            
+            print(f"\n🤖 [{username}] LLM 决策完成，将执行 {len(actions)} 个行动")
+            
+            # 详细打印每个行动
+            if actions:
+                print(f"\n📋 [{username}] 决策详情:")
+                for i, action in enumerate(actions, 1):
+                    # 确保每个 action 都是字典
+                    if not isinstance(action, dict):
+                        print(f"   [{i}] ⚠️ 行动格式错误，跳过")
+                        continue
+                    
+                    action_type = action.get("type", "unknown")
+                    
+                    # 根据行动类型显示详细信息
+                    if action_type == "reply_to_comment":
+                        comment_id = action.get("comment_id", "?")
+                        content = action.get("content", "")[:30] + ("..." if len(action.get("content", "")) > 30 else "")
+                        print(f"   [{i}] 💬 回复评论 ID={comment_id}：\"{content}\"")
+                    
+                    elif action_type == "reply_to_reply":
+                        reply_id = action.get("reply_id", "?")
+                        content = action.get("content", "")[:30] + ("..." if len(action.get("content", "")) > 30 else "")
+                        print(f"   [{i}] 💬 回复回复 ID={reply_id}：\"{content}\"")
+                    
+                    elif action_type == "like_comment":
+                        comment_id = action.get("comment_id", "?")
+                        print(f"   [{i}] 👍 点赞评论 ID={comment_id}")
+                    
+                    elif action_type == "like_reply":
+                        reply_id = action.get("reply_id", "?")
+                        print(f"   [{i}] 👍 点赞回复 ID={reply_id}")
+                    
+                    elif action_type == "skip":
+                        print(f"   [{i}] ⏭️ 跳过（不回应）")
+                    
+                    else:
+                        print(f"   [{i}] ❓ 未知行动：{action_type}")
+            
+            print()
             return {"actions": actions}
         
-        print(f"[{username}] LLM 返回格式错误")
+        print(f"[{username}] LLM 返回格式错误：{type(result)}")
         return {"actions": []}
         
     except Exception as e:
         print(f"[{username}] LLM 处理失败：{e}")
+        import traceback
+        traceback.print_exc()
         return {"actions": []}
 
 
@@ -495,9 +545,19 @@ def think_node(state: AISessionState) -> Dict:
         llm_client = LLMClient()
         result = llm_client.chat(user_prompt, system_prompt)
         
+        # 检查 LLM 自我修复是否失败
+        if isinstance(result, dict) and result.get("success") == False:
+            print(f"[{username}] ⚠️ LLM JSON 解析失败：{result.get('parse_error', '未知错误')}")
+            return {"thoughts": [], "post_reflection": None}
+        
         if isinstance(result, dict):
             thoughts = result.get("thoughts", [])
             post_reflection = result.get("post_reflection")
+            
+            # 确保 thoughts 是列表
+            if not isinstance(thoughts, list):
+                print(f"[{username}] ⚠️ thoughts 不是列表类型，设为空列表")
+                thoughts = []
             
             # 创建 API 客户端
             api = SocialPlatformAPI()
@@ -505,6 +565,10 @@ def think_node(state: AISessionState) -> Dict:
             # 根据兴趣系数获取评论和回复
             print(f"[{username}] 正在根据兴趣系数获取评论和回复...")
             for t in thoughts:
+                # 确保 t 是字典
+                if not isinstance(t, dict):
+                    continue
+                    
                 post_id = t.get("post_id")
                 interest_score = t.get("interest_score", 0.5)
                 
@@ -538,11 +602,13 @@ def think_node(state: AISessionState) -> Dict:
             
             return {"thoughts": thoughts, "post_reflection": post_reflection}
         
-        print(f"[{username}] LLM 返回格式错误")
+        print(f"[{username}] LLM 返回格式错误：{type(result)}")
         return {"thoughts": [], "post_reflection": None}
         
     except Exception as e:
         print(f"[{username}] LLM 思考失败：{e}")
+        import traceback
+        traceback.print_exc()
         return {"thoughts": [], "post_reflection": None}
 
 
@@ -608,11 +674,11 @@ def decide_node(state: AISessionState) -> Dict:
 - 保持简洁，像真实社交媒体一样
 
 【多行动说明】
-你一次登录可以对多个或一个对象执行多个行动，actions 数组可以包含多个行动。例如：
+你可以对多个或一个对象执行多个行动，actions 数组可以包含多个行动。例如：
 - 可以既点赞又评论
 - 可以点赞多条内容
 - 可以评论后再回复
-- ...
+- ...你的行动没有限制
 根据你的兴趣和意愿自由互动。
 
 【极其重要】你的响应必须是一个合法的 JSON 对象，不要包含任何 markdown 代码块标记，不要包含任何解释性文字。
@@ -685,9 +751,20 @@ def decide_node(state: AISessionState) -> Dict:
         llm_client = LLMClient()
         result = llm_client.chat(user_prompt, system_prompt)
         
+        # 检查 LLM 自我修复是否失败
+        if isinstance(result, dict) and result.get("success") == False:
+            print(f"[{username}] ⚠️ LLM JSON 解析失败：{result.get('parse_error', '未知错误')}")
+            print(f"[{username}] 原始内容：{result.get('raw_content', '')[:200]}...")
+            return {"decisions": {"actions": [], "decide_to_post": False}}
+        
         if isinstance(result, dict):
             actions = result.get("actions", [])
             decide_to_post = result.get("decide_to_post", False)
+            
+            # 确保 actions 是列表
+            if not isinstance(actions, list):
+                print(f"[{username}] ⚠️ actions 不是列表类型，设为空列表")
+                actions = []
             
             print(f"\n[决策] [{username}] LLM 决策完成")
             print(f"[决策] [{username}] 计划执行 {len(actions)} 个行动，发帖：{decide_to_post}")
@@ -696,6 +773,11 @@ def decide_node(state: AISessionState) -> Dict:
             if actions:
                 print(f"\n[决策] [{username}] 行动列表:")
                 for i, action in enumerate(actions, 1):
+                    # 确保每个 action 都是字典
+                    if not isinstance(action, dict):
+                        print(f"   [{i}] ⚠️ 行动格式错误，跳过")
+                        continue
+                    
                     action_type = action.get("type", "unknown")
                     if action_type == "comment":
                         print(f"   [{i}] 📝 评论帖子 ID={action.get('post_id')}：\"{action.get('content', '')[:30]}...\"")
@@ -721,11 +803,13 @@ def decide_node(state: AISessionState) -> Dict:
             
             return {"decisions": {"actions": actions, "decide_to_post": decide_to_post}}
         
-        print(f"[{username}] LLM 返回格式错误")
+        print(f"[{username}] LLM 返回格式错误：{type(result)}")
         return {"decisions": {"actions": [], "decide_to_post": False}}
         
     except Exception as e:
         print(f"[{username}] LLM 决策失败：{e}")
+        import traceback
+        traceback.print_exc()
         return {"decisions": {"actions": [], "decide_to_post": False}}
 
 
@@ -779,16 +863,27 @@ def generate_post_node(state: AISessionState) -> Dict:
         llm_client = LLMClient()
         result = llm_client.chat(user_prompt, system_prompt)
         
+        # 检查 LLM 自我修复是否失败
+        if isinstance(result, dict) and result.get("success") == False:
+            print(f"[{username}] ⚠️ LLM JSON 解析失败：{result.get('parse_error', '未知错误')}")
+            return {"post_content": None}
+        
         if isinstance(result, dict) and result.get("content"):
             content = result["content"]
+            # 确保 content 是字符串
+            if not isinstance(content, str):
+                print(f"[{username}] ⚠️ content 不是字符串类型")
+                return {"post_content": None}
             print(f"[{username}] 帖子内容生成成功：{content[:30]}...")
             return {"post_content": content}
         
-        print(f"[{username}] LLM 返回格式错误")
+        print(f"[{username}] LLM 返回格式错误或无内容：{type(result)}")
         return {"post_content": None}
         
     except Exception as e:
         print(f"[{username}] 生成帖子失败：{e}")
+        import traceback
+        traceback.print_exc()
         return {"post_content": None}
 
 
