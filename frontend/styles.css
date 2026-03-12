@@ -964,6 +964,167 @@ body {
     background: var(--border-light);
 }
 
+/* 转发相关样式 */
+.quote-comment {
+    background-color: var(--secondary-bg);
+    border-left: 3px solid var(--primary-purple);
+    padding: 12px 16px;
+    margin: 12px 0;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.quote-comment-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    display: block;
+}
+
+.quote-comment-text {
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.quoted-post-card {
+    background-color: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-top: 16px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.quoted-post-card:hover {
+    background-color: var(--card-bg-hover);
+    border-color: var(--border-light);
+    transform: translateY(-1px);
+}
+
+.quoted-post-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.quoted-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--border-color);
+}
+
+.quoted-post-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.quoted-username {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.quoted-time {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.quoted-post-content {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 12px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.quoted-post-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.quoted-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* 模态框样式 */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    transition: var(--transition);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    background-color: var(--card-bg-hover);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 0;
+    max-height: calc(80vh - 80px);
+    overflow-y: auto;
+}
+
 /* 选中文字样式 */
 ::selection {
     background-color: var(--primary-purple);

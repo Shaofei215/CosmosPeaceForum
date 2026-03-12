@@ -3,7 +3,7 @@
 提供帖子、评论、回复的热度计算、衰减和更新功能
 
 热度公式:
-- 帖子：score = (点赞数*1 + 评论数*2) * 时间衰减系数 + 新鲜度加成
+- 帖子：score = (点赞数*1 + 评论数*2 + 转发数*3) * 时间衰减系数 + 新鲜度加成
 - 评论：score = (点赞数*1 + 回复数*2) * 时间衰减系数
 - 回复：score = (点赞数*1 + 子回复数*2) * 时间衰减系数
 
@@ -27,6 +27,7 @@ from . import models
 HOT_SCORE_CONFIG = {
     "like_weight": 1,      # 点赞权重
     "comment_weight": 2,   # 评论/回复权重
+    "quote_weight": 3,     # 转发权重（传播价值最高）
     "decay_half_life": 24, # 帖子半衰期（小时）
     "freshness_bonus": 50, # 新鲜度加成
     "freshness_window": 24, # 新鲜度窗口（小时）
@@ -36,7 +37,8 @@ HOT_SCORE_CONFIG = {
 
 
 def calculate_hot_score(likes_count: int, comments_count: int, 
-                        created_at: datetime, last_update: Optional[datetime] = None) -> int:
+                        created_at: datetime, last_update: Optional[datetime] = None,
+                        quotes_count: int = 0) -> int:
     """
     计算帖子热度分数
     
@@ -45,13 +47,15 @@ def calculate_hot_score(likes_count: int, comments_count: int,
         comments_count: 评论数
         created_at: 帖子创建时间
         last_update: 上次热度更新时间（可选）
+        quotes_count: 转发数（可选）
         
     Returns:
         int: 热度分数
     """
-    # 基础分数 = 点赞*1 + 评论*2
+    # 基础分数 = 点赞*1 + 评论*2 + 转发*3
     base_score = likes_count * HOT_SCORE_CONFIG["like_weight"] + \
-                 comments_count * HOT_SCORE_CONFIG["comment_weight"]
+                 comments_count * HOT_SCORE_CONFIG["comment_weight"] + \
+                 quotes_count * HOT_SCORE_CONFIG["quote_weight"]
     
     # 计算时间衰减
     now = datetime.utcnow()
@@ -143,8 +147,18 @@ def calculate_reply_hot_score(likes_count: int, child_replies_count: int,
     return max(0, int(decayed_score))
 
 
-def update_post_hot_score(db: Session, post_id: int) -> int:
-    """更新单个帖子的热度分数"""
+def update_post_hot_score(db: Session, post_id: int, recursive: bool = True) -> int:
+    """
+    更新帖子的热度分数
+    
+    Args:
+        db: 数据库会话
+        post_id: 帖子 ID
+        recursive: 是否递归更新所有被转发的帖子（默认 True）
+    
+    Returns:
+        int: 热度分数
+    """
     post = db.query(models.Post).filter(models.Post.id == post_id).first()
     if not post:
         return 0
@@ -154,12 +168,15 @@ def update_post_hot_score(db: Session, post_id: int) -> int:
     comment_count = db.query(models.Comment).filter(models.Comment.post_id == post_id).count()
     reply_count = db.query(models.Reply).join(models.Comment).filter(models.Comment.post_id == post_id).count()
     comments_count = comment_count + reply_count
+    # 转发数
+    quotes_count = db.query(models.Post).filter(models.Post.quote_from_id == post_id).count()
     
     new_score = calculate_hot_score(
         likes_count=likes_count,
         comments_count=comments_count,
         created_at=post.created_at,
-        last_update=post.last_hot_update
+        last_update=post.last_hot_update,
+        quotes_count=quotes_count
     )
     
     post.hot_score = new_score
@@ -167,6 +184,10 @@ def update_post_hot_score(db: Session, post_id: int) -> int:
     
     db.commit()
     db.refresh(post)
+    
+    # 递归更新所有被转发的帖子
+    if recursive and post.post_type == 'quote' and post.quote_from_id:
+        update_post_hot_score(db, post.quote_from_id, recursive=True)
     
     return new_score
 
@@ -252,7 +273,9 @@ def get_hot_posts(db: Session, limit: int = 50, offset: int = 0) -> list:
         comment_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
         reply_count = db.query(models.Reply).join(models.Comment).filter(models.Comment.post_id == post.id).count()
         post.comments_count = comment_count + reply_count
-        post.reposts_count = 0
+        # 递归统计转发数（包括间接转发）
+        from app.crud import count_all_reposts
+        post.reposts_count = count_all_reposts(db, post.id)
         post.views_count = post.hot_score
         # 获取点赞用户列表（最多 3 个）
         likers = db.query(models.Like).filter(models.Like.post_id == post.id).limit(3).all()
@@ -330,14 +353,16 @@ def get_mixed_posts(db: Session, user_id: Optional[int] = None,
     # 4. 取前 N 条
     sorted_posts = [p[1] for p in scored_posts[:total_limit]]
 
-    # 5. 为每个帖子添加统计属性
+    # 为每个帖子添加统计属性
     for post in sorted_posts:
         post.likes_count = db.query(models.Like).filter(models.Like.post_id == post.id).count()
         # 评论数 = 评论数 + 回复数
         comment_count = db.query(models.Comment).filter(models.Comment.post_id == post.id).count()
         reply_count = db.query(models.Reply).join(models.Comment).filter(models.Comment.post_id == post.id).count()
         post.comments_count = comment_count + reply_count
-        post.reposts_count = 0
+        # 递归统计转发数（包括间接转发）
+        from app.crud import count_all_reposts
+        post.reposts_count = count_all_reposts(db, post.id)
         post.views_count = post.hot_score
         # 获取点赞用户列表（最多 3 个）
         likers = db.query(models.Like).filter(models.Like.post_id == post.id).limit(3).all()

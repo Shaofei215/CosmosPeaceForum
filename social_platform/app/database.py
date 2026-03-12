@@ -2,11 +2,15 @@
 数据库配置模块
 提供 SQLAlchemy 引擎和会话管理
 """
+import os
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./social_platform.db"
+# 使用绝对路径，确保数据库文件在 social_platform 目录下
+BASE_DIR = Path(__file__).parent
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{BASE_DIR}/social_platform.db"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
