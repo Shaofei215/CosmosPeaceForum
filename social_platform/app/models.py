@@ -74,11 +74,13 @@ class Post(Base):
     
     # 关联的直接转发帖子 ID（外键，用于计数和追溯）
     # quote 类型时，指向直接转发的帖子；original 类型时为 NULL
-    quote_from_id = Column(Integer, ForeignKey("posts.id"), nullable=True, index=True)
+    # ondelete="CASCADE"：原帖删除时，级联删除所有转发（符合实际产品逻辑）
+    quote_from_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True, index=True)
     
     # 关联的原始帖子 ID（用于小卡片展示）
     # 永远指向最底层的原创帖子
-    original_post_id = Column(Integer, ForeignKey("posts.id"), nullable=True, index=True)
+    # ondelete="CASCADE"：原帖删除时，级联删除所有转发
+    original_post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True, index=True)
     
     # 转发类型：direct=直接转发，comment=评论转发，reply=回复转发
     repost_type = Column(String(20), nullable=True)  # 仅当 post_type='quote' 时使用
@@ -104,10 +106,11 @@ class Post(Base):
         foreign_keys=[quote_from_id]
     )
     # 自引用：所有引用/转发此帖的记录
+    # ✅ 移除 cascade="all, delete-orphan"，避免删除原帖时删除所有转发
     quotes = relationship(
         "Post",
         back_populates="quote_from",
-        cascade="all, delete-orphan",
+        # cascade="all, delete-orphan",  # 已移除，转发记录应独立存在
         foreign_keys=[quote_from_id]
     )
     

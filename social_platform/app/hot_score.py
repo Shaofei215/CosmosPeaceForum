@@ -12,6 +12,11 @@
 - 改用"热度排序 + 新鲜度加成 + 随机扰动"
 - 核心思想：所有内容包括基础热度分，新内容获得额外加成，部分获得随机扰动
 - 优势：真正按质量排序，同时保证新内容和长尾内容的曝光机会
+
+性能优化（2026-03-12 更新）:
+- ✅ 惰性更新：30 分钟内不重复更新所有帖子
+- ✅ 分批处理：避免一次性加载所有帖子到内存
+- ✅ 增量更新：只在互动时更新相关帖子
 """
 import math
 import random
@@ -21,6 +26,17 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from . import models
+
+# ✅ 缓存配置
+CACHE_CONFIG = {
+    "update_interval_minutes": 30,  # 全量更新间隔（分钟）
+    "batch_size": 100,              # 每批处理帖子数
+}
+
+# ✅ 缓存状态存储（生产环境应使用 Redis）
+_cache_state = {
+    "last_full_update": None,       # 上次全量更新时间
+}
 
 
 # 热度计算配置
@@ -244,21 +260,61 @@ def update_reply_hot_score(db: Session, reply_id: int) -> int:
     return new_score
 
 
-def update_all_hot_scores(db: Session) -> int:
-    """更新所有帖子的热度分数"""
-    posts = db.query(models.Post).all()
+def update_all_hot_scores(db: Session, batch_size: int = None, force: bool = False) -> int:
+    """
+    更新所有帖子的热度分数
+    ✅ 优化：分批更新 + 惰性更新，避免内存爆炸和重复计算
+    
+    Args:
+        db: 数据库会话
+        batch_size: 每批处理数量（默认使用 CACHE_CONFIG 配置）
+        force: 是否强制更新（忽略缓存时间）
+    
+    Returns:
+        更新的帖子数量
+    """
+    if batch_size is None:
+        batch_size = CACHE_CONFIG["batch_size"]
+    
+    # ✅ 检查是否需要更新（惰性更新）
+    if not force:
+        last_update = _cache_state["last_full_update"]
+        if last_update:
+            time_since_update = datetime.utcnow() - last_update
+            if time_since_update < timedelta(minutes=CACHE_CONFIG["update_interval_minutes"]):
+                # 距离上次更新不足 30 分钟，跳过
+                return 0
+    
+    # ✅ 分批更新，避免一次性加载所有帖子
+    offset = 0
     updated_count = 0
     
-    for post in posts:
-        update_post_hot_score(db, post.id)
-        updated_count += 1
+    while True:
+        # 每批只获取 batch_size 个帖子
+        posts = db.query(models.Post).offset(offset).limit(batch_size).all()
+        if not posts:
+            break
+        
+        for post in posts:
+            update_post_hot_score(db, post.id)
+            updated_count += 1
+        
+        offset += batch_size
+        db.commit()  # 每批提交一次，避免长事务
+    
+    # ✅ 记录更新时间
+    _cache_state["last_full_update"] = datetime.utcnow()
     
     return updated_count
 
 
 def get_hot_posts(db: Session, limit: int = 50, offset: int = 0) -> list:
-    """获取热门帖子列表（按热度排序）"""
-    update_all_hot_scores(db)
+    """
+    获取热门帖子列表（按热度排序）
+    ✅ 优化：只在必要时更新热度（惰性更新）
+    """
+    # ✅ 惰性更新：30 分钟内只更新一次
+    update_all_hot_scores(db, force=False)
     
     posts = db.query(models.Post) \
              .order_by(desc(models.Post.hot_score)) \
@@ -309,7 +365,8 @@ def get_mixed_posts(db: Session, user_id: Optional[int] = None,
     """
     from app import crud
     
-    update_all_hot_scores(db)
+    # ✅ 惰性更新：30 分钟内只更新一次
+    update_all_hot_scores(db, force=False)
 
     # 获取用户的已读帖子 ID（如果提供了 user_id）
     read_post_ids = set()

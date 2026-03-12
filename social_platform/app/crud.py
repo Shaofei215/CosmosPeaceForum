@@ -12,7 +12,8 @@ from app import models, schemas
 
 def count_all_reposts(db: Session, post_id: int) -> int:
     """
-    递归统计所有转发（包括直接转发和间接转发）
+    统计所有转发（包括直接转发和间接转发）
+    ✅ 优化：单次查询 + 内存递归，解决 N+1 查询问题
     
     Args:
         db: 数据库会话
@@ -21,21 +22,28 @@ def count_all_reposts(db: Session, post_id: int) -> int:
     Returns:
         总转发数
     """
-    # 统计直接转发
-    direct_reposts = db.query(models.Post).filter(
-        models.Post.quote_from_id == post_id
-    ).count()
-    
-    # 递归统计间接转发
-    indirect_reposts = 0
-    direct_repost_posts = db.query(models.Post).filter(
-        models.Post.quote_from_id == post_id
+    # ✅ 一次性获取所有转发记录
+    all_quotes = db.query(models.Post).filter(
+        models.Post.post_type == 'quote'
     ).all()
     
-    for repost in direct_repost_posts:
-        indirect_reposts += count_all_reposts(db, repost.id)
+    # ✅ 构建转发关系图（内存中）
+    # quote_map[from_id] = [所有转发 from_id 的帖子 ID 列表]
+    quote_map = {}
+    for quote in all_quotes:
+        if quote.quote_from_id not in quote_map:
+            quote_map[quote.quote_from_id] = []
+        quote_map[quote.quote_from_id].append(quote.id)
     
-    return direct_reposts + indirect_reposts
+    # ✅ 递归计数（纯内存操作，无数据库查询）
+    def count_descendants(pid):
+        count = 0
+        if pid in quote_map:
+            for child_id in quote_map[pid]:
+                count += 1 + count_descendants(child_id)
+        return count
+    
+    return count_descendants(post_id)
 
 
 def create_user(db: Session, user: schemas.UserCreate) -> models.User:
@@ -241,83 +249,90 @@ def create_comment_with_repost(
     Returns:
         (评论对象，转发帖子对象)
     """
-    # 1. 创建评论
-    db_comment = models.Comment(
-        post_id=post_id,
-        author_id=author_id,
-        content=content
-    )
-    db.add(db_comment)
-    db.commit()
-    db.refresh(db_comment)
-    
-    # 2. 创建转发帖子
-    original_post = db.query(models.Post).filter(
-        models.Post.id == quote_from_id
-    ).first()
-    if not original_post:
-        db.rollback()
-        raise ValueError(f"原帖不存在：{quote_from_id}")
-    
-    # 追溯到最原始的帖子（小卡片应该显示原始帖子）
-    original_post_id = quote_from_id
-    current_post = original_post
-    while current_post.post_type == 'quote':
-        current_post = db.query(models.Post).filter(
-            models.Post.id == current_post.quote_from_id
+    try:
+        # 1. 检查原帖是否存在（提前验证）
+        original_post = db.query(models.Post).filter(
+            models.Post.id == quote_from_id
         ).first()
-        if current_post:
-            original_post_id = current_post.id
-        else:
-            break
-    
-    # 构建完整的正文内容（包括转发链）
-    full_content = build_repost_content(
-        db=db,
-        current_content=content,
-        quote_from_id=quote_from_id,
-        comment_id=db_comment.id
-    )
-    
-    db_post = models.Post(
-        author_id=author_id,
-        content=full_content,  # 完整的正文内容（包括转发链）
-        post_type="quote",
-        repost_type="comment",  # 评论并转发
-        quote_from_id=quote_from_id,
-        original_post_id=original_post_id,  # 指向原始帖子（用于小卡片）
-        comment_id=db_comment.id,
-        quote_comment=content  # 仅存储评论内容
-    )
-    db.add(db_post)
-    db.commit()
-    db.refresh(db_post)
-    
-    # 3. 创建通知：通知帖子作者
-    if original_post.author_id != author_id:
-        create_notification(
-            db=db,
-            user_id=original_post.author_id,
-            actor_id=author_id,
-            notification_type=models.NotificationType.COMMENT,
+        if not original_post:
+            raise ValueError(f"原帖不存在：{quote_from_id}")
+        
+        # 2. 创建评论（不 commit）
+        db_comment = models.Comment(
             post_id=post_id,
+            author_id=author_id,
+            content=content
+        )
+        db.add(db_comment)
+        db.flush()  # 获取 comment_id 但不提交
+        
+        # 3. 追溯到最原始的帖子（小卡片应该显示原始帖子）
+        original_post_id = quote_from_id
+        current_post = original_post
+        while current_post.post_type == 'quote':
+            current_post = db.query(models.Post).filter(
+                models.Post.id == current_post.quote_from_id
+            ).first()
+            if current_post:
+                original_post_id = current_post.id
+            else:
+                break
+        
+        # 4. 构建完整的正文内容（包括转发链）
+        full_content = build_repost_content(
+            db=db,
+            current_content=content,
+            quote_from_id=quote_from_id,
             comment_id=db_comment.id
         )
-        # 同时通知被转发
-        create_notification(
-            db=db,
-            user_id=original_post.author_id,
-            actor_id=author_id,
-            notification_type=models.NotificationType.QUOTE,
-            post_id=quote_from_id
+        
+        # 5. 创建转发帖子
+        db_post = models.Post(
+            author_id=author_id,
+            content=full_content,  # 完整的正文内容（包括转发链）
+            post_type="quote",
+            repost_type="comment",  # 评论并转发
+            quote_from_id=quote_from_id,
+            original_post_id=original_post_id,  # 指向原始帖子（用于小卡片）
+            comment_id=db_comment.id,
+            quote_comment=content  # 仅存储评论内容
         )
-    
-    # 4. 更新原帖热度
-    from app.hot_score import update_post_hot_score
-    update_post_hot_score(db, quote_from_id)
-    update_post_hot_score(db, post_id)
-    
-    return db_comment, db_post
+        db.add(db_post)
+        
+        # 6. 统一提交
+        db.commit()
+        db.refresh(db_comment)
+        db.refresh(db_post)
+        
+        # 7. 创建通知：通知帖子作者
+        if original_post.author_id != author_id:
+            create_notification(
+                db=db,
+                user_id=original_post.author_id,
+                actor_id=author_id,
+                notification_type=models.NotificationType.COMMENT,
+                post_id=post_id,
+                comment_id=db_comment.id
+            )
+            # 同时通知被转发
+            create_notification(
+                db=db,
+                user_id=original_post.author_id,
+                actor_id=author_id,
+                notification_type=models.NotificationType.QUOTE,
+                post_id=quote_from_id
+            )
+        
+        # 8. 更新原帖热度
+        from app.hot_score import update_post_hot_score
+        update_post_hot_score(db, quote_from_id)
+        update_post_hot_score(db, post_id)
+        
+        return db_comment, db_post
+        
+    except Exception as e:
+        db.rollback()
+        raise
 
 
 def create_reply_with_repost(
@@ -631,9 +646,11 @@ def build_repost_content(db: Session, current_content: str, quote_from_id: int,
         if not quoted_post:
             return content
         
-        # 如果被转发的帖子是原创帖，直接添加原帖作者
+        # 如果被转发的帖子是原创帖，不再添加到正文（前端会用小卡片展示）
+        # ✅ 修复：避免正文和小卡片重复展示原帖
         if quoted_post.post_type == 'original':
-            content += f"//@{quoted_post.author.username}: {quoted_post.content}"
+            # 不再添加原帖内容到正文，前端会用小卡片展示
+            pass  # 正文只包含转发评论，原帖内容在小卡片中展示
         
         # 如果被转发的帖子是转发帖，递归获取转发链
         elif quoted_post.post_type == 'quote':
@@ -644,15 +661,12 @@ def build_repost_content(db: Session, current_content: str, quote_from_id: int,
             # 递归构建上一级转发链
             parent_content = build_repost_content(
                 db=db,
-                current_content="",  # 不需要再添加内容
+                current_content="",
                 quote_from_id=quoted_post.quote_from_id,
                 comment_id=quoted_post.comment_id,
                 reply_id=quoted_post.reply_id,
                 is_reply=False
             )
-            # 去掉开头的 "。"
-            if parent_content.startswith("。"):
-                parent_content = parent_content[1:]
             content += parent_content
     
     return content
