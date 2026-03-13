@@ -701,13 +701,16 @@ def decide_node(state: AISessionState) -> Dict:
     thoughts = state["thoughts"]
     post_reflection = state["post_reflection"]
     posts = state.get("posts", [])
+    # ✅ 获取之前阶段产生的 actions（如通知处理）
+    previous_actions = state.get("actions", [])
     username = user_config.get("username", "Unknown")
     
     print(f"\n[决策] [{username}] 正在决策...")
     
     if not thoughts:
         print(f"[{username}] 没有思考结果，跳过决策")
-        return {"decisions": {"actions": [], "decide_to_post": False}}
+        # ✅ 保留之前的 actions（如通知处理）
+        return {"decisions": {"actions": previous_actions, "decide_to_post": False}}
     
     # 获取关注列表（简化版本，实际应该调用 API）
     following_list = []  # TODO: 从后端获取关注列表
@@ -891,16 +894,22 @@ def decide_node(state: AISessionState) -> Dict:
             else:
                 print(f"\n[决策] [{username}] ❌ 不发帖")
             
-            return {"decisions": {"actions": actions, "decide_to_post": decide_to_post}}
+            # ✅ 合并之前的 actions（如通知处理）和当前的 actions
+            all_actions = previous_actions + actions
+            print(f"\n[决策] [{username}] 合并后总行动数：{len(all_actions)} (通知处理：{len(previous_actions)}, 浏览决策：{len(actions)})")
+            
+            return {"decisions": {"actions": all_actions, "decide_to_post": decide_to_post}}
         
         print(f"[{username}] LLM 返回格式错误：{type(result)}")
-        return {"decisions": {"actions": [], "decide_to_post": False}}
+        # ✅ 错误情况下也保留之前的 actions
+        return {"decisions": {"actions": previous_actions, "decide_to_post": False}}
         
     except Exception as e:
         print(f"[{username}] LLM 决策失败：{e}")
         import traceback
         traceback.print_exc()
-        return {"decisions": {"actions": [], "decide_to_post": False}}
+        # ✅ 异常情况下也保留之前的 actions
+        return {"decisions": {"actions": previous_actions, "decide_to_post": False}}
 
 
 def generate_post_node(state: AISessionState) -> Dict:

@@ -20,6 +20,12 @@ httpx==0.28.1
 # 时间调度
 APScheduler==3.11.2
 
+# AI/LLM 相关
+langgraph==0.2.61
+langchain==0.3.18
+langchain-openai==0.3.5
+langchain-core==0.3.37
+
 # 工具库
 numpy==2.4.1
 pandas==2.3.3
