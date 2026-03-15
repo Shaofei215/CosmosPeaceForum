@@ -112,11 +112,25 @@ class SocialPlatformAPI:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def create_reply(self, comment_id: int, user_id: int, content: str) -> Dict:
-        """创建回复"""
+    def get_reply(self, reply_id: int) -> Dict:
+        """获取单个回复信息"""
+        url = f"{self.base_url}/replies/{reply_id}"
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                return {"success": True, "data": response.json()}
+            else:
+                return {"success": False, "error": f"HTTP {response.status_code}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def create_reply(self, comment_id: int, user_id: int, content: str, parent_reply_id: int = None) -> Dict:
+        """创建回复（支持楼中楼）"""
         url = f"{self.base_url}/comments/{comment_id}/replies"
         params = {"author_id": user_id}
         data = {"content": content}
+        if parent_reply_id is not None:
+            data["parent_reply_id"] = parent_reply_id
         try:
             response = requests.post(url, params=params, json=data, timeout=10)
             if response.status_code == 201:
@@ -701,13 +715,16 @@ def decide_node(state: AISessionState) -> Dict:
     thoughts = state["thoughts"]
     post_reflection = state["post_reflection"]
     posts = state.get("posts", [])
+    # ✅ 获取之前阶段产生的 actions（如通知处理）
+    previous_actions = state.get("actions", [])
     username = user_config.get("username", "Unknown")
     
     print(f"\n[决策] [{username}] 正在决策...")
     
     if not thoughts:
         print(f"[{username}] 没有思考结果，跳过决策")
-        return {"decisions": {"actions": [], "decide_to_post": False}}
+        # ✅ 保留之前的 actions（如通知处理）
+        return {"decisions": {"actions": previous_actions, "decide_to_post": False}}
     
     # 获取关注列表（简化版本，实际应该调用 API）
     following_list = []  # TODO: 从后端获取关注列表
@@ -891,16 +908,22 @@ def decide_node(state: AISessionState) -> Dict:
             else:
                 print(f"\n[决策] [{username}] ❌ 不发帖")
             
-            return {"decisions": {"actions": actions, "decide_to_post": decide_to_post}}
+            # ✅ 合并之前的 actions（如通知处理）和当前的 actions
+            all_actions = previous_actions + actions
+            print(f"\n[决策] [{username}] 合并后总行动数：{len(all_actions)} (通知处理：{len(previous_actions)}, 浏览决策：{len(actions)})")
+            
+            return {"decisions": {"actions": all_actions, "decide_to_post": decide_to_post}}
         
         print(f"[{username}] LLM 返回格式错误：{type(result)}")
-        return {"decisions": {"actions": [], "decide_to_post": False}}
+        # ✅ 错误情况下也保留之前的 actions
+        return {"decisions": {"actions": previous_actions, "decide_to_post": False}}
         
     except Exception as e:
         print(f"[{username}] LLM 决策失败：{e}")
         import traceback
         traceback.print_exc()
-        return {"decisions": {"actions": [], "decide_to_post": False}}
+        # ✅ 异常情况下也保留之前的 actions
+        return {"decisions": {"actions": previous_actions, "decide_to_post": False}}
 
 
 def generate_post_node(state: AISessionState) -> Dict:
@@ -1140,15 +1163,35 @@ def execute_actions_node(state: AISessionState) -> Dict:
                 print(f"       状态：❌ 失败 - {api_result.get('error', '未知错误')}")
                 
         elif action_type == "reply_to_reply":
-            # 暂时简化处理，回复回复也使用 create_reply
-            comment_id = action.get('comment_id', action.get('reply_id'))
+            reply_id = action.get('reply_id')
             content = action.get('content', '')
             print(f"\n   [{i}/{len(actions)}] 💬 回复回复")
-            print(f"       目标：评论 ID={comment_id}")
+            print(f"       目标：回复 ID={reply_id}")
             print(f"       内容：\"{content}\"")
             
-            # 调用 API
-            api_result = api.create_reply(comment_id, user_id, content)
+            # 1. 先查询回复信息，获取 comment_id 和 parent_reply_id
+            reply_info = api.get_reply(reply_id)
+            if not reply_info or not reply_info.get('success'):
+                print(f"       状态：❌ 失败 - 回复 ID={reply_id} 不存在")
+                result["success"] = False
+                results.append(result)
+                continue
+            
+            # 2. 获取该回复所属的评论 ID
+            comment_id = reply_info['data'].get('comment_id')
+            if not comment_id:
+                print(f"       状态：❌ 失败 - 无法获取评论 ID")
+                result["success"] = False
+                results.append(result)
+                continue
+            
+            # 3. 设置 parent_reply_id 为当前回复 ID（楼中楼）
+            parent_reply_id = reply_id
+            
+            print(f"       评论 ID={comment_id}, 父回复 ID={parent_reply_id}")
+            
+            # 4. 调用 API 创建回复（带 parent_reply_id）
+            api_result = api.create_reply(comment_id, user_id, content, parent_reply_id)
             if api_result["success"]:
                 result["success"] = True
                 success_count += 1
