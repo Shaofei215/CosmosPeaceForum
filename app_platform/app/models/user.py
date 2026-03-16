@@ -32,3 +32,8 @@ class User(Base):
     # 关联关系：用户发布的帖子
     # cascade="all, delete-orphan" 表示删除用户时自动删除其所有帖子
     posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")
+    
+    # 关联关系：用户的点赞记录
+    # back_populates 建立双向关联
+    # cascade 不设置，因为用户删除通过外键 ondelete 处理
+    likes = relationship("Like", back_populates="user")

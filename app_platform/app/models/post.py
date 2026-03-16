@@ -28,7 +28,16 @@ class Post(Base):
     
     # 创建时间，自动设置为当前 UTC 时间
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # 点赞计数，冗余存储以提高查询性能
+    # 默认值为 0，每次点赞/取消点赞时更新
+    like_count = Column(Integer, default=0, nullable=False)
 
     # 关联关系：帖子的作者
     # back_populates 建立双向关联
     author = relationship("User", back_populates="posts")
+    
+    # 关联关系：帖子的点赞记录
+    # back_populates 建立双向关联
+    # cascade 不设置，因为帖子删除通过外键 ondelete 处理
+    likes = relationship("Like", back_populates="post")

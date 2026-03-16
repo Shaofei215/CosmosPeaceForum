@@ -2,12 +2,13 @@
 # 处理帖子相关的 API 请求
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.api.deps import get_db
 from app.models.post import Post
 from app.models.user import User
-from app.schemas.post import PostCreate, PostResponse, PostUpdate
+from app.models.like import Like
+from app.schemas.post import PostCreate, PostResponse, PostUpdate, PostResponseWithLikeStatus
 
 # 创建 API 路由器
 router = APIRouter()
@@ -54,25 +55,53 @@ def get_posts(
     return posts
 
 
-@router.get("/{post_id}", response_model=PostResponse)
-def get_post(post_id: int, db: Session = Depends(get_db)):
+@router.get("/{post_id}", response_model=PostResponseWithLikeStatus)
+def get_post(
+    post_id: int,
+    user_id: Optional[int] = Query(None, description="当前用户 ID（可选，用于返回点赞状态）"),
+    db: Session = Depends(get_db)
+):
     """
     获取指定帖子的详细信息
     
     Args:
-        post_id: 帖子 ID
-        db: 数据库会话
+        post_id: 帖子 ID（路径参数）
+        user_id: 当前用户 ID（查询参数，可选）
+        db: 数据库会话（依赖注入）
     
     Returns:
-        帖子详细信息
+        PostResponseWithLikeStatus: 帖子详细信息及当前用户点赞状态
     
     Raises:
         HTTPException: 帖子不存在时抛出 404 错误
+    
+    Note:
+        - 如果提供 user_id，响应中会包含 is_liked_by_current_user 字段
+        - 如果不提供 user_id，is_liked_by_current_user 默认为 False
     """
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="帖子不存在")
-    return post
+    
+    # 如果提供了 user_id，查询该用户是否已点赞
+    is_liked = False
+    if user_id is not None:
+        like = db.query(Like).filter(
+            Like.user_id == user_id,
+            Like.post_id == post_id
+        ).first()
+        is_liked = like is not None
+    
+    # 构建响应数据（包含点赞状态）
+    return PostResponseWithLikeStatus(
+        id=post.id,
+        author_id=post.author_id,
+        title=post.title,
+        content=post.content,
+        created_at=post.created_at,
+        like_count=post.like_count,
+        is_liked_by_current_user=is_liked
+    )
 
 
 @router.put("/{post_id}", response_model=PostResponse)

@@ -6,6 +6,7 @@
 - [基础信息](#基础信息)
 - [用户接口](#用户接口)
 - [帖子接口](#帖子接口)
+- [点赞接口](#点赞接口)
 - [信息流接口](#信息流接口)
 - [错误处理](#错误处理)
 
@@ -322,12 +323,14 @@ DELETE /api/v1/users/1
 |------|------|------|------|
 | title | string | 否 | 帖子标题，最多 200 个字符 |
 | content | string | 是 | 帖子内容，至少 1 个字符 |
+| author_id | integer | 是 | 作者用户 ID |
 
 **请求示例：**
 ```json
 {
   "title": "今天的空间站",
-  "content": "今天空间站发生了很多有趣的事情..."
+  "content": "今天空间站发生了很多有趣的事情...",
+  "author_id": 1
 }
 ```
 
@@ -338,7 +341,8 @@ DELETE /api/v1/users/1
   "author_id": 1,
   "title": "今天的空间站",
   "content": "今天空间站发生了很多有趣的事情...",
-  "created_at": "2026-03-16T10:00:00Z"
+  "created_at": "2026-03-16T10:00:00Z",
+  "like_count": 0
 }
 ```
 
@@ -373,14 +377,16 @@ GET /api/v1/posts/?skip=0&limit=10
     "author_id": 1,
     "title": "最新帖子",
     "content": "这是最新的内容",
-    "created_at": "2026-03-16T12:00:00Z"
+    "created_at": "2026-03-16T12:00:00Z",
+    "like_count": 10
   },
   {
     "id": 4,
     "author_id": 2,
     "title": null,
     "content": "没有标题的帖子",
-    "created_at": "2026-03-16T11:00:00Z"
+    "created_at": "2026-03-16T11:00:00Z",
+    "like_count": 5
   }
 ]
 ```
@@ -414,7 +420,8 @@ GET /api/v1/posts/1
   "author_id": 1,
   "title": "今天的空间站",
   "content": "今天空间站发生了很多有趣的事情...",
-  "created_at": "2026-03-16T10:00:00Z"
+  "created_at": "2026-03-16T10:00:00Z",
+  "like_count": 0
 }
 ```
 
@@ -460,7 +467,8 @@ GET /api/v1/posts/1
   "author_id": 1,
   "title": "更新后的标题",
   "content": "更新后的内容",
-  "created_at": "2026-03-16T10:00:00Z"
+  "created_at": "2026-03-16T10:00:00Z",
+  "like_count": 0
 }
 ```
 
@@ -536,20 +544,160 @@ GET /api/v1/posts/user/1?skip=0&limit=10
     "author_id": 1,
     "title": "帖子 1",
     "content": "内容 1",
-    "created_at": "2026-03-16T10:00:00Z"
+    "created_at": "2026-03-16T10:00:00Z",
+    "like_count": 3
   },
   {
     "id": 2,
     "author_id": 1,
     "title": "帖子 2",
     "content": "内容 2",
-    "created_at": "2026-03-16T09:00:00Z"
+    "created_at": "2026-03-16T09:00:00Z",
+    "like_count": 7
   }
 ]
 ```
 
 **错误响应：**
 - 404 Not Found：用户不存在
+
+---
+
+## 点赞接口
+
+### 1. 点赞/取消点赞
+
+切换当前用户对指定帖子的点赞状态。如果未点赞则点赞，如果已点赞则取消点赞。
+
+**接口信息：**
+- 路径：`POST /api/v1/posts/{post_id}/like`
+- 方法：POST
+- 认证：不需要
+
+**路径参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| post_id | integer | 是 | 帖子 ID |
+
+**查询参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| user_id | integer | 是 | 当前用户 ID |
+
+**请求示例：**
+```
+POST /api/v1/posts/1/like?user_id=2
+```
+
+**响应示例（200 OK）- 点赞成功：**
+```json
+{
+  "post_id": 1,
+  "like_count": 1,
+  "is_liked": true
+}
+```
+
+**响应示例（200 OK）- 取消点赞成功：**
+```json
+{
+  "post_id": 1,
+  "like_count": 0,
+  "is_liked": false
+}
+```
+
+**错误响应：**
+- 404 Not Found：帖子不存在
+
+---
+
+### 2. 获取点赞状态
+
+查询指定用户对指定帖子的点赞状态和帖子的总点赞数。
+
+**接口信息：**
+- 路径：`GET /api/v1/posts/{post_id}/like-status`
+- 方法：GET
+- 认证：不需要
+
+**路径参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| post_id | integer | 是 | 帖子 ID |
+
+**查询参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| user_id | integer | 是 | 当前用户 ID |
+
+**请求示例：**
+```
+GET /api/v1/posts/1/like-status?user_id=2
+```
+
+**响应示例（200 OK）：**
+```json
+{
+  "is_liked": true,
+  "like_count": 5
+}
+```
+
+**错误响应：**
+- 404 Not Found：帖子不存在
+
+---
+
+### 3. 获取帖子详情（带点赞状态）
+
+获取指定帖子的详细信息，包括当前用户是否已点赞该帖子。
+
+**接口信息：**
+- 路径：`GET /api/v1/posts/{post_id}`
+- 方法：GET
+- 认证：不需要
+
+**路径参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| post_id | integer | 是 | 帖子 ID |
+
+**查询参数：**
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| user_id | integer | 否 | null | 当前用户 ID（用于返回点赞状态） |
+
+**请求示例：**
+```
+GET /api/v1/posts/1?user_id=2
+```
+
+**响应示例（200 OK）：**
+```json
+{
+  "id": 1,
+  "author_id": 3,
+  "title": "测试帖子",
+  "content": "这是一个用于测试点赞功能的帖子内容",
+  "created_at": "2026-03-16T22:02:50.196678",
+  "like_count": 2,
+  "is_liked_by_current_user": true
+}
+```
+
+**说明：**
+- 如果提供 `user_id` 参数，响应中会包含 `is_liked_by_current_user` 字段
+- 如果不提供 `user_id` 参数，`is_liked_by_current_user` 默认为 `false`
+
+**错误响应：**
+- 404 Not Found：帖子不存在
 
 ---
 
@@ -584,14 +732,16 @@ GET /api/v1/feeds/feed/all?skip=0&limit=20
     "author_id": 1,
     "title": "热门帖子",
     "content": "这是热门内容",
-    "created_at": "2026-03-16T12:00:00Z"
+    "created_at": "2026-03-16T12:00:00Z",
+    "like_count": 100
   },
   {
     "id": 9,
     "author_id": 2,
     "title": null,
     "content": "另一条内容",
-    "created_at": "2026-03-16T11:30:00Z"
+    "created_at": "2026-03-16T11:30:00Z",
+    "like_count": 50
   }
 ]
 ```
@@ -633,7 +783,8 @@ GET /api/v1/feeds/feed/user/1?skip=0&limit=20
     "author_id": 1,
     "title": "我的帖子",
     "content": "这是我的内容",
-    "created_at": "2026-03-16T12:00:00Z"
+    "created_at": "2026-03-16T12:00:00Z",
+    "like_count": 25
   }
 ]
 ```
@@ -672,6 +823,7 @@ GET /api/v1/feeds/feed/user/1?skip=0&limit=20
 | 用户名已存在 | 400 | 创建用户时用户名已被使用 |
 | 用户不存在 | 404 | 请求的用户 ID 或用户名不存在 |
 | 帖子不存在 | 404 | 请求的帖子 ID 不存在 |
+| 重复点赞 | 400 | 同一用户对同一帖子重复点赞（理论上不会发生） |
 
 ---
 
@@ -699,7 +851,19 @@ curl -X POST "http://localhost:8000/api/v1/posts/" \
 curl "http://localhost:8000/api/v1/posts/"
 ```
 
-### 4. 查看 API 文档
+### 4. 点赞帖子
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/posts/1/like?user_id=2"
+```
+
+### 5. 查看帖子详情（带点赞状态）
+
+```bash
+curl "http://localhost:8000/api/v1/posts/1?user_id=2"
+```
+
+### 6. 查看 API 文档
 
 访问交互式 API 文档：
 ```
@@ -725,6 +889,14 @@ http://localhost:8000/docs
 - ✅ 信息流功能
 - ✅ 基础错误处理
 
+### Alpha-1.3.0-feat (2026-03-17)
+- ✅ 新增点赞功能
+  - 点赞/取消点赞切换接口
+  - 点赞状态查询接口
+  - 帖子详情扩展点赞状态
+  - 双写一致性保障
+  - 冗余计数优化性能
+
 ---
 
-*文档生成时间：2026-03-16*
+*文档生成时间：2026-03-17*

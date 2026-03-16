@@ -22,7 +22,8 @@ class PostCreate(PostBase):
     创建帖子时的请求模型
     继承 PostBase，用于接收帖子创建请求
     """
-    pass
+    # 作者 ID，必填
+    author_id: int
 
 
 class PostUpdate(BaseModel):
@@ -51,6 +52,19 @@ class PostResponse(PostBase):
     # 创建时间
     created_at: datetime
     
+    # 点赞计数
+    like_count: int = 0
+    
     # 配置：允许从 ORM 模型读取数据
     class Config:
         from_attributes = True
+
+
+class PostResponseWithLikeStatus(PostResponse):
+    """
+    带点赞状态的帖子响应模型
+    继承 PostResponse，增加当前用户点赞状态字段
+    用于需要显示当前用户是否已点赞的场景
+    """
+    # 当前用户是否已点赞该帖子
+    is_liked_by_current_user: bool = False
