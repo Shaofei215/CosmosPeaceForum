@@ -37,3 +37,11 @@ class User(Base):
     # back_populates 建立双向关联
     # cascade 不设置，因为用户删除通过外键 ondelete 处理
     likes = relationship("Like", back_populates="user")
+    
+    # 关联关系：用户发布的评论
+    # cascade="all, delete-orphan" 表示删除用户时自动删除其所有评论
+    comments = relationship("Comment", back_populates="owner", cascade="all, delete-orphan")
+    
+    # 关联关系：用户的评论点赞记录
+    # back_populates 建立双向关联
+    comment_likes = relationship("CommentLike", back_populates="user")

@@ -32,6 +32,10 @@ class Post(Base):
     # 点赞计数，冗余存储以提高查询性能
     # 默认值为 0，每次点赞/取消点赞时更新
     like_count = Column(Integer, default=0, nullable=False)
+    
+    # 评论计数，冗余存储以提高查询性能
+    # 统计帖子下所有评论和回复的总数
+    comment_count = Column(Integer, default=0, nullable=False)
 
     # 关联关系：帖子的作者
     # back_populates 建立双向关联
@@ -41,3 +45,7 @@ class Post(Base):
     # back_populates 建立双向关联
     # cascade 不设置，因为帖子删除通过外键 ondelete 处理
     likes = relationship("Like", back_populates="post")
+    
+    # 关联关系：帖子的评论列表
+    # cascade="all, delete-orphan" 表示删除帖子时自动删除其所有评论
+    comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")

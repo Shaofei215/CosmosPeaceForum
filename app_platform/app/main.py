@@ -5,7 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.db.session import engine, Base
-from app.api.routers import users, posts, feeds, like
+
+# 导入所有模型以确保 SQLAlchemy 正确注册关系
+# 必须在创建表之前导入所有模型
+from app.models import User, Post, Like, Comment, CommentLike
+
+from app.api.routers import users, posts, feeds, like, comment
 
 # 获取应用配置
 settings = get_settings()
@@ -40,6 +45,7 @@ app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=
 app.include_router(posts.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["posts"])
 app.include_router(feeds.router, prefix=f"{settings.API_V1_PREFIX}/feeds", tags=["feeds"])
 app.include_router(like.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["likes"])
+app.include_router(comment.router, prefix=f"{settings.API_V1_PREFIX}", tags=["comments"])
 
 
 @app.get("/")
