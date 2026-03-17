@@ -2,7 +2,10 @@
 # 定义帖子数据的请求和响应格式
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
+
+from app.schemas.user import UserResponse
+from app.schemas.comment import CommentTreeResponse
 
 
 class PostBase(BaseModel):

@@ -1158,7 +1158,7 @@ GET /api/v1/posts/1?user_id=2
 
 ### 1. 获取全局信息流
 
-获取所有用户的公开帖子（按创建时间倒序）。
+获取所有用户的公开帖子（按创建时间倒序）。返回完整的帖子信息，包括作者、点赞状态、预览评论和分页信息。
 
 **接口信息：**
 
@@ -1168,45 +1168,107 @@ GET /api/v1/posts/1?user_id=2
 
 **查询参数：**
 
-| 参数    | 类型      | 必填 | 默认值 | 说明            |
-| ----- | ------- | -- | --- | ------------- |
-| skip  | integer | 否  | 0   | 跳过前 N 条记录     |
-| limit | integer | 否  | 20  | 返回记录数量，最大 100 |
+| 参数             | 类型      | 必填 | 默认值  | 说明                     |
+| ---------------- | --------- | ---- | ------- | ------------------------ |
+| page             | integer   | 否   | 1       | 页码，从 1 开始          |
+| page_size        | integer   | 否   | 20      | 每页记录数，最大 100     |
+| current_user_id  | integer   | 否   | null    | 当前用户 ID（用于点赞状态） |
 
 **请求示例：**
 
 ```
-GET /api/v1/feeds/feed/all?skip=0&limit=20
+GET /api/v1/feeds/feed/all?page=1&page_size=20&current_user_id=123
 ```
 
 **响应示例（200 OK）：**
 
 ```json
-[
-  {
-    "id": 10,
-    "author_id": 1,
-    "title": "热门帖子",
-    "content": "这是热门内容",
-    "created_at": "2026-03-16T12:00:00Z",
-    "like_count": 100
-  },
-  {
-    "id": 9,
-    "author_id": 2,
-    "title": null,
-    "content": "另一条内容",
-    "created_at": "2026-03-16T11:30:00Z",
-    "like_count": 50
+{
+  "code": 200,
+  "message": "success",
+  "data": [
+    {
+      "id": 1,
+      "title": "今天天气真好",
+      "content": "适合出去走走！",
+      "created_at": "2026-03-17T10:00:00",
+      "author_id": 1,
+      "author_name": "三月七",
+      "author_avatar": "https://example.com/avatar.jpg",
+      "like_count": 15,
+      "comment_count": 8,
+      "is_liked": true,
+      "has_more_comments": true,
+      "preview_comments": [
+        {
+          "id": 1,
+          "content": "确实不错！",
+          "created_at": "2026-03-17T11:00:00",
+          "owner_id": 2,
+          "owner_name": "丹恒",
+          "owner_avatar": "https://example.com/avatar2.jpg",
+          "like_count": 3
+        },
+        {
+          "id": 2,
+          "content": "我也觉得！",
+          "created_at": "2026-03-17T12:00:00",
+          "owner_id": 3,
+          "owner_name": "姬子",
+          "owner_avatar": "https://example.com/avatar3.jpg",
+          "like_count": 2
+        }
+      ]
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total": 100,
+    "total_pages": 5,
+    "has_next": true,
+    "has_prev": false
   }
-]
+}
 ```
+
+**响应字段说明：**
+
+| 字段                | 类型    | 说明                           |
+| ------------------- | ------- | ------------------------------ |
+| code                | integer | 状态码，200 表示成功           |
+| message             | string  | 消息，"success" 表示成功       |
+| data                | array   | 帖子列表（PostFeedItem）       |
+| pagination          | object  | 分页信息                       |
+| pagination.page     | integer | 当前页码                       |
+| pagination.page_size| integer | 每页记录数                     |
+| pagination.total    | integer | 总记录数                       |
+| pagination.total_pages | integer | 总页数                      |
+| pagination.has_next | boolean | 是否有下一页                   |
+| pagination.has_prev | boolean | 是否有上一页                   |
+
+**PostFeedItem 字段：**
+
+| 字段                | 类型    | 说明                           |
+| ------------------- | ------- | ------------------------------ |
+| id                  | integer | 帖子 ID                        |
+| title               | string  | 帖子标题（可能为 null）        |
+| content             | string  | 帖子内容                       |
+| created_at          | string  | 创建时间（ISO 8601 格式）      |
+| author_id           | integer | 作者 ID                        |
+| author_name         | string  | 作者用户名                     |
+| author_avatar       | string  | 作者头像 URL（可能为 null）    |
+| like_count          | integer | 点赞数                         |
+| comment_count       | integer | 评论总数                       |
+| is_liked            | boolean | 当前用户是否已点赞             |
+| has_more_comments   | boolean | 是否有更多评论（>2条）         |
+| preview_comments    | array   | 预览评论列表（最多2条）        |
 
 ***
 
 ### 2. 获取用户帖子流
 
-获取指定用户的帖子流（按创建时间倒序）。
+获取指定用户的帖子流（按创建时间倒序）。响应格式与全局信息流相同。
 
 **接口信息：**
 
@@ -1222,31 +1284,19 @@ GET /api/v1/feeds/feed/all?skip=0&limit=20
 
 **查询参数：**
 
-| 参数    | 类型      | 必填 | 默认值 | 说明            |
-| ----- | ------- | -- | --- | ------------- |
-| skip  | integer | 否  | 0   | 跳过前 N 条记录     |
-| limit | integer | 否  | 20  | 返回记录数量，最大 100 |
+| 参数             | 类型      | 必填 | 默认值  | 说明                     |
+| ---------------- | --------- | ---- | ------- | ------------------------ |
+| page             | integer   | 否   | 1       | 页码，从 1 开始          |
+| page_size        | integer   | 否   | 20      | 每页记录数，最大 100     |
+| current_user_id  | integer   | 否   | null    | 当前用户 ID（用于点赞状态） |
 
 **请求示例：**
 
 ```
-GET /api/v1/feeds/feed/user/1?skip=0&limit=20
+GET /api/v1/feeds/feed/user/1?page=1&page_size=20&current_user_id=123
 ```
 
-**响应示例（200 OK）：**
-
-```json
-[
-  {
-    "id": 5,
-    "author_id": 1,
-    "title": "我的帖子",
-    "content": "这是我的内容",
-    "created_at": "2026-03-16T12:00:00Z",
-    "like_count": 25
-  }
-]
-```
+**响应示例（200 OK）：** 同全局信息流
 
 **错误响应：**
 
@@ -1402,6 +1452,18 @@ http://localhost:8000/docs
   - 三重冗余计数（like\_count, reply\_count, comment\_count）
   - 递归更新祖先回复计数
   - 事务保证多表联动一致性
+
+### Alpha-v1.5.0-feat (2026-03-17 8:30)
+
+- ✅ 重构并增强信息流功能
+  - 标准化 API 响应结构（code, message, data, pagination）
+  - 分页功能（page, page_size, total, total_pages, has_next, has_prev）
+  - 帖子作者信息完整返回（author_id, author_name, author_avatar）
+  - 当前用户点赞状态（is_liked）
+  - 预览评论功能（每个帖子最多2条一级评论）
+  - 是否有更多评论标识（has_more_comments）
+  - 批量查询优化（避免 N+1 查询问题）
+  - 应用层分组实现预览评论限制
 
 ***
 
