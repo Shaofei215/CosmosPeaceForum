@@ -1,27 +1,8 @@
 # Feed 信息流数据验证模型
 # 定义信息流相关的请求和响应格式
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field
-
-
-class CommentPreviewItem(BaseModel):
-    """
-    评论预览项
-    
-    用于在信息流中展示评论的精简信息，
-    包含评论内容、作者信息和基本统计
-    """
-    id: int                      # 评论ID
-    content: str                 # 评论内容
-    created_at: datetime         # 创建时间
-    owner_id: int                # 作者ID
-    owner_name: str              # 作者用户名
-    owner_avatar: Optional[str] = None  # 作者头像（可选）
-    like_count: int = 0          # 点赞数
-    
-    class Config:
-        from_attributes = True
+from typing import Optional
+from pydantic import BaseModel
 
 
 class PostFeedItem(BaseModel):
@@ -42,8 +23,6 @@ class PostFeedItem(BaseModel):
         like_count: 点赞数
         comment_count: 评论总数
         is_liked: 当前用户是否已点赞
-        has_more_comments: 是否有更多评论（comment_count > 2）
-        preview_comments: 预览评论列表（最多2条一级评论）
     """
     # 基础字段
     id: int
@@ -62,10 +41,6 @@ class PostFeedItem(BaseModel):
     
     # 状态字段
     is_liked: bool = False
-    has_more_comments: bool = False
-    
-    # 预览评论
-    preview_comments: List[CommentPreviewItem] = []
     
     class Config:
         from_attributes = True

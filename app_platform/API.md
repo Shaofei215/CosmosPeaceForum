@@ -1158,7 +1158,7 @@ GET /api/v1/posts/1?user_id=2
 
 ### 1. 获取全局信息流
 
-获取所有用户的公开帖子（按创建时间倒序）。返回完整的帖子信息，包括作者、点赞状态、预览评论和分页信息。
+获取所有用户的公开帖子（按创建时间倒序）。返回完整的帖子信息，包括作者、点赞状态和分页信息。
 
 **接口信息：**
 
@@ -1197,28 +1197,7 @@ GET /api/v1/feeds/feed/all?page=1&page_size=20&current_user_id=123
       "author_avatar": "https://example.com/avatar.jpg",
       "like_count": 15,
       "comment_count": 8,
-      "is_liked": true,
-      "has_more_comments": true,
-      "preview_comments": [
-        {
-          "id": 1,
-          "content": "确实不错！",
-          "created_at": "2026-03-17T11:00:00",
-          "owner_id": 2,
-          "owner_name": "丹恒",
-          "owner_avatar": "https://example.com/avatar2.jpg",
-          "like_count": 3
-        },
-        {
-          "id": 2,
-          "content": "我也觉得！",
-          "created_at": "2026-03-17T12:00:00",
-          "owner_id": 3,
-          "owner_name": "姬子",
-          "owner_avatar": "https://example.com/avatar3.jpg",
-          "like_count": 2
-        }
-      ]
+      "is_liked": true
     }
   ],
   "pagination": {
@@ -1261,8 +1240,6 @@ GET /api/v1/feeds/feed/all?page=1&page_size=20&current_user_id=123
 | like_count          | integer | 点赞数                         |
 | comment_count       | integer | 评论总数                       |
 | is_liked            | boolean | 当前用户是否已点赞             |
-| has_more_comments   | boolean | 是否有更多评论（>2条）         |
-| preview_comments    | array   | 预览评论列表（最多2条）        |
 
 ***
 
@@ -1464,6 +1441,14 @@ http://localhost:8000/docs
   - 是否有更多评论标识（has_more_comments）
   - 批量查询优化（避免 N+1 查询问题）
   - 应用层分组实现预览评论限制
+
+### Alpha-v1.5.1-chore (2026-03-17 22:00)
+
+- ✅ 移除评论预览功能
+  - 移除 `preview_comments` 字段
+  - 移除 `has_more_comments` 字段
+  - 简化 Feed 接口响应结构
+  - 评论详情通过独立接口获取
 
 ***
 
