@@ -181,8 +181,9 @@ def get_comment_tree(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.post("/comments/{comment_id}/like", response_model=CommentLikeToggleResponse)
+@router.post("/{post_id}/comments/{comment_id}/like", response_model=CommentLikeToggleResponse)
 def toggle_comment_like(
+    post_id: int,
     comment_id: int,
     user_id: int = Query(..., description="当前用户 ID"),
     db: Session = Depends(get_db)
@@ -232,8 +233,9 @@ def toggle_comment_like(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/comments/{comment_id}/like-status")
+@router.get("/{post_id}/comments/{comment_id}/like-status")
 def get_comment_like_status(
+    post_id: int,
     comment_id: int,
     user_id: int = Query(..., description="当前用户 ID"),
     db: Session = Depends(get_db)
@@ -281,8 +283,9 @@ def get_comment_like_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/comments/{comment_id}", response_model=CommentResponse)
+@router.get("/{post_id}/comments/{comment_id}", response_model=CommentResponse)
 def get_comment_by_id(
+    post_id: int,
     comment_id: int,
     user_id: Optional[int] = Query(None, description="当前用户 ID（可选，用于判断点赞状态）"),
     db: Session = Depends(get_db)
@@ -335,8 +338,9 @@ def get_comment_by_id(
     return comment
 
 
-@router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{post_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_comment(
+    post_id: int,
     comment_id: int,
     user_id: int = Query(..., description="当前用户 ID"),
     db: Session = Depends(get_db)

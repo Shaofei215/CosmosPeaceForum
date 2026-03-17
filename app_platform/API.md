@@ -815,7 +815,7 @@ GET /api/v1/posts/1/comments?user_id=123&skip=0&limit=20
 
 **接口信息：**
 
-- 路径：`GET /api/v1/comments/{comment_id}`
+- 路径：`GET /api/v1/posts/{post_id}/comments/{comment_id}`
 - 方法：GET
 - 认证：不需要
 
@@ -823,6 +823,7 @@ GET /api/v1/posts/1/comments?user_id=123&skip=0&limit=20
 
 | 参数          | 类型      | 必填 | 说明    |
 | ----------- | ------- | -- | ----- |
+| post\_id | integer | 是  | 帖子 ID |
 | comment\_id | integer | 是  | 评论 ID |
 
 **查询参数：**
@@ -834,7 +835,7 @@ GET /api/v1/posts/1/comments?user_id=123&skip=0&limit=20
 **请求示例：**
 
 ```
-GET /api/v1/comments/1?user_id=123
+GET /api/v1/posts/1/comments/1?user_id=123
 ```
 
 **响应示例（200 OK）：**
@@ -872,7 +873,7 @@ GET /api/v1/comments/1?user_id=123
 
 **接口信息：**
 
-- 路径：`DELETE /api/v1/comments/{comment_id}`
+- 路径：`DELETE /api/v1/posts/{post_id}/comments/{comment_id}`
 - 方法：DELETE
 - 认证：不需要
 
@@ -880,6 +881,7 @@ GET /api/v1/comments/1?user_id=123
 
 | 参数          | 类型      | 必填 | 说明    |
 | ----------- | ------- | -- | ----- |
+| post\_id | integer | 是  | 帖子 ID |
 | comment\_id | integer | 是  | 评论 ID |
 
 **查询参数：**
@@ -891,7 +893,7 @@ GET /api/v1/comments/1?user_id=123
 **请求示例：**
 
 ```
-DELETE /api/v1/comments/1?user_id=123
+DELETE /api/v1/posts/1/comments/1?user_id=123
 ```
 
 **响应示例（204 No Content）：**
@@ -913,7 +915,7 @@ DELETE /api/v1/comments/1?user_id=123
 
 **接口信息：**
 
-- 路径：`POST /api/v1/comments/{comment_id}/like`
+- 路径：`POST /api/v1/posts/{post_id}/comments/{comment_id}/like`
 - 方法：POST
 - 认证：不需要
 
@@ -921,6 +923,7 @@ DELETE /api/v1/comments/1?user_id=123
 
 | 参数          | 类型      | 必填 | 说明    |
 | ----------- | ------- | -- | ----- |
+| post\_id | integer | 是  | 帖子 ID |
 | comment\_id | integer | 是  | 评论 ID |
 
 **查询参数：**
@@ -932,7 +935,7 @@ DELETE /api/v1/comments/1?user_id=123
 **请求示例：**
 
 ```
-POST /api/v1/comments/1/like?user_id=123
+POST /api/v1/posts/1/comments/1/like?user_id=123
 ```
 
 **响应示例（200 OK）- 点赞成功：**
@@ -965,7 +968,7 @@ POST /api/v1/comments/1/like?user_id=123
 
 **接口信息：**
 
-- 路径：`GET /api/v1/comments/{comment_id}/like-status`
+- 路径：`GET /api/v1/posts/{post_id}/comments/{comment_id}/like-status`
 - 方法：GET
 - 认证：不需要
 
@@ -973,6 +976,7 @@ POST /api/v1/comments/1/like?user_id=123
 
 | 参数          | 类型      | 必填 | 说明    |
 | ----------- | ------- | -- | ----- |
+| post\_id | integer | 是  | 帖子 ID |
 | comment\_id | integer | 是  | 评论 ID |
 
 **查询参数：**
@@ -984,7 +988,7 @@ POST /api/v1/comments/1/like?user_id=123
 **请求示例：**
 
 ```
-GET /api/v1/comments/1/like-status?user_id=123
+GET /api/v1/posts/1/comments/1/like-status?user_id=123
 ```
 
 **响应示例（200 OK）：**
@@ -1379,7 +1383,7 @@ curl "http://localhost:8000/api/v1/posts/1/comments?user_id=2"
 ### 9. 点赞评论
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/comments/1/like?user_id=2"
+curl -X POST "http://localhost:8000/api/v1/posts/1/comments/1/like?user_id=2"
 ```
 
 ### 10. 查看 API 文档
@@ -1449,6 +1453,20 @@ http://localhost:8000/docs
   - 移除 `has_more_comments` 字段
   - 简化 Feed 接口响应结构
   - 评论详情通过独立接口获取
+
+### Alpha-v1.5.2-fix (2026-03-17 22:20)
+
+- ✅ 修复评论接口路由路径
+  - 统一评论相关接口路径格式为 `/api/v1/posts/{post_id}/comments/{comment_id}/...`
+  - 更新接口路径：
+    - 获取评论详情：`GET /api/v1/posts/{post_id}/comments/{comment_id}`
+    - 删除评论：`DELETE /api/v1/posts/{post_id}/comments/{comment_id}`
+    - 评论点赞：`POST /api/v1/posts/{post_id}/comments/{comment_id}/like`
+    - 获取评论点赞状态：`GET /api/v1/posts/{post_id}/comments/{comment_id}/like-status`
+  - 修复路由注册前缀：`/api/v1` → `/api/v1/posts`
+  - 更新相关函数签名，添加 `post_id` 路径参数
+  - 同步更新 API 文档和开发文档中的接口路径说明
+  - 确保接口路径与 RESTful 设计规范一致
 
 ***
 

@@ -74,10 +74,10 @@
 **更改说明**: 新建评论路由控制器
 - `POST /posts/{post_id}/comments`: 创建评论/回复（201 Created）
 - `GET /posts/{post_id}/comments`: 获取评论树（200 OK）
-- `POST /comments/{comment_id}/like`: 点赞/取消点赞（200 OK）
-- `GET /comments/{comment_id}/like-status`: 获取点赞状态（200 OK）
-- `GET /comments/{comment_id}`: 获取评论详情（200 OK）
-- `DELETE /comments/{comment_id}`: 删除评论（204 No Content）
+- `POST /posts/{post_id}/comments/{comment_id}/like`: 点赞/取消点赞（200 OK）
+- `GET /posts/{post_id}/comments/{comment_id}/like-status`: 获取点赞状态（200 OK）
+- `GET /posts/{post_id}/comments/{comment_id}`: 获取评论详情（200 OK）
+- `DELETE /posts/{post_id}/comments/{comment_id}`: 删除评论（204 No Content）
 
 #### `app/models/__init__.py`
 **更改说明**: 新建模型包初始化文件
@@ -99,7 +99,7 @@
 #### `app/main.py`
 **更改说明**: 注册评论路由和模型导入
 - 导入所有模型以确保 SQLAlchemy 正确注册关系
-- 注册路由：`app.include_router(comment.router, prefix=f"{settings.API_V1_PREFIX}", tags=["comments"])`
+- 注册路由：`app.include_router(comment.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["comments"])`
 
 ---
 
@@ -111,10 +111,10 @@
 |------|------|------|--------|
 | `/api/v1/posts/{post_id}/comments` | POST | `user_id` (query, 必填), `content`, `parent_id` (可选) | `CommentResponse` |
 | `/api/v1/posts/{post_id}/comments` | GET | `user_id` (query, 可选), `skip`, `limit` | `CommentListResponse` |
-| `/api/v1/comments/{comment_id}/like` | POST | `user_id` (query, 必填) | `CommentLikeToggleResponse` |
-| `/api/v1/comments/{comment_id}/like-status` | GET | `user_id` (query, 必填) | `{is_liked, like_count}` |
-| `/api/v1/comments/{comment_id}` | GET | `user_id` (query, 可选) | `CommentResponse` |
-| `/api/v1/comments/{comment_id}` | DELETE | `user_id` (query, 必填) | 204 No Content |
+| `/api/v1/posts/{post_id}/comments/{comment_id}/like` | POST | `user_id` (query, 必填) | `CommentLikeToggleResponse` |
+| `/api/v1/posts/{post_id}/comments/{comment_id}/like-status` | GET | `user_id` (query, 必填) | `{is_liked, like_count}` |
+| `/api/v1/posts/{post_id}/comments/{comment_id}` | GET | `user_id` (query, 可选) | `CommentResponse` |
+| `/api/v1/posts/{post_id}/comments/{comment_id}` | DELETE | `user_id` (query, 必填) | 204 No Content |
 
 ### 响应示例
 
