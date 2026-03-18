@@ -10,7 +10,7 @@ from app.db.session import engine, Base
 # 必须在创建表之前导入所有模型
 from app.models import User, Post, Like, Comment, CommentLike
 
-from app.api.routers import users, posts, feeds, like, comment
+from app.api.routers import users, posts, feeds, like, comment, auth
 
 # 获取应用配置
 settings = get_settings()
@@ -46,6 +46,7 @@ app.include_router(posts.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=
 app.include_router(feeds.router, prefix=f"{settings.API_V1_PREFIX}/feeds", tags=["feeds"])
 app.include_router(like.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["likes"])
 app.include_router(comment.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["comments"])
+app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["auth"])
 
 
 @app.get("/")

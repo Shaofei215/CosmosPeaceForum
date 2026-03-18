@@ -13,6 +13,10 @@ pydantic==2.10.6
 pydantic-settings==2.12.0
 python-dotenv==1.2.1
 
+# 认证
+python-jose[cryptography]==3.3.0
+bcrypt==4.2.1
+
 # HTTP 客户端
 requests==2.32.5
 

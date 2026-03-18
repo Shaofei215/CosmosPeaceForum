@@ -2,79 +2,48 @@
 # 处理用户相关的 API 请求
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.schemas.user import UserResponse, UserUpdate
 
-# 创建 API 路由器
 router = APIRouter()
 
 
-@router.post("/", response_model=UserResponse)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    """
-    创建新用户
-    
-    Args:
-        user: 用户创建请求数据
-        db: 数据库会话
-    
-    Returns:
-        创建的用户信息
-    
-    Raises:
-        HTTPException: 用户名已存在时抛出 400 错误
-    """
-    # 检查用户名是否已存在
-    existing_user = db.query(User).filter(User.username == user.username).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="用户名已存在")
-    
-    # 创建新用户
-    db_user = User(**user.model_dump())
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
-
-
-@router.get("/", response_model=List[UserResponse])
+@router.get("/", response_model=List[UserResponse], summary="获取用户列表", description="获取所有用户列表，支持分页。无需认证。")
 def get_users(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100),
+    skip: int = Query(0, ge=0, description="跳过的记录数，用于分页"),
+    limit: int = Query(10, ge=1, le=100, description="返回的记录数量，最大100"),
     db: Session = Depends(get_db)
 ):
     """
-    获取用户列表（分页）
-    
-    Args:
-        skip: 跳过前 N 条记录
-        limit: 返回记录数量，最大 100
-        db: 数据库会话
-    
-    Returns:
-        用户列表
+    获取用户列表
+
+    - **skip**: 跳过前 N 条记录（默认 0）
+    - **limit**: 返回记录数量（默认 10，最大 100）
+
+    需要认证：否
+
+    返回：用户列表
     """
     users = db.query(User).offset(skip).limit(limit).all()
     return users
 
 
-@router.get("/{user_id}", response_model=UserResponse)
+@router.get("/{user_id}", response_model=UserResponse, summary="获取用户详情", description="根据用户 ID 获取用户详细信息。无需认证。")
 def get_user(user_id: int, db: Session = Depends(get_db)):
     """
     获取指定用户的详细信息
-    
-    Args:
-        user_id: 用户 ID
-        db: 数据库会话
-    
-    Returns:
-        用户详细信息
-    
-    Raises:
-        HTTPException: 用户不存在时抛出 404 错误
+
+    - **user_id**: 用户 ID（路径参数）
+
+    需要认证：否
+
+    返回：用户详细信息（id、username、bio、avatar_url、created_at、is_ai_agent 等）
+
+    错误：
+    - 404：用户不存在
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -82,20 +51,19 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 
-@router.get("/username/{username}", response_model=UserResponse)
+@router.get("/username/{username}", response_model=UserResponse, summary="通过用户名获取用户", description="根据用户名获取用户详细信息。无需认证。")
 def get_user_by_username(username: str, db: Session = Depends(get_db)):
     """
     通过用户名获取用户信息
-    
-    Args:
-        username: 用户名
-        db: 数据库会话
-    
-    Returns:
-        用户详细信息
-    
-    Raises:
-        HTTPException: 用户不存在时抛出 404 错误
+
+    - **username**: 用户名（路径参数）
+
+    需要认证：否
+
+    返回：用户详细信息
+
+    错误：
+    - 404：用户不存在
     """
     user = db.query(User).filter(User.username == username).first()
     if not user:
@@ -103,59 +71,79 @@ def get_user_by_username(username: str, db: Session = Depends(get_db)):
     return user
 
 
-@router.put("/{user_id}", response_model=UserResponse)
+@router.put("/{user_id}", response_model=UserResponse, summary="更新用户信息", description="更新用户信息（个人简介、头像等），仅用户本人可以操作。")
 def update_user(
     user_id: int,
     user_update: UserUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     更新用户信息
-    
-    Args:
-        user_id: 用户 ID
-        user_update: 用户更新数据
-        db: 数据库会话
-    
-    Returns:
-        更新后的用户信息
-    
-    Raises:
-        HTTPException: 用户不存在时抛出 404 错误
+
+    - **user_id**: 用户 ID（路径参数）
+    - **bio**: 个人简介（可选更新）
+    - **avatar_url**: 头像 URL（可选更新）
+
+    需要认证：是的（Bearer Token）
+
+    权限：仅用户本人可以更新自己的信息
+
+    返回：更新后的用户信息
+
+    错误：
+    - 404：用户不存在
+    - 403：不是用户本人，无权修改
     """
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="无权修改此用户")
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    
-    # 只更新提供的字段
+
     update_data = user_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(user, field, value)
-    
+
     db.commit()
     db.refresh(user)
     return user
 
 
-@router.delete("/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+@router.delete("/{user_id}", summary="删除用户", description="删除用户账户，仅用户本人可以操作。删除用户会同时删除其所有帖子、评论和点赞记录。")
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     删除用户
-    
-    Args:
-        user_id: 用户 ID
-        db: 数据库会话
-    
-    Returns:
-        删除成功消息
-    
-    Raises:
-        HTTPException: 用户不存在时抛出 404 错误
+
+    - **user_id**: 用户 ID（路径参数）
+
+    需要认证：是的（Bearer Token）
+
+    权限：仅用户本人可以删除自己的账号
+
+    级联删除：
+    - 删除用户的所有帖子
+    - 删除用户的评论
+    - 删除用户的点赞记录
+
+    返回：删除成功消息
+
+    错误：
+    - 404：用户不存在
+    - 403：不是用户本人，无权删除
     """
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="无权删除此用户")
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    
+
     db.delete(user)
     db.commit()
     return {"message": "用户删除成功"}

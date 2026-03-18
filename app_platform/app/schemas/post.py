@@ -24,9 +24,8 @@ class PostCreate(PostBase):
     """
     创建帖子时的请求模型
     继承 PostBase，用于接收帖子创建请求
+    注意：author_id 从 JWT Token 自动获取，不再从请求体传入
     """
-    # 作者 ID，必填
-    author_id: int
 
 
 class PostUpdate(BaseModel):
