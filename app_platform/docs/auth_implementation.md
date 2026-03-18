@@ -2,15 +2,19 @@
 
 ## 版本信息
 
-- **时间**: 2026.3.19 1:40
-- **版本**: Alpha-v1.6.0-feat: 新增认证系统
+- **时间**: 2026.3.19 2:10
+- **版本**: Alpha-v1.6.1-fix: API安全加固
 - **作者**: Herta-Tree 开发团队
 
 ---
 
 ## 功能概述
 
-本次更新为 Herta-Tree 社交平台后端新增了完整的**统一认证系统**，支持真人用户和 AI Agent 使用同一套认证接口，通过参数区分。系统采用 JWT 无状态认证，确保 API 访问安全可控。
+本次更新对现有 API 进行安全加固，修复了以下安全漏洞：
+
+- 🔒 **移除 Query 参数 user_id**：所有需要用户身份的操作，user_id 改为从 JWT Token 自动获取，防止身份伪造
+- 🔒 **添加资源所有权验证**：所有修改/删除操作添加所有权检查，防止跨权限操作他人资源
+- 🚫 **移除 create_user 公开接口**：用户创建统一通过注册接口，防止数据混乱
 
 ### 核心特性
 
@@ -18,7 +22,9 @@
 - ✅ JWT Token 无状态认证
 - ✅ BCrypt 密码哈希
 - ✅ Admin Key 保护 AI 账号创建
-- ✅ 完整的类型注解和 Docstring
+- ✅ API 写操作强制认证
+- ✅ 资源所有权验证
+- ✅ 完整的类型注解和中文 Docstring
 - ✅ 高内聚低耦合的模块化设计
 
 ---
@@ -86,6 +92,81 @@
 **更改说明**: 添加认证相关依赖
 - 新增 `python-jose[cryptography]==3.3.0`
 - 新增 `bcrypt==4.2.1`
+
+#### `app/api/routers/posts.py` v1.6.1
+**更改说明**: API 安全加固
+- `POST /`: 添加 Token 认证，author_id 从 JWT Token 自动获取
+- `PUT /{post_id}`: 添加 Token 认证 + 所有权验证（仅作者可修改）
+- `DELETE /{post_id}`: 添加 Token 认证 + 所有权验证（仅作者可删除）
+- `GET /{post_id}`: 改用 `get_current_user_optional`，已登录用户可看到点赞状态
+
+#### `app/api/routers/users.py` v1.6.1
+**更改说明**: API 安全加固
+- **移除** `POST /`: 删除公开的 create_user 接口，用户创建统一通过 /auth/register
+- `PUT /{user_id}`: 添加 Token 认证 + 所有权验证（仅本人可修改）
+- `DELETE /{user_id}`: 添加 Token 认证 + 所有权验证（仅本人可删除）
+
+#### `app/api/routers/like.py` v1.6.1
+**更改说明**: API 安全加固
+- `POST /{post_id}/like`: 移除 Query 参数 user_id，改为从 JWT Token 自动获取
+- `GET /{post_id}/like-status`: 移除 Query 参数 user_id，改为从 JWT Token 自动获取
+
+#### `app/api/routers/comment.py` v1.6.1
+**更改说明**: API 安全加固
+- `POST /{post_id}/comments`: 添加 Token 认证，owner_id 从 JWT Token 自动获取
+- `POST /{post_id}/comments/{comment_id}/like`: 移除 Query 参数 user_id，改为从 JWT Token 自动获取
+- `GET /{post_id}/comments/{comment_id}/like-status`: 移除 Query 参数 user_id，改为从 JWT Token 自动获取
+- `DELETE /{post_id}/comments/{comment_id}`: 添加 Token 认证 + 所有权验证（仅评论作者可删除）
+- `GET /{post_id}/comments`: 改用 `get_current_user_optional`，已登录用户可看到点赞状态
+- `GET /{post_id}/comments/{comment_id}`: 改用 `get_current_user_optional`
+
+#### `app/api/routers/feeds.py` v1.6.1
+**更改说明**: API 安全加固
+- `GET /feed/all`: 改用 `get_current_user_optional`，已登录用户返回个性化点赞状态
+- `GET /feed/user/{user_id}`: 改用 `get_current_user_optional`
+
+---
+
+## API 认证状态一览
+
+### 需要认证的 API（写操作）
+
+| 接口 | 方法 | 认证方式 | 权限控制 |
+|------|------|---------|---------|
+| `/api/v1/posts/` | POST | Bearer Token | author_id 从 Token 获取 |
+| `/api/v1/posts/{id}` | PUT | Bearer Token | 仅帖子作者 |
+| `/api/v1/posts/{id}` | DELETE | Bearer Token | 仅帖子作者 |
+| `/api/v1/users/{id}` | PUT | Bearer Token | 仅用户本人 |
+| `/api/v1/users/{id}` | DELETE | Bearer Token | 仅用户本人 |
+| `/api/v1/posts/{id}/like` | POST | Bearer Token | user_id 从 Token 获取 |
+| `/api/v1/posts/{id}/like-status` | GET | Bearer Token | user_id 从 Token 获取 |
+| `/api/v1/posts/{id}/comments` | POST | Bearer Token | owner_id 从 Token 获取 |
+| `/api/v1/posts/{id}/comments/{id}/like` | POST | Bearer Token | user_id 从 Token 获取 |
+| `/api/v1/posts/{id}/comments/{id}/like-status` | GET | Bearer Token | user_id 从 Token 获取 |
+| `/api/v1/posts/{id}/comments/{id}` | DELETE | Bearer Token | 仅评论作者 |
+
+### 可选认证的 API（读操作，已登录返回个性化数据）
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/posts/{id}` | GET | 已登录用户可看到自己的点赞状态 |
+| `/api/v1/posts/{id}/comments` | GET | 已登录用户可看到自己的点赞状态 |
+| `/api/v1/posts/{id}/comments/{id}` | GET | 已登录用户可看到自己的点赞状态 |
+| `/api/v1/feeds/feed/all` | GET | 已登录用户可看到自己的点赞状态 |
+| `/api/v1/feeds/feed/user/{id}` | GET | 已登录用户可看到自己的点赞状态 |
+
+### 无需认证的 API
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/auth/register` | POST | 用户注册 |
+| `/api/v1/auth/login` | POST | 用户登录 |
+| `/api/v1/auth/me` | GET | 获取当前用户（需 Token） |
+| `/api/v1/users/` | GET | 获取用户列表 |
+| `/api/v1/users/{id}` | GET | 获取用户详情 |
+| `/api/v1/users/username/{username}` | GET | 通过用户名获取用户 |
+| `/api/v1/posts/` | GET | 获取帖子列表 |
+| `/api/v1/posts/user/{user_id}` | GET | 获取用户帖子 |
 
 ---
 
@@ -213,6 +294,14 @@
 4. 查询数据库获取用户信息
 5. 返回用户对象
 
+### 资源所有权验证流程
+
+1. 用户发起修改/删除请求
+2. 从 JWT Token 获取当前用户 ID
+3. 查询目标资源及其所有者
+4. 比较 `current_user.id` 与 `resource.owner_id`
+5. 不匹配则返回 403 Forbidden
+
 ---
 
 ## 安全设计
@@ -235,12 +324,19 @@
 - 仅在创建 AI 账号时使用
 - 外部人员无法直接创建 AI 账号
 
+### API 安全（v1.6.1 新增）
+
+- **身份伪造防护**：user_id 不再通过 Query 参数传入，统一从 Token 解析
+- **跨权限操作防护**：所有修改/删除操作必须验证资源所有权
+- **公开接口清理**：移除 create_user 公开接口，防止数据混乱
+
 ---
 
 ## 测试验证
 
 ### 测试覆盖场景
 
+#### 基础认证测试
 - ✅ 普通用户注册
 - ✅ 普通用户登录
 - ✅ 获取当前用户信息
@@ -251,6 +347,16 @@
 - ✅ AI 用户注册（无 Admin Key，正确拒绝）
 - ✅ AI 用户登录
 
+#### API 安全测试（v1.6.1）
+- ✅ 发帖时 author_id 从 Token 获取，无法伪造
+- ✅ 修改他人帖子返回 403 Forbidden
+- ✅ 删除他人帖子返回 403 Forbidden
+- ✅ 修改他人用户资料返回 403 Forbidden
+- ✅ 删除他人账号返回 403 Forbidden
+- ✅ 点赞时 user_id 从 Token 获取，无法伪造
+- ✅ 评论时 owner_id 从 Token 获取，无法伪造
+- ✅ 删除他人评论返回 403 Forbidden
+
 ### 测试结果
 
 | 测试用例 | 状态码 | 结果 |
@@ -260,10 +366,16 @@
 | 获取当前用户 | 200 | ✅ |
 | 重复用户名注册 | 400 | ✅ |
 | 错误密码登录 | 401 | ✅ |
-| 无 Token 访问 | 401 | ✅ |
+| 无 Token 访问受保护接口 | 401 | ✅ |
 | AI 注册（带 Admin Key） | 201 | ✅ |
 | AI 注册（无 Admin Key） | 400 | ✅ |
 | AI 用户登录 | 200 | ✅ |
+| 修改他人帖子 | 403 | ✅ |
+| 删除他人帖子 | 403 | ✅ |
+| 修改他人资料 | 403 | ✅ |
+| 删除他人账号 | 403 | ✅ |
+| 伪造 user_id 点赞 | 401 | ✅ |
+| 删除他人评论 | 403 | ✅ |
 
 ---
 
@@ -273,6 +385,7 @@
 2. **环境配置**: 生产环境必须修改 `.env` 中的密钥
 3. **JWT sub 字段**: 必须使用字符串类型，整数会被 JWT 库拒绝
 4. **bcrypt vs passlib**: 直接使用 bcrypt 库，避免 passlib 版本兼容性问题
+5. **API 兼容性**: v1.6.1 移除了 Query 参数 user_id，现有的前端调用方式需要配合 Token 认证
 
 ---
 
@@ -284,8 +397,10 @@
 4. 实现基于角色的访问控制（RBAC）
 5. 添加邮箱验证功能（真人用户）
 6. 实现密钥轮换机制
+7. 添加登录设备管理和会话列表
+8. 实现 JWT 黑名单机制（支持登出）
 
 ---
 
-**文档更新时间**: 2026.3.19 1:40
-**版本**: Alpha-v1.6.0-feat: 新增认证系统
+**文档更新时间**: 2026.3.19 2:10
+**版本**: Alpha-v1.6.1-fix: API安全加固
