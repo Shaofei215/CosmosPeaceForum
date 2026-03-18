@@ -418,7 +418,7 @@ GET /api/v1/users/username/herta
 
 - 路径：`PUT /api/v1/users/{user_id}`
 - 方法：PUT
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
@@ -426,16 +426,13 @@ GET /api/v1/users/username/herta
 | -------- | ------- | -- | ----- |
 | user\_id | integer | 是  | 用户 ID |
 
-**请求参数：**
-
-| 参数          | 类型     | 必填 | 说明     |
-| ----------- | ------ | -- | ------ |
-| bio         | string | 否  | 个人简介   |
-| avatar\_url | string | 否  | 头像 URL |
-
 **请求示例：**
 
-```json
+```bash
+PUT /api/v1/users/1
+Authorization: Bearer {token}
+Content-Type: application/json
+
 {
   "bio": "更新后的简介",
   "avatar_url": "https://example.com/new-avatar.jpg"
@@ -468,7 +465,7 @@ GET /api/v1/users/username/herta
 
 - 路径：`DELETE /api/v1/users/{user_id}`
 - 方法：DELETE
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
@@ -480,6 +477,7 @@ GET /api/v1/users/username/herta
 
 ```
 DELETE /api/v1/users/1
+Authorization: Bearer {token}
 ```
 
 **响应示例（200 OK）：**
@@ -506,7 +504,7 @@ DELETE /api/v1/users/1
 
 - 路径：`POST /api/v1/posts/`
 - 方法：POST
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **请求参数：**
 
@@ -514,15 +512,13 @@ DELETE /api/v1/users/1
 | ---------- | ------- | -- | --------------- |
 | title      | string  | 否  | 帖子标题，最多 200 个字符 |
 | content    | string  | 是  | 帖子内容，至少 1 个字符   |
-| author\_id | integer | 是  | 作者用户 ID         |
 
 **请求示例：**
 
 ```json
 {
   "title": "今天的空间站",
-  "content": "今天空间站发生了很多有趣的事情...",
-  "author_id": 1
+  "content": "今天空间站发生了很多有趣的事情..."
 }
 ```
 
@@ -638,7 +634,7 @@ GET /api/v1/posts/1
 
 - 路径：`PUT /api/v1/posts/{post_id}`
 - 方法：PUT
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
@@ -646,16 +642,13 @@ GET /api/v1/posts/1
 | -------- | ------- | -- | ----- |
 | post\_id | integer | 是  | 帖子 ID |
 
-**请求参数：**
-
-| 参数      | 类型     | 必填 | 说明   |
-| ------- | ------ | -- | ---- |
-| title   | string | 否  | 帖子标题 |
-| content | string | 否  | 帖子内容 |
-
 **请求示例：**
 
-```json
+```bash
+PUT /api/v1/posts/1
+Authorization: Bearer {token}
+Content-Type: application/json
+
 {
   "title": "更新后的标题",
   "content": "更新后的内容"
@@ -689,7 +682,7 @@ GET /api/v1/posts/1
 
 - 路径：`DELETE /api/v1/posts/{post_id}`
 - 方法：DELETE
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
@@ -701,6 +694,7 @@ GET /api/v1/posts/1
 
 ```
 DELETE /api/v1/posts/1
+Authorization: Bearer {token}
 ```
 
 **响应示例（200 OK）：**
@@ -785,19 +779,13 @@ GET /api/v1/posts/user/1?skip=0&limit=10
 
 - 路径：`POST /api/v1/posts/{post_id}/comments`
 - 方法：POST
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
 | 参数       | 类型      | 必填 | 说明    |
 | -------- | ------- | -- | ----- |
 | post\_id | integer | 是  | 帖子 ID |
-
-**查询参数：**
-
-| 参数       | 类型      | 必填 | 说明      |
-| -------- | ------- | -- | ------- |
-| user\_id | integer | 是  | 当前用户 ID |
 
 **请求体参数：**
 
@@ -809,7 +797,8 @@ GET /api/v1/posts/user/1?skip=0&limit=10
 **请求示例（创建一级评论）：**
 
 ```bash
-POST /api/v1/posts/1/comments?user_id=123
+POST /api/v1/posts/1/comments
+Authorization: Bearer {token}
 Content-Type: application/json
 
 {
@@ -820,7 +809,8 @@ Content-Type: application/json
 **请求示例（创建回复）：**
 
 ```bash
-POST /api/v1/posts/1/comments?user_id=456
+POST /api/v1/posts/1/comments
+Authorization: Bearer {token}
 Content-Type: application/json
 
 {
@@ -1039,7 +1029,7 @@ GET /api/v1/posts/1/comments/1?user_id=123
 
 - 路径：`DELETE /api/v1/posts/{post_id}/comments/{comment_id}`
 - 方法：DELETE
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
@@ -1048,16 +1038,11 @@ GET /api/v1/posts/1/comments/1?user_id=123
 | post\_id | integer | 是  | 帖子 ID |
 | comment\_id | integer | 是  | 评论 ID |
 
-**查询参数：**
-
-| 参数       | 类型      | 必填 | 说明              |
-| -------- | ------- | -- | --------------- |
-| user\_id | integer | 是  | 当前用户 ID（用于权限验证） |
-
 **请求示例：**
 
 ```
-DELETE /api/v1/posts/1/comments/1?user_id=123
+DELETE /api/v1/posts/1/comments/1
+Authorization: Bearer {token}
 ```
 
 **响应示例（204 No Content）：**
@@ -1081,7 +1066,7 @@ DELETE /api/v1/posts/1/comments/1?user_id=123
 
 - 路径：`POST /api/v1/posts/{post_id}/comments/{comment_id}/like`
 - 方法：POST
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
@@ -1090,16 +1075,11 @@ DELETE /api/v1/posts/1/comments/1?user_id=123
 | post\_id | integer | 是  | 帖子 ID |
 | comment\_id | integer | 是  | 评论 ID |
 
-**查询参数：**
-
-| 参数       | 类型      | 必填 | 说明      |
-| -------- | ------- | -- | ------- |
-| user\_id | integer | 是  | 当前用户 ID |
-
 **请求示例：**
 
 ```
-POST /api/v1/posts/1/comments/1/like?user_id=123
+POST /api/v1/posts/1/comments/1/like
+Authorization: Bearer {token}
 ```
 
 **响应示例（200 OK）- 点赞成功：**
@@ -1134,7 +1114,7 @@ POST /api/v1/posts/1/comments/1/like?user_id=123
 
 - 路径：`GET /api/v1/posts/{post_id}/comments/{comment_id}/like-status`
 - 方法：GET
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
@@ -1143,16 +1123,11 @@ POST /api/v1/posts/1/comments/1/like?user_id=123
 | post\_id | integer | 是  | 帖子 ID |
 | comment\_id | integer | 是  | 评论 ID |
 
-**查询参数：**
-
-| 参数       | 类型      | 必填 | 说明      |
-| -------- | ------- | -- | ------- |
-| user\_id | integer | 是  | 当前用户 ID |
-
 **请求示例：**
 
 ```
-GET /api/v1/posts/1/comments/1/like-status?user_id=123
+GET /api/v1/posts/1/comments/1/like-status
+Authorization: Bearer {token}
 ```
 
 **响应示例（200 OK）：**
@@ -1180,7 +1155,7 @@ GET /api/v1/posts/1/comments/1/like-status?user_id=123
 
 - 路径：`POST /api/v1/posts/{post_id}/like`
 - 方法：POST
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
@@ -1188,16 +1163,11 @@ GET /api/v1/posts/1/comments/1/like-status?user_id=123
 | -------- | ------- | -- | ----- |
 | post\_id | integer | 是  | 帖子 ID |
 
-**查询参数：**
-
-| 参数       | 类型      | 必填 | 说明      |
-| -------- | ------- | -- | ------- |
-| user\_id | integer | 是  | 当前用户 ID |
-
 **请求示例：**
 
 ```
-POST /api/v1/posts/1/like?user_id=2
+POST /api/v1/posts/1/like
+Authorization: Bearer {token}
 ```
 
 **响应示例（200 OK）- 点赞成功：**
@@ -1234,7 +1204,7 @@ POST /api/v1/posts/1/like?user_id=2
 
 - 路径：`GET /api/v1/posts/{post_id}/like-status`
 - 方法：GET
-- 认证：不需要
+- 认证：需要（Bearer Token）
 
 **路径参数：**
 
@@ -1242,16 +1212,11 @@ POST /api/v1/posts/1/like?user_id=2
 | -------- | ------- | -- | ----- |
 | post\_id | integer | 是  | 帖子 ID |
 
-**查询参数：**
-
-| 参数       | 类型      | 必填 | 说明      |
-| -------- | ------- | -- | ------- |
-| user\_id | integer | 是  | 当前用户 ID |
-
 **请求示例：**
 
 ```
-GET /api/v1/posts/1/like-status?user_id=2
+GET /api/v1/posts/1/like-status
+Authorization: Bearer {token}
 ```
 
 **响应示例（200 OK）：**
