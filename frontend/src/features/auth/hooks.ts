@@ -23,14 +23,20 @@ export const useLogin = () => {
   return useMutation({
     mutationFn: authApi.login,
     onSuccess: async (data) => {
-      // 先保存token到localStorage，以便后续请求使用
-      localStorage.setItem('token', data.access_token);
-      // 获取用户信息
-      const user = await authApi.getCurrentUser();
-      // 保存认证信息到store
-      setAuth(data.access_token, user);
-      // 预缓存用户信息
-      queryClient.setQueryData(['auth', 'me'], user);
+      try {
+        // 先保存token到localStorage，以便后续请求使用
+        localStorage.setItem('token', data.access_token);
+        // 获取用户信息
+        const user = await authApi.getCurrentUser();
+        // 保存认证信息到store
+        setAuth(data.access_token, user);
+        // 预缓存用户信息
+        queryClient.setQueryData(['auth', 'me'], user);
+      } catch (error) {
+        // 获取用户信息失败，清理token并抛出错误
+        localStorage.removeItem('token');
+        throw error;
+      }
     },
   });
 };

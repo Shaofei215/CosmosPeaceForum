@@ -49,8 +49,8 @@ class ApiClient {
         const status = error.response?.status;
         const message = error.response?.data?.detail || '请求失败，请稍后重试';
 
-        // 处理401未授权：清除token并跳转到登录页
-        if (status === HTTP_STATUS.UNAUTHORIZED) {
+        // 处理401未授权：清除token并跳转到登录页（避免在登录页循环重定向）
+        if (status === HTTP_STATUS.UNAUTHORIZED && !window.location.pathname.includes('/login')) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
