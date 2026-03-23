@@ -2,14 +2,15 @@
  * 用户资料页面
  */
 
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import { useUser } from '@/features/user';
 import { useInfiniteUserFeed } from '@/features/feed';
-import { useAuthStore } from '@/features/auth';
+import { useAuthStore, useLogout } from '@/features/auth';
 import { PostCard } from '@/widgets/post-card';
-import { Avatar, Skeleton } from '@/shared/components/ui';
+import { Avatar, Skeleton, Button } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
+import { LogOut } from 'lucide-react';
 
 /**
  * 用户资料页面组件
@@ -17,7 +18,17 @@ import { formatDate } from '@/shared/lib/utils';
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const { user: currentUser } = useAuthStore();
+  const logout = useLogout();
+  const navigate = useNavigate();
   const userIdNum = Number(userId);
+
+  /**
+   * 处理登出
+   */
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const { data: user, isLoading: isUserLoading } = useUser(userIdNum);
   const {
@@ -91,6 +102,18 @@ export default function ProfilePage() {
               </p>
             )}
           </div>
+          {/* 登出按钮 - 仅当前用户可见 */}
+          {isCurrentUser && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              退出
+            </Button>
+          )}
         </div>
       </div>
 

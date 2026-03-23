@@ -3,10 +3,11 @@
  * 展示单个帖子的摘要信息
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, CornerDownRight } from 'lucide-react';
+import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, CornerDownRight, ChevronDown as ExpandIcon } from 'lucide-react';
 import type { PostFeedItem } from '@/features/feed';
+import type { PostWithLikeStatus } from '@/features/post';
 import type { Comment } from '@/features/comment';
 import { Avatar, Skeleton, Button, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
@@ -18,19 +19,39 @@ import { useAuthStore } from '@/features/auth';
  * 帖子卡片组件属性
  */
 interface PostCardProps {
-  post: PostFeedItem;
+  post: PostFeedItem | PostWithLikeStatus;
+  expanded?: boolean;
 }
 
 /**
  * 帖子卡片组件
  */
-export function PostCard({ post }: PostCardProps) {
+export function PostCard({ post, expanded = false }: PostCardProps) {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const toggleLike = useToggleLike();
-  const [isCommentsExpanded, setIsCommentsExpanded] = useState(false);
+  const [isCommentsExpanded, setIsCommentsExpanded] = useState(expanded);
+  const [isContentExpanded, setIsContentExpanded] = useState(expanded);
+  const [isContentTruncated, setIsContentTruncated] = useState(false);
+  const contentRef = useRef<HTMLParagraphElement>(null);
   const [newCommentContent, setNewCommentContent] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ id: number; username: string } | null>(null);
+
+  // 适配两种数据类型的字段
+  const authorName = 'author_name' in post ? post.author_name : `用户${post.author_id}`;
+  const authorAvatar = 'author_avatar' in post ? post.author_avatar : null;
+  const isLiked = 'is_liked' in post ? post.is_liked : post.is_liked_by_current_user;
+
+  // 检测内容是否被截断
+  useEffect(() => {
+    if (contentRef.current) {
+      const element = contentRef.current;
+      // 如果实际高度大于行高*3，说明内容被截断了
+      const lineHeight = parseInt(getComputedStyle(element).lineHeight) || 24;
+      const maxHeight = lineHeight * 3;
+      setIsContentTruncated(element.scrollHeight > maxHeight + 1);
+    }
+  }, [post.content]);
 
   // 获取评论列表（仅在展开时请求）
   const { data: commentsData, isLoading: isCommentsLoading } = useComments(
@@ -87,18 +108,20 @@ export function PostCard({ post }: PostCardProps) {
     setReplyingTo(null);
   };
 
-  // 获取前5条评论
-  const previewComments = commentsData?.items?.slice(0, 5) || [];
-  const hasMoreComments = (commentsData?.total || 0) > 5;
+  // 获取评论：展开模式显示所有，非展开模式显示前5条
+  const previewComments = expanded
+    ? (commentsData?.items || [])
+    : (commentsData?.items?.slice(0, 5) || []);
+  const hasMoreComments = !expanded && (commentsData?.total || 0) > 5;
 
   return (
-    <article className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+    <article className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-4 hover:bg-card/50 transition-colors">
       {/* 头部：作者信息 */}
       <div className="flex items-center gap-3 mb-3">
         <Link to={`/user/${post.author_id}`}>
           <Avatar
-            src={post.author_avatar}
-            alt={post.author_name}
+            src={authorAvatar}
+            alt={authorName}
             size="md"
           />
         </Link>
@@ -107,7 +130,7 @@ export function PostCard({ post }: PostCardProps) {
             to={`/user/${post.author_id}`}
             className="font-medium text-foreground hover:text-primary transition-colors"
           >
-            {post.author_name}
+            {authorName}
           </Link>
           <p className="text-xs text-muted-foreground">
             {formatDate(post.created_at)}
@@ -116,22 +139,52 @@ export function PostCard({ post }: PostCardProps) {
       </div>
 
       {/* 内容 */}
-      <Link to={`/post/${post.id}`} className="block">
+      <div className="block">
         {post.title && (
-          <h3 className="font-semibold text-lg mb-2 line-clamp-2">
-            {post.title}
-          </h3>
+          <Link to={`/post/${post.id}`}>
+            <h3 className="font-semibold text-lg mb-2 line-clamp-2">
+              {post.title}
+            </h3>
+          </Link>
         )}
-        <p className="text-muted-foreground line-clamp-3 whitespace-pre-wrap">
+        <p
+          ref={contentRef}
+          className={`text-muted-foreground whitespace-pre-wrap ${
+            isContentExpanded ? '' : 'line-clamp-3'
+          }`}
+        >
           {post.content}
         </p>
-      </Link>
+        {/* 展开/收起按钮 - 仅在内容被截断时显示 */}
+        {(isContentTruncated || isContentExpanded) && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsContentExpanded(!isContentExpanded);
+            }}
+            className="mt-2 text-sm text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+          >
+            {isContentExpanded ? (
+              <>
+                <ChevronUp className="h-3 w-3" />
+                收起
+              </>
+            ) : (
+              <>
+                <ExpandIcon className="h-3 w-3" />
+                展开
+              </>
+            )}
+          </button>
+        )}
+      </div>
 
       {/* 底部：互动按钮 */}
       <div className="flex items-center gap-6 mt-4 pt-3 border-t">
         <button
           className={`flex items-center gap-1.5 text-sm transition-colors ${
-            post.is_liked
+            isLiked
               ? 'text-red-500'
               : 'text-muted-foreground hover:text-red-500'
           }`}
@@ -139,7 +192,7 @@ export function PostCard({ post }: PostCardProps) {
           disabled={toggleLike.isPending}
         >
           <Heart
-            className={`h-4 w-4 ${post.is_liked ? 'fill-current' : ''}`}
+            className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`}
           />
           <span>{post.like_count}</span>
         </button>
@@ -169,7 +222,7 @@ export function PostCard({ post }: PostCardProps) {
             <form onSubmit={handleSubmitNewComment} className="mb-4">
               <div className="flex gap-2">
                 <Avatar
-                  src={user?.avatar_url || null}
+                  src={null}
                   alt={user?.username || '用户'}
                   size="sm"
                 />
@@ -178,7 +231,7 @@ export function PostCard({ post }: PostCardProps) {
                     placeholder="写下你的评论..."
                     value={newCommentContent}
                     onChange={(e) => setNewCommentContent(e.target.value)}
-                    className="min-h-[60px] resize-none"
+                    className="min-h-[60px] resize-none border-0 shadow-none bg-muted/30 focus-visible:ring-0"
                     onClick={(e) => e.stopPropagation()}
                   />
                   <div className="flex justify-end">
@@ -268,7 +321,7 @@ interface CommentItemProps {
   postId: number;
   isAuthenticated: boolean;
   currentUserId?: number;
-  user: { id: number; username: string; avatar_url: string | null } | null;
+  user: { id: number; username: string } | null;
   replyingTo: { id: number; username: string } | null;
   onReply: (commentId: number, username: string) => void;
   onCancelReply: () => void;
@@ -328,7 +381,7 @@ function CommentItem({
           size="sm"
         />
         <div className="flex-1 min-w-0">
-          <div className={`${isTopLevel ? 'bg-muted' : 'bg-muted/50'} rounded-lg px-3 py-2`}>
+          <div className="px-0 py-0">
             {/* 用户名显示 */}
             {isTopLevel || isSecondLevel ? (
               // 一级评论和一级回复：只显示用户名
@@ -502,7 +555,7 @@ function ReplyInput({
             placeholder="写下你的回复..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="min-h-[60px] resize-none"
+            className="min-h-[60px] resize-none border-0 shadow-none bg-muted/30 focus-visible:ring-0"
             onClick={(e) => e.stopPropagation()}
             autoFocus
           />

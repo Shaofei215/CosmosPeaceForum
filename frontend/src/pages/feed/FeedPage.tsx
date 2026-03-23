@@ -7,7 +7,6 @@ import { useEffect, useRef } from 'react';
 import { useInfiniteGlobalFeed } from '@/features/feed';
 import { useAuthStore } from '@/features/auth';
 import { PostCard } from '@/widgets/post-card';
-import { CreatePostForm } from '@/widgets/create-post-form';
 import { Skeleton } from '@/shared/components/ui';
 
 /**
@@ -49,29 +48,24 @@ export default function FeedPage() {
   const posts = data?.pages.flatMap((page) => page.data) || [];
 
   return (
-    <div className="space-y-6">
-      {/* 创建帖子表单（仅登录用户可见） */}
-      {user && <CreatePostForm />}
-
+    <div className="space-y-4">
       {/* 帖子列表 */}
-      <div className="space-y-4">
-        {isLoading ? (
-          // 加载骨架屏
-          <>
-            <PostCardSkeleton />
-            <PostCardSkeleton />
-            <PostCardSkeleton />
-          </>
-        ) : posts.length > 0 ? (
-          posts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))
-        ) : (
-          <div className="text-center py-12 text-muted-foreground">
-            暂无帖子，快来发布第一条吧！
-          </div>
-        )}
-      </div>
+      {isLoading ? (
+        // 加载骨架屏
+        <>
+          <PostCardSkeleton />
+          <PostCardSkeleton />
+          <PostCardSkeleton />
+        </>
+      ) : posts.length > 0 ? (
+        posts.map((post) => (
+          <PostCard key={post.id} post={post} />
+        ))
+      ) : (
+        <div className="text-center py-12 text-muted-foreground rounded-xl border bg-card p-8">
+          暂无帖子，快来发布第一条吧！
+        </div>
+      )}
 
       {/* 加载更多 */}
       <div ref={loadMoreRef} className="py-4 text-center">
