@@ -61,15 +61,15 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 relative z-10">
+      <Card className="w-full max-w-md rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 border-0 shadow-none">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">注册</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
+              <div className="p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
                 {error}
               </div>
             )}
@@ -84,6 +84,7 @@ export default function RegisterPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isPending}
+                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
             <div className="space-y-2">
@@ -97,6 +98,7 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isPending}
+                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
             <div className="space-y-2">
@@ -110,9 +112,14 @@ export default function RegisterPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={isPending}
+                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isPending}>
+            <Button
+              type="submit"
+              className="w-full rounded-lg"
+              disabled={isPending}
+            >
               {isPending ? '注册中...' : '注册'}
             </Button>
           </form>

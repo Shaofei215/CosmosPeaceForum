@@ -57,6 +57,9 @@ class PostResponse(PostBase):
     # 点赞计数
     like_count: int = 0
     
+    # 评论计数
+    comment_count: int = 0
+    
     # 配置：允许从 ORM 模型读取数据
     class Config:
         from_attributes = True

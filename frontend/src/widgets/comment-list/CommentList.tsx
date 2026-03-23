@@ -114,7 +114,7 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
           />
         </Link>
         <div className="flex-1 min-w-0">
-          <div className={`${isTopLevel ? 'bg-muted' : 'bg-muted/50'} rounded-lg p-3`}>
+          <div className="p-0">
             {/* 用户名显示 */}
             {isTopLevel || isSecondLevel ? (
               // 一级评论和一级回复：只显示用户名
@@ -142,7 +142,7 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                 </Link>
               </div>
             )}
-            <p className="text-sm mt-1 whitespace-pre-wrap">{comment.content}</p>
+            <p className="text-sm mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
           </div>
 
           {/* 操作按钮 */}
@@ -194,6 +194,7 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                 onChange={(e) => setReplyContent(e.target.value)}
                 rows={2}
                 disabled={isPending}
+                className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
               />
               <div className="flex justify-end gap-2">
                 <Button

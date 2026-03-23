@@ -98,6 +98,7 @@ def get_post(
         content=post.content,
         created_at=post.created_at,
         like_count=post.like_count,
+        comment_count=post.comment_count,
         is_liked_by_current_user=is_liked
     )
 

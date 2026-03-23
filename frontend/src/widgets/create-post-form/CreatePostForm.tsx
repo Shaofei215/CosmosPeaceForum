@@ -32,16 +32,16 @@ export function CreatePostForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border bg-card p-4 shadow-sm">
+    <form onSubmit={handleSubmit}>
       <Textarea
         placeholder="分享你的想法..."
         value={content}
         onChange={(e) => setContent(e.target.value)}
         rows={3}
-        className="resize-none border-0 focus-visible:ring-0 p-0"
         disabled={isPending}
+        className="border-0 shadow-none bg-muted/30 focus-visible:ring-0 resize-none"
       />
-      <div className="flex justify-end mt-3 pt-3 border-t">
+      <div className="flex justify-end mt-3">
         <Button type="submit" disabled={!content.trim() || isPending} size="sm">
           {isPending ? '发布中...' : '发布'}
         </Button>
