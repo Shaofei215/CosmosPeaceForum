@@ -149,14 +149,14 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
         )}
         <p
           ref={contentRef}
-          className={`text-muted-foreground whitespace-pre-wrap ${
+          className={`text-foreground/90 whitespace-pre-wrap ${
             isContentExpanded ? '' : 'line-clamp-3'
           }`}
         >
           {post.content}
         </p>
         {/* 展开/收起按钮 - 仅在内容被截断时显示 */}
-        {(isContentTruncated || isContentExpanded) && (
+        {isContentTruncated && (
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -387,7 +387,7 @@ function CommentItem({
               // 一级评论和一级回复：只显示用户名
               <Link
                 to={`/user/${comment.owner_id}`}
-                className="text-sm font-medium text-foreground hover:text-primary"
+                className="text-sm font-medium text-foreground/70 hover:text-primary"
               >
                 {comment.owner.username}
               </Link>
@@ -396,7 +396,7 @@ function CommentItem({
               <div className="flex items-center gap-1 text-sm">
                 <Link
                   to={`/user/${comment.owner_id}`}
-                  className="font-medium text-foreground hover:text-primary"
+                  className="font-medium text-foreground/70 hover:text-primary"
                 >
                   {comment.owner.username}
                 </Link>
@@ -409,7 +409,7 @@ function CommentItem({
                 </Link>
               </div>
             )}
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-sm text-foreground/85 mt-0.5 whitespace-pre-wrap break-words">
               {comment.content}
             </p>
           </div>

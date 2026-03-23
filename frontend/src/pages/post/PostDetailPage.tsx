@@ -3,7 +3,6 @@
  */
 
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
 import { usePost } from '@/features/post';
 import { useAuthStore } from '@/features/auth';
 import { useUser } from '@/features/user';
@@ -58,15 +57,6 @@ export default function PostDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* 返回按钮 */}
-      <Link
-        to="/feed"
-        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        返回
-      </Link>
-
       {/* 帖子内容 - 使用 PostCard 组件，默认展开 */}
       <PostCard post={postFeedItem} expanded />
     </div>

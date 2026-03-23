@@ -142,7 +142,7 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                 </Link>
               </div>
             )}
-            <p className="text-sm mt-1 whitespace-pre-wrap">{comment.content}</p>
+            <p className="text-sm mt-1 whitespace-pre-wrap break-words">{comment.content}</p>
           </div>
 
           {/* 操作按钮 */}

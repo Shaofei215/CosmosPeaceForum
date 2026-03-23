@@ -84,7 +84,7 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6">
       {/* 用户资料卡片 */}
-      <div className="rounded-xl border bg-card p-6 shadow-sm">
+      <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-6">
         <div className="flex items-start gap-4">
           <Avatar
             src={user.avatar_url}
@@ -159,7 +159,7 @@ export default function ProfilePage() {
 function ProfileSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border bg-card p-6 shadow-sm">
+      <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-6">
         <div className="flex items-start gap-4">
           <Skeleton className="h-16 w-16 rounded-full" />
           <div className="flex-1 space-y-2">

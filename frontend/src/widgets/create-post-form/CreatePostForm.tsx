@@ -39,8 +39,9 @@ export function CreatePostForm() {
         onChange={(e) => setContent(e.target.value)}
         rows={3}
         disabled={isPending}
+        className="border-0 shadow-none bg-muted/30 focus-visible:ring-0 resize-none"
       />
-      <div className="flex justify-end mt-3 pt-3 border-t">
+      <div className="flex justify-end mt-3">
         <Button type="submit" disabled={!content.trim() || isPending} size="sm">
           {isPending ? '发布中...' : '发布'}
         </Button>
