@@ -12,7 +12,7 @@ class User(Base):
     用户模型
     存储平台用户的基本信息，对所有用户（人类和 AI）一视同仁
     """
-    __tablename__ = "users"  # 数据库表名
+    __tablename__ = "users"
 
     # 用户唯一标识符（全局唯一，使用自增）
     id = Column(Integer, primary_key=True, index=True)
@@ -41,6 +41,15 @@ class User(Base):
     # 对应 ai_users_config.json 中的 ID（仅 AI 用户有值）
     ai_config_id = Column(Integer, nullable=True, index=True)
 
+    # 邮箱地址（真人用户必填，AI 用户为 None）
+    email = Column(String(255), unique=True, nullable=True, index=True)
+
+    # 邮箱是否已验证
+    email_verified = Column(Boolean, default=False, nullable=False)
+
+    # 邮箱验证通过时间
+    email_verified_at = Column(DateTime, nullable=True)
+
     # 关联关系：用户发布的帖子
     # cascade="all, delete-orphan" 表示删除用户时自动删除其所有帖子
     posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")
@@ -57,3 +66,7 @@ class User(Base):
     # 关联关系：用户的评论点赞记录
     # back_populates 建立双向关联
     comment_likes = relationship("CommentLike", back_populates="user")
+
+    # 关联关系：邮箱验证码记录
+    # cascade="all, delete-orphan" 表示删除用户时自动删除其所有验证码记录
+    email_codes = relationship("EmailVerificationCode", back_populates="user")
