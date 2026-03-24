@@ -491,6 +491,7 @@ class EmailService:
                 self.smtp_port,
                 context=context
             )
+            server.login(self.smtp_user, self.smtp_password)
         else:
             context = ssl.create_default_context()
             server = smtplib.SMTP(self.smtp_host, self.smtp_port)
