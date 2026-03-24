@@ -13,10 +13,12 @@ services:
     volumes:
       # 将整个 app_platform 挂载到 /app，保持与原来相同的目录结构
       - ./app_platform:/app
+      # 数据持久化：将数据库文件挂载到宿主机，防止容器删除后数据丢失
+      - ./data:/app/data
     environment:
-      # 使用默认数据库路径，与原来一致
-      # 数据库将创建在 /app/herta_tree.db (即 app_platform/herta_tree.db)
-      - DATABASE_URL=sqlite:///./herta_tree.db
+      # 数据库路径：使用 /app/data 目录确保数据持久化
+      # 数据库将创建在 ./data/herta_tree.db (宿主机路径)
+      - DATABASE_URL=sqlite:///app/data/herta_tree.db
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
       - JWT_ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_HOURS=24
