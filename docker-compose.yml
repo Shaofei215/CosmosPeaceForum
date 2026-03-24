@@ -1,0 +1,87 @@
+# Herta-Tree Docker Compose 配置
+# 开发环境使用此配置
+
+services:
+  # 后端服务
+  backend:
+    build:
+      context: ./app_platform
+      dockerfile: Dockerfile
+    container_name: herta-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # 将整个 app_platform 挂载到 /app，保持与原来相同的目录结构
+      - ./app_platform:/app
+      # 数据持久化：将数据库文件挂载到宿主机，防止容器删除后数据丢失
+      - ./data:/app/data
+    environment:
+      # 数据库路径：使用 /app/data 目录确保数据持久化
+      # 数据库将创建在 ./data/herta_tree.db (宿主机路径)
+      - DATABASE_URL=sqlite:///app/data/herta_tree.db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_HOURS=24
+      - ADMIN_KEY=${ADMIN_KEY:-your-admin-key-change-in-production}
+      - DEBUG=${DEBUG:-true}
+      - PROJECT_NAME=Herta-Tree Social Platform
+      - VERSION=0.1.0
+      - API_V1_PREFIX=/api/v1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - herta-network
+
+  # 前端服务 - 开发模式
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: herta-frontend-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      # 开发热重载
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - herta-network
+    profiles:
+      - dev
+
+  # 前端服务 - 生产模式
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: herta-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_BASE_URL=http://backend:8000/api/v1
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - herta-network
+    profiles:
+      - prod
+
+networks:
+  herta-network:
+    driver: bridge
+
+volumes:
+  herta-data:
+    driver: local
