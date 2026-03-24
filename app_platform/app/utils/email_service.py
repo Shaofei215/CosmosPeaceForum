@@ -493,7 +493,7 @@ class EmailService:
             )
         else:
             context = ssl.create_default_context()
-            server = smtplib.SMTP(self.smtp_port)
+            server = smtplib.SMTP(self.smtp_host, self.smtp_port)
             server.starttls(context=context)
             server.login(self.smtp_user, self.smtp_password)
 
@@ -537,29 +537,12 @@ class EmailService:
             html_part = MIMEText(html_content, 'html', 'utf-8')
             msg.attach(html_part)
 
-            if self.use_ssl:
-                with smtplib.SMTP_SSL(
-                    self.smtp_host,
-                    self.smtp_port,
-                    context=ssl.create_default_context()
-                ) as server:
-                    server.login(self.smtp_user, self.smtp_password)
-                    server.sendmail(
-                        self.sender_email,
-                        to_email,
-                        msg.as_string()
-                    )
-            else:
-                with smtplib.SMTP(
-                    self.smtp_port
-                ) as server:
-                    server.starttls(context=ssl.create_default_context())
-                    server.login(self.smtp_user, self.smtp_password)
-                    server.sendmail(
-                        self.sender_email,
-                        to_email,
-                        msg.as_string()
-                    )
+            with self._create_smtp_connection() as server:
+                server.sendmail(
+                    self.sender_email,
+                    to_email,
+                    msg.as_string()
+                )
 
             return True
 
