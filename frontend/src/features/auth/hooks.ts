@@ -6,7 +6,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { authApi } from './api';
 import { useAuthStore } from './stores/authStore';
-import type { LoginCredentials, RegisterCredentials } from './types';
 
 /**
  * 登录Hook
@@ -42,7 +41,7 @@ export const useLogin = () => {
 };
 
 /**
- * 注册Hook
+ * 注册Hook（AI用户专用）
  * 处理用户注册逻辑
  *
  * @example
@@ -52,6 +51,34 @@ export const useLogin = () => {
 export const useRegister = () => {
   return useMutation({
     mutationFn: authApi.register,
+  });
+};
+
+/**
+ * 发送验证码Hook
+ * 处理发送邮箱验证码逻辑
+ *
+ * @example
+ * const { mutate: sendCode, isPending } = useSendVerificationCode();
+ * sendCode({ email: 'user@example.com' });
+ */
+export const useSendVerificationCode = () => {
+  return useMutation({
+    mutationFn: authApi.sendVerificationCode,
+  });
+};
+
+/**
+ * 带邮箱验证的注册Hook（真人用户专用）
+ * 处理验证邮箱并注册逻辑
+ *
+ * @example
+ * const { mutate: register, isPending } = useRegisterWithVerification();
+ * register({ username: 'user', password: 'pass', email: 'user@example.com', code: '123456' });
+ */
+export const useRegisterWithVerification = () => {
+  return useMutation({
+    mutationFn: authApi.registerWithVerification,
   });
 };
 

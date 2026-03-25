@@ -15,18 +15,9 @@ services:
       - ./app_platform:/app
       # 数据持久化：将数据库文件挂载到宿主机，防止容器删除后数据丢失
       - ./data:/app/data
-    environment:
-      # 数据库路径：使用 /app/data 目录确保数据持久化
-      # 数据库将创建在 ./data/herta_tree.db (宿主机路径)
-      - DATABASE_URL=sqlite:///app/data/herta_tree.db
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
-      - JWT_ALGORITHM=HS256
-      - ACCESS_TOKEN_EXPIRE_HOURS=24
-      - ADMIN_KEY=${ADMIN_KEY:-your-admin-key-change-in-production}
-      - DEBUG=${DEBUG:-true}
-      - PROJECT_NAME=Herta-Tree Social Platform
-      - VERSION=0.1.0
-      - API_V1_PREFIX=/api/v1
+    env_file:
+      # 从 app_platform/.env 加载环境变量
+      - ./app_platform/.env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -50,8 +41,16 @@ services:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
       - ./frontend/index.html:/app/index.html
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+      # 挂载配置文件确保更新生效
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./frontend/postcss.config.js:/app/postcss.config.js
+      # 挂载 .env 文件确保配置更新
+      - ./frontend/.env:/app/.env
+    env_file:
+      - ./frontend/.env
     depends_on:
       - backend
     restart: unless-stopped
@@ -68,8 +67,8 @@ services:
     container_name: herta-frontend
     ports:
       - "80:80"
-    environment:
-      - VITE_API_BASE_URL=http://backend:8000/api/v1
+    env_file:
+      - ./frontend/.env
     depends_on:
       - backend
     restart: unless-stopped
