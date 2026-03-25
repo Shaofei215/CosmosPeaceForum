@@ -51,15 +51,20 @@ def generate_verification_code(length: int = 6) -> str:
     return ''.join(random.choices(string.digits, k=length))
 
 
-def check_send_frequency_by_email(db: Session, email: str) -> Optional[int]:
+def check_send_frequency_by_email(
+    db: Session,
+    email: str,
+    purpose: str
+) -> Optional[int]:
     """
     检查发送频率限制
 
-    检查同一邮箱在指定时间间隔内是否已发送过验证码
+    检查同一邮箱在指定时间间隔内是否已发送过同类验证码
 
     Args:
         db: 数据库会话
         email: 邮箱地址
+        purpose: 验证码用途，用于区分注册和密码重置
 
     Returns:
         Optional[int]: 如果发送过于频繁，返回还需等待的秒数；否则返回 None
@@ -67,7 +72,10 @@ def check_send_frequency_by_email(db: Session, email: str) -> Optional[int]:
     interval = timedelta(minutes=settings.EMAIL_CODE_SEND_INTERVAL_MINUTES)
 
     latest_code = db.query(EmailVerificationCode).filter(
-        EmailVerificationCode.email == email
+        and_(
+            EmailVerificationCode.email == email,
+            EmailVerificationCode.purpose == purpose
+        )
     ).order_by(EmailVerificationCode.created_at.desc()).first()
 
     if latest_code:
@@ -148,7 +156,7 @@ def send_register_verification_code(
         )
 
     # 检查发送频率限制
-    remaining = check_send_frequency_by_email(db, email)
+    remaining = check_send_frequency_by_email(db, email, "register")
     if remaining:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -348,12 +356,13 @@ def verify_and_register(
             detail="该邮箱已被注册"
         )
 
-    # 查询最新的有效验证码
+    # 查询最新的有效验证码（未使用且未过期）
     verification = db.query(EmailVerificationCode).filter(
         and_(
             EmailVerificationCode.email == email,
             EmailVerificationCode.purpose == "register",
-            EmailVerificationCode.used == False
+            EmailVerificationCode.used == False,
+            EmailVerificationCode.expires_at > datetime.utcnow()
         )
     ).order_by(EmailVerificationCode.created_at.desc()).first()
 
@@ -361,12 +370,6 @@ def verify_and_register(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="注册信息无效，请重新获取验证码"
-        )
-
-    if verification.is_expired():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证码已过期，请重新获取"
         )
 
     if not verification.can_attempt(settings.EMAIL_CODE_MAX_ATTEMPTS):
@@ -525,7 +528,7 @@ def send_password_reset_code(
         )
 
     # 检查发送频率
-    remaining = check_send_frequency_by_email(db, email)
+    remaining = check_send_frequency_by_email(db, email, "reset_password")
     if remaining:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -616,13 +619,14 @@ def confirm_password_reset(
             detail="该邮箱未绑定任何已验证账号"
         )
 
-    # 查询最新未使用的重置验证码
+    # 查询最新未使用的重置验证码（未使用且未过期）
     verification = db.query(EmailVerificationCode).filter(
         and_(
             EmailVerificationCode.user_id == user.id,
             EmailVerificationCode.email == email,
             EmailVerificationCode.purpose == "reset_password",
-            EmailVerificationCode.used == False
+            EmailVerificationCode.used == False,
+            EmailVerificationCode.expires_at > datetime.utcnow()
         )
     ).order_by(EmailVerificationCode.created_at.desc()).first()
 
@@ -630,12 +634,6 @@ def confirm_password_reset(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="验证码无效，请重新获取"
-        )
-
-    if verification.is_expired():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证码已过期，请重新获取"
         )
 
     if not verification.can_attempt(settings.EMAIL_CODE_MAX_ATTEMPTS):

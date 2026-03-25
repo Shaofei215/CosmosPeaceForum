@@ -52,6 +52,16 @@
 - `PasswordResetRequest`: 密码重置请求模型（email）
 - `PasswordResetConfirmRequest`: 密码重置确认请求模型（email, code, new_password）
 
+#### `app/tasks/cleanup.py`
+**更改说明**: 新建验证码清理定时任务
+- `cleanup_expired_verification_codes()`: 清理过期验证码记录
+  - 删除已使用超过7天的验证码
+  - 删除已过期超过7天的验证码
+  - 每6小时执行一次
+
+#### `app/tasks/__init__.py`
+**更改说明**: 新建任务包初始化文件
+
 #### `app/utils/email_service.py`
 **更改说明**: 新建 SMTP 邮件服务模块
 - `EmailService`: SMTP 邮件服务类
@@ -115,6 +125,12 @@
 #### `requirements.txt`
 **更改说明**: 添加依赖
 - 新增 `email-validator==2.1.0`
+
+#### `app/main.py`
+**更改说明**: 添加定时任务调度器
+- 新增 `BackgroundScheduler`: 定时任务调度器
+- 新增 `start_scheduler()`: 启动调度器，注册清理任务
+- 新增 `lifespan()`: 应用生命周期管理，自动启动/停止调度器
 
 ---
 
@@ -408,10 +424,10 @@ EMAIL_CODE_MAX_ATTEMPTS=5
 2. 支持多种邮件服务商
 3. 添加邮件发送失败重试机制
 4. 添加邮件发送日志记录
-5. 实现验证码清理定时任务
+5. ~~实现验证码清理定时任务~~ ✅ 已实现（每6小时执行一次）
 6. 添加邮件发送成功/失败的 Webhook 通知
 
 ---
 
-**文档更新时间**: 2026.3.24 20:00
+**文档更新时间**: 2026.3.25
 **版本**: v1.8-Alpha-feat: 邮箱验证功能
