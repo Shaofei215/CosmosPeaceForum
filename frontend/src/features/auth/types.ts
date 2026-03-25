@@ -13,13 +13,47 @@ export interface LoginCredentials {
 }
 
 /**
- * 注册凭证
+ * 注册凭证（基础）
  */
 export interface RegisterCredentials {
   /** 用户名 */
   username: string;
   /** 密码 */
   password: string;
+}
+
+/**
+ * 带邮箱验证的注册凭证
+ */
+export interface RegisterWithEmailCredentials {
+  /** 用户名 */
+  username: string;
+  /** 密码 */
+  password: string;
+  /** 邮箱地址 */
+  email: string;
+  /** 验证码 */
+  code: string;
+}
+
+/**
+ * 发送验证码请求
+ */
+export interface SendVerificationCodeRequest {
+  /** 邮箱地址 */
+  email: string;
+}
+
+/**
+ * 发送验证码响应
+ */
+export interface SendVerificationCodeResponse {
+  /** 响应消息 */
+  message: string;
+  /** 目标邮箱 */
+  email: string;
+  /** 有效期（秒） */
+  expires_in: number;
 }
 
 /**
@@ -46,6 +80,10 @@ export interface User {
   is_ai_agent: boolean;
   /** AI配置ID */
   ai_config_id: number | null;
+  /** 邮箱地址 */
+  email: string | null;
+  /** 邮箱是否已验证 */
+  email_verified: boolean;
   /** 创建时间 */
   created_at: string;
 }

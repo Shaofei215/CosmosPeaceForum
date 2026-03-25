@@ -1,5 +1,5 @@
 # 应用配置模块
-# 管理应用的所有配置项
+# 管理应用的所有配置项，所有配置从环境变量/.env文件加载，无硬编码默认值
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -7,60 +7,45 @@ from functools import lru_cache
 class Settings(BaseSettings):
     """
     应用配置类
-    从环境变量或.env 文件加载配置
+    所有配置从环境变量或.env文件加载，生产环境必须正确配置
     """
-    # 项目名称
-    PROJECT_NAME: str = "Herta-Tree Social Platform"
+    # 应用基础配置
+    PROJECT_NAME: str
+    VERSION: str
+    API_V1_PREFIX: str
+    DEBUG: bool = False
 
-    # API 版本号
-    VERSION: str = "0.1.0"
+    # 数据库配置
+    DATABASE_URL: str
 
-    # API v1 版本前缀
-    API_V1_PREFIX: str = "/api/v1"
-
-    # 数据库连接 URL，默认使用 SQLite
-    DATABASE_URL: str = "sqlite:///./herta_tree.db"
-
-    # 调试模式开关
-    DEBUG: bool = True
-
-    # JWT 配置
-    JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_HOURS: int = 24
+    # JWT 认证配置
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_HOURS: int
 
     # 管理员密钥（用于 AI 账号创建）
-    ADMIN_KEY: str = "your-admin-key-change-in-production"
+    ADMIN_KEY: str
 
     # SMTP 邮件服务配置
-    # SMTP 服务器地址
-    SMTP_HOST: str = "smtp.qq.com"
-    # SMTP 服务器端口（SSL: 465, TLS: 587）
-    SMTP_PORT: int = 465
-    # SMTP 用户名（通常是邮箱地址）
-    SMTP_USER: str = ""
-    # SMTP 密码/授权码
-    SMTP_PASSWORD: str = ""
-    # 是否使用 SSL（true/false）
-    SMTP_USE_SSL: bool = True
-    # 发件人显示名称
-    SMTP_SENDER_NAME: str = "Herta-Tree"
-    # 发件人邮箱地址
-    SMTP_SENDER_EMAIL: str = "noreply@herta-tree.com"
+    SMTP_HOST: str
+    SMTP_PORT: int
+    SMTP_USER: str
+    SMTP_PASSWORD: str
+    SMTP_USE_SSL: bool
+    SMTP_SENDER_NAME: str
+    SMTP_SENDER_EMAIL: str
 
     # 邮箱验证码配置
-    # 验证码有效期（分钟）
-    EMAIL_CODE_EXPIRE_MINUTES: int = 10
-    # 同一邮箱发送间隔（分钟）
-    EMAIL_CODE_SEND_INTERVAL_MINUTES: int = 1
-    # 同一邮箱每日最大发送次数
-    EMAIL_CODE_DAILY_LIMIT: int = 10
-    # 验证码最大尝试次数
-    EMAIL_CODE_MAX_ATTEMPTS: int = 5
+    EMAIL_CODE_EXPIRE_MINUTES: int
+    EMAIL_CODE_SEND_INTERVAL_MINUTES: int
+    EMAIL_CODE_DAILY_LIMIT: int
+    EMAIL_CODE_MAX_ATTEMPTS: int
 
     class Config:
-        # 指定从.env 文件读取环境变量
+        # 指定从.env文件读取环境变量
         env_file = ".env"
+        # 允许从环境变量读取（优先级高于.env文件）
+        env_file_encoding = "utf-8"
 
 
 @lru_cache()

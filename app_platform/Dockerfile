@@ -14,7 +14,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # 安装系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# 创建数据目录并设置权限
+RUN mkdir -p /app/data && chmod 777 /app/data
 
 # 复制依赖文件
 COPY requirements.txt .
