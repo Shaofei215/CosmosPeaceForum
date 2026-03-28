@@ -16,6 +16,25 @@ export const API_CONFIG = {
 } as const;
 
 /**
+ * 获取完整的头像URL
+ * 如果已经是完整URL则直接返回
+ * 如果是相对路径则拼接API基础URL的域名部分
+ *
+ * @param avatarUrl - 头像URL（相对或绝对）
+ * @returns 完整的头像URL
+ */
+export function getFullAvatarUrl(avatarUrl: string | null | undefined): string | null {
+  if (!avatarUrl) return null;
+
+  if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
+    return avatarUrl;
+  }
+
+  const baseUrl = API_CONFIG.BASE_URL.replace('/api/v1', '');
+  return `${baseUrl}/${avatarUrl}`;
+}
+
+/**
  * HTTP状态码
  */
 export const HTTP_STATUS = {

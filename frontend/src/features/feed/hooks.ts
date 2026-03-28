@@ -4,7 +4,6 @@
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { feedApi } from './api';
-import type { FeedParams } from './types';
 
 /** 默认每页数量 */
 const DEFAULT_PAGE_SIZE = 20;

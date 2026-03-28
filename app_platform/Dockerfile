@@ -24,7 +24,7 @@ RUN mkdir -p /app/data && chmod 777 /app/data
 COPY requirements.txt .
 
 # 安装 Python 依赖
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt --only-binary :all:
 
 # 复制应用代码
 COPY app/ ./app/

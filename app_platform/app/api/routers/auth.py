@@ -24,6 +24,7 @@ from app.schemas.auth import (
     UserLogin,
     TokenResponse,
     UserResponse,
+    RegisterResponse,
 )
 from app.schemas.email_verification import (
     EmailCodeSendRequest,
@@ -335,15 +336,6 @@ def register(
         HTTPException 401: 管理员密钥无效
         HTTPException 400: AI 注册但未提供 ai_config_id
     """
-    existing_user = db.query(User).filter(
-        User.username == user_data.username
-    ).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户名已存在"
-        )
-
     # AI 用户注册
     if user_data.is_ai_agent:
         if x_admin_key is None:
@@ -360,6 +352,21 @@ def register(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="AI 注册需要提供 ai_config_id"
+            )
+        if not user_data.username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="AI 注册需要提供用户名"
+            )
+
+        # 检查用户名是否已存在
+        existing_user = db.query(User).filter(
+            User.username == user_data.username
+        ).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="用户名已存在"
             )
 
         password_hash = get_password_hash(user_data.password)
@@ -390,30 +397,30 @@ def register(
 
 @router.post(
     "/register/verify",
-    response_model=UserResponse,
+    response_model=RegisterResponse,
     status_code=status.HTTP_201_CREATED
 )
 def verify_and_register(
     user_data: UserRegister,
     code: str = Query(..., description="邮箱验证码"),
     db: Session = Depends(get_db)
-) -> UserResponse:
+) -> RegisterResponse:
     """
-    验证邮箱验证码并创建用户（真人用户注册）
+    验证邮箱验证码并创建用户（真人用户注册两步流程第一步）
 
     - **真人用户专用**：验证邮箱验证码后创建用户
     - AI 用户请使用 POST /auth/register
+    - 注册成功后需要调用 /users/{user_id} 接口完善用户名等信息
 
     Args:
-        user_data: 用户注册信息
+        user_data: 用户注册信息（包含邮箱和密码）
         code: 邮箱验证码（Query 参数）
         db: 数据库会话
 
     Returns:
-        UserResponse: 创建的用户信息
+        RegisterResponse: 包含用户ID和注册成功消息
 
     Raises:
-        HTTPException 400: 用户名已存在
         HTTPException 400: AI 用户请使用其他接口
         HTTPException 400: 真人用户必须提供邮箱地址
         HTTPException 400: 该邮箱已被注册
@@ -425,15 +432,6 @@ def verify_and_register(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="AI 用户请使用 POST /auth/register"
-        )
-
-    existing_user = db.query(User).filter(
-        User.username == user_data.username
-    ).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户名已存在"
         )
 
     # 真人用户必须提供邮箱
@@ -489,11 +487,11 @@ def verify_and_register(
     verification.used = True
     verification.used_at = datetime.utcnow()
 
-    # 创建用户
+    # 创建用户（暂时使用临时用户名，后续在资料完善页面更新）
     password_hash = get_password_hash(user_data.password)
 
     db_user = User(
-        username=user_data.username,
+        username=f"用户_{verification.id}",  # 临时用户名，后续需在资料完善页面更新
         password_hash=password_hash,
         is_ai_agent=False,
         ai_config_id=None,
@@ -509,7 +507,21 @@ def verify_and_register(
     verification.user_id = db_user.id
     db.commit()
 
-    return UserResponse.model_validate(db_user)
+    # 注册成功后生成访问令牌
+    access_token_expires = timedelta(hours=settings.ACCESS_TOKEN_EXPIRE_HOURS)
+    access_token = create_access_token(
+        data={"sub": str(db_user.id), "email": email},
+        expires_delta=access_token_expires
+    )
+
+    return RegisterResponse(
+        id=db_user.id,
+        username=db_user.username,
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+        message="注册成功，请完善您的个人资料"
+    )
 
 
 # ========== 用户登录 ==========

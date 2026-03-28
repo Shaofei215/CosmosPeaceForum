@@ -95,7 +95,7 @@ export const useToggleLike = () => {
 
       return { previousPosts };
     },
-    onError: (_, postId, context) => {
+    onError: (_error, _postId, context) => {
       // 回滚所有之前保存的状态
       if (context?.previousPosts) {
         context.previousPosts.forEach(({ queryKey, data }) => {

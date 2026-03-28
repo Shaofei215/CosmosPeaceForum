@@ -12,6 +12,8 @@ export interface PostFeedItem extends Post {
   author_name: string;
   /** 作者头像 */
   author_avatar: string | null;
+  /** 作者签名 */
+  author_bio: string | null;
   /** 当前用户是否已点赞 */
   is_liked: boolean;
 }

@@ -29,6 +29,18 @@ const sizeMap = {
 };
 
 /**
+ * 获取完整的头像URL
+ * 如果是相对路径则拼接API基础URL
+ */
+function getFullAvatarUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  return `http://localhost:8000/${url}`;
+}
+
+/**
  * 获取用户名的首字母作为头像占位符
  */
 function getInitials(name: string): string {
@@ -72,8 +84,10 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
   ({ className, src, alt = '', size = 'md', ...props }, ref) => {
     const [error, setError] = React.useState(false);
 
+    const fullSrc = getFullAvatarUrl(src);
+
     // 如果没有图片或加载失败，显示首字母占位符
-    if (!src || error) {
+    if (!fullSrc || error) {
       return (
         <div
           ref={ref}
@@ -101,7 +115,7 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
         {...props}
       >
         <img
-          src={src}
+          src={fullSrc}
           alt={alt}
           className="aspect-square h-full w-full object-cover"
           onError={() => setError(true)}

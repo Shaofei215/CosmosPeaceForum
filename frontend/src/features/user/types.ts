@@ -22,8 +22,22 @@ export interface UserProfile {
  * 更新用户数据
  */
 export interface UpdateUserData {
+  /** 用户名 */
+  username?: string;
   /** 个人简介 */
   bio?: string;
   /** 头像URL */
+  avatar_url?: string;
+}
+
+/**
+ * 完善用户资料数据
+ */
+export interface CompleteProfileData {
+  /** 用户名（必填） */
+  username: string;
+  /** 个人简介（可选） */
+  bio?: string;
+  /** 头像URL（可选） */
   avatar_url?: string;
 }

@@ -27,7 +27,7 @@ export function LeftSidebar() {
               className="flex justify-center group"
             >
               <Avatar
-                src={null}
+                src={user.avatar_url}
                 alt={user.username}
                 size="xl"
                 className="group-hover:ring-2 group-hover:ring-primary/20 transition-all"

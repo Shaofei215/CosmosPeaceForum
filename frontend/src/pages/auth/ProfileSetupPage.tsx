@@ -1,0 +1,168 @@
+/**
+ * 资料完善页面
+ * 用户注册后设置用户名、签名和头像
+ */
+
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useCompleteProfile, useUploadAvatar } from '@/features/user';
+import { useAuthStore } from '@/features/auth';
+import { AvatarUpload } from '@/shared/components/avatar-upload';
+import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
+
+export default function ProfileSetupPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuthStore();
+
+  const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
+  const [error, setError] = useState('');
+  const [avatarError, setAvatarError] = useState('');
+
+  const { mutate: completeProfile, isPending: isCompleting } = useCompleteProfile();
+  const { mutate: uploadAvatar, isPending: isUploading } = useUploadAvatar();
+
+  const isPending = isCompleting || isUploading;
+
+  useEffect(() => {
+    if (!location.state?.userId && !user?.id) {
+      navigate('/register');
+    }
+  }, [location.state, user, navigate]);
+
+  const handleAvatarUpload = (file: File) => {
+    setAvatarError('');
+    uploadAvatar(file, {
+      onError: (err: { message?: string }) => {
+        setAvatarError(err.message || '头像上传失败');
+      },
+    });
+  };
+
+  const handleAvatarDelete = () => {
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!username.trim()) {
+      setError('请输入用户名');
+      return;
+    }
+
+    if (username.length < 3) {
+      setError('用户名至少需要3个字符');
+      return;
+    }
+
+    if (username.length > 50) {
+      setError('用户名最多50个字符');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(username)) {
+      setError('用户名只能包含字母、数字、下划线和中文');
+      return;
+    }
+
+    const userId = location.state?.userId || user?.id;
+
+    completeProfile(
+      { userId, data: { username: username.trim(), bio: bio.trim() || undefined } },
+      {
+        onSuccess: () => {
+          navigate('/feed');
+        },
+        onError: (err: { message?: string }) => {
+          setError(err.message || '保存失败，请稍后重试');
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 relative z-10">
+      <Card className="w-full max-w-md rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 border-0 shadow-none">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">完善个人资料</CardTitle>
+          <p className="text-sm text-muted-foreground text-center mt-2">
+            设置您的用户名和头像，让大家认识您
+          </p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
+                {error}
+              </div>
+            )}
+
+            <div className="flex justify-center">
+              <AvatarUpload
+                avatarUrl={user?.avatar_url}
+                username={username || '用户'}
+                size="xl"
+                isUploading={isUploading}
+                onUpload={handleAvatarUpload}
+                onDelete={handleAvatarDelete}
+                error={avatarError}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="username" className="text-sm font-medium">
+                用户名 <span className="text-destructive">*</span>
+              </label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="请输入用户名（3-50个字符）"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                disabled={isPending}
+                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                maxLength={50}
+              />
+              <p className="text-xs text-muted-foreground">
+                用户名设置后不可更改，将作为您的唯一标识
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="bio" className="text-sm font-medium">
+                个人签名
+              </label>
+              <Input
+                id="bio"
+                type="text"
+                placeholder="向大家介绍一下自己（可选）"
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                disabled={isPending}
+                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                maxLength={200}
+              />
+              <p className="text-xs text-muted-foreground">
+                最长200个字符
+              </p>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full rounded-lg"
+              disabled={isPending}
+            >
+              {isCompleting ? '保存中...' : '完成设置'}
+            </Button>
+
+            <p className="text-xs text-muted-foreground text-center">
+              您之后可以在个人资料页面修改这些信息
+            </p>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

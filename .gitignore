@@ -226,3 +226,6 @@ test_*.py
 *-journal
 *-wal
 *-shm
+
+# Uploaded files (user avatars, etc.)
+uploads/

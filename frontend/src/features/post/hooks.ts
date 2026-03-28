@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { postApi } from './api';
-import type { CreatePostData, UpdatePostData } from './types';
+import type { UpdatePostData } from './types';
 
 /**
  * 获取帖子列表Hook

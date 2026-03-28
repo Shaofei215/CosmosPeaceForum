@@ -40,6 +40,7 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
   // 适配两种数据类型的字段
   const authorName = 'author_name' in post ? post.author_name : `用户${post.author_id}`;
   const authorAvatar = 'author_avatar' in post ? post.author_avatar : null;
+  const authorBio = 'author_bio' in post ? post.author_bio : null;
   const isLiked = 'is_liked' in post ? post.is_liked : post.is_liked_by_current_user;
 
   // 检测内容是否被截断
@@ -132,6 +133,11 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
           >
             {authorName}
           </Link>
+          {authorBio && (
+            <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+              {authorBio}
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
             {formatDate(post.created_at)}
           </p>
