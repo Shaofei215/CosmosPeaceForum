@@ -1,7 +1,7 @@
 /**
  * 根布局组件
  * 提供应用的四块布局结构：左块、中间块、右块、顶块
- * 
+ *
  * 显示规则：
  * - 顶块和右块：除登录/注册页外的所有页面显示
  * - 左块：除登录/注册页和自己的个人主页外的页面显示
@@ -14,6 +14,16 @@ import { TopBar } from '@/widgets/top-bar';
 import { useAuthStore } from '@/features/auth';
 
 /**
+ * 认证页面路径列表
+ */
+const AUTH_PATHS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+];
+
+/**
  * 根布局组件
  */
 export function RootLayout() {
@@ -21,10 +31,12 @@ export function RootLayout() {
   const { user } = useAuthStore();
   const pathname = location.pathname;
 
-  // 判断是否为登录/注册页
-  const isAuthPage = pathname === '/login' || pathname === '/register';
+  // 判断是否为登录/注册页（支持子路径如 /login/email）
+  const isAuthPage = AUTH_PATHS.some(path =>
+    pathname === path || pathname.startsWith(path + '/')
+  );
 
-  // 判断是否为自己的个人主页
+  // 判断是否为自己个人主页
   const isOwnProfilePage = user ? pathname === `/user/${user.id}` : false;
 
   // 显示规则

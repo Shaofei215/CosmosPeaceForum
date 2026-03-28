@@ -9,11 +9,14 @@ import { useAuthStore } from './stores/authStore';
 
 /**
  * 登录Hook
- * 处理用户登录逻辑，成功后保存认证信息
+ * 使用邮箱+密码或邮箱+验证码登录，成功后保存认证信息
  *
  * @example
  * const { mutate: login, isPending } = useLogin();
- * login({ username: 'user', password: 'pass' });
+ * // 密码登录
+ * login({ email: 'user@example.com', password: 'pass' });
+ * // 验证码登录
+ * login({ email: 'user@example.com', code: '123456' });
  */
 export const useLogin = () => {
   const { setAuth } = useAuthStore();
@@ -37,6 +40,20 @@ export const useLogin = () => {
         throw error;
       }
     },
+  });
+};
+
+/**
+ * 发送登录验证码Hook
+ * 处理发送登录验证码逻辑
+ *
+ * @example
+ * const { mutate: sendLoginCode, isPending } = useSendLoginCode();
+ * sendLoginCode({ email: 'user@example.com' });
+ */
+export const useSendLoginCode = () => {
+  return useMutation({
+    mutationFn: authApi.sendLoginCode,
   });
 };
 
@@ -117,4 +134,32 @@ export const useLogout = () => {
     // 清除所有查询缓存
     queryClient.clear();
   };
+};
+
+/**
+ * 发送密码重置验证码Hook
+ * 处理发送密码重置验证码逻辑
+ *
+ * @example
+ * const { mutate: sendResetCode, isPending } = useSendPasswordResetCode();
+ * sendResetCode({ email: 'user@example.com' });
+ */
+export const useSendPasswordResetCode = () => {
+  return useMutation({
+    mutationFn: authApi.sendPasswordResetCode,
+  });
+};
+
+/**
+ * 确认密码重置Hook
+ * 处理验证邮箱验证码并重置密码逻辑
+ *
+ * @example
+ * const { mutate: resetPassword, isPending } = useConfirmPasswordReset();
+ * resetPassword({ email: 'user@example.com', code: '123456', new_password: 'newpass123' });
+ */
+export const useConfirmPasswordReset = () => {
+  return useMutation({
+    mutationFn: authApi.confirmPasswordReset,
+  });
 };
