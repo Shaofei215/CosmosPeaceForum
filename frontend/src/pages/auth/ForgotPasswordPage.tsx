@@ -17,6 +17,7 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [countdown, setCountdown] = useState(0);
 
   const { mutate: sendResetCode, isPending: isSending } = useSendPasswordResetCode();
@@ -34,6 +35,7 @@ export default function ForgotPasswordPage() {
    */
   const handleSendCode = () => {
     setError('');
+    setSuccessMessage('');
 
     // 邮箱格式验证
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -51,6 +53,8 @@ export default function ForgotPasswordPage() {
       {
         onSuccess: () => {
           setCountdown(60);
+          setSuccessMessage('验证码已发送至您的邮箱，有效期10分钟');
+          setTimeout(() => setSuccessMessage(''), 5000);
         },
         onError: (err: { message?: string }) => {
           setError(err.message || '发送验证码失败，请稍后重试');
@@ -102,6 +106,11 @@ export default function ForgotPasswordPage() {
             {error && (
               <div className="p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
                 {error}
+              </div>
+            )}
+            {successMessage && (
+              <div className="p-3 text-sm text-green-600 bg-green-50/80 backdrop-blur-sm rounded-lg">
+                {successMessage}
               </div>
             )}
 

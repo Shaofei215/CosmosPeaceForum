@@ -84,8 +84,8 @@ export default function LoginPage() {
       {
         onSuccess: (data) => {
           setCountdown(60);
-          setSuccessMessage(data.message);
-          setTimeout(() => setSuccessMessage(''), 3000);
+          setSuccessMessage(`${data.message}，有效期10分钟`);
+          setTimeout(() => setSuccessMessage(''), 5000);
         },
         onError: (err: { message?: string }) => {
           setError(err.message || '发送验证码失败，请稍后重试');
