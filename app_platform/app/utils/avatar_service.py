@@ -61,9 +61,13 @@ async def save_avatar_file(file: UploadFile, user_id: int) -> str:
     settings = get_settings()
     upload_dir = get_avatar_upload_dir_path()
 
-    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
-    if file_ext.lower() not in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
-        file_ext = 'jpg'
+    allowed_extensions = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
+    file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+    if file_ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail="不支持的图片格式，请上传以下格式之一：jpg, jpeg, png, gif, webp"
+        )
 
     unique_filename = f"avatar_{user_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
     file_path = os.path.join(upload_dir, unique_filename)
