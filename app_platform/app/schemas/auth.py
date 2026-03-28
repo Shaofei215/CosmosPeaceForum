@@ -23,9 +23,19 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     """
     用户登录请求模型
+    支持邮箱+密码或邮箱+验证码登录
     """
-    username: str = Field(..., min_length=1)
-    password: str = Field(..., min_length=1)
+    email: EmailStr = Field(..., description="邮箱地址")
+    password: Optional[str] = Field(default=None, min_length=6, description="密码（与code二选一）")
+    code: Optional[str] = Field(default=None, min_length=6, max_length=6, description="验证码（与password二选一）")
+
+    def validate_login_method(self):
+        """验证登录方式：必须提供password或code其中一个，但不能同时提供"""
+        if self.password is None and self.code is None:
+            raise ValueError("必须提供密码或验证码")
+        if self.password is not None and self.code is not None:
+            raise ValueError("不能同时提供密码和验证码")
+        return self
 
 
 class TokenResponse(BaseModel):

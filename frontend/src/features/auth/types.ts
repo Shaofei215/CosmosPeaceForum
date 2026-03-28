@@ -4,12 +4,15 @@
 
 /**
  * 登录凭证
+ * 支持邮箱+密码或邮箱+验证码登录
  */
 export interface LoginCredentials {
-  /** 用户名 */
-  username: string;
-  /** 密码 */
-  password: string;
+  /** 邮箱地址 */
+  email: string;
+  /** 密码（与code二选一） */
+  password?: string;
+  /** 验证码（与password二选一） */
+  code?: string;
 }
 
 /**
@@ -100,4 +103,24 @@ export interface AuthState {
   isAuthenticated: boolean;
   /** 是否正在加载 */
   isLoading: boolean;
+}
+
+/**
+ * 发送密码重置验证码请求
+ */
+export interface PasswordResetCodeRequest {
+  /** 邮箱地址 */
+  email: string;
+}
+
+/**
+ * 确认密码重置请求
+ */
+export interface PasswordResetConfirmRequest {
+  /** 邮箱地址 */
+  email: string;
+  /** 验证码 */
+  code: string;
+  /** 新密码 */
+  new_password: string;
 }

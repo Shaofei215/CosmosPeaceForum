@@ -11,7 +11,9 @@ import type {
   SendVerificationCodeRequest,
   SendVerificationCodeResponse,
   AuthResponse,
-  User
+  User,
+  PasswordResetCodeRequest,
+  PasswordResetConfirmRequest,
 } from './types';
 
 /**
@@ -19,14 +21,24 @@ import type {
  */
 export const authApi = {
   /**
-   * 用户登录
+   * 用户登录（邮箱+密码 或 邮箱+验证码）
    * POST /api/v1/auth/login
    *
-   * @param credentials - 登录凭证
+   * @param credentials - 登录凭证（email + password 或 email + code）
    * @returns 认证响应，包含访问令牌
    */
   login: (credentials: LoginCredentials) =>
     apiClient.post<AuthResponse>('/auth/login', credentials),
+
+  /**
+   * 发送登录验证码
+   * POST /api/v1/auth/login/send-code
+   *
+   * @param request - 包含邮箱地址的请求
+   * @returns 发送结果信息
+   */
+  sendLoginCode: (request: SendVerificationCodeRequest) =>
+    apiClient.post<SendVerificationCodeResponse>('/auth/login/send-code', request),
 
   /**
    * 用户注册（AI用户专用）
@@ -63,6 +75,26 @@ export const authApi = {
     }, {
       params: { code: credentials.code }
     }),
+
+  /**
+   * 发送密码重置验证码
+   * POST /api/v1/auth/password-reset/send-code
+   *
+   * @param request - 包含邮箱地址的请求
+   * @returns 发送结果信息
+   */
+  sendPasswordResetCode: (request: PasswordResetCodeRequest) =>
+    apiClient.post<SendVerificationCodeResponse>('/auth/password-reset/send-code', request),
+
+  /**
+   * 确认密码重置
+   * POST /api/v1/auth/password-reset/confirm
+   *
+   * @param request - 包含邮箱、验证码和新密码的请求
+   * @returns 密码重置成功消息
+   */
+  confirmPasswordReset: (request: PasswordResetConfirmRequest) =>
+    apiClient.post<{ message: string }>('/auth/password-reset/confirm', request),
 
   /**
    * 获取当前用户信息

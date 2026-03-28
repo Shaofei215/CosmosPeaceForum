@@ -454,6 +454,223 @@ EMAIL_RESET_TEMPLATE = Template("""
 </html>
 """)
 
+# 登录验证码邮件 HTML 模板
+EMAIL_LOGIN_TEMPLATE = Template("""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* ========== CSS 变量定义（参考 style-guide.md）========== */
+        :root {
+            --background: 0 0% 100%;
+            --foreground: 222.2 84% 4.9%;
+            --card: 0 0% 100%;
+            --card-foreground: 222.2 84% 4.9%;
+            --primary: 222.2 47.4% 11.2%;
+            --primary-foreground: 210 40% 98%;
+            --secondary: 210 40% 96.1%;
+            --muted: 210 40% 96.1%;
+            --muted-foreground: 215.4 16.3% 46.9%;
+            --theme-primary: 262 83% 58%;
+            --theme-primary-light: 262 83% 65%;
+            --theme-primary-dark: 262 83% 45%;
+            --radius: 0.5rem;
+        }
+
+        /* ========== 基础样式 ========== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'HYWH65S', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: hsl(var(--foreground));
+            background-color: hsl(var(--background));
+        }
+
+        /* ========== 页面背景（多层渐变，参考 style-guide.md 9.1）========== */
+        .page-background {
+            background:
+                radial-gradient(ellipse at left top, hsl(230 70% 55% / 0.55) 0%, transparent 50%),
+                radial-gradient(ellipse at right top, hsl(210 75% 60% / 0.5) 0%, transparent 50%),
+                radial-gradient(ellipse at left bottom, hsl(220 70% 62% / 0.5) 0%, transparent 50%),
+                radial-gradient(ellipse at right bottom, hsl(200 80% 65% / 0.55) 0%, transparent 50%),
+                radial-gradient(ellipse at center, hsl(215 65% 65% / 0.25) 0%, transparent 70%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        /* ========== 容器样式 ========== */
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* ========== 玻璃态卡片（统一毛玻璃，无边框无阴影）========== */
+        .glass-card {
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: none;
+            box-shadow: none;
+        }
+
+        /* ========== 头部样式 ========== */
+        .header {
+            background: linear-gradient(135deg, hsl(var(--theme-primary)) 0%, hsl(var(--theme-primary-dark)) 100%);
+            color: white;
+            padding: 32px 24px;
+            text-align: center;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0.9;
+        }
+
+        /* ========== 内容区域（毛玻璃）========== */
+        .content {
+            padding: 32px 24px;
+            background: rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 0;
+        }
+
+        .content p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: hsl(var(--foreground));
+            margin-bottom: 16px;
+        }
+
+        .content p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* ========== 验证码输入框样式（参考 style-guide.md 6.2 无边框变体）========== */
+        .code-input {
+            width: 100%;
+            border: 0;
+            box-shadow: none;
+            background: hsl(var(--muted) / 0.5);
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin: 24px 0;
+            text-align: center;
+        }
+
+        .code-input:focus {
+            outline: none;
+            background: hsl(var(--muted) / 0.7);
+        }
+
+        .code-text {
+            font-size: 32px;
+            font-weight: 700;
+            color: hsl(var(--theme-primary));
+            letter-spacing: 12px;
+            border: none;
+            background: transparent;
+            text-align: center;
+            width: 100%;
+        }
+
+        .code-text:focus {
+            outline: none;
+        }
+
+        /* ========== 警告提示 ========== */
+        .warning {
+            color: hsl(0 84.2% 60.2%);
+            font-size: 12px;
+            background: hsl(0 84.2% 60.2% / 0.1);
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        /* ========== 底部信息 ========== */
+        .footer {
+            padding: 24px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 0 0 12px 12px;
+        }
+
+        .footer p {
+            font-size: 12px;
+            color: hsl(var(--muted-foreground));
+            line-height: 1.5;
+        }
+
+        /* ========== 辅助信息 ========== */
+        .meta-info {
+            font-size: 12px;
+            color: hsl(var(--muted-foreground));
+            margin-top: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-background">
+        <div class="container">
+            <div class="glass-card">
+                <!-- 头部 -->
+                <div class="header">
+                    <h1>🌳 Herta-Tree</h1>
+                    <p>账号登录验证</p>
+                </div>
+
+                <!-- 内容 -->
+                <div class="content">
+                    <p>您好，</p>
+                    <p>您正在登录 Herta-Tree 账号。请使用以下验证码完成登录：</p>
+
+                    <!-- 验证码输入框样式 -->
+                    <div class="code-input">
+                        <input type="text" class="code-text" value="$code" readonly />
+                    </div>
+
+                    <!-- 有效期信息 -->
+                    <p class="meta-info">验证码将在 $expire_minutes 分钟后过期，请尽快完成验证。</p>
+
+                    <!-- 警告 -->
+                    <div class="warning">
+                        ⚠️ 请勿将验证码泄露给他人，如果这不是您的操作，请立即检查账号安全。
+                    </div>
+                </div>
+
+                <!-- 底部 -->
+                <div class="footer">
+                    <p>此邮件由 Herta-Tree 系统自动发送，请勿回复。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+""")
+
 
 class EmailService:
     """
@@ -512,7 +729,7 @@ class EmailService:
         Args:
             to_email: 收件人邮箱地址
             code: 6位数字验证码
-            purpose: 验证码用途，"register" 或 "reset_password"
+            purpose: 验证码用途，"register" / "login" / "reset_password"
 
         Returns:
             bool: 发送成功返回 True，失败返回 False
@@ -521,6 +738,9 @@ class EmailService:
             if purpose == "reset_password":
                 template = EMAIL_RESET_TEMPLATE
                 subject = "【Herta-Tree】密码重置验证码"
+            elif purpose == "login":
+                template = EMAIL_LOGIN_TEMPLATE
+                subject = "【Herta-Tree】登录验证码"
             else:
                 template = EMAIL_REGISTER_TEMPLATE
                 subject = "【Herta-Tree】注册验证码"

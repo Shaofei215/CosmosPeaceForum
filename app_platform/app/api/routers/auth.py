@@ -206,6 +206,103 @@ def send_register_verification_code(
     )
 
 
+@router.post(
+    "/login/send-code",
+    response_model=EmailCodeSendResponse,
+    status_code=status.HTTP_200_OK
+)
+def send_login_verification_code(
+    request: EmailCodeSendRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    发送登录邮箱验证码
+
+    - **无需认证**
+    - 用于真人用户验证码登录
+    - 同一邮箱发送间隔内只能发送一次
+    - 同一邮箱每日最多发送指定次数
+
+    Args:
+        request: 包含邮箱地址的请求体
+        db: 数据库会话
+
+    Returns:
+        EmailCodeSendResponse: 发送结果信息
+
+    Raises:
+        HTTPException 400: 该邮箱未绑定任何已验证账号
+        HTTPException 429: 发送过于频繁或已达每日上限
+        HTTPException 500: 邮件发送失败
+    """
+    email = request.email.lower()
+
+    # 查找已验证的真人用户
+    user = db.query(User).filter(
+        and_(
+            User.email == email,
+            User.email_verified == True,
+            User.is_ai_agent == False
+        )
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该邮箱未绑定任何已验证账号"
+        )
+
+    # 检查发送频率限制
+    remaining = check_send_frequency_by_email(db, email)
+    if remaining:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"发送过于频繁，请 {remaining} 秒后再试",
+            headers={"Retry-After": str(remaining)}
+        )
+
+    # 检查每日发送次数限制
+    if not check_daily_limit_by_email(db, email):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="今日发送次数已达上限，请明天再试"
+        )
+
+    # 生成验证码
+    code = generate_verification_code()
+
+    # 创建验证码记录
+    expires_at = datetime.utcnow() + timedelta(
+        minutes=settings.EMAIL_CODE_EXPIRE_MINUTES
+    )
+    verification = EmailVerificationCode(
+        user_id=user.id,
+        email=email,
+        code=code,
+        purpose="login",
+        expires_at=expires_at
+    )
+
+    db.add(verification)
+    db.commit()
+
+    # 发送邮件
+    success = email_service.send_verification_email(email, code, "login")
+
+    if not success:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="邮件发送失败，请稍后重试"
+        )
+
+    return EmailCodeSendResponse(
+        message="验证码已发送至您的邮箱",
+        email=email,
+        expires_in=settings.EMAIL_CODE_EXPIRE_MINUTES * 60
+    )
+
+
 # ========== 用户注册（AI 用户直接注册） ==========
 
 
@@ -426,32 +523,107 @@ def login(
     """
     用户登录
 
-    使用用户名和密码登录，返回 JWT Token
+    使用邮箱+密码或邮箱+验证码登录，返回 JWT Token
+    两种登录方式二选一：
+    - 密码登录：提供 email 和 password
+    - 验证码登录：提供 email 和 code
 
     Args:
-        user_data: 用户登录信息
+        user_data: 用户登录信息（email + password 或 email + code）
         db: 数据库会话
 
     Returns:
         TokenResponse: 包含 access_token 的响应
 
     Raises:
-        HTTPException 401: 用户名或密码错误
+        HTTPException 400: 请求参数错误
+        HTTPException 401: 邮箱或密码/验证码错误
     """
-    user = db.query(User).filter(User.username == user_data.username).first()
+    # 验证登录方式
+    if user_data.password is None and user_data.code is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="必须提供密码或验证码"
+        )
+    if user_data.password is not None and user_data.code is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能同时提供密码和验证码"
+        )
+
+    email = user_data.email.lower()
+
+    # 查找已验证的真人用户
+    user = db.query(User).filter(
+        and_(
+            User.email == email,
+            User.email_verified == True,
+            User.is_ai_agent == False
+        )
+    ).first()
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误"
+            detail="邮箱或密码错误"
         )
 
-    if user.password_hash is None or not verify_password(
-        user_data.password, user.password_hash
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误"
-        )
+    # 密码登录方式
+    if user_data.password is not None:
+        if user.password_hash is None or not verify_password(
+            user_data.password, user.password_hash
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="邮箱或密码错误"
+            )
+
+    # 验证码登录方式
+    else:
+        # 查询最新的有效登录验证码
+        verification = db.query(EmailVerificationCode).filter(
+            and_(
+                EmailVerificationCode.user_id == user.id,
+                EmailVerificationCode.email == email,
+                EmailVerificationCode.purpose == "login",
+                EmailVerificationCode.used == False
+            )
+        ).order_by(EmailVerificationCode.created_at.desc()).first()
+
+        # 统一错误信息，避免泄露验证码状态（无效、过期、尝试次数过多）
+        INVALID_CODE_MESSAGE = "验证码错误"
+
+        # 检查验证码是否存在、是否过期、是否超过尝试次数
+        if not verification:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=INVALID_CODE_MESSAGE
+            )
+
+        if verification.is_expired():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=INVALID_CODE_MESSAGE
+            )
+
+        if not verification.can_attempt(settings.EMAIL_CODE_MAX_ATTEMPTS):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=INVALID_CODE_MESSAGE
+            )
+
+        if verification.code != user_data.code:
+            verification.attempt_count += 1
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=INVALID_CODE_MESSAGE
+            )
+
+        # 验证成功，标记验证码已使用
+        verification.used = True
+        verification.used_at = datetime.utcnow()
+        db.commit()
 
     access_token = create_access_token(data={"sub": str(user.id)})
 
