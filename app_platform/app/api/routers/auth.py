@@ -587,31 +587,34 @@ def login(
             )
         ).order_by(EmailVerificationCode.created_at.desc()).first()
 
+        # 统一错误信息，避免泄露验证码状态（无效、过期、尝试次数过多）
+        INVALID_CODE_MESSAGE = "验证码错误"
+
+        # 检查验证码是否存在、是否过期、是否超过尝试次数
         if not verification:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="验证码无效，请重新获取"
+                detail=INVALID_CODE_MESSAGE
             )
 
         if verification.is_expired():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="验证码已过期，请重新获取"
+                detail=INVALID_CODE_MESSAGE
             )
 
         if not verification.can_attempt(settings.EMAIL_CODE_MAX_ATTEMPTS):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="验证失败次数过多，请重新获取验证码"
+                detail=INVALID_CODE_MESSAGE
             )
 
         if verification.code != user_data.code:
             verification.attempt_count += 1
             db.commit()
-            remaining = settings.EMAIL_CODE_MAX_ATTEMPTS - verification.attempt_count
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"验证码错误，还剩 {remaining} 次尝试机会"
+                detail=INVALID_CODE_MESSAGE
             )
 
         # 验证成功，标记验证码已使用
