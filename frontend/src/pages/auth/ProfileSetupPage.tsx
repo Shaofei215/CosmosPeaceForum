@@ -54,6 +54,7 @@ export default function ProfileSetupPage() {
     setAvatarError('');
     uploadAvatar(file, {
       onSuccess: () => {
+        window.location.reload();
       },
       onError: (err: unknown) => {
         setAvatarError(extractErrorMessage(err) || '头像上传失败');
