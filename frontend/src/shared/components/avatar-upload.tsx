@@ -14,7 +14,7 @@ interface AvatarUploadProps {
   /** 用户名（用于显示首字母） */
   username?: string;
   /** 头像尺寸 */
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   /** 是否禁用 */
   disabled?: boolean;
   /** 上传中状态 */
@@ -129,9 +129,20 @@ export function AvatarUpload({
         />
 
         {!disabled && !isUploading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-            <Camera className="w-6 h-6 text-white" />
-          </div>
+          <>
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+              <Camera className="w-6 h-6 text-white" />
+            </div>
+            {displayUrl && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="absolute -top-1 -right-1 w-6 h-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-destructive/90"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </>
         )}
 
         {isUploading && (
@@ -149,17 +160,6 @@ export function AvatarUpload({
           disabled={disabled || isUploading}
         />
       </div>
-
-      {displayUrl && !disabled && !isUploading && (
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
-        >
-          <X className="w-3 h-3" />
-          删除头像
-        </button>
-      )}
 
       {error && (
         <p className="text-xs text-destructive">{error}</p>

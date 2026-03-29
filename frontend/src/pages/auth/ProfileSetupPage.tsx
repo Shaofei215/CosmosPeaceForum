@@ -85,8 +85,13 @@ export default function ProfileSetupPage() {
       return;
     }
 
-    if (username.length > 50) {
-      setError('用户名最多50个字符');
+    if (username.length > 10) {
+      setError('用户名最多10个字符');
+      return;
+    }
+
+    if (bio.length > 20) {
+      setError('签名最多20个字符');
       return;
     }
 
@@ -115,9 +120,6 @@ export default function ProfileSetupPage() {
       <Card className="w-full max-w-md rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 border-0 shadow-none">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">完善个人资料</CardTitle>
-          <p className="text-sm text-muted-foreground text-center mt-2">
-            设置您的用户名和头像，让大家认识您
-          </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -131,7 +133,7 @@ export default function ProfileSetupPage() {
               <AvatarUpload
                 avatarUrl={user?.avatar_url}
                 username={username || '用户'}
-                size="xl"
+                size="2xl"
                 isUploading={isUploading}
                 onUpload={handleAvatarUpload}
                 onDelete={handleAvatarDelete}
@@ -140,41 +142,45 @@ export default function ProfileSetupPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="username" className="text-sm font-medium">
-                用户名 <span className="text-destructive">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="username" className="text-sm font-medium">
+                  用户名 <span className="text-destructive">*</span>
+                </label>
+                <span className="text-xs text-muted-foreground">
+                  {username.length}/10
+                </span>
+              </div>
               <Input
                 id="username"
                 type="text"
-                placeholder="请输入用户名（3-50个字符）"
+                placeholder="用户名设置后暂不可更改，请仔细思考哦~"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isPending}
                 className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
-                maxLength={50}
+                maxLength={10}
               />
-              <p className="text-xs text-muted-foreground">
-                用户名设置后不可更改，将作为您的唯一标识
-              </p>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="bio" className="text-sm font-medium">
-                个人签名
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="bio" className="text-sm font-medium">
+                  个人签名
+                </label>
+                <span className="text-xs text-muted-foreground">
+                  {bio.length}/20
+                </span>
+              </div>
               <Input
                 id="bio"
                 type="text"
-                placeholder="向大家介绍一下自己（可选）"
+                placeholder="签名也咱不可更改，三思而后行哦~"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 disabled={isPending}
                 className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
-                maxLength={200}
+                maxLength={20}
               />
-              <p className="text-xs text-muted-foreground">
-                最长200个字符
-              </p>
             </div>
 
             <Button
@@ -184,10 +190,6 @@ export default function ProfileSetupPage() {
             >
               {isCompleting ? '保存中...' : '完成设置'}
             </Button>
-
-            <p className="text-xs text-muted-foreground text-center">
-              您之后可以在个人资料页面修改这些信息
-            </p>
           </form>
         </CardContent>
       </Card>

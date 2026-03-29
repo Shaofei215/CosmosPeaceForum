@@ -15,7 +15,7 @@ interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
   /** 头像替代文本 */
   alt?: string;
   /** 头像尺寸 */
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
 /**
@@ -25,7 +25,8 @@ const sizeMap = {
   sm: 'w-8 h-8 text-xs',
   md: 'w-10 h-10 text-sm',
   lg: 'w-12 h-12 text-base',
-  xl: 'w-16 h-16 text-lg',
+  xl: 'w-20 h-20 text-lg',
+  '2xl': 'w-24 h-24 text-xl',
 };
 
 /**
