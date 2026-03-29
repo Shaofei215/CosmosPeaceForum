@@ -174,7 +174,7 @@ export default function ProfileSetupPage() {
               <Input
                 id="bio"
                 type="text"
-                placeholder="签名也咱不可更改，三思而后行哦~"
+                placeholder="签名也暂不可更改，三思而后行哦~"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 disabled={isPending}

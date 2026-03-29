@@ -127,20 +127,27 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
           />
         </Link>
         <div className="flex-1 min-w-0">
-          <Link
-            to={`/user/${post.author_id}`}
-            className="font-medium text-foreground hover:text-primary transition-colors"
-          >
-            {authorName}
-          </Link>
-          {authorBio && (
-            <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-              {authorBio}
+          <div className="flex items-center justify-between gap-2">
+            <Link
+              to={`/user/${post.author_id}`}
+              className="font-medium text-foreground hover:text-primary transition-colors"
+            >
+              {authorName}
+            </Link>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            {authorBio ? (
+              <p className="text-xs text-muted-foreground truncate max-w-[50%]">
+                {authorBio}
+              </p>
+            ) : (
+              <span />
+            )}
+            <span className="text-xs text-muted-foreground">·</span>
+            <p className="text-xs text-muted-foreground shrink-0">
+              {formatDate(post.created_at)}
             </p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            {formatDate(post.created_at)}
-          </p>
+          </div>
         </div>
       </div>
 

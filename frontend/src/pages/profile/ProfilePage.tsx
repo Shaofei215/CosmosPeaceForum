@@ -9,7 +9,6 @@ import { useInfiniteUserFeed } from '@/features/feed';
 import { useAuthStore, useLogout } from '@/features/auth';
 import { PostCard } from '@/widgets/post-card';
 import { Avatar, Skeleton, Button } from '@/shared/components/ui';
-import { formatDate } from '@/shared/lib/utils';
 import { LogOut } from 'lucide-react';
 
 /**
@@ -93,11 +92,8 @@ export default function ProfilePage() {
           />
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold">{user.username}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              加入于 {formatDate(user.created_at)}
-            </p>
             {user.bio && (
-              <p className="mt-3 text-muted-foreground whitespace-pre-wrap">
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                 {user.bio}
               </p>
             )}
