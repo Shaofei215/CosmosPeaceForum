@@ -61,17 +61,19 @@ async def save_avatar_file(file: UploadFile, user_id: int) -> str:
     settings = get_settings()
     upload_dir = get_avatar_upload_dir_path()
 
+    allowed_mime_types = set(settings.ALLOWED_AVATAR_TYPES)
+    if file.content_type not in allowed_mime_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的图片格式：{file.content_type}"
+        )
+
     mime_to_ext = {
         'image/jpeg': 'jpg',
         'image/png': 'png',
         'image/gif': 'gif',
         'image/webp': 'webp',
     }
-    if file.content_type not in mime_to_ext:
-        raise HTTPException(
-            status_code=400,
-            detail=f"不支持的图片格式：{file.content_type}"
-        )
     file_ext = mime_to_ext[file.content_type]
 
     unique_filename = f"avatar_{user_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
