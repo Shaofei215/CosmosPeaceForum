@@ -67,7 +67,12 @@ async def save_avatar_file(file: UploadFile, user_id: int) -> str:
         'image/gif': 'gif',
         'image/webp': 'webp',
     }
-    file_ext = mime_to_ext.get(file.content_type, 'jpg')
+    if file.content_type not in mime_to_ext:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的图片格式：{file.content_type}"
+        )
+    file_ext = mime_to_ext[file.content_type]
 
     unique_filename = f"avatar_{user_id}_{uuid.uuid4().hex[:8]}.{file_ext}"
     file_path = os.path.join(upload_dir, unique_filename)
