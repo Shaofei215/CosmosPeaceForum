@@ -95,13 +95,13 @@ app.mount("/uploads", StaticFiles(directory=os.path.dirname(avatar_dir)), name="
 
 # 注册路由
 # 将各个模块的路由器注册到应用中
+app.include_router(avatar.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["avatar"])
 app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["users"])
 app.include_router(posts.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["posts"])
 app.include_router(feeds.router, prefix=f"{settings.API_V1_PREFIX}/feeds", tags=["feeds"])
 app.include_router(like.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["likes"])
 app.include_router(comment.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["comments"])
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["auth"])
-app.include_router(avatar.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["avatar"])
 
 
 @app.get("/")

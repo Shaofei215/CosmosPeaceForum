@@ -3,7 +3,7 @@
  * 支持图片预览、上传、删除功能
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Camera, X } from 'lucide-react';
 import { Avatar } from '@/shared/components/ui';
 import { cn } from '@/shared/lib/utils';
@@ -43,6 +43,12 @@ export function AvatarUpload({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (avatarUrl) {
+      setPreviewUrl(null);
+    }
+  }, [avatarUrl]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

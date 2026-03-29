@@ -5,10 +5,28 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useCompleteProfile, useUploadAvatar } from '@/features/user';
+import { useCompleteProfile, useUploadAvatar, useDeleteAvatar } from '@/features/user';
 import { useAuthStore } from '@/features/auth';
 import { AvatarUpload } from '@/shared/components/avatar-upload';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
+
+function extractErrorMessage(err: unknown): string | null {
+  if (typeof err === 'object' && err !== null) {
+    const e = err as Record<string, unknown>;
+    if (typeof e.message === 'string') {
+      return e.message;
+    }
+    if (Array.isArray(e.message)) {
+      return (e.message as Array<Record<string, unknown>>)
+        .map((item) => (typeof item.msg === 'string' ? item.msg : JSON.stringify(item)))
+        .join(', ');
+    }
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return null;
+}
 
 export default function ProfileSetupPage() {
   const navigate = useNavigate();
@@ -22,6 +40,7 @@ export default function ProfileSetupPage() {
 
   const { mutate: completeProfile, isPending: isCompleting } = useCompleteProfile();
   const { mutate: uploadAvatar, isPending: isUploading } = useUploadAvatar();
+  const { mutate: deleteAvatar } = useDeleteAvatar();
 
   const isPending = isCompleting || isUploading;
 
@@ -34,13 +53,21 @@ export default function ProfileSetupPage() {
   const handleAvatarUpload = (file: File) => {
     setAvatarError('');
     uploadAvatar(file, {
-      onError: (err: { message?: string }) => {
-        setAvatarError(err.message || '头像上传失败');
+      onSuccess: () => {
+      },
+      onError: (err: unknown) => {
+        setAvatarError(extractErrorMessage(err) || '头像上传失败');
       },
     });
   };
 
   const handleAvatarDelete = () => {
+    deleteAvatar(undefined, {
+      onError: (err: unknown) => {
+        const message = extractErrorMessage(err);
+        setAvatarError(message || '头像删除失败');
+      },
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -75,8 +102,8 @@ export default function ProfileSetupPage() {
         onSuccess: () => {
           navigate('/feed');
         },
-        onError: (err: { message?: string }) => {
-          setError(err.message || '保存失败，请稍后重试');
+        onError: (err: unknown) => {
+          setError(extractErrorMessage(err) || '保存失败，请稍后重试');
         },
       }
     );
