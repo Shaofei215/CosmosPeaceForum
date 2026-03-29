@@ -1,5 +1,6 @@
 # 应用配置模块
 # 管理应用的所有配置项，所有配置从环境变量/.env文件加载，无硬编码默认值
+import os
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -40,6 +41,15 @@ class Settings(BaseSettings):
     EMAIL_CODE_SEND_INTERVAL_MINUTES: int
     EMAIL_CODE_DAILY_LIMIT: int
     EMAIL_CODE_MAX_ATTEMPTS: int
+
+    # 头像上传配置
+    AVATAR_UPLOAD_DIR: str = "uploads/avatars"
+    MAX_AVATAR_SIZE: int = 5 * 1024 * 1024  # 5MB
+    ALLOWED_AVATAR_TYPES: list = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+
+    # 服务器配置
+    SERVER_HOST: str = "0.0.0.0"
+    SERVER_PORT: int = 8000
 
     class Config:
         # 指定从.env文件读取环境变量

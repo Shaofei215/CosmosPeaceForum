@@ -26,17 +26,33 @@ export interface RegisterCredentials {
 }
 
 /**
- * 带邮箱验证的注册凭证
+ * 带邮箱验证的注册凭证（简化版：不需要用户名）
  */
 export interface RegisterWithEmailCredentials {
-  /** 用户名 */
-  username: string;
   /** 密码 */
   password: string;
   /** 邮箱地址 */
   email: string;
   /** 验证码 */
   code: string;
+}
+
+/**
+ * 注册响应
+ */
+export interface RegisterResponse {
+  /** 用户ID */
+  id: number;
+  /** 用户名 */
+  username: string;
+  /** 访问令牌 */
+  access_token: string;
+  /** 令牌类型 */
+  token_type: string;
+  /** 过期时间（秒） */
+  expires_in: number;
+  /** 响应消息 */
+  message: string;
 }
 
 /**
@@ -89,6 +105,10 @@ export interface User {
   email_verified: boolean;
   /** 创建时间 */
   created_at: string;
+  /** 头像URL */
+  avatar_url?: string | null;
+  /** 个人签名 */
+  bio?: string | null;
 }
 
 /**

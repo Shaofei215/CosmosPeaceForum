@@ -8,6 +8,7 @@ import type {
   LoginCredentials,
   RegisterCredentials,
   RegisterWithEmailCredentials,
+  RegisterResponse,
   SendVerificationCodeRequest,
   SendVerificationCodeResponse,
   AuthResponse,
@@ -61,15 +62,14 @@ export const authApi = {
     apiClient.post<SendVerificationCodeResponse>('/auth/register/send-code', request),
 
   /**
-   * 验证邮箱并注册（真人用户专用）
+   * 验证邮箱并注册（真人用户专用，简化版：不需要用户名）
    * POST /api/v1/auth/register/verify?code={code}
    *
-   * @param credentials - 包含用户名、密码、邮箱和验证码的注册凭证
-   * @returns 新创建的用户信息
+   * @param credentials - 包含邮箱、密码和验证码的注册凭证
+   * @returns 注册响应，包含用户ID和提示消息
    */
   registerWithVerification: (credentials: RegisterWithEmailCredentials) =>
-    apiClient.post<User>('/auth/register/verify', {
-      username: credentials.username,
+    apiClient.post<RegisterResponse>('/auth/register/verify', {
       password: credentials.password,
       email: credentials.email,
     }, {

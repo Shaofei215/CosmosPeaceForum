@@ -1,19 +1,22 @@
 # 应用主入口
 # 初始化 FastAPI 应用，注册路由和中间件
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.core.config import get_settings
+from app.core.paths import get_avatar_upload_dir
 from app.db.session import engine, Base
 
 # 导入所有模型以确保 SQLAlchemy 正确注册关系
 # 必须在创建表之前导入所有模型
 from app.models import User, Post, Like, Comment, CommentLike
 
-from app.api.routers import users, posts, feeds, like, comment, auth
+from app.api.routers import users, posts, feeds, like, comment, auth, avatar
 
 
 settings = get_settings()
@@ -81,8 +84,18 @@ app.add_middleware(
     allow_headers=["*"],  # 允许所有 HTTP 头
 )
 
+# 创建头像上传目录（如果不存在）
+avatar_dir = get_avatar_upload_dir()
+os.makedirs(avatar_dir, exist_ok=True)
+
+# 挂载静态文件服务器，提供头像访问
+# 访问URL: /uploads/avatars/avatar_1_xxx.jpg
+# 实际目录: app_platform/uploads/avatars/
+app.mount("/uploads", StaticFiles(directory=os.path.dirname(avatar_dir)), name="uploads")
+
 # 注册路由
 # 将各个模块的路由器注册到应用中
+app.include_router(avatar.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["avatar"])
 app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["users"])
 app.include_router(posts.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["posts"])
 app.include_router(feeds.router, prefix=f"{settings.API_V1_PREFIX}/feeds", tags=["feeds"])
@@ -95,7 +108,7 @@ app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["
 def root():
     """
     根路径接口
-    
+
     Returns:
         应用基本信息和文档链接
     """
@@ -110,7 +123,7 @@ def root():
 def health_check():
     """
     健康检查接口
-    
+
     Returns:
         应用健康状态
     """

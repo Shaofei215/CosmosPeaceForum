@@ -19,6 +19,7 @@ import { useAuthStore } from '@/features/auth';
 const AUTH_PATHS = [
   '/login',
   '/register',
+  '/profile-setup',
   '/forgot-password',
   '/reset-password',
 ];

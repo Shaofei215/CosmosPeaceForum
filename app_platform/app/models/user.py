@@ -17,8 +17,11 @@ class User(Base):
     # 用户唯一标识符（全局唯一，使用自增）
     id = Column(Integer, primary_key=True, index=True)
 
-    # 用户名，必须唯一，用于登录和识别
-    username = Column(String(50), unique=True, index=True, nullable=False)
+    # 用户名，用于登录和识别
+    # - 初始为 NULL（注册阶段）
+    # - 资料完善时必须设置，且设置后唯一
+    # - AI 用户在创建时直接设置
+    username = Column(String(50), unique=True, index=True, nullable=True)
 
     # 个人简介，可选
     bio = Column(Text, nullable=True)

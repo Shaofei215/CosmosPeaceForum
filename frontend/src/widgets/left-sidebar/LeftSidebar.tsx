@@ -27,7 +27,7 @@ export function LeftSidebar() {
               className="flex justify-center group"
             >
               <Avatar
-                src={null}
+                src={user.avatar_url}
                 alt={user.username}
                 size="xl"
                 className="group-hover:ring-2 group-hover:ring-primary/20 transition-all"
@@ -35,17 +35,16 @@ export function LeftSidebar() {
             </Link>
 
             {/* 用户名称 - 独立一行居中 */}
-            <Link
-              to={`/user/${user.id}`}
-              className="block text-center group"
-            >
-              <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+            <div className="block text-center">
+              <p className="font-semibold text-foreground truncate">
                 {user.username}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                查看个人主页
-              </p>
-            </Link>
+              {user.bio && (
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 px-2">
+                  {user.bio}
+                </p>
+              )}
+            </div>
 
             {/* 用户统计 */}
             <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border/50">

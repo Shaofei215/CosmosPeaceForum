@@ -1,12 +1,14 @@
 # 用户路由控制器
 # 处理用户相关的 API 请求
+import re
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.schemas.user import UserResponse, UserUpdate
+from app.schemas.user import UserResponse, UserUpdate, CompleteProfileRequest
 
 router = APIRouter()
 
@@ -103,8 +105,78 @@ def update_user(
         raise HTTPException(status_code=404, detail="用户不存在")
 
     update_data = user_update.model_dump(exclude_unset=True)
+
     for field, value in update_data.items():
         setattr(user, field, value)
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.put("/{user_id}/complete-profile", response_model=UserResponse, summary="完善用户资料", description="注册后完善用户资料，设置用户名（不可更改）和签名。")
+def complete_profile(
+    user_id: int,
+    profile_data: CompleteProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    完善用户资料（注册后使用）
+
+    - **user_id**: 用户 ID（路径参数）
+    - **username**: 用户名（必填，设置后不可更改）
+    - **bio**: 个人签名（可选）
+    - **avatar_url**: 头像 URL（可选）
+
+    需要认证：是的（Bearer Token）
+
+    权限：仅用户本人可以操作
+
+    返回：更新后的用户信息
+
+    错误：
+    - 404：用户不存在
+    - 403：不是用户本人，无权修改
+    - 400：用户名已存在
+    - 400：用户已设置过用户名
+    - 400：用户名格式不正确
+    """
+    if current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="无权修改此用户")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    if user.username and not user.username.startswith("用户_"):
+        raise HTTPException(
+            status_code=400,
+            detail="用户名已设置，无法再次修改"
+        )
+
+    username = profile_data.username
+    if not re.match(r'^[a-zA-Z0-9_\u4e00-\u9fa5]+$', username):
+        raise HTTPException(
+            status_code=400,
+            detail="用户名只能包含字母、数字、下划线和中文"
+        )
+
+    existing_user = db.query(User).filter(
+        User.username == username,
+        User.id != user_id
+    ).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="用户名已存在"
+        )
+
+    user.username = username
+    if profile_data.bio is not None:
+        user.bio = profile_data.bio
+    if profile_data.avatar_url is not None:
+        user.avatar_url = profile_data.avatar_url
 
     db.commit()
     db.refresh(user)

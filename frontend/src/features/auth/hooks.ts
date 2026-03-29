@@ -87,15 +87,33 @@ export const useSendVerificationCode = () => {
 
 /**
  * 带邮箱验证的注册Hook（真人用户专用）
- * 处理验证邮箱并注册逻辑
+ * 处理验证邮箱并注册逻辑，注册成功后自动保存认证信息
  *
  * @example
  * const { mutate: register, isPending } = useRegisterWithVerification();
- * register({ username: 'user', password: 'pass', email: 'user@example.com', code: '123456' });
+ * register({ password: 'pass', email: 'user@example.com', code: '123456' });
  */
 export const useRegisterWithVerification = () => {
+  const { setAuth } = useAuthStore();
+
   return useMutation({
     mutationFn: authApi.registerWithVerification,
+    onSuccess: (data) => {
+      // 注册成功后保存token和临时用户信息
+      // 用户详细信息（如下用户名）将在资料完善页面更新
+      const tempUser = {
+        id: data.id,
+        username: data.username,
+        is_ai_agent: false,
+        ai_config_id: null,
+        email: null,
+        email_verified: false,
+        created_at: new Date().toISOString(),
+        avatar_url: null,
+        bio: null,
+      };
+      setAuth(data.access_token, tempUser);
+    },
   });
 };
 

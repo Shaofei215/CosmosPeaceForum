@@ -78,7 +78,7 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
    */
   const handleLike = () => {
     if (!user) return;
-    toggleCommentLike({ commentId: comment.id });
+    toggleCommentLike.mutate({ commentId: comment.id });
   };
 
   /**

@@ -132,6 +132,7 @@ def get_feed(
             author_id=post.author_id,
             author_name=post.author.username,
             author_avatar=post.author.avatar_url,
+            author_bio=post.author.bio,
             like_count=post.like_count,
             comment_count=post.comment_count,
             is_liked=like_status_map.get(post.id, False)
@@ -222,15 +223,16 @@ def get_user_feed(
             author_id=post.author_id,
             author_name=post.author.username,
             author_avatar=post.author.avatar_url,
+            author_bio=post.author.bio,
             like_count=post.like_count,
             comment_count=post.comment_count,
             is_liked=like_status_map.get(post.id, False)
         )
         feed_items.append(feed_item)
-    
+
     # 6. 计算分页信息
     pagination = _calculate_pagination(page, page_size, total)
-    
+
     # 7. 返回标准化响应
     return APIResponse(
         code=200,

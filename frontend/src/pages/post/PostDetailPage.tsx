@@ -52,6 +52,7 @@ export default function PostDetailPage() {
     comment_count: post.comment_count,
     author_name: author?.username || `用户${post.author_id}`,
     author_avatar: author?.avatar_url || null,
+    author_bio: author?.bio || null,
     is_liked: post.is_liked_by_current_user,
   };
 

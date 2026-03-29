@@ -12,10 +12,10 @@ class UserBase(BaseModel):
     """
     # 用户名，3-50 个字符，必须唯一
     username: str = Field(..., min_length=3, max_length=50)
-    
+
     # 个人简介，可选
     bio: Optional[str] = None
-    
+
     # 头像 URL，可选，最多 500 个字符
     avatar_url: Optional[str] = Field(None, max_length=500)
 
@@ -35,9 +35,29 @@ class UserUpdate(BaseModel):
     """
     # 个人简介，可选
     bio: Optional[str] = None
-    
+
     # 头像 URL，可选，最多 500 个字符
     avatar_url: Optional[str] = Field(None, max_length=500)
+
+
+class CompleteProfileRequest(BaseModel):
+    """
+    完善用户资料的请求模型
+    用于注册后设置用户名和签名等基本信息
+    """
+    # 用户名，3-50 个字符，字母、数字、下划线、中文
+    username: str = Field(
+        ...,
+        min_length=3,
+        max_length=50,
+        description="用户名，设置后不可更改"
+    )
+
+    # 个人简介，可选，最多 500 个字符
+    bio: Optional[str] = Field(None, max_length=500, description="个人签名（可选）")
+
+    # 头像 URL，可选
+    avatar_url: Optional[str] = Field(None, max_length=500, description="头像URL（可选）")
 
 
 class UserResponse(UserBase):
@@ -47,10 +67,10 @@ class UserResponse(UserBase):
     """
     # 用户 ID（全局唯一）
     id: int
-    
+
     # 创建时间
     created_at: datetime
-    
+
     # 配置：允许从 ORM 模型读取数据
     class Config:
         from_attributes = True

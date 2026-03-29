@@ -1,6 +1,7 @@
 /**
  * 注册页面
- * 支持邮箱验证的真人用户注册流程
+ * 简化版注册流程：仅需邮箱、验证码、密码
+ * 注册成功后跳转到资料完善页面设置用户名
  */
 
 import { useState, useEffect } from 'react';
@@ -8,12 +9,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useSendVerificationCode, useRegisterWithVerification } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 
-/**
- * 注册页面组件
- */
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +23,6 @@ export default function RegisterPage() {
 
   const isPending = isSendingCode || isRegistering;
 
-  // 倒计时逻辑
   useEffect(() => {
     if (countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
@@ -34,19 +30,19 @@ export default function RegisterPage() {
     }
   }, [countdown]);
 
-  /**
-   * 处理发送验证码
-   */
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSendCode = () => {
     setError('');
 
-    // 邮箱格式验证
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email.trim()) {
       setError('请输入邮箱地址');
       return;
     }
-    if (!emailRegex.test(email)) {
+    if (!validateEmail(email)) {
       setError('请输入有效的邮箱地址');
       return;
     }
@@ -55,7 +51,6 @@ export default function RegisterPage() {
       { email: email.trim() },
       {
         onSuccess: () => {
-          // 开始倒计时（使用后端返回的有效期或默认60秒）
           setCountdown(60);
         },
         onError: (err: { message?: string }) => {
@@ -65,31 +60,15 @@ export default function RegisterPage() {
     );
   };
 
-  /**
-   * 处理注册提交
-   */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    // 表单验证
-    if (!username.trim()) {
-      setError('请输入用户名');
-      return;
-    }
-
-    if (username.length < 3) {
-      setError('用户名至少需要3个字符');
-      return;
-    }
 
     if (!email.trim()) {
       setError('请输入邮箱地址');
       return;
     }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!validateEmail(email)) {
       setError('请输入有效的邮箱地址');
       return;
     }
@@ -98,7 +77,6 @@ export default function RegisterPage() {
       setError('请输入验证码');
       return;
     }
-
     if (code.length !== 6) {
       setError('验证码为6位数字');
       return;
@@ -108,7 +86,6 @@ export default function RegisterPage() {
       setError('请输入密码');
       return;
     }
-
     if (password.length < 6) {
       setError('密码至少需要6个字符');
       return;
@@ -121,14 +98,13 @@ export default function RegisterPage() {
 
     register(
       {
-        username: username.trim(),
         email: email.trim(),
         password,
         code: code.trim(),
       },
       {
-        onSuccess: () => {
-          navigate('/login');
+        onSuccess: (data) => {
+          navigate('/profile-setup', { state: { userId: data.id } });
         },
         onError: (err: { message?: string }) => {
           setError(err.message || '注册失败，请稍后重试');
@@ -142,6 +118,9 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 border-0 shadow-none">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">注册</CardTitle>
+          <p className="text-sm text-muted-foreground text-center mt-2">
+            注册后需完善个人资料
+          </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -150,22 +129,6 @@ export default function RegisterPage() {
                 {error}
               </div>
             )}
-
-            {/* 用户名 */}
-            <div className="space-y-2">
-              <label htmlFor="username" className="text-sm font-medium">
-                用户名
-              </label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="请输入用户名（至少3个字符）"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                disabled={isPending}
-                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
-              />
-            </div>
 
             {/* 邮箱 */}
             <div className="space-y-2">
@@ -194,7 +157,7 @@ export default function RegisterPage() {
                   type="text"
                   placeholder="请输入6位验证码"
                   value={code}
-                  onChange={(e) => setCode(e.target.value)}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   disabled={isPending}
                   maxLength={6}
                   className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1 flex-1"

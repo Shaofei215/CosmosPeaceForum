@@ -4,7 +4,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userApi } from './api';
-import type { UpdateUserData } from './types';
+import type { UpdateUserData, CompleteProfileData, UserProfile } from './types';
+import { useAuthStore } from '@/features/auth';
 
 /**
  * 获取用户列表Hook
@@ -64,10 +65,96 @@ export const useUpdateUser = () => {
     mutationFn: ({ userId, data }: { userId: number; data: UpdateUserData }) =>
       userApi.updateUser(userId, data),
     onSuccess: (_, variables) => {
-      // 刷新用户详情缓存
       queryClient.invalidateQueries({ queryKey: ['user', variables.userId] });
-      // 刷新用户列表缓存
       queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+};
+
+/**
+ * 将 UserProfile 转换为 User 类型
+ */
+const toAuthUser = (profile: UserProfile) => ({
+  id: profile.id,
+  username: profile.username,
+  is_ai_agent: false,
+  ai_config_id: null,
+  email: null,
+  email_verified: false,
+  created_at: profile.created_at,
+  avatar_url: profile.avatar_url,
+  bio: profile.bio,
+});
+
+/**
+ * 完善用户资料Hook（注册后使用）
+ *
+ * @example
+ * const { mutate: completeProfile, isPending } = useCompleteProfile();
+ * completeProfile({ userId: 1, data: { username: 'newname', bio: 'Hello' } });
+ */
+export const useCompleteProfile = () => {
+  const queryClient = useQueryClient();
+  const { setAuth } = useAuthStore();
+
+  return useMutation({
+    mutationFn: ({ userId, data }: { userId: number; data: CompleteProfileData }) =>
+      userApi.completeProfile(userId, data),
+    onSuccess: (updatedUser) => {
+      queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      const token = localStorage.getItem('token');
+      if (token) {
+        setAuth(token, toAuthUser(updatedUser));
+      }
+    },
+  });
+};
+
+/**
+ * 上传头像Hook
+ *
+ * @example
+ * const { mutate: uploadAvatar, isPending } = useUploadAvatar();
+ * uploadAvatar(file);
+ */
+export const useUploadAvatar = () => {
+  const queryClient = useQueryClient();
+  const { setAuth } = useAuthStore();
+
+  return useMutation({
+    mutationFn: (file: File) => userApi.uploadAvatar(file),
+    onSuccess: (updatedUser) => {
+      queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      const token = localStorage.getItem('token');
+      if (token) {
+        setAuth(token, toAuthUser(updatedUser));
+      }
+    },
+  });
+};
+
+/**
+ * 删除头像Hook
+ *
+ * @example
+ * const { mutate: deleteAvatar, isPending } = useDeleteAvatar();
+ * deleteAvatar();
+ */
+export const useDeleteAvatar = () => {
+  const queryClient = useQueryClient();
+  const { setAuth } = useAuthStore();
+
+  return useMutation({
+    mutationFn: () => userApi.deleteAvatar(),
+    onSuccess: (updatedUser) => {
+      queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      const token = localStorage.getItem('token');
+      if (token) {
+        setAuth(token, toAuthUser(updatedUser));
+      }
     },
   });
 };
@@ -85,7 +172,6 @@ export const useDeleteUser = () => {
   return useMutation({
     mutationFn: userApi.deleteUser,
     onSuccess: () => {
-      // 刷新用户列表缓存
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
   });

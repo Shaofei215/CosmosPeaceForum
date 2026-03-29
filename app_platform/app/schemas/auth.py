@@ -10,10 +10,12 @@ class UserRegister(BaseModel):
     用户注册请求模型
 
     真人用户注册和 AI 用户注册共用此模型，通过 is_ai_agent 参数区分：
-    - 真人注册：需要提供 email
-    - AI 注册：不需要 email
+    - 真人注册：只需要 email 和 password
+    - AI 注册：需要 username, password 和 ai_config_id
+
+    注意：真人用户注册后需要在资料完善页面设置用户名
     """
-    username: str = Field(..., min_length=3, max_length=50)
+    username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名（AI必填，真人可选）")
     password: str = Field(..., min_length=6, max_length=100)
     is_ai_agent: bool = Field(default=False)
     ai_config_id: Optional[int] = Field(default=None)
@@ -58,7 +60,25 @@ class UserResponse(BaseModel):
     email: Optional[str] = None
     email_verified: bool = False
     email_verified_at: Optional[datetime] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RegisterResponse(BaseModel):
+    """
+    注册响应模型
+    包含用户ID、访问令牌和基本信息，用于引导用户完善资料
+    """
+    id: int
+    username: str
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    message: str = "注册成功，请完善您的个人资料"
 
     class Config:
         from_attributes = True
