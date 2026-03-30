@@ -1,4 +1,4 @@
-# 邮件服务模块
+# 邮件服务业务逻辑层
 # 提供基于 SMTP 的邮件发送功能，用于发送验证码邮件
 import smtplib
 import ssl
@@ -12,14 +12,6 @@ from app.core.config import get_settings
 settings = get_settings()
 
 
-# 注册验证码邮件 HTML 模板
-# 设计规范参考 frontend/docs/style-guide.md
-# - 玻璃态设计：统一毛玻璃效果，无边框无阴影
-# - 多层渐变背景
-# - 圆角：rounded-xl (12px)
-# - 主色调：紫色系
-# - 文本框：border-0 shadow-none bg-muted/50 rounded-lg
-# - 字体：HYWH65S
 EMAIL_REGISTER_TEMPLATE = Template("""
 <!DOCTYPE html>
 <html>
@@ -27,7 +19,6 @@ EMAIL_REGISTER_TEMPLATE = Template("""
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        /* ========== CSS 变量定义（参考 style-guide.md）========== */
         :root {
             --background: 0 0% 100%;
             --foreground: 222.2 84% 4.9%;
@@ -43,22 +34,13 @@ EMAIL_REGISTER_TEMPLATE = Template("""
             --theme-primary-dark: 262 83% 45%;
             --radius: 0.5rem;
         }
-
-        /* ========== 基础样式 ========== */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'HYWH65S', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: hsl(var(--foreground));
             background-color: hsl(var(--background));
         }
-
-        /* ========== 页面背景（多层渐变，参考 style-guide.md 9.1）========== */
         .page-background {
             background:
                 radial-gradient(ellipse at left top, hsl(230 70% 55% / 0.55) 0%, transparent 50%),
@@ -69,14 +51,7 @@ EMAIL_REGISTER_TEMPLATE = Template("""
             min-height: 100vh;
             padding: 40px 20px;
         }
-
-        /* ========== 容器样式 ========== */
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        /* ========== 玻璃态卡片（统一毛玻璃，无边框无阴影）========== */
+        .container { max-width: 600px; margin: 0 auto; }
         .glass-card {
             border-radius: 12px;
             background: rgba(255, 255, 255, 0.4);
@@ -85,8 +60,6 @@ EMAIL_REGISTER_TEMPLATE = Template("""
             border: none;
             box-shadow: none;
         }
-
-        /* ========== 头部样式 ========== */
         .header {
             background: linear-gradient(135deg, hsl(var(--theme-primary)) 0%, hsl(var(--theme-primary-dark)) 100%);
             color: white;
@@ -94,21 +67,8 @@ EMAIL_REGISTER_TEMPLATE = Template("""
             text-align: center;
             border-radius: 12px 12px 0 0;
         }
-
-        .header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            line-height: 1.2;
-            margin-bottom: 8px;
-        }
-
-        .header p {
-            font-size: 14px;
-            font-weight: 500;
-            opacity: 0.9;
-        }
-
-        /* ========== 内容区域（毛玻璃）========== */
+        .header h1 { font-size: 24px; font-weight: 700; line-height: 1.2; margin-bottom: 8px; }
+        .header p { font-size: 14px; font-weight: 500; opacity: 0.9; }
         .content {
             padding: 32px 24px;
             background: rgba(255, 255, 255, 0.3);
@@ -116,19 +76,8 @@ EMAIL_REGISTER_TEMPLATE = Template("""
             -webkit-backdrop-filter: blur(8px);
             border-radius: 0;
         }
-
-        .content p {
-            font-size: 14px;
-            line-height: 1.6;
-            color: hsl(var(--foreground));
-            margin-bottom: 16px;
-        }
-
-        .content p:last-child {
-            margin-bottom: 0;
-        }
-
-        /* ========== 验证码输入框样式（参考 style-guide.md 6.2 无边框变体）========== */
+        .content p { font-size: 14px; line-height: 1.6; color: hsl(var(--foreground)); margin-bottom: 16px; }
+        .content p:last-child { margin-bottom: 0; }
         .code-input {
             width: 100%;
             border: 0;
@@ -139,12 +88,7 @@ EMAIL_REGISTER_TEMPLATE = Template("""
             margin: 24px 0;
             text-align: center;
         }
-
-        .code-input:focus {
-            outline: none;
-            background: hsl(var(--muted) / 0.7);
-        }
-
+        .code-input:focus { outline: none; background: hsl(var(--muted) / 0.7); }
         .code-text {
             font-size: 32px;
             font-weight: 700;
@@ -155,12 +99,7 @@ EMAIL_REGISTER_TEMPLATE = Template("""
             text-align: center;
             width: 100%;
         }
-
-        .code-text:focus {
-            outline: none;
-        }
-
-        /* ========== 警告提示 ========== */
+        .code-text:focus { outline: none; }
         .warning {
             color: hsl(0 84.2% 60.2%);
             font-size: 12px;
@@ -170,8 +109,6 @@ EMAIL_REGISTER_TEMPLATE = Template("""
             margin-top: 20px;
             text-align: center;
         }
-
-        /* ========== 底部信息 ========== */
         .footer {
             padding: 24px;
             text-align: center;
@@ -180,52 +117,27 @@ EMAIL_REGISTER_TEMPLATE = Template("""
             -webkit-backdrop-filter: blur(8px);
             border-radius: 0 0 12px 12px;
         }
-
-        .footer p {
-            font-size: 12px;
-            color: hsl(var(--muted-foreground));
-            line-height: 1.5;
-        }
-
-        /* ========== 辅助信息 ========== */
-        .meta-info {
-            font-size: 12px;
-            color: hsl(var(--muted-foreground));
-            margin-top: 8px;
-            text-align: center;
-        }
+        .footer p { font-size: 12px; color: hsl(var(--muted-foreground)); line-height: 1.5; }
+        .meta-info { font-size: 12px; color: hsl(var(--muted-foreground)); margin-top: 8px; text-align: center; }
     </style>
 </head>
 <body>
     <div class="page-background">
         <div class="container">
             <div class="glass-card">
-                <!-- 头部 -->
                 <div class="header">
                     <h1>🌳 Herta-Tree</h1>
                     <p>账号注册验证</p>
                 </div>
-
-                <!-- 内容 -->
                 <div class="content">
                     <p>您好，</p>
                     <p>欢迎注册 Herta-Tree 账号！请使用以下验证码完成注册：</p>
-
-                    <!-- 验证码输入框样式 -->
                     <div class="code-input">
                         <input type="text" class="code-text" value="$code" readonly />
                     </div>
-
-                    <!-- 有效期信息 -->
                     <p class="meta-info">验证码将在 $expire_minutes 分钟后过期，请尽快完成验证。</p>
-
-                    <!-- 警告 -->
-                    <div class="warning">
-                        ⚠️ 请勿将验证码泄露给他人，如有疑虑请忽略此邮件。
-                    </div>
+                    <div class="warning">⚠️ 请勿将验证码泄露给他人，如有疑虑请忽略此邮件。</div>
                 </div>
-
-                <!-- 底部 -->
                 <div class="footer">
                     <p>此邮件由 Herta-Tree 系统自动发送，请勿回复。</p>
                 </div>
@@ -236,8 +148,6 @@ EMAIL_REGISTER_TEMPLATE = Template("""
 </html>
 """)
 
-# 密码重置验证码邮件 HTML 模板
-# 设计规范与注册邮件一致，保持统一的视觉风格
 EMAIL_RESET_TEMPLATE = Template("""
 <!DOCTYPE html>
 <html>
@@ -245,7 +155,6 @@ EMAIL_RESET_TEMPLATE = Template("""
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        /* ========== CSS 变量定义（参考 style-guide.md）========== */
         :root {
             --background: 0 0% 100%;
             --foreground: 222.2 84% 4.9%;
@@ -261,22 +170,13 @@ EMAIL_RESET_TEMPLATE = Template("""
             --theme-primary-dark: 262 83% 45%;
             --radius: 0.5rem;
         }
-
-        /* ========== 基础样式 ========== */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'HYWH65S', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: hsl(var(--foreground));
             background-color: hsl(var(--background));
         }
-
-        /* ========== 页面背景（多层渐变）========== */
         .page-background {
             background:
                 radial-gradient(ellipse at left top, hsl(230 70% 55% / 0.55) 0%, transparent 50%),
@@ -287,14 +187,7 @@ EMAIL_RESET_TEMPLATE = Template("""
             min-height: 100vh;
             padding: 40px 20px;
         }
-
-        /* ========== 容器样式 ========== */
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        /* ========== 玻璃态卡片（统一毛玻璃，无边框无阴影）========== */
+        .container { max-width: 600px; margin: 0 auto; }
         .glass-card {
             border-radius: 12px;
             background: rgba(255, 255, 255, 0.4);
@@ -303,8 +196,6 @@ EMAIL_RESET_TEMPLATE = Template("""
             border: none;
             box-shadow: none;
         }
-
-        /* ========== 头部样式 ========== */
         .header {
             background: linear-gradient(135deg, hsl(var(--theme-primary)) 0%, hsl(var(--theme-primary-dark)) 100%);
             color: white;
@@ -312,21 +203,8 @@ EMAIL_RESET_TEMPLATE = Template("""
             text-align: center;
             border-radius: 12px 12px 0 0;
         }
-
-        .header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            line-height: 1.2;
-            margin-bottom: 8px;
-        }
-
-        .header p {
-            font-size: 14px;
-            font-weight: 500;
-            opacity: 0.9;
-        }
-
-        /* ========== 内容区域（毛玻璃）========== */
+        .header h1 { font-size: 24px; font-weight: 700; line-height: 1.2; margin-bottom: 8px; }
+        .header p { font-size: 14px; font-weight: 500; opacity: 0.9; }
         .content {
             padding: 32px 24px;
             background: rgba(255, 255, 255, 0.3);
@@ -334,19 +212,8 @@ EMAIL_RESET_TEMPLATE = Template("""
             -webkit-backdrop-filter: blur(8px);
             border-radius: 0;
         }
-
-        .content p {
-            font-size: 14px;
-            line-height: 1.6;
-            color: hsl(var(--foreground));
-            margin-bottom: 16px;
-        }
-
-        .content p:last-child {
-            margin-bottom: 0;
-        }
-
-        /* ========== 验证码输入框样式（参考 style-guide.md 6.2 无边框变体）========== */
+        .content p { font-size: 14px; line-height: 1.6; color: hsl(var(--foreground)); margin-bottom: 16px; }
+        .content p:last-child { margin-bottom: 0; }
         .code-input {
             width: 100%;
             border: 0;
@@ -357,12 +224,7 @@ EMAIL_RESET_TEMPLATE = Template("""
             margin: 24px 0;
             text-align: center;
         }
-
-        .code-input:focus {
-            outline: none;
-            background: hsl(var(--muted) / 0.7);
-        }
-
+        .code-input:focus { outline: none; background: hsl(var(--muted) / 0.7); }
         .code-text {
             font-size: 32px;
             font-weight: 700;
@@ -373,12 +235,7 @@ EMAIL_RESET_TEMPLATE = Template("""
             text-align: center;
             width: 100%;
         }
-
-        .code-text:focus {
-            outline: none;
-        }
-
-        /* ========== 警告提示 ========== */
+        .code-text:focus { outline: none; }
         .warning {
             color: hsl(0 84.2% 60.2%);
             font-size: 12px;
@@ -388,8 +245,6 @@ EMAIL_RESET_TEMPLATE = Template("""
             margin-top: 20px;
             text-align: center;
         }
-
-        /* ========== 底部信息 ========== */
         .footer {
             padding: 24px;
             text-align: center;
@@ -398,52 +253,27 @@ EMAIL_RESET_TEMPLATE = Template("""
             -webkit-backdrop-filter: blur(8px);
             border-radius: 0 0 12px 12px;
         }
-
-        .footer p {
-            font-size: 12px;
-            color: hsl(var(--muted-foreground));
-            line-height: 1.5;
-        }
-
-        /* ========== 辅助信息 ========== */
-        .meta-info {
-            font-size: 12px;
-            color: hsl(var(--muted-foreground));
-            margin-top: 8px;
-            text-align: center;
-        }
+        .footer p { font-size: 12px; color: hsl(var(--muted-foreground)); line-height: 1.5; }
+        .meta-info { font-size: 12px; color: hsl(var(--muted-foreground)); margin-top: 8px; text-align: center; }
     </style>
 </head>
 <body>
     <div class="page-background">
         <div class="container">
             <div class="glass-card">
-                <!-- 头部 -->
                 <div class="header">
                     <h1>🌳 Herta-Tree</h1>
                     <p>密码重置验证</p>
                 </div>
-
-                <!-- 内容 -->
                 <div class="content">
                     <p>您好，</p>
                     <p>您正在重置 Herta-Tree 账号密码。请使用以下验证码完成操作：</p>
-
-                    <!-- 验证码输入框样式 -->
                     <div class="code-input">
                         <input type="text" class="code-text" value="$code" readonly />
                     </div>
-
-                    <!-- 有效期信息 -->
                     <p class="meta-info">验证码将在 $expire_minutes 分钟后过期，请尽快完成验证。</p>
-
-                    <!-- 警告 -->
-                    <div class="warning">
-                        ⚠️ 请勿将验证码泄露给他人，如果这不是您的操作，请立即检查账号安全。
-                    </div>
+                    <div class="warning">⚠️ 请勿将验证码泄露给他人，如果这不是您的操作，请立即检查账号安全。</div>
                 </div>
-
-                <!-- 底部 -->
                 <div class="footer">
                     <p>此邮件由 Herta-Tree 系统自动发送，请勿回复。</p>
                 </div>
@@ -454,7 +284,6 @@ EMAIL_RESET_TEMPLATE = Template("""
 </html>
 """)
 
-# 登录验证码邮件 HTML 模板
 EMAIL_LOGIN_TEMPLATE = Template("""
 <!DOCTYPE html>
 <html>
@@ -462,7 +291,6 @@ EMAIL_LOGIN_TEMPLATE = Template("""
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        /* ========== CSS 变量定义（参考 style-guide.md）========== */
         :root {
             --background: 0 0% 100%;
             --foreground: 222.2 84% 4.9%;
@@ -478,22 +306,13 @@ EMAIL_LOGIN_TEMPLATE = Template("""
             --theme-primary-dark: 262 83% 45%;
             --radius: 0.5rem;
         }
-
-        /* ========== 基础样式 ========== */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'HYWH65S', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: hsl(var(--foreground));
             background-color: hsl(var(--background));
         }
-
-        /* ========== 页面背景（多层渐变，参考 style-guide.md 9.1）========== */
         .page-background {
             background:
                 radial-gradient(ellipse at left top, hsl(230 70% 55% / 0.55) 0%, transparent 50%),
@@ -504,14 +323,7 @@ EMAIL_LOGIN_TEMPLATE = Template("""
             min-height: 100vh;
             padding: 40px 20px;
         }
-
-        /* ========== 容器样式 ========== */
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        /* ========== 玻璃态卡片（统一毛玻璃，无边框无阴影）========== */
+        .container { max-width: 600px; margin: 0 auto; }
         .glass-card {
             border-radius: 12px;
             background: rgba(255, 255, 255, 0.4);
@@ -520,8 +332,6 @@ EMAIL_LOGIN_TEMPLATE = Template("""
             border: none;
             box-shadow: none;
         }
-
-        /* ========== 头部样式 ========== */
         .header {
             background: linear-gradient(135deg, hsl(var(--theme-primary)) 0%, hsl(var(--theme-primary-dark)) 100%);
             color: white;
@@ -529,21 +339,8 @@ EMAIL_LOGIN_TEMPLATE = Template("""
             text-align: center;
             border-radius: 12px 12px 0 0;
         }
-
-        .header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            line-height: 1.2;
-            margin-bottom: 8px;
-        }
-
-        .header p {
-            font-size: 14px;
-            font-weight: 500;
-            opacity: 0.9;
-        }
-
-        /* ========== 内容区域（毛玻璃）========== */
+        .header h1 { font-size: 24px; font-weight: 700; line-height: 1.2; margin-bottom: 8px; }
+        .header p { font-size: 14px; font-weight: 500; opacity: 0.9; }
         .content {
             padding: 32px 24px;
             background: rgba(255, 255, 255, 0.3);
@@ -551,19 +348,8 @@ EMAIL_LOGIN_TEMPLATE = Template("""
             -webkit-backdrop-filter: blur(8px);
             border-radius: 0;
         }
-
-        .content p {
-            font-size: 14px;
-            line-height: 1.6;
-            color: hsl(var(--foreground));
-            margin-bottom: 16px;
-        }
-
-        .content p:last-child {
-            margin-bottom: 0;
-        }
-
-        /* ========== 验证码输入框样式（参考 style-guide.md 6.2 无边框变体）========== */
+        .content p { font-size: 14px; line-height: 1.6; color: hsl(var(--foreground)); margin-bottom: 16px; }
+        .content p:last-child { margin-bottom: 0; }
         .code-input {
             width: 100%;
             border: 0;
@@ -574,12 +360,7 @@ EMAIL_LOGIN_TEMPLATE = Template("""
             margin: 24px 0;
             text-align: center;
         }
-
-        .code-input:focus {
-            outline: none;
-            background: hsl(var(--muted) / 0.7);
-        }
-
+        .code-input:focus { outline: none; background: hsl(var(--muted) / 0.7); }
         .code-text {
             font-size: 32px;
             font-weight: 700;
@@ -590,12 +371,7 @@ EMAIL_LOGIN_TEMPLATE = Template("""
             text-align: center;
             width: 100%;
         }
-
-        .code-text:focus {
-            outline: none;
-        }
-
-        /* ========== 警告提示 ========== */
+        .code-text:focus { outline: none; }
         .warning {
             color: hsl(0 84.2% 60.2%);
             font-size: 12px;
@@ -605,8 +381,6 @@ EMAIL_LOGIN_TEMPLATE = Template("""
             margin-top: 20px;
             text-align: center;
         }
-
-        /* ========== 底部信息 ========== */
         .footer {
             padding: 24px;
             text-align: center;
@@ -615,52 +389,27 @@ EMAIL_LOGIN_TEMPLATE = Template("""
             -webkit-backdrop-filter: blur(8px);
             border-radius: 0 0 12px 12px;
         }
-
-        .footer p {
-            font-size: 12px;
-            color: hsl(var(--muted-foreground));
-            line-height: 1.5;
-        }
-
-        /* ========== 辅助信息 ========== */
-        .meta-info {
-            font-size: 12px;
-            color: hsl(var(--muted-foreground));
-            margin-top: 8px;
-            text-align: center;
-        }
+        .footer p { font-size: 12px; color: hsl(var(--muted-foreground)); line-height: 1.5; }
+        .meta-info { font-size: 12px; color: hsl(var(--muted-foreground)); margin-top: 8px; text-align: center; }
     </style>
 </head>
 <body>
     <div class="page-background">
         <div class="container">
             <div class="glass-card">
-                <!-- 头部 -->
                 <div class="header">
                     <h1>🌳 Herta-Tree</h1>
                     <p>账号登录验证</p>
                 </div>
-
-                <!-- 内容 -->
                 <div class="content">
                     <p>您好，</p>
                     <p>您正在登录 Herta-Tree 账号。请使用以下验证码完成登录：</p>
-
-                    <!-- 验证码输入框样式 -->
                     <div class="code-input">
                         <input type="text" class="code-text" value="$code" readonly />
                     </div>
-
-                    <!-- 有效期信息 -->
                     <p class="meta-info">验证码将在 $expire_minutes 分钟后过期，请尽快完成验证。</p>
-
-                    <!-- 警告 -->
-                    <div class="warning">
-                        ⚠️ 请勿将验证码泄露给他人，如果这不是您的操作，请立即检查账号安全。
-                    </div>
+                    <div class="warning">⚠️ 请勿将验证码泄露给他人，如果这不是您的操作，请立即检查账号安全。</div>
                 </div>
-
-                <!-- 底部 -->
                 <div class="footer">
                     <p>此邮件由 Herta-Tree 系统自动发送，请勿回复。</p>
                 </div>
@@ -772,5 +521,4 @@ class EmailService:
             return False
 
 
-# 邮件服务单例
 email_service = EmailService()

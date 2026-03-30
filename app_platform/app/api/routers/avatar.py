@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.schemas.user import UserResponse
-from app.utils.avatar_service import (
+from app.services.avatar_service import (
     validate_avatar_file,
     save_avatar_file,
     delete_avatar_file,
