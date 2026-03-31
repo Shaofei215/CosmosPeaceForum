@@ -7,6 +7,7 @@
 import { Link } from 'react-router-dom';
 import { MessageCircle, User } from 'lucide-react';
 import { useAuthStore } from '@/features/auth';
+import { useUser } from '@/features/user';
 import { Avatar, Button } from '@/shared/components/ui';
 
 /**
@@ -14,6 +15,7 @@ import { Avatar, Button } from '@/shared/components/ui';
  */
 export function LeftSidebar() {
   const { user, isAuthenticated } = useAuthStore();
+  const { data: currentUserProfile } = useUser(user?.id ?? 0);
 
   return (
     <aside className="sticky top-28 h-fit w-64 space-y-4">
@@ -48,14 +50,24 @@ export function LeftSidebar() {
 
             {/* 用户统计 */}
             <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border/50">
-              <div className="text-center">
-                <p className="text-lg font-semibold">0</p>
+              <Link
+                to={`/user/${user.id}/following`}
+                className="text-center hover:bg-muted/30 rounded-lg p-1 transition-colors"
+              >
+                <p className="text-lg font-semibold">
+                  {currentUserProfile?.following_count ?? user.following_count ?? 0}
+                </p>
                 <p className="text-xs text-muted-foreground">关注</p>
-              </div>
-              <div className="text-center">
-                <p className="text-lg font-semibold">0</p>
+              </Link>
+              <Link
+                to={`/user/${user.id}/followers`}
+                className="text-center hover:bg-muted/30 rounded-lg p-1 transition-colors"
+              >
+                <p className="text-lg font-semibold">
+                  {currentUserProfile?.followers_count ?? user.followers_count ?? 0}
+                </p>
                 <p className="text-xs text-muted-foreground">粉丝</p>
-              </div>
+              </Link>
             </div>
 
             {/* 消息按钮 */}
