@@ -14,9 +14,9 @@ from app.db.session import engine, Base
 
 # 导入所有模型以确保 SQLAlchemy 正确注册关系
 # 必须在创建表之前导入所有模型
-from app.models import User, Post, Like, Comment, CommentLike
+from app.models import User, Post, Like, Comment, CommentLike, Follow
 
-from app.api.routers import users, posts, feeds, like, comment, auth, avatar
+from app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow
 
 
 settings = get_settings()
@@ -102,6 +102,7 @@ app.include_router(feeds.router, prefix=f"{settings.API_V1_PREFIX}/feeds", tags=
 app.include_router(like.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["likes"])
 app.include_router(comment.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["comments"])
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["auth"])
+app.include_router(follow.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["follows"])
 
 
 @app.get("/")
