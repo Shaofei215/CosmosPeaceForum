@@ -1,85 +1,64 @@
-# 信息流功能开发文档
+# 信息流系统文档
 
 ## 版本信息
 
-- **时间**: 2026.3.17 22:20
-- **版本**: Alpha-v1.5.2-fix: 修复评论路由路径
-- **作者**: Herta-Tree 开发团队
+| 项目 | 内容 |
+|------|------|
+| 当前版本 | v1.9.7-Alpha-refactor |
+| 更新日期 | 2026.3.30 |
 
 ---
 
 ## 功能概述
 
-本次更新为 Herta-Tree 社交平台后端重构并增强了**信息流功能**，实现了前端友好的标准化响应结构，支持分页、点赞状态等完整的信息流展示需求。
+信息流系统为用户提供统一的内容聚合视图，支持全局信息流和用户专属信息流两种模式。
 
-### 核心特性
+### 信息流类型
 
-- ✅ 标准化 API 响应结构（code, message, data, pagination）
-- ✅ 分页功能（page, page_size, total, total_pages, has_next, has_prev）
-- ✅ 帖子作者信息完整返回（author_id, author_name, author_avatar）
-- ✅ 当前用户点赞状态（is_liked）
-- ✅ 批量查询优化（避免 N+1 查询问题）
-
----
-
-## 更改的文件
-
-### 1. 新增文件
-
-#### `app/schemas/response.py`
-**更改说明**: 新建标准化响应模型
-- `PaginationInfo`: 分页信息模型（page, page_size, total, total_pages, has_next, has_prev）
-- `APIResponse[T]`: 泛型标准化响应模型（code, message, data, pagination）
-
-#### `app/schemas/feed.py`
-**更改说明**: 新建信息流相关 Pydantic Schemas
-- `PostFeedItem`: 信息流帖子项
-  - 基础字段：id, title, content, created_at
-  - 作者信息：author_id, author_name, author_avatar
-  - 统计字段：like_count, comment_count
-  - 状态字段：is_liked
-
-#### `app/services/feed_service.py`
-**更改说明**: 新建信息流业务逻辑层
-- `_get_user_like_status()`: 批量获取用户点赞状态
-- `_calculate_pagination()`: 计算分页信息
-- `get_feed()`: 获取全局信息流（分页 + 完整数据组装）
-- `get_user_feed()`: 获取指定用户的帖子流
-
-### 2. 修改文件
-
-#### `app/api/routers/feeds.py`
-**更改说明**: 重构信息流路由控制器
-- `GET /feed/all`: 全局信息流接口重构
-  - 新增参数：page（默认1）, page_size（默认20）, current_user_id（可选）
-  - 响应模型改为：`APIResponse[List[PostFeedItem]]`
-  - 返回完整帖子信息：作者、点赞状态、分页信息
-- `GET /feed/user/{user_id}`: 用户帖子流接口重构
-  - 新增参数：page（默认1）, page_size（默认20）, current_user_id（可选）
-  - 响应模型改为：`APIResponse[List[PostFeedItem]]`
-  - 返回完整帖子信息
+| 类型 | 说明 |
+|------|------|
+| 全局信息流 | 聚合所有用户的公开帖子，按时间倒序排列 |
+| 用户帖子流 | 指定用户发布的帖子列表 |
 
 ---
 
-## API 接口文档
+## 数据聚合
 
-### 信息流相关接口
+### 信息流条目字段
 
-| 接口 | 方法 | 参数 | 返回值 |
-|------|------|------|--------|
-| `/api/v1/feeds/feed/all` | GET | `page`, `page_size`, `current_user_id` | `APIResponse[List[PostFeedItem]]` |
-| `/api/v1/feeds/feed/user/{user_id}` | GET | `page`, `page_size`, `current_user_id` | `APIResponse[List[PostFeedItem]]` |
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | integer | 帖子 ID |
+| title | string | 帖子标题（可为空） |
+| content | string | 帖子内容 |
+| created_at | datetime | 创建时间 |
+| author_id | integer | 作者用户 ID |
+| author_name | string | 作者用户名 |
+| author_avatar | string | 作者头像 URL |
+| like_count | integer | 点赞数 |
+| comment_count | integer | 评论数 |
+| is_liked | boolean | 当前用户是否已点赞（需认证） |
 
-### 接口详细说明
+---
 
-#### 1. 获取全局信息流
+## API 接口
 
-**请求示例：**
-```bash
-GET /api/v1/feeds/feed/all?page=1&page_size=20&current_user_id=123
-```
+### 1. 获取全局信息流
 
-**响应示例（200 OK）：**
+**路径**: `GET /api/v1/feeds/feed/all`
+
+**认证**: 不需要（传入 `current_user_id` 可返回点赞状态）
+
+**查询参数**:
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| page | integer | 否 | 1 | 页码，从 1 开始 |
+| page_size | integer | 否 | 20 | 每页记录数，最大 100 |
+| current_user_id | integer | 否 | null | 当前用户 ID（用于返回点赞状态） |
+
+**响应 (200 OK)**:
+
 ```json
 {
   "code": 200,
@@ -96,6 +75,18 @@ GET /api/v1/feeds/feed/all?page=1&page_size=20&current_user_id=123
       "like_count": 15,
       "comment_count": 8,
       "is_liked": true
+    },
+    {
+      "id": 2,
+      "title": "空间站的日常",
+      "content": "今天的黑塔又在摸鱼...",
+      "created_at": "2026-03-17T09:00:00",
+      "author_id": 2,
+      "author_name": "黑塔",
+      "author_avatar": "https://example.com/hat.jpg",
+      "like_count": 23,
+      "comment_count": 12,
+      "is_liked": false
     }
   ],
   "pagination": {
@@ -109,158 +100,150 @@ GET /api/v1/feeds/feed/all?page=1&page_size=20&current_user_id=123
 }
 ```
 
-#### 2. 获取用户帖子流
+---
 
-**请求示例：**
-```bash
-GET /api/v1/feeds/feed/user/1?page=1&page_size=20&current_user_id=123
+### 2. 获取用户帖子流
+
+**路径**: `GET /api/v1/feeds/feed/user/{user_id}`
+
+**认证**: 不需要
+
+**路径参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| user_id | integer | 是 | 用户 ID |
+
+**查询参数**: 同全局信息流
+
+**响应格式**: 同全局信息流
+
+---
+
+## 分页机制
+
+### 分页参数
+
+| 参数 | 默认值 | 最大值 | 说明 |
+|------|--------|--------|------|
+| page | 1 | - | 页码，从 1 开始 |
+| page_size | 20 | 100 | 每页记录数 |
+
+### 分页响应字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| page | integer | 当前页码 |
+| page_size | integer | 每页记录数 |
+| total | integer | 总记录数 |
+| total_pages | integer | 总页数 |
+| has_next | boolean | 是否有下一页 |
+| has_prev | boolean | 是否有上一页 |
+
+### 分页计算公式
+
+```python
+total_pages = ceil(total / page_size)
+has_next = page < total_pages
+has_prev = page > 1
+offset = (page - 1) * page_size
 ```
 
-**响应示例（200 OK）：** 同上
-
 ---
 
-## 数据库设计
+## 实现逻辑
 
-### 涉及表
+### 全局信息流查询
 
-#### `posts` 表
+```python
+def get_global_feed(
+    db: Session,
+    page: int = 1,
+    page_size: int = 20,
+    current_user_id: int = None
+):
+    offset = (page - 1) * page_size
 
-| 字段名 | 类型 | 约束 | 说明 |
-|--------|------|------|------|
-| id | Integer | PK, Auto | 帖子唯一ID |
-| author_id | Integer | FK(users.id), Index, NonNull | 作者ID |
-| title | String(200) | Nullable | 帖子标题 |
-| content | Text | NonNull | 帖子内容 |
-| like_count | Integer | Default 0, NonNull | 点赞数（冗余） |
-| comment_count | Integer | Default 0, NonNull | 评论数（冗余） |
-| created_at | DateTime | Default UTC | 创建时间 |
+    posts = db.query(Post).order_by(
+        Post.created_at.desc()
+    ).offset(offset).limit(page_size).all()
 
-#### `users` 表
+    total = db.query(func.count(Post.id)).scalar()
 
-| 字段名 | 类型 | 约束 | 说明 |
-|--------|------|------|------|
-| id | Integer | PK, Auto | 用户唯一ID |
-| username | String(50) | Unique, Index, NonNull | 用户名 |
-| bio | Text | Nullable | 个人简介 |
-| avatar_url | String(500) | Nullable | 头像URL |
-| created_at | DateTime | Default UTC | 创建时间 |
+    items = []
+    for post in posts:
+        item = {
+            "id": post.id,
+            "title": post.title,
+            "content": post.content,
+            "created_at": post.created_at,
+            "author_id": post.author_id,
+            "author_name": post.author.username,
+            "author_avatar": post.author.avatar_url,
+            "like_count": post.like_count,
+            "comment_count": post.comment_count,
+        }
+        if current_user_id:
+            item["is_liked"] = db.query(Like).filter(
+                Like.post_id == post.id,
+                Like.user_id == current_user_id
+            ).first() is not None
+        items.append(item)
 
-#### `likes` 表
-
-| 字段名 | 类型 | 约束 | 说明 |
-|--------|------|------|------|
-| user_id | Integer | FK(users.id), PK | 点赞用户ID |
-| post_id | Integer | FK(posts.id), PK | 被点赞帖子ID |
-| created_at | DateTime | Default UTC | 点赞时间 |
-
----
-
-## 业务逻辑说明
-
-### 获取信息流流程
-
-```
-1. 查询帖子总数（用于分页计算）
-   ↓
-2. 查询帖子列表（分页 + joinedload 预加载作者）
-   ↓
-3. 批量查询当前用户点赞状态（IN 查询）
-   ↓
-4. 组装 PostFeedItem 列表
-   ↓
-5. 计算分页信息（total, total_pages, has_next, has_prev）
-   ↓
-6. 返回标准化响应结构
+    return {
+        "code": 200,
+        "message": "success",
+        "data": items,
+        "pagination": {...}
+    }
 ```
 
-### 性能优化策略
-
-1. **joinedload 预加载**
-   - `joinedload(Post.author)`: 避免 N+1 查询作者信息
-
-2. **批量查询**
-   - 使用 `IN` 查询一次性获取所有点赞状态
-
-3. **冗余计数**
-   - `post.like_count`: 避免频繁 COUNT 查询
-   - `post.comment_count`: 快速获取评论总数
-
 ---
 
-## 测试验证
+## 性能优化
 
-### 测试覆盖场景
+### 数据库索引
 
-- ✅ 分页功能（page, page_size, total_pages, has_next, has_prev）
-- ✅ 点赞状态正确返回
-- ✅ 作者信息完整返回
-- ✅ 全局信息流接口
-- ✅ 用户帖子流接口
-- ✅ 错误处理（用户不存在返回 404）
+| 索引 | 字段 | 用途 |
+|------|------|------|
+| idx_posts_created_at | created_at | 加速时间排序查询 |
+| idx_posts_author_id | author_id | 加速用户帖子查询 |
 
-### 测试脚本
+### N+1 问题
 
-测试文件: `test_feed.py`
+信息流需要关联查询用户表获取作者信息，建议使用 **SQLAlchemy joinedload** 预加载：
 
-运行命令:
-```bash
-python test_feed.py
+```python
+from sqlalchemy.orm import joinedload
+
+posts = db.query(Post).options(
+    joinedload(Post.author)
+).order_by(
+    Post.created_at.desc()
+).offset(offset).limit(page_size).all()
 ```
 
-测试结果: **全部通过**
+---
+
+## 与其他模块的关系
+
+```
+┌─────────────────────────────────────────────┐
+│              信息流 (Feed)                  │
+├─────────────────────────────────────────────┤
+│                                             │
+│  依赖数据:                                   │
+│  ├── Posts (帖子列表)                        │
+│  ├── Users (作者信息)                        │
+│  └── Likes (点赞状态)                        │
+│                                             │
+│  不直接操作:                                 │
+│  ├── Comments (评论数通过关系获取)            │
+│  └── 点赞/评论本身                           │
+│                                             │
+└─────────────────────────────────────────────┘
+```
 
 ---
 
-## 注意事项
-
-1. **分页参数**
-   - `page` 从 1 开始（不是 0）
-   - `page_size` 默认 20，最大 100
-   - 超过总页数时返回空列表
-
-2. **current_user_id**
-   - 可选参数，不提供时 `is_liked` 默认为 `false`
-   - 用于判断当前用户是否点赞了帖子
-
-3. **评论获取**
-   - 信息流接口不返回评论内容
-   - 评论详情通过独立接口 `/api/v1/posts/{post_id}/comments` 获取
-
----
-
-## 后续优化建议
-
-1. **性能优化**
-   - 添加 Redis 缓存热点信息流数据
-   - 实现信息流预加载机制
-
-2. **功能扩展**
-   - 添加信息流筛选功能（按时间范围、按标签等）
-   - 实现个性化推荐算法
-   - 添加信息流搜索功能
-
-3. **监控与统计**
-   - 添加接口性能监控
-   - 统计热门帖子排行
-   - 用户行为分析
-
----
-
-## 更新历史
-
-### Alpha-v1.5.0-feat (2026.3.17 8:30)
-- 初始版本，包含预览评论功能
-- 标准化 API 响应结构
-- 分页功能
-- 作者信息和点赞状态
-
-### Alpha-v1.5.1-chore (2026.3.17 22:00)
-- 移除预览评论功能
-- 简化 Feed 接口响应结构
-- 评论详情通过独立接口获取
-
----
-
-**文档更新时间**: 2026.3.17 22:00  
-**版本**: Alpha-v1.5.1-chore: 移除评论预览
+*文档版本：v1.9.7-Alpha-refactor | 更新日期：2026.3.30*

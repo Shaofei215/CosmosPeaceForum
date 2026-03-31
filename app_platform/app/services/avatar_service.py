@@ -1,4 +1,4 @@
-# 头像上传工具模块
+# 头像上传业务逻辑层
 # 处理头像文件的上传、存储和访问
 import os
 import uuid
@@ -96,8 +96,6 @@ async def save_avatar_file(file: UploadFile, user_id: int) -> str:
             detail=f"文件保存失败：{str(e)}"
         )
 
-    # 返回相对路径，用于存储在数据库中
-    # 格式：uploads/avatars/avatar_1_xxx.jpg
     relative_path = f"uploads/avatars/{unique_filename}"
     return relative_path
 

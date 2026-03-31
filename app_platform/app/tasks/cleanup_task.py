@@ -1,4 +1,4 @@
-# 验证码清理任务
+# 验证码清理定时任务
 # 定期清理过期的验证码记录，防止数据库膨胀
 from datetime import datetime, timedelta
 
@@ -21,10 +21,8 @@ def cleanup_expired_verification_codes():
     """
     db = SessionLocal()
     try:
-        # 7天前的时间点
         cutoff_date = datetime.utcnow() - timedelta(days=7)
 
-        # 查询过期且超过保留期限的验证码
         expired_codes = db.query(EmailVerificationCode).filter(
             and_(
                 (

@@ -1,6 +1,6 @@
-# 🐳 Herta-Tree Docker 部署指南
+# Herta-Tree Docker 部署指南
 
-## 📋 目录
+## 目录
 
 - [快速开始](#快速开始)
 - [开发环境](#开发环境)
@@ -10,52 +10,60 @@
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
-### 1. 环境准备
+### 环境准备
 
-确保已安装：
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
+确保已安装以下软件：
 
-### 2. 配置环境变量
+| 软件 | 版本 | 说明 |
+|------|------|------|
+| [Docker](https://docs.docker.com/get-docker/) | 20.0+ | 容器运行时 |
+| [Docker Compose](https://docs.docker.com/compose/install/) | 2.0+ | 容器编排工具 |
+
+### 启动服务
+
+**1. 配置环境变量**
 
 ```bash
 # 复制环境变量模板
 cp .env.example .env
 
-# 编辑 .env 文件，修改必要配置
-# 特别注意修改 JWT_SECRET_KEY 和 ADMIN_KEY
+# 编辑 .env 文件，修改以下配置：
+# - JWT_SECRET_KEY: JWT 签名密钥（生产环境必须修改）
+# - ADMIN_KEY: 管理员密钥（生产环境必须修改）
 ```
 
-### 3. 启动服务
-
-**开发模式（推荐开发使用）：**
+**2. 启动开发环境（推荐）**
 
 ```bash
-# 启动后端 + 前端开发服务器
 docker-compose --profile dev up -d
-
-# 访问地址：
-# - 前端: http://localhost:5173
-# - 后端 API: http://localhost:8000
-# - API 文档: http://localhost:8000/docs
 ```
 
-**生产模式：**
+**3. 访问服务**
+
+| 服务 | 地址 |
+|------|------|
+| 前端开发服务器 | http://localhost:5173 |
+| 后端 API | http://localhost:8000 |
+| API 文档 | http://localhost:8000/docs |
+
+**4. 启动生产环境**
 
 ```bash
-# 启动后端 + 前端生产构建
 docker-compose --profile prod up -d
-
-# 访问地址：
-# - 前端: http://localhost
-# - 后端 API: http://localhost:8000
 ```
+
+**5. 访问生产服务**
+
+| 服务 | 地址 |
+|------|------|
+| 前端 | http://localhost |
+| 后端 API | http://localhost:8000 |
 
 ---
 
-## 💻 开发环境
+## 开发环境
 
 ### 服务架构
 
@@ -63,34 +71,43 @@ docker-compose --profile prod up -d
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │   Frontend Dev  │────▶│    Backend      │────▶│    SQLite DB    │
 │    :5173        │     │    :8000        │     │   /app/data     │
-│  (Vite dev)     │     │  (FastAPI)      │     │  (持久化卷)      │
+│  (Vite + HMR)   │     │  (FastAPI)      │     │  (持久化卷)      │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
 ### 开发特性
 
-- ✅ **热重载**：代码修改自动刷新
-- ✅ **源码映射**：支持调试
-- ✅ **独立数据库**：数据持久化在 `./data` 目录
+| 特性 | 说明 |
+|------|------|
+| 热重载 | 代码修改自动刷新 |
+| 源码映射 | 支持调试 |
+| 数据持久化 | 数据存储在 `./data` 目录 |
 
 ### 开发命令
 
 ```bash
-# 查看日志
+# 查看后端日志
 docker-compose logs -f backend
+
+# 查看前端日志
 docker-compose logs -f frontend-dev
 
-# 进入容器调试
+# 进入后端容器
 docker-compose exec backend bash
+
+# 进入前端容器
 docker-compose exec frontend-dev sh
 
-# 重启服务
+# 重启后端服务
 docker-compose restart backend
+
+# 重启前端服务
+docker-compose restart frontend-dev
 ```
 
 ---
 
-## 🏭 生产环境
+## 生产环境
 
 ### 服务架构
 
@@ -98,18 +115,20 @@ docker-compose restart backend
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │     Nginx       │────▶│    Backend      │────▶│    SQLite DB    │
 │     :80         │     │    :8000        │     │   /app/data     │
-│  (静态文件)      │     │  (FastAPI)      │     │  (持久化卷)      │
+│  (静态文件服务)   │     │  (FastAPI)       │     │  (持久化卷)      │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
 ### 生产优化
 
-- ✅ **多阶段构建**：减小镜像体积
-- ✅ **Nginx 服务**：高效静态文件服务
-- ✅ **Gzip 压缩**：减少传输体积
-- ✅ **静态缓存**：长期缓存静态资源
+| 优化项 | 说明 |
+|--------|------|
+| 多阶段构建 | 减小镜像体积 |
+| Nginx 服务 | 高效静态文件服务 |
+| Gzip 压缩 | 减少传输体积 |
+| 静态缓存 | 长期缓存静态资源 |
 
-### 生产部署
+### 生产部署步骤
 
 ```bash
 # 1. 修改环境变量
@@ -120,13 +139,16 @@ vim .env
 # 2. 启动生产环境
 docker-compose --profile prod up -d
 
-# 3. 查看状态
+# 3. 查看服务状态
 docker-compose ps
+
+# 4. 查看日志
+docker-compose logs -f
 ```
 
 ---
 
-## 🛠️ 常用命令
+## 常用命令
 
 ### 基础操作
 
@@ -140,13 +162,13 @@ docker-compose up -d
 # 停止服务
 docker-compose down
 
-# 停止并删除数据卷（慎用）
+# 停止服务并删除数据卷（慎用！）
 docker-compose down -v
 
 # 查看日志
 docker-compose logs -f [service]
 
-# 查看状态
+# 查看服务状态
 docker-compose ps
 ```
 
@@ -169,7 +191,7 @@ sqlite3 data/herta_tree.db
 # 查看镜像
 docker images | grep herta
 
-# 删除镜像
+# 删除旧镜像
 docker rmi herta-tree-backend herta-tree-frontend
 
 # 清理未使用镜像
@@ -178,7 +200,7 @@ docker image prune
 
 ---
 
-## 🔧 故障排查
+## 故障排查
 
 ### 常见问题
 
@@ -186,7 +208,6 @@ docker image prune
 
 ```bash
 # 错误：bind: address already in use
-# 解决：修改 .env 中的端口配置或停止占用端口的进程
 
 # 查看端口占用
 lsof -i :8000
@@ -201,8 +222,8 @@ kill -9 <PID>
 
 ```bash
 # 错误：unable to open database file
-# 解决：检查 data 目录权限
 
+# 检查 data 目录权限
 chmod 755 data
 chmod 644 data/herta_tree.db
 ```
@@ -216,8 +237,8 @@ curl http://localhost:8000/health
 # 查看后端日志
 docker-compose logs backend
 
-# 检查 CORS 配置（开发环境）
-# 确保 vite.config.ts 中的代理配置正确
+# 检查 CORS 配置
+# 确保 .env 中 VITE_API_BASE_URL 配置正确
 ```
 
 #### 4. 镜像构建失败
@@ -226,7 +247,7 @@ docker-compose logs backend
 # 清理构建缓存
 docker-compose build --no-cache
 
-# 检查网络连接（需要下载基础镜像）
+# 检查网络连接
 docker pull python:3.11-slim
 docker pull node:20-alpine
 ```
@@ -250,7 +271,7 @@ docker-compose exec backend python -c "from app.db.session import engine; print(
 
 ---
 
-## 📁 文件说明
+## 文件说明
 
 | 文件 | 说明 |
 |------|------|
@@ -266,17 +287,19 @@ docker-compose exec backend python -c "from app.db.session import engine; print(
 
 ---
 
-## 🔒 安全建议
+## 安全建议
 
-1. **修改默认密钥**：生产环境必须修改 `JWT_SECRET_KEY` 和 `ADMIN_KEY`
-2. **关闭调试模式**：生产环境设置 `DEBUG=false`
-3. **使用 HTTPS**：生产环境建议配合反向代理使用 HTTPS
-4. **定期备份**：定期备份 `./data` 目录中的数据库文件
-5. **限制访问**：使用防火墙限制端口访问
+| 建议 | 说明 |
+|------|------|
+| 修改默认密钥 | 生产环境必须修改 `JWT_SECRET_KEY` 和 `ADMIN_KEY` |
+| 关闭调试模式 | 生产环境设置 `DEBUG=false` |
+| 使用 HTTPS | 生产环境建议配合反向代理使用 HTTPS |
+| 定期备份 | 定期备份 `./data` 目录中的数据库文件 |
+| 限制访问 | 使用防火墙限制端口访问 |
 
 ---
 
-## 📚 参考链接
+## 参考链接
 
 - [FastAPI 部署文档](https://fastapi.tiangolo.com/deployment/)
 - [Docker 官方文档](https://docs.docker.com/)
@@ -284,4 +307,4 @@ docker-compose exec backend python -c "from app.db.session import engine; print(
 
 ---
 
-*Happy Dockerizing! 🐳*
+*文档版本：v1.9.7-Alpha-refactor | 更新日期：2026.3.30*

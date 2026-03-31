@@ -32,7 +32,7 @@ from app.schemas.email_verification import (
     PasswordResetRequest,
     PasswordResetConfirmRequest,
 )
-from app.utils.email_service import email_service
+from app.services.email_service import email_service
 
 
 router = APIRouter()
