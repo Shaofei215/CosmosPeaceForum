@@ -16,6 +16,8 @@ import ResetPasswordPage from '@/pages/auth/ResetPasswordPage';
 import FeedPage from '@/pages/feed/FeedPage';
 import PostDetailPage from '@/pages/post/PostDetailPage';
 import ProfilePage from '@/pages/profile/ProfilePage';
+import FollowingListPage from '@/pages/profile/FollowingListPage';
+import FollowersListPage from '@/pages/profile/FollowersListPage';
 
 /**
  * 应用路由配置
@@ -32,6 +34,8 @@ export const router = createBrowserRouter([
       { path: 'feed', element: <FeedPage /> },
       { path: 'post/:postId', element: <PostDetailPage /> },
       { path: 'user/:userId', element: <ProfilePage /> },
+      { path: 'user/:userId/following', element: <FollowingListPage /> },
+      { path: 'user/:userId/followers', element: <FollowersListPage /> },
 
       // 认证路由
       { path: 'login', element: <LoginPage /> },

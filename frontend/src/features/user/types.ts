@@ -16,6 +16,10 @@ export interface UserProfile {
   avatar_url: string | null;
   /** 创建时间 */
   created_at: string;
+  /** 关注数量 */
+  following_count?: number;
+  /** 粉丝数量 */
+  followers_count?: number;
 }
 
 /**

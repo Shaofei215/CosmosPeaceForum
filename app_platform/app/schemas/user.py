@@ -71,6 +71,12 @@ class UserResponse(UserBase):
     # 创建时间
     created_at: datetime
 
+    # 关注数量
+    following_count: int = Field(default=0, description="关注数量")
+
+    # 粉丝数量
+    followers_count: int = Field(default=0, description="粉丝数量")
+
     # 配置：允许从 ORM 模型读取数据
     class Config:
         from_attributes = True

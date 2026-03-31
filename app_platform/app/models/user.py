@@ -73,3 +73,35 @@ class User(Base):
     # 关联关系：邮箱验证码记录
     # cascade="all, delete-orphan" 表示删除用户时自动删除其所有验证码记录
     email_codes = relationship("EmailVerificationCode", back_populates="user")
+
+    # ========== 关注系统相关字段和关系 ==========
+
+    # 冗余计数字段：关注数量
+    # 表示该用户关注了多少人
+    # 在关注/取消关注时更新，保证高性能查询
+    following_count = Column(Integer, default=0, nullable=False)
+
+    # 冗余计数字段：粉丝数量
+    # 表示该用户被多少人关注
+    # 在关注/取消关注时更新，保证高性能查询
+    followers_count = Column(Integer, default=0, nullable=False)
+
+    # 关联关系：用户关注的人（作为关注者）
+    # User.following 表示该用户关注了哪些人
+    # foreign_keys=[Follow.follower_id] 指定外键指向 Follow 表的 follower_id
+    following = relationship(
+        "Follow",
+        foreign_keys="Follow.follower_id",
+        back_populates="follower",
+        cascade="all, delete-orphan"
+    )
+
+    # 关联关系：用户的粉丝（作为被关注者）
+    # User.followers 表示该用户的粉丝有哪些
+    # foreign_keys=[Follow.following_id] 指定外键指向 Follow 表的 following_id
+    followers = relationship(
+        "Follow",
+        foreign_keys="Follow.following_id",
+        back_populates="following",
+        cascade="all, delete-orphan"
+    )

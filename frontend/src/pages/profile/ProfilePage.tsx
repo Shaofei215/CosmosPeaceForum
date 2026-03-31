@@ -6,20 +6,24 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import { useUser } from '@/features/user';
 import { useInfiniteUserFeed } from '@/features/feed';
+import { useToggleFollow, useFollowStatus } from '@/features/follow';
 import { useAuthStore, useLogout } from '@/features/auth';
 import { PostCard } from '@/widgets/post-card';
 import { Avatar, Skeleton, Button } from '@/shared/components/ui';
-import { LogOut } from 'lucide-react';
+import { LogOut, UserPlus } from 'lucide-react';
 
 /**
  * 用户资料页面组件
  */
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, isAuthenticated } = useAuthStore();
   const logout = useLogout();
   const navigate = useNavigate();
   const userIdNum = Number(userId);
+
+  const toggleFollow = useToggleFollow();
+  const { data: followStatus } = useFollowStatus(userIdNum);
 
   /**
    * 处理登出
@@ -27,6 +31,14 @@ export default function ProfilePage() {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleFollow = () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    toggleFollow.mutate(userIdNum);
   };
 
   const { data: user, isLoading: isUserLoading } = useUser(userIdNum);
@@ -91,12 +103,50 @@ export default function ProfilePage() {
             size="xl"
           />
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold">{user.username}</h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold">{user.username}</h1>
+              {!isCurrentUser && (
+                <Button
+                  variant={followStatus?.is_following ? "outline" : "default"}
+                  size="sm"
+                  onClick={handleFollow}
+                  disabled={toggleFollow.isPending}
+                  className="gap-1"
+                >
+                  {toggleFollow.isPending ? (
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : followStatus?.is_mutual ? (
+                    "互相关注"
+                  ) : followStatus?.is_following ? (
+                    "已关注"
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4" />
+                      关注
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
             {user.bio && (
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                 {user.bio}
               </p>
             )}
+            <div className="flex items-center gap-4 mt-3">
+              <Link
+                to={`/user/${user.id}/following`}
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                <span className="font-medium text-foreground">{user.following_count ?? 0}</span> 关注
+              </Link>
+              <Link
+                to={`/user/${user.id}/followers`}
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                <span className="font-medium text-foreground">{user.followers_count ?? 0}</span> 粉丝
+              </Link>
+            </div>
           </div>
           {/* 登出按钮 - 仅当前用户可见 */}
           {isCurrentUser && (
@@ -158,9 +208,13 @@ function ProfileSkeleton() {
       <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-6">
         <div className="flex items-start gap-4">
           <Skeleton className="h-16 w-16 rounded-full" />
-          <div className="flex-1 space-y-2">
+          <div className="flex-1 space-y-3">
             <Skeleton className="h-8 w-32" />
             <Skeleton className="h-4 w-24" />
+            <div className="flex gap-4">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-4 w-16" />
+            </div>
           </div>
         </div>
       </div>

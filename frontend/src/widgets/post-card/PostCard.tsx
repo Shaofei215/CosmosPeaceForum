@@ -5,13 +5,15 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, CornerDownRight, ChevronDown as ExpandIcon } from 'lucide-react';
+import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, CornerDownRight, ChevronDown as ExpandIcon, UserPlus } from 'lucide-react';
 import type { PostFeedItem } from '@/features/feed';
 import type { PostWithLikeStatus } from '@/features/post';
 import type { Comment } from '@/features/comment';
 import { Avatar, Skeleton, Button, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
 import { useToggleLike } from '@/features/like';
+import { useToggleFollow } from '@/features/follow';
+import { useFollowStatus } from '@/features/follow';
 import { useComments, useCreateComment, useToggleCommentLike } from '@/features/comment';
 import { useAuthStore } from '@/features/auth';
 
@@ -30,6 +32,7 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const toggleLike = useToggleLike();
+  const toggleFollow = useToggleFollow();
   const [isCommentsExpanded, setIsCommentsExpanded] = useState(expanded);
   const [isContentExpanded, setIsContentExpanded] = useState(expanded);
   const [isContentTruncated, setIsContentTruncated] = useState(false);
@@ -42,6 +45,13 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
   const authorAvatar = 'author_avatar' in post ? post.author_avatar : null;
   const authorBio = 'author_bio' in post ? post.author_bio : null;
   const isLiked = 'is_liked' in post ? post.is_liked : post.is_liked_by_current_user;
+  const authorId = post.author_id;
+
+  // 判断是否为当前用户
+  const isCurrentUser = user?.id === authorId;
+
+  // 获取关注状态
+  const { data: followStatus } = useFollowStatus(authorId);
 
   // 检测内容是否被截断
   useEffect(() => {
@@ -67,6 +77,17 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
     e.preventDefault();
     e.stopPropagation();
     toggleLike.mutate(post.id);
+  };
+
+  const handleFollow = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    if (isCurrentUser) return;
+    toggleFollow.mutate(authorId);
   };
 
   const handleCommentClick = (e: React.MouseEvent) => {
@@ -134,6 +155,24 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
             >
               {authorName}
             </Link>
+            {!isCurrentUser && !followStatus?.is_following && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleFollow}
+                disabled={toggleFollow.isPending}
+                className="gap-1 h-7 px-2 text-xs"
+              >
+                {toggleFollow.isPending ? (
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <>
+                    <UserPlus className="h-3 w-3" />
+                    关注
+                  </>
+                )}
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             {authorBio ? (
