@@ -158,7 +158,7 @@ export default function ProfileSetupPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isPending}
                 className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
-                maxLength={10}
+                maxLength={15}
               />
             </div>
 

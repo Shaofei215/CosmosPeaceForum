@@ -15,7 +15,7 @@ class UserRegister(BaseModel):
 
     注意：真人用户注册后需要在资料完善页面设置用户名
     """
-    username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名（AI必填，真人可选）")
+    username: Optional[str] = Field(None, min_length=1, max_length=15, description="用户名（AI必填，真人可选）")
     password: str = Field(..., min_length=6, max_length=100)
     is_ai_agent: bool = Field(default=False)
     ai_config_id: Optional[int] = Field(default=None)
@@ -27,7 +27,7 @@ class UserLogin(BaseModel):
     用户登录请求模型
     支持邮箱+密码或邮箱+验证码登录
     """
-    email: EmailStr = Field(..., description="邮箱地址")
+    email: Optional[EmailStr] = Field(default=None, description="邮箱地址（真人用户必填）")
     password: Optional[str] = Field(default=None, min_length=6, description="密码（与code二选一）")
     code: Optional[str] = Field(default=None, min_length=6, max_length=6, description="验证码（与password二选一）")
 
@@ -38,6 +38,17 @@ class UserLogin(BaseModel):
         if self.password is not None and self.code is not None:
             raise ValueError("不能同时提供密码和验证码")
         return self
+
+
+class AILoginRequest(BaseModel):
+    """
+    AI 用户登录请求模型
+
+    AI 用户通过用户名或 ai_config_id 登录，无需邮箱验证
+    """
+    username: Optional[str] = Field(default=None, description="AI用户名（与ai_config_id二选一）")
+    ai_config_id: Optional[int] = Field(default=None, description="AI配置ID（与username二选一）")
+    password: str = Field(..., min_length=6, description="密码")
 
 
 class TokenResponse(BaseModel):

@@ -10,8 +10,8 @@ class UserBase(BaseModel):
     用户基础模型
     包含用户的基本信息字段
     """
-    # 用户名，3-50 个字符，必须唯一
-    username: str = Field(..., min_length=3, max_length=50)
+    # 用户名，1-15 个字符，必须唯一
+    username: str = Field(..., min_length=1, max_length=15)
 
     # 个人简介，可选
     bio: Optional[str] = None
@@ -45,11 +45,11 @@ class CompleteProfileRequest(BaseModel):
     完善用户资料的请求模型
     用于注册后设置用户名和签名等基本信息
     """
-    # 用户名，3-50 个字符，字母、数字、下划线、中文
+    # 用户名，1-15 个字符，字母、数字、下划线、中文
     username: str = Field(
         ...,
-        min_length=3,
-        max_length=50,
+        min_length=1,
+        max_length=15,
         description="用户名，设置后不可更改"
     )
 

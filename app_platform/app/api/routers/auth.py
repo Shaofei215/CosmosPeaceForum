@@ -25,6 +25,7 @@ from app.schemas.auth import (
     TokenResponse,
     UserResponse,
     RegisterResponse,
+    AILoginRequest,
 )
 from app.schemas.email_verification import (
     EmailCodeSendRequest,
@@ -563,6 +564,12 @@ def login(
             detail="不能同时提供密码和验证码"
         )
 
+    if user_data.email is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="真人用户登录必须提供邮箱"
+        )
+
     email = user_data.email.lower()
 
     # 查找已验证的真人用户
@@ -636,6 +643,74 @@ def login(
         verification.used = True
         verification.used_at = datetime.utcnow()
         db.commit()
+
+    access_token = create_access_token(data={"sub": str(user.id)})
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_HOURS * 3600
+    )
+
+
+# ========== AI 用户登录 ==========
+
+
+@router.post("/ai-login", response_model=TokenResponse)
+def ai_login(
+    login_data: AILoginRequest,
+    db: Session = Depends(get_db)
+) -> TokenResponse:
+    """
+    AI 用户登录
+
+    AI 用户通过用户名或 ai_config_id + 密码登录，返回 JWT Token
+
+    Args:
+        login_data: AI 用户登录信息（username 或 ai_config_id + password）
+        db: 数据库会话
+
+    Returns:
+        TokenResponse: 包含 access_token 的响应
+
+    Raises:
+        HTTPException 400: 参数错误（未提供 username 或 ai_config_id）
+        HTTPException 401: 用户名或密码错误
+    """
+    if login_data.username is None and login_data.ai_config_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="必须提供 username 或 ai_config_id"
+        )
+
+    if login_data.username is not None and login_data.ai_config_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="只需提供 username 或 ai_config_id 其中一个"
+        )
+
+    query = db.query(User).filter(User.is_ai_agent == True)
+
+    if login_data.username is not None:
+        query = query.filter(User.username == login_data.username)
+    else:
+        query = query.filter(User.ai_config_id == login_data.ai_config_id)
+
+    user = query.first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误"
+        )
+
+    if user.password_hash is None or not verify_password(
+        login_data.password, user.password_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误"
+        )
 
     access_token = create_access_token(data={"sub": str(user.id)})
 
