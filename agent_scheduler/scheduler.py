@@ -4,7 +4,6 @@ import json
 import math
 import os
 import random
-import sys
 import threading
 import time
 import traceback
@@ -15,12 +14,7 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 
-_scheduler_dir = Path(__file__).parent.resolve()
-_project_root = _scheduler_dir.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
-
-from agent_scheduler.time_system import (
+from .time_system import (
     TimeSystem,
     get_scaled_time,
     get_scaled_timestamp,
