@@ -2,6 +2,7 @@
 # 实现 AI 用户的注册、登录时间计算和会话调度功能
 import json
 import math
+import mimetypes
 import os
 import random
 import threading
@@ -21,6 +22,76 @@ from .time_system import (
     get_time_system,
     set_time_scale,
 )
+
+
+# ==================== 环境配置加载 ====================
+
+def get_avatar_dir() -> str:
+    """
+    获取 AI 用户头像目录的绝对路径
+
+    头像文件存储在 agent_scheduler/avatar/ 目录下
+
+    Returns:
+        str: 头像目录的绝对路径
+    """
+    scheduler_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(scheduler_dir, 'avatar')
+
+
+def get_avatar_file_path(avatar_filename: str) -> Optional[str]:
+    """
+    获取头像文件的完整路径
+
+    Args:
+        avatar_filename: 头像文件名（来自 ai_users_config.json）
+
+    Returns:
+        Optional[str]: 完整的头像文件路径，如果文件不存在或文件名为空则返回 None
+    """
+    if not avatar_filename or not avatar_filename.strip():
+        return None
+
+    avatar_dir = get_avatar_dir()
+    file_path = os.path.join(avatar_dir, avatar_filename)
+
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return file_path
+
+    return None
+
+
+def is_valid_avatar_file(avatar_filename: str) -> bool:
+    """
+    检查头像文件是否为有效的图片格式
+
+    支持的格式：JPEG, PNG, GIF, WebP
+
+    Args:
+        avatar_filename: 头像文件名
+
+    Returns:
+        bool: 文件是否为有效的图片格式
+    """
+    if not avatar_filename or not avatar_filename.strip():
+        return False
+
+    file_path = get_avatar_file_path(avatar_filename)
+    if not file_path:
+        return False
+
+    mime_type, _ = mimetypes.guess_type(file_path)
+    if mime_type:
+        return mime_type.startswith('image/') and mime_type in [
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp'
+        ]
+
+    valid_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    _, ext = os.path.splitext(avatar_filename)
+    return ext.lower() in valid_extensions
 
 
 # ==================== 环境配置加载 ====================
@@ -360,6 +431,67 @@ def login_user(
         return False, None, "无法连接到 API 服务器"
     except requests.exceptions.Timeout:
         return False, None, "API 请求超时"
+    except Exception as e:
+        return False, None, f"请求异常: {str(e)}"
+
+
+def upload_avatar(
+    user_id: int,
+    avatar_filename: str,
+    token: str
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    上传用户头像到服务器
+
+    Args:
+        user_id: 用户 ID
+        avatar_filename: 头像文件名（来自 ai_users_config.json）
+        token: 访问令牌
+
+    Returns:
+        Tuple[bool, Optional[str], Optional[str]]:
+            - 成功标志
+            - 头像 URL（成功时）
+            - 错误信息（失败时）
+    """
+    file_path = get_avatar_file_path(avatar_filename)
+    if not file_path:
+        return False, None, f"头像文件不存在或无效: {avatar_filename}"
+
+    mime_type, _ = mimetypes.guess_type(file_path)
+    if mime_type is None:
+        mime_type = 'application/octet-stream'
+
+    url = f"{API_BASE_URL}/users/avatar"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+    }
+
+    try:
+        with open(file_path, 'rb') as f:
+            files = {
+                'file': (avatar_filename, f, mime_type)
+            }
+            response = requests.post(url, headers=headers, files=files, timeout=30)
+
+        if response.status_code == 200:
+            data = response.json()
+            avatar_url = data.get('avatar_url', '')
+            return True, avatar_url, None
+        elif response.status_code == 400:
+            response_data = response.json()
+            detail = response_data.get('detail', '文件格式不支持')
+            return False, None, f"头像上传失败: {detail}"
+        elif response.status_code == 401:
+            return False, None, "无权限上传头像"
+        else:
+            return False, None, f"HTTP {response.status_code}: {response.text}"
+
+    except requests.exceptions.ConnectionError:
+        return False, None, "无法连接到 API 服务器"
+    except requests.exceptions.Timeout:
+        return False, None, "头像上传超时"
     except Exception as e:
         return False, None, f"请求异常: {str(e)}"
 
@@ -732,6 +864,58 @@ class RegistrationManager:
             print(f"[注册管理器] {username} 更新用户简介失败: {bio_error}")
             return False
 
+    def update_avatar_for_user(
+        self,
+        user: AIUserConfig,
+        registered_user_id: int
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        为已注册用户上传并更新头像
+
+        Args:
+            user: 用户配置
+            registered_user_id: 注册后的用户 ID
+
+        Returns:
+            Tuple[bool, Optional[str]]: (是否成功, 错误信息或头像URL)
+        """
+        avatar_filename = user.avatar
+
+        if not avatar_filename or not avatar_filename.strip():
+            return True, None
+
+        if not is_valid_avatar_file(avatar_filename):
+            print(f"[注册管理器] 跳过无效的头像文件: {avatar_filename}")
+            return True, None
+
+        file_path = get_avatar_file_path(avatar_filename)
+        if not file_path:
+            print(f"[注册管理器] 头像文件不存在: {avatar_filename}")
+            return True, None
+
+        username = user.username if user.username else user.name
+
+        print(f"[注册管理器] 正在上传 {username} 的用户头像: {avatar_filename}")
+
+        login_success, token, login_error = login_user(username, self.password)
+
+        if not login_success or not token:
+            print(f"[注册管理器] {username} 登录获取令牌失败: {login_error}")
+            return False, login_error
+
+        upload_success, avatar_url, upload_error = upload_avatar(
+            registered_user_id,
+            avatar_filename,
+            token
+        )
+
+        if upload_success:
+            print(f"[注册管理器] {username} 上传头像成功: {avatar_url}")
+            return True, avatar_url
+        else:
+            print(f"[注册管理器] {username} 上传头像失败: {upload_error}")
+            return False, upload_error
+
     def update_all_bios(self, users: List[AIUserConfig]) -> None:
         """
         按顺序为所有已注册用户更新简介
@@ -761,6 +945,37 @@ class RegistrationManager:
                     time.sleep(self.registration_interval)
 
         print(f"[注册管理器] 简介更新完成")
+
+    def update_all_avatars(self, users: List[AIUserConfig]) -> None:
+        """
+        按顺序为所有已注册用户上传头像
+
+        Args:
+            users: AI 用户配置列表
+        """
+        users_to_update = [
+            (user, self.registered_users.get(user.id))
+            for user in users
+            if user.avatar and user.avatar.strip() and user.id in self.registered_users
+        ]
+
+        if not users_to_update:
+            print(f"[注册管理器] 没有需要上传头像的用户")
+            return
+
+        total = len(users_to_update)
+        print(f"\n[注册管理器] 开始上传 {total} 个用户的头像...")
+
+        for index, (user, registered_id) in enumerate(users_to_update, 1):
+            if registered_id:
+                username = user.username if user.username else user.name
+                print(f"[注册管理器] [{index}/{total}] 上传头像: {username} ({user.avatar})")
+                self.update_avatar_for_user(user, registered_id)
+
+                if index < total and self.registration_interval > 0:
+                    time.sleep(self.registration_interval)
+
+        print(f"[注册管理器] 头像上传完成")
 
     def get_registered_user_id(self, config_id: int) -> Optional[int]:
         """
@@ -809,6 +1024,11 @@ class AgentSchedulerManager:
         注册流程在主线程中顺序执行，完成后再启动调度器线程。
         调度器线程会跳过已完成的注册流程，直接进入调度循环。
 
+        注册流程包括：
+        1. 用户注册
+        2. 更新用户简介（personal_signature）
+        3. 上传用户头像（avatar）
+
         Args:
             config_path: AI 用户配置文件路径
             registration_interval: 两次注册之间的间隔秒数，默认 0.5 秒
@@ -833,6 +1053,7 @@ class AgentSchedulerManager:
             )
             self.registration_manager.register_all_users(users)
             self.registration_manager.update_all_bios(users)
+            self.registration_manager.update_all_avatars(users)
 
         for user in users:
             registered_user_id = None
@@ -896,10 +1117,20 @@ def main():
     print("\n[配置信息]")
     print(f"  API 地址: {API_BASE_URL}")
     print(f"  配置文件: {CONFIG_FILE_PATH}")
+    print(f"  头像目录: {get_avatar_dir()}")
     if ADMIN_KEY:
         print(f"  Admin Key: 已配置")
     else:
         print(f"  Admin Key: 未配置（将跳过用户注册，如需注册请配置 ADMIN_KEY）")
+
+    try:
+        users = load_ai_users_config(CONFIG_FILE_PATH)
+        users_with_avatar = [u for u in users if u.avatar and u.avatar.strip()]
+        print(f"\n[头像配置]")
+        print(f"  AI 用户总数: {len(users)}")
+        print(f"  有头像配置的用户数: {len(users_with_avatar)}")
+    except Exception as e:
+        print(f"\n[警告] 无法加载用户配置: {e}")
 
     manager = AgentSchedulerManager()
     manager.load_and_start(CONFIG_FILE_PATH)

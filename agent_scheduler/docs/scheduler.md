@@ -4,7 +4,7 @@
 
 | 项目 | 内容 |
 |------|------|
-| 当前版本 | v1.11.5-Alpha-fix: 修复注册并发问题 |
+| 当前版本 | v1.11.7-Alpha-feat: 添加AI用户头像上传功能 |
 | 更新日期 | 2026.4.5 |
 | 贡献者 | Claude AI Assistant |
 
@@ -19,10 +19,11 @@
 | 多线程独立调度 | 为每个 AI 用户创建独立调度线程，实现真正的并行调度 |
 | 泊松过程建模 | 基于泊松过程模型计算用户登录时间间隔 |
 | 外置时间系统集成 | 深度集成 `time_system.py`，实现时间缩放调度 |
-| 完整注册流程 | 支持 AI 用户注册、登录、资料更新全流程 |
+| 完整注册流程 | 支持 AI 用户注册、登录、资料更新、头像上传全流程 |
 | 环境配置管理 | 通过 `.env` 文件管理所有配置 |
 | 相对时间显示 | 终端日志使用 "xx时xx分后" 格式显示相对时间 |
 | 顺序注册机制 | 注册流程在主线程顺序执行，避免 API 并发拥塞 |
+| 自动头像上传 | 支持 AI 用户头像自动上传到后端服务器 |
 
 ---
 
@@ -32,6 +33,10 @@
 
 ```
 scheduler.py
+├── 头像目录管理
+│   ├── get_avatar_dir()           # 获取头像目录路径
+│   ├── get_avatar_file_path()     # 获取头像文件完整路径
+│   └── is_valid_avatar_file()     # 验证头像文件有效性
 ├── 环境配置加载
 │   ├── load_env_config()        # 解析 .env 文件
 │   └── get_env_config()         # 获取配置字典
@@ -49,13 +54,18 @@ scheduler.py
 ├── API 通信模块
 │   ├── register_ai_user()        # 注册 AI 用户
 │   ├── login_user()             # AI 用户登录
-│   └── update_user_profile()    # 更新用户资料
+│   ├── update_user_profile()    # 更新用户资料
+│   └── upload_avatar()          # 上传用户头像
 ├── 泊松过程计算模块
 │   └── calculate_poisson_interval()  # 计算登录间隔
 ├── 登录会话处理模块
 │   └── trigger_login_event()    # 触发登录事件
 ├── 用户注册管理器
-│   └── RegistrationManager      # 主线程顺序注册管理
+│   ├── RegistrationManager.register_all_users()    # 注册所有用户
+│   ├── RegistrationManager.update_bio_for_user()   # 更新单个用户简介
+│   ├── RegistrationManager.update_all_bios()       # 更新所有用户简介
+│   ├── RegistrationManager.update_avatar_for_user() # 上传单个用户头像
+│   └── RegistrationManager.update_all_avatars()    # 上传所有用户头像
 ├── 单用户调度器
 │   └── AIUserScheduler          # 单个用户调度器类
 ├── 全局调度器管理器
@@ -230,6 +240,9 @@ AgentSchedulerManager
 ├── 顺序更新所有简介（主线程）
 │   └── RegistrationManager.update_all_bios()
 │
+├── 顺序上传所有头像（主线程）
+│   └── RegistrationManager.update_all_avatars()
+│
 ├── 为每个用户创建调度器
 │   └── AIUserScheduler(pre_registered_user_id)
 │
@@ -255,6 +268,13 @@ AgentSchedulerManager
 │     ├── 筛选需要更新简介的用户                           │
 │     ├── 登录获取 token                                   │
 │     └── 调用 /users/{id} PUT                            │
+│                                                          │
+│  update_all_avatars(users)                              │
+│     │                                                   │
+│     ├── 筛选有头像配置的用户                            │
+│     ├── 验证头像文件有效性                               │
+│     ├── 登录获取 token                                   │
+│     └── 调用 /users/avatar POST                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -324,6 +344,32 @@ Content-Type: application/json
 }
 ```
 
+### 4. 上传用户头像
+
+**接口**: `POST /api/v1/users/avatar`
+
+**请求头**:
+```
+Authorization: Bearer {access_token}
+Content-Type: multipart/form-data
+```
+
+**请求体**:
+```
+file: 头像图片文件（JPEG, PNG, GIF, WebP）
+```
+
+**响应**:
+- `200 OK`: 上传成功，返回头像 URL
+```json
+{
+  "avatar_url": "/uploads/avatars/avatar_1_abc123.jpg"
+}
+```
+- `400 Bad Request`: 文件格式不支持或文件过大
+- `401 Unauthorized`: 无权限上传
+```
+
 ---
 
 ## 使用示例
@@ -347,7 +393,12 @@ Herta-Tree AI Agent 调度器
 [配置信息]
   API 地址: http://localhost:8000/api/v1
   配置文件: E:\...\agent_scheduler\ai_users_config.json
+  头像目录: E:\...\agent_scheduler\avatar
   Admin Key: 已配置
+
+[头像配置]
+  AI 用户总数: 97
+  有头像配置的用户数: 90
 
 [注册管理器] 开始注册 97 个 AI 用户...
 [注册管理器] 注册间隔: 0.5 秒
@@ -363,6 +414,14 @@ Herta-Tree AI Agent 调度器
 [注册管理器] 星穹列车-Official 更新用户简介成功
 ...
 [注册管理器] 简介更新完成
+
+[注册管理器] 开始上传 88 个用户的头像...
+[注册管理器] [1/88] 上传头像: 帕姆 (帕姆.png)
+[注册管理器] 帕姆 上传头像成功: /uploads/avatars/avatar_101_abc123.png
+[注册管理器] [2/88] 上传头像: 三月七 (三月七.png)
+[注册管理器] 跳过无效的头像文件: 不存在的文件.png
+...
+[注册管理器] 头像上传完成
 
 [信息] 已启动 97 个用户调度器
 
@@ -507,6 +566,11 @@ current_scaled_time = self.time_system.get_scaled_time()
 4. **线程数量**：97 个用户会创建 97 个独立线程，需确保系统资源充足
 5. **Daemon 模式**：调度器线程为守护线程，主进程退出时自动终止
 6. **注册间隔**：默认 0.5 秒，可通过 `registration_interval` 参数调整，避免 API 并发拥塞
+7. **头像文件**：
+   - 头像目录：`agent_scheduler/avatar/`
+   - 支持格式：JPEG, PNG, GIF, WebP
+   - avatar 字段为空字符串的用户将跳过头像上传
+   - 无效或不存在头像文件会被跳过，不影响整体流程
 
 ---
 
@@ -521,4 +585,4 @@ current_scaled_time = self.time_system.get_scaled_time()
 
 ---
 
-*文档版本：v1.11.5-Alpha-fix: 修复注册并发问题 | 更新日期：2026.4.5*
+*文档版本：v1.12.0-Alpha-feat: 添加头像自动上传功能 | 更新日期：2026.4.5*
