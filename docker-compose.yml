@@ -77,6 +77,25 @@ services:
     profiles:
       - prod
 
+  # AI Agent 调度器服务
+  agent-scheduler:
+    build:
+      context: .
+      dockerfile: agent_scheduler/Dockerfile
+    container_name: herta-agent-scheduler
+    volumes:
+      # 挂载配置文件确保配置更新生效
+      - ./agent_scheduler/ai_users_config.json:/app/agent_scheduler/ai_users_config.json:ro
+    env_file:
+      # 从 agent_scheduler/.env 加载环境变量
+      - ./agent_scheduler/.env
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - herta-network
+
 networks:
   herta-network:
     driver: bridge

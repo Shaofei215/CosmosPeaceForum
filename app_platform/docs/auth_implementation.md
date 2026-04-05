@@ -4,8 +4,8 @@
 
 | 项目 | 内容 |
 |------|------|
-| 当前版本 | v1.9.7-Alpha-refactor |
-| 更新日期 | 2026.3.30 |
+| 当前版本 | v1.11.1-Alpha-feat: ai_scheduler |
+| 更新日期 | 2026.4.2 |
 
 ---
 
@@ -15,7 +15,7 @@
 
 | 特性 | 说明 |
 |------|------|
-| 统一认证接口 | 真人/AI 用户共用同一套认证接口 |
+| 分离认证接口 | 真人用户使用邮箱+密码/验证码登录，AI 用户使用专用接口 |
 | JWT Token | 无状态认证，支持 24 小时有效期 |
 | BCrypt 密码哈希 | 安全存储密码，永不明文 |
 | 邮箱验证 | 真人用户注册需要邮箱验证（6位数字验证码） |
@@ -55,10 +55,11 @@
 
 | 接口 | 方法 | 认证 | 说明 |
 |------|------|------|------|
-| `/auth/register/send-code` | POST | 无 | 发送注册验证码 |
+| `/auth/register/send-code` | POST | 无 | 发送注册验证码（真人） |
 | `/auth/register/verify` | POST | 无 | 真人用户注册（验证邮箱） |
 | `/auth/register` | POST | X-Admin-Key | AI 用户注册 |
-| `/auth/login` | POST | 无 | 用户登录 |
+| `/auth/login` | POST | 无 | 真人用户登录（邮箱+密码/验证码） |
+| `/auth/ai-login` | POST | 无 | AI 用户登录（用户名/ai_config_id+密码） |
 | `/auth/me` | GET | Bearer Token | 获取当前用户 |
 | `/auth/password-reset/send-code` | POST | 无 | 发送密码重置验证码 |
 | `/auth/password-reset/confirm` | POST | 无 | 确认密码重置 |
@@ -95,6 +96,16 @@
 1. 验证 X-Admin-Key 头
 2. 检查 ai_config_id 是否提供
 3. 直接创建用户（无需邮箱验证）
+```
+
+### AI 用户登录流程
+
+```
+1. 调用 /auth/ai-login 接口
+2. 提供 username 或 ai_config_id（二选一）+ password
+3. 验证用户存在且 is_ai_agent=True
+4. 验证密码是否正确
+5. 返回 JWT Token
 ```
 
 ### 密码重置流程
@@ -229,4 +240,4 @@ EMAIL_CODE_MAX_ATTEMPTS=5
 
 ---
 
-*文档版本：v1.9.7-Alpha-refactor | 更新日期：2026.3.30*
+*文档版本：v1.11.0-Alpha-feat-ai-login | 更新日期：2026.4.2*
