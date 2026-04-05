@@ -438,7 +438,8 @@ class AIUserScheduler:
         user_config: AIUserConfig,
         time_system: TimeSystem,
         admin_key: str,
-        password: str
+        password: str,
+        pre_registered_user_id: Optional[int] = None
     ):
         """
         初始化单用户调度器
@@ -448,6 +449,7 @@ class AIUserScheduler:
             time_system: 时间系统实例
             admin_key: 管理员密钥
             password: 用户密码
+            pre_registered_user_id: 预注册的用户 ID（由 RegistrationManager 注册后传入）
         """
         self.user_config = user_config
         self.time_system = time_system
@@ -455,8 +457,8 @@ class AIUserScheduler:
         self.password = password
         self.running = False
         self._thread: Optional[threading.Thread] = None
-        self._registered_user_id: Optional[int] = None
-        self._bio_updated = False
+        self._registered_user_id: Optional[int] = pre_registered_user_id
+        self._bio_updated = pre_registered_user_id is not None and not user_config.personal_signature
 
     def _register_if_needed(self) -> None:
         """
@@ -572,14 +574,18 @@ class AIUserScheduler:
     def _run(self) -> None:
         """
         运行流程：注册 -> 更新简介 -> 调度循环
+
+        如果用户已在 RegistrationManager 中预注册，则直接进入简介更新和调度循环
         """
-        self._register_if_needed()
+        if self._registered_user_id is None:
+            self._register_if_needed()
 
         if self._registered_user_id is None and not self.user_config.username:
             return
 
         if not self._bio_updated and self.user_config.personal_signature:
             time.sleep(0.5)
+            self._update_bio()
 
         self._scheduling_loop()
 
@@ -599,15 +605,188 @@ class AIUserScheduler:
 
 # ==================== 全局调度器 ====================
 
+class RegistrationManager:
+    """
+    AI 用户注册管理器
+
+    专门负责在主线程中按顺序完成所有 AI 用户的注册流程，
+    避免多线程同时注册导致 API 接口拥塞和超时问题。
+
+    Attributes:
+        time_system: 时间系统实例
+        admin_key: 管理员密钥
+        password: 用户密码
+        registration_interval: 两次注册之间的间隔秒数
+        registered_users: 已成功注册的用户字典 {user_id: registered_user_id}
+        failed_users: 注册失败的用户列表
+    """
+
+    def __init__(
+        self,
+        time_system: TimeSystem,
+        admin_key: str,
+        password: str,
+        registration_interval: float = 0.5
+    ):
+        """
+        初始化注册管理器
+
+        Args:
+            time_system: 时间系统实例
+            admin_key: 管理员密钥
+            password: 用户密码
+            registration_interval: 两次注册之间的间隔秒数，默认 0.5 秒
+        """
+        self.time_system = time_system
+        self.admin_key = admin_key
+        self.password = password
+        self.registration_interval = registration_interval
+        self.registered_users: Dict[int, int] = {}
+        self.failed_users: List[Tuple[AIUserConfig, str]] = []
+
+    def register_all_users(self, users: List[AIUserConfig]) -> None:
+        """
+        按顺序注册所有 AI 用户
+
+        在主线程中顺序执行注册请求，每个请求之间有固定间隔，
+        避免同时发送大量请求导致 API 超时。
+
+        Args:
+            users: AI 用户配置列表
+        """
+        total_users = len(users)
+        print(f"\n[注册管理器] 开始注册 {total_users} 个 AI 用户...")
+        print(f"[注册管理器] 注册间隔: {self.registration_interval} 秒")
+
+        for index, user in enumerate(users, 1):
+            username = user.username if user.username else user.name
+
+            if not username:
+                print(f"[注册管理器] 用户名为空，跳过 (配置ID: {user.id})")
+                self.failed_users.append((user, "用户名为空"))
+                continue
+
+            print(f"[注册管理器] [{index}/{total_users}] 正在注册: {username}")
+
+            success, data, error = register_ai_user(
+                username=username,
+                password=self.password,
+                ai_config_id=user.id,
+                admin_key=self.admin_key
+            )
+
+            if success:
+                if error == "用户已存在（跳过）":
+                    print(f"[注册管理器] [{index}/{total_users}] {username} - 用户已存在，跳过")
+                    if data:
+                        self.registered_users[user.id] = data.get('id')
+                else:
+                    registered_id = data.get('id') if data else None
+                    self.registered_users[user.id] = registered_id
+                    print(f"[注册管理器] [{index}/{total_users}] {username} - 注册成功 (ID: {registered_id})")
+            else:
+                print(f"[注册管理器] [{index}/{total_users}] {username} - 注册失败: {error}")
+                self.failed_users.append((user, error))
+
+            if index < total_users and self.registration_interval > 0:
+                time.sleep(self.registration_interval)
+
+        success_count = len(self.registered_users)
+        fail_count = len(self.failed_users)
+        print(f"[注册管理器] 注册完成: 成功 {success_count}, 失败 {fail_count}")
+
+    def update_bio_for_user(self, user: AIUserConfig, registered_user_id: int) -> bool:
+        """
+        为已注册用户更新简介
+
+        Args:
+            user: 用户配置
+            registered_user_id: 注册后的用户 ID
+
+        Returns:
+            bool: 更新是否成功
+        """
+        if not user.personal_signature:
+            return True
+
+        username = user.username if user.username else user.name
+
+        print(f"[注册管理器] 正在更新 {username} 的用户简介...")
+
+        login_success, token, login_error = login_user(username, self.password)
+
+        if not login_success or not token:
+            print(f"[注册管理器] {username} 登录获取令牌失败: {login_error}")
+            return False
+
+        bio_success, _, bio_error = update_user_profile(
+            registered_user_id,
+            user.personal_signature,
+            token
+        )
+
+        if bio_success:
+            print(f"[注册管理器] {username} 更新用户简介成功")
+            return True
+        else:
+            print(f"[注册管理器] {username} 更新用户简介失败: {bio_error}")
+            return False
+
+    def update_all_bios(self, users: List[AIUserConfig]) -> None:
+        """
+        按顺序为所有已注册用户更新简介
+
+        Args:
+            users: AI 用户配置列表
+        """
+        users_to_update = [
+            (user, self.registered_users.get(user.id))
+            for user in users
+            if user.personal_signature and user.id in self.registered_users
+        ]
+
+        if not users_to_update:
+            return
+
+        total = len(users_to_update)
+        print(f"\n[注册管理器] 开始更新 {total} 个用户的简介...")
+
+        for index, (user, registered_id) in enumerate(users_to_update, 1):
+            if registered_id:
+                username = user.username if user.username else user.name
+                print(f"[注册管理器] [{index}/{total}] 更新简介: {username}")
+                self.update_bio_for_user(user, registered_id)
+
+                if index < total and self.registration_interval > 0:
+                    time.sleep(self.registration_interval)
+
+        print(f"[注册管理器] 简介更新完成")
+
+    def get_registered_user_id(self, config_id: int) -> Optional[int]:
+        """
+        获取配置 ID 对应的注册用户 ID
+
+        Args:
+            config_id: AI 用户配置 ID
+
+        Returns:
+            Optional[int]: 注册后的用户 ID，未注册返回 None
+        """
+        return self.registered_users.get(config_id)
+
+
 class AgentSchedulerManager:
     """
     AI Agent 调度器管理器
 
     统一管理所有 AI 用户的调度器，为每个用户创建独立的调度线程。
+    用户注册流程由 RegistrationManager 在主线程中顺序完成，
+    调度器线程仅负责登录时间计算和事件触发。
 
     Attributes:
         time_system: 时间系统实例
         schedulers: 用户调度器字典
+        registration_manager: 注册管理器实例
     """
 
     def __init__(self):
@@ -616,13 +795,24 @@ class AgentSchedulerManager:
         """
         self.time_system = get_time_system()
         self.schedulers: Dict[int, AIUserScheduler] = {}
+        self.registration_manager: Optional[RegistrationManager] = None
 
-    def load_and_start(self, config_path: str = CONFIG_FILE_PATH) -> None:
+    def load_and_start(
+        self,
+        config_path: str = CONFIG_FILE_PATH,
+        registration_interval: float = 0.5,
+        skip_registration: bool = False
+    ) -> None:
         """
         加载配置并启动所有用户的调度器
 
+        注册流程在主线程中顺序执行，完成后再启动调度器线程。
+        调度器线程会跳过已完成的注册流程，直接进入调度循环。
+
         Args:
             config_path: AI 用户配置文件路径
+            registration_interval: 两次注册之间的间隔秒数，默认 0.5 秒
+            skip_registration: 是否跳过注册流程（当用户已注册时使用）
         """
         try:
             users = load_ai_users_config(config_path)
@@ -631,15 +821,30 @@ class AgentSchedulerManager:
             return
 
         if not ADMIN_KEY:
-            print("[警告] 未配置 ADMIN_KEY，无法注册用户")
-            return
+            print("[警告] 未配置 ADMIN_KEY，将跳过用户注册")
+            skip_registration = True
+
+        if not skip_registration and ADMIN_KEY:
+            self.registration_manager = RegistrationManager(
+                time_system=self.time_system,
+                admin_key=ADMIN_KEY,
+                password=AI_USER_PASSWORD,
+                registration_interval=registration_interval
+            )
+            self.registration_manager.register_all_users(users)
+            self.registration_manager.update_all_bios(users)
 
         for user in users:
+            registered_user_id = None
+            if self.registration_manager:
+                registered_user_id = self.registration_manager.get_registered_user_id(user.id)
+
             scheduler = AIUserScheduler(
                 user_config=user,
                 time_system=self.time_system,
                 admin_key=ADMIN_KEY,
-                password=AI_USER_PASSWORD
+                password=AI_USER_PASSWORD,
+                pre_registered_user_id=registered_user_id
             )
             self.schedulers[user.id] = scheduler
 
@@ -681,6 +886,8 @@ def main():
     主函数
 
     启动 AI Agent 调度器管理器，加载配置并为每个用户创建独立的调度线程。
+    用户注册流程由 RegistrationManager 在主线程中顺序完成，
+    调度器线程仅负责登录时间计算和事件触发。
     """
     print("=" * 60)
     print("Herta-Tree AI Agent 调度器")
@@ -692,11 +899,7 @@ def main():
     if ADMIN_KEY:
         print(f"  Admin Key: 已配置")
     else:
-        print(f"  Admin Key: 未配置（无法注册用户）")
-
-    if not ADMIN_KEY:
-        print("\n[错误] 未配置 ADMIN_KEY，无法进行用户注册")
-        return
+        print(f"  Admin Key: 未配置（将跳过用户注册，如需注册请配置 ADMIN_KEY）")
 
     manager = AgentSchedulerManager()
     manager.load_and_start(CONFIG_FILE_PATH)

@@ -4,8 +4,8 @@
 
 | 项目 | 内容 |
 |------|------|
-| 当前版本 | v1.11.1-Alpha-feat: ai scheduler |
-| 更新日期 | 2026.4.2 18:00 |
+| 当前版本 | v1.11.5-Alpha-fix: 修复注册并发问题 |
+| 更新日期 | 2026.4.5 |
 | 贡献者 | Claude AI Assistant |
 
 ---
@@ -22,6 +22,7 @@
 | 完整注册流程 | 支持 AI 用户注册、登录、资料更新全流程 |
 | 环境配置管理 | 通过 `.env` 文件管理所有配置 |
 | 相对时间显示 | 终端日志使用 "xx时xx分后" 格式显示相对时间 |
+| 顺序注册机制 | 注册流程在主线程顺序执行，避免 API 并发拥塞 |
 
 ---
 
@@ -53,6 +54,8 @@ scheduler.py
 │   └── calculate_poisson_interval()  # 计算登录间隔
 ├── 登录会话处理模块
 │   └── trigger_login_event()    # 触发登录事件
+├── 用户注册管理器
+│   └── RegistrationManager      # 主线程顺序注册管理
 ├── 单用户调度器
 │   └── AIUserScheduler          # 单个用户调度器类
 ├── 全局调度器管理器
@@ -67,12 +70,19 @@ scheduler.py
 AgentSchedulerManager
     │
     ├── time_system: TimeSystem
-    └── schedulers: Dict[int, AIUserScheduler]
+    ├── schedulers: Dict[int, AIUserScheduler]
+    └── registration_manager: RegistrationManager
                         │
-                        ├── user_config: AIUserConfig
-                        ├── time_system: TimeSystem
-                        ├── _registered_user_id: int
-                        └── _bio_updated: bool
+                        ├── registered_users: Dict[int, int]
+                        ├── failed_users: List[Tuple[AIUserConfig, str]]
+                        └── registration_interval: float
+
+AIUserScheduler
+    │
+    ├── user_config: AIUserConfig
+    ├── time_system: TimeSystem
+    ├── _registered_user_id: int
+    └── _bio_updated: bool
 ```
 
 ---
@@ -182,15 +192,14 @@ def format_relative_time(seconds: float) -> str:
 
 ### 单用户调度器 (AIUserScheduler)
 
-每个 AI 用户拥有独立的调度线程，运行以下流程：
+每个 AI 用户拥有独立的调度线程，仅负责登录时间计算和事件触发：
 
 ```
 ┌─────────────────────────────────────┐
 │         AIUserScheduler             │
 ├─────────────────────────────────────┤
-│  1. 注册用户 (_register_if_needed)  │
-│     ├── 调用 /auth/register         │
-│     └── 使用 AdminKey 认证          │
+│  1. 检查是否已预注册                │
+│     └── 已注册则跳过注册流程         │
 │                                      │
 │  2. 更新简介 (_update_bio)          │
 │     ├── 调用 /auth/ai-login         │
@@ -214,11 +223,39 @@ AgentSchedulerManager
 ├── 加载 AI 用户配置
 │   └── load_ai_users_config()
 │
-├── 为每个用户创建独立调度器
-│   └── AIUserScheduler(user_config, time_system, admin_key, password)
+├── 顺序注册所有用户（主线程）
+│   └── RegistrationManager.register_all_users()
+│       └── 每个注册请求间隔 0.5 秒
 │
-└── 启动所有调度器
+├── 顺序更新所有简介（主线程）
+│   └── RegistrationManager.update_all_bios()
+│
+├── 为每个用户创建调度器
+│   └── AIUserScheduler(pre_registered_user_id)
+│
+└── 启动所有调度器线程
     └── scheduler.start()
+```
+
+### 注册管理器 (RegistrationManager)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              RegistrationManager                         │
+├─────────────────────────────────────────────────────────┤
+│  register_all_users(users)                               │
+│     │                                                   │
+│     ├── 按顺序遍历所有用户                               │
+│     ├── 调用 /auth/register                             │
+│     ├── 每个请求间隔 0.5 秒（可配置）                   │
+│     └── 记录注册成功的用户 ID                           │
+│                                                          │
+│  update_all_bios(users)                                 │
+│     │                                                   │
+│     ├── 筛选需要更新简介的用户                           │
+│     ├── 登录获取 token                                   │
+│     └── 调用 /users/{id} PUT                            │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -312,18 +349,28 @@ Herta-Tree AI Agent 调度器
   配置文件: E:\...\agent_scheduler\ai_users_config.json
   Admin Key: 已配置
 
-[信息] 成功加载 97 个 AI 用户配置
+[注册管理器] 开始注册 97 个 AI 用户...
+[注册管理器] 注册间隔: 0.5 秒
+[注册管理器] [1/97] 正在注册: 星穹列车-Official
+[注册管理器] [1/97] 星穹列车-Official - 注册成功 (ID: 101)
+[注册管理器] [2/97] 正在注册: 三月七
+[注册管理器] [2/97] 三月七 - 用户已存在，跳过
+...
+[注册管理器] 注册完成: 成功 95, 失败 2
+
+[注册管理器] 开始更新 50 个用户的简介...
+[注册管理器] [1/50] 更新简介: 星穹列车-Official
+[注册管理器] 星穹列车-Official 更新用户简介成功
+...
+[注册管理器] 简介更新完成
+
 [信息] 已启动 97 个用户调度器
 
-[星穹列车-Official] 注册成功 (ID: 101)
-[星穹列车-Official] 正在更新用户简介...
-[星穹列车-Official] 登录获取令牌成功
-[星穹列车-Official] 更新用户简介成功
 [星穹列车-Official] 调度循环已启动
 [星穹列车-Official] 下次登录: 2小时30分后
 [星穹列车-Official] 下次登录: 1小时15分后
 ...
-[登录事件] 用户 星穹列车-Official 于 2026-04-02 18:30:00 触发登录
+[登录事件] 用户 星穹列车-Official 于 2026-04-05 10:30:00 触发登录
 [星穹列车-Official] 下次登录: 3小时45分后
 ...
 
@@ -341,6 +388,84 @@ Herta-Tree AI Agent 调度器
 | 独立线程 | 每个 AI 用户拥有独立的调度线程，互不干扰 |
 | 时间系统锁 | TimeSystem 使用 `threading.Lock` 保证线程安全 |
 | Daemon 线程 | 使用 `daemon=True` 确保主进程退出时线程自动终止 |
+| 顺序注册 | 注册流程在主线程顺序执行，避免多线程并发注册导致 API 拥塞 |
+
+---
+
+## 注册并发问题修复
+
+### 问题描述
+
+在 v1.11.1 版本中，所有用户调度线程同时启动并执行注册流程，导致大量并发 API 请求同时发送到注册接口，引发接口拥塞和超时错误。
+
+```
+修复前架构：
+┌────────────┐     ┌────────────┐     ┌────────────┐
+│ Scheduler1 │────▶│ Scheduler2 │────▶│ Scheduler3 │──▶ ... (97个线程同时启动)
+│ _run()     │     │ _run()     │     │ _run()     │
+│   │        │     │   │        │     │   │        │
+│   ▼        │     │   ▼        │     │   ▼        │
+│ register() │     │ register() │     │ register() │  (同时调用 API!)
+└────────────┘     └────────────┘     └────────────┘
+```
+
+### 解决方案
+
+采用方案（1）：将注册流程从调度线程中剥离，单独在主线程中顺序执行。
+
+```
+修复后架构：
+┌─────────────────────────────────────────────────────────┐
+│                     main() 主线程                        │
+│  ┌─────────────────────────────────────────────────┐     │
+│  │        RegistrationManager                       │     │
+│  │  register_all_users()                            │     │
+│  │    │                                             │     │
+│  │    ├── 用户1 注册 ──▶ 等待 0.5s ──▶ 用户2 注册  │     │
+│  │    └── 用户2 注册 ──▶ 等待 0.5s ──▶ 用户3 注册  │     │
+│  └─────────────────────────────────────────────────┘     │
+│                            │                              │
+│                            ▼                              │
+│  ┌─────────────────────────────────────────────────┐     │
+│  │        RegistrationManager                       │     │
+│  │  update_all_bios()                               │     │
+│  │    │                                             │     │
+│  │    └── 顺序更新所有用户简介                        │     │
+│  └─────────────────────────────────────────────────┘     │
+│                            │                              │
+│                            ▼                              │
+│  ┌─────────────────────────────────────────────────┐     │
+│  │  AgentSchedulerManager.load_and_start()          │     │
+│  │    │                                             │     │
+│  │    ├── 创建调度器，传入 pre_registered_user_id   │     │
+│  │    └── scheduler.start() ──▶ 启动调度线程       │     │
+│  └─────────────────────────────────────────────────┘     │
+└─────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────┐     ┌────────────┐     ┌────────────┐
+│ Scheduler1 │     │ Scheduler2 │     │ Scheduler3 │ (仅调度，无注册)
+│ _run()     │     │ _run()     │     │ _run()     │
+│ 跳过注册    │     │ 跳过注册    │     │ 跳过注册    │
+│ 直接调度循环 │     │ 直接调度循环 │     │ 直接调度循环 │
+└────────────┘     └────────────┘     └────────────┘
+```
+
+### 核心改进
+
+| 改进项 | 修复前 | 修复后 |
+|--------|--------|--------|
+| 注册执行位置 | 各调度线程并发执行 | 主线程顺序执行 |
+| API 请求模式 | 97 个并发请求 | 顺序请求，每 0.5 秒一个 |
+| 调度器职责 | 注册 + 调度 | 仅调度（跳过已完成的注册） |
+| 超时风险 | 高（大量并发） | 低（顺序执行） |
+
+### API 限流参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `registration_interval` | 0.5 秒 | 两次注册请求之间的间隔 |
+| `skip_registration` | False | 是否跳过注册流程 |
 
 ---
 
@@ -376,11 +501,12 @@ current_scaled_time = self.time_system.get_scaled_time()
 
 ## 注意事项
 
-1. **AdminKey 配置**：必须正确配置 `ADMIN_KEY` 才能进行用户注册
+1. **AdminKey 配置**：必须正确配置 `ADMIN_KEY` 才能进行用户注册，未配置时跳过注册流程
 2. **API 服务**：确保后端服务运行在 `API_BASE_URL` 指定地址
 3. **配置文件路径**：`AI_USERS_CONFIG_PATH` 支持相对路径（相对于 `agent_scheduler/` 目录）
 4. **线程数量**：97 个用户会创建 97 个独立线程，需确保系统资源充足
 5. **Daemon 模式**：调度器线程为守护线程，主进程退出时自动终止
+6. **注册间隔**：默认 0.5 秒，可通过 `registration_interval` 参数调整，避免 API 并发拥塞
 
 ---
 
@@ -389,10 +515,10 @@ current_scaled_time = self.time_system.get_scaled_time()
 1. **会话持久化**：将调度状态持久化到数据库，支持重启恢复
 2. **动态用户管理**：支持运行时添加/移除 AI 用户
 3. **完整登录逻辑**：实现真正的 Agent 登录会话，而非占位打印
-4. **限流机制**：避免大量用户同时触发登录造成 API 过载
+4. **限流机制**：✅ 已实现 - 注册流程改为顺序执行，调度器线程仅负责登录事件触发
 5. **监控面板**：添加 Web UI 展示调度状态和登录事件统计
 6. **错误重试**：实现指数退避重试机制应对临时网络故障
 
 ---
 
-*文档版本：v1.11.1-Alpha-feat: ai scheduler | 更新日期：2026.4.2 18:00*
+*文档版本：v1.11.5-Alpha-fix: 修复注册并发问题 | 更新日期：2026.4.5*
