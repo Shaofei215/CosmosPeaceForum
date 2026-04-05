@@ -68,7 +68,11 @@ def get_env_config() -> Dict[str, str]:
 
 _env_config = get_env_config()
 
-_api_base = os.environ.get('VITE_API_BASE_URL') or _env_config.get('VITE_API_BASE_URL', 'http://localhost:8000/api/v1')
+_api_base = os.environ.get('AGENT_SCHEDULER_API_BASE_URL') or _env_config.get('AGENT_SCHEDULER_API_BASE_URL')
+if not _api_base:
+    _api_base = os.environ.get('API_BASE_URL') or _env_config.get('API_BASE_URL')
+if not _api_base:
+    _api_base = os.environ.get('VITE_API_BASE_URL') or _env_config.get('VITE_API_BASE_URL', 'http://localhost:8000/api/v1')
 if _api_base.endswith('/api/v1'):
     API_BASE_URL = _api_base
 elif _api_base.endswith('/api/v1/'):
