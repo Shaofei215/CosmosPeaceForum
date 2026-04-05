@@ -458,7 +458,7 @@ class AIUserScheduler:
         self.running = False
         self._thread: Optional[threading.Thread] = None
         self._registered_user_id: Optional[int] = pre_registered_user_id
-        self._bio_updated = pre_registered_user_id is not None and not user_config.personal_signature
+        self._bio_updated = pre_registered_user_id is None or not user_config.personal_signature
 
     def _register_if_needed(self) -> None:
         """
