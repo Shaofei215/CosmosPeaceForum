@@ -22,6 +22,11 @@ from .time_system import (
     get_time_system,
     set_time_scale,
 )
+from .context import (
+    AgentContext,
+    set_current_context,
+    clear_current_context,
+)
 
 
 # ==================== 环境配置加载 ====================
@@ -636,6 +641,19 @@ class AIUserScheduler:
         login_success, token, login_error = login_user(username, self.password)
 
         if login_success and token:
+            set_current_context(AgentContext(
+                user_id=self._registered_user_id,
+                username=username,
+                ai_config_id=self.user_config.id,
+                token=token,
+                user_config={
+                    "name": self.user_config.name,
+                    "avatar": self.user_config.avatar,
+                    "personal_signature": self.user_config.personal_signature,
+                    "personality_prompt": self.user_config.personality_prompt,
+                }
+            ))
+
             bio_success, _, bio_error = update_user_profile(
                 self._registered_user_id,
                 self.user_config.personal_signature,
@@ -653,7 +671,7 @@ class AIUserScheduler:
         """
         调度循环
 
-        持续运行：计算下次登录时间 -> 休眠 -> 触发登录 -> 重复
+        持续运行：计算下次登录时间 -> 休眠 -> 登录 -> 设置上下文 -> 触发登录事件 -> 清理上下文 -> 重复
         """
         username = self.user_config.username if self.user_config.username else self.user_config.name
 
@@ -681,7 +699,27 @@ class AIUserScheduler:
                 if not self.running:
                     break
 
-                trigger_login_event(username, self.time_system)
+                login_success, token, login_error = login_user(username, self.password)
+
+                if login_success and token:
+                    set_current_context(AgentContext(
+                        user_id=self._registered_user_id,
+                        username=username,
+                        ai_config_id=self.user_config.id,
+                        token=token,
+                        user_config={
+                            "name": self.user_config.name,
+                            "avatar": self.user_config.avatar,
+                            "personal_signature": self.user_config.personal_signature,
+                            "personality_prompt": self.user_config.personality_prompt,
+                        }
+                    ))
+
+                    trigger_login_event(username, self.time_system)
+
+                    clear_current_context()
+                else:
+                    print(f"[{username}] 登录失败: {login_error}")
 
             except Exception as e:
                 print(f"[{username}] 调度循环异常: {e}")
