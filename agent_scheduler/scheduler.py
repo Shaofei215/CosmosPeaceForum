@@ -622,7 +622,6 @@ class AIUserScheduler:
         running: 调度器运行状态
         _thread: 调度线程
         _registered_user_id: 注册后的用户 ID
-        _bio_updated: 简介是否已更新
     """
 
     def __init__(
@@ -650,77 +649,6 @@ class AIUserScheduler:
         self.running = False
         self._thread: Optional[threading.Thread] = None
         self._registered_user_id: Optional[int] = pre_registered_user_id
-        self._bio_updated = pre_registered_user_id is None or not user_config.personal_signature
-
-    def _register_if_needed(self) -> None:
-        """
-        如需要，注册用户并更新简介
-        """
-        username = self.user_config.username if self.user_config.username else self.user_config.name
-
-        if not username:
-            print(f"[{username}] 用户名为空，跳过注册")
-            return
-
-        success, data, error = register_ai_user(
-            username=username,
-            password=self.password,
-            ai_config_id=self.user_config.id,
-            admin_key=self.admin_key
-        )
-
-        if success:
-            if error == "用户已存在（跳过）":
-                print(f"[{username}] 用户已存在，跳过注册")
-            else:
-                self._registered_user_id = data.get('id') if data else None
-                print(f"[{username}] 注册成功 (ID: {self._registered_user_id})")
-        else:
-            print(f"[{username}] 注册失败: {error}")
-            return
-
-        if self._registered_user_id and self.user_config.personal_signature:
-            self._update_bio()
-
-    def _update_bio(self) -> None:
-        """
-        更新用户简介
-        """
-        username = self.user_config.username if self.user_config.username else self.user_config.name
-
-        if not self._registered_user_id:
-            print(f"[{username}] 未注册，无法更新简介")
-            return
-
-        print(f"[{username}] 正在更新用户简介...")
-        login_success, token, login_error = login_user(username, self.password)
-
-        if login_success and token:
-            set_current_context(AgentContext(
-                user_id=self._registered_user_id,
-                username=username,
-                ai_config_id=self.user_config.id,
-                token=token,
-                user_config={
-                    "name": self.user_config.name,
-                    "avatar": self.user_config.avatar,
-                    "personal_signature": self.user_config.personal_signature,
-                    "personality_prompt": self.user_config.personality_prompt,
-                }
-            ))
-
-            bio_success, _, bio_error = update_user_profile(
-                self._registered_user_id,
-                self.user_config.personal_signature,
-                token
-            )
-            if bio_success:
-                print(f"[{username}] 更新用户简介成功")
-                self._bio_updated = True
-            else:
-                print(f"[{username}] 更新用户简介失败: {bio_error}")
-        else:
-            print(f"[{username}] 登录获取令牌失败: {login_error}")
 
     def _scheduling_loop(self) -> None:
         """
@@ -806,19 +734,11 @@ class AIUserScheduler:
 
     def _run(self) -> None:
         """
-        运行流程：注册 -> 更新简介 -> 调度循环
-
-        如果用户已在 RegistrationManager 中预注册，则直接进入简介更新和调度循环
+        运行流程：调度时间计算循环
         """
         if self._registered_user_id is None:
-            self._register_if_needed()
-
-        if self._registered_user_id is None and not self.user_config.username:
+            print(f"[{self.user_config.name}] 错误：未获取到注册用户ID，跳过调度")
             return
-
-        if not self._bio_updated and self.user_config.personal_signature:
-            time.sleep(0.5)
-            self._update_bio()
 
         self._scheduling_loop()
 
