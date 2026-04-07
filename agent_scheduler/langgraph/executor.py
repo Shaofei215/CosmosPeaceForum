@@ -220,8 +220,10 @@ class SessionExecutor:
         self.session_id = str(uuid.uuid4())
         self.start_time = datetime.now()
         self.config = config or get_default_config()
+        self.username = username
 
-        # 构建初始状态
+        print(f"[会话执行器] 初始化会话: 用户={username}, 会话ID={self.session_id[:8]}..., 最大步数={self.config.max_steps}")
+
         self.initial_state: SessionState = {
             "user_id": user_id,
             "username": username,
@@ -256,20 +258,25 @@ class SessionExecutor:
         if thread_id is None:
             thread_id = f"session_{self.session_id}"
 
+        print(f"[会话执行器] 开始执行会话: 用户={self.username}, 会话ID={self.session_id[:8]}...")
+
         try:
-            # 构建图（传入 LLM 调用器）
+            print(f"[会话执行器] 构建LangGraph图结构")
             graph = build_session_graph(
                 config=self.config,
                 llm_invoker=llm_invoker
             )
 
-            # 执行图
+            print(f"[会话执行器] 开始执行图")
             final_state = graph.invoke(self.initial_state)
 
             self.end_time = datetime.now()
+            duration = (self.end_time - self.start_time).total_seconds()
 
-            # 构建总结
+            print(f"[会话执行器] 图执行完成: 步数={final_state.get('step_count', 0)}, 耗时={duration:.2f}秒")
+
             summary = self._build_summary(final_state)
+            print(f"[会话执行器] 生成总结: 退出原因={summary.get('exit_reason', 'N/A')}")
 
             return ExecutionResult(
                 session_id=self.session_id,
@@ -279,12 +286,13 @@ class SessionExecutor:
                 error_message=None,
                 start_time=self.start_time,
                 end_time=self.end_time,
-                duration_seconds=(self.end_time - self.start_time).total_seconds()
+                duration_seconds=duration
             )
 
         except Exception as e:
             self.end_time = datetime.now()
             error_msg = f"会话执行异常: {str(e)}"
+            print(f"[会话执行器] 会话执行异常: {error_msg}")
             traceback.print_exc()
 
             return ExecutionResult(

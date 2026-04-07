@@ -592,7 +592,8 @@ def trigger_login_event(
     if result.success:
         print(f"[登录事件] 用户 {username} 会话结束: {result.step_count} 步, 退出原因: {result.exit_reason}")
         if result.summary:
-            print(f"[登录事件] 用户 {username} 总结: {result.summary.narrative[:100]}...")
+            narrative = result.summary.get('narrative', '') if isinstance(result.summary, dict) else result.summary.narrative
+            print(f"[登录事件] 用户 {username} 总结: {narrative[:100]}...")
     else:
         print(f"[登录事件] 用户 {username} 会话异常: {result.error_message}")
 

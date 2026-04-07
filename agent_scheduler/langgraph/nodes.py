@@ -136,6 +136,9 @@ def start_node(state: SessionState) -> SessionState:
     Returns:
         SessionState: 更新后的状态
     """
+    username = state.get("username", "未知")
+    print(f"[节点] start_node | 用户={username} | 初始化会话状态")
+
     return {
         **state,
         "step_count": 0,
@@ -162,6 +165,9 @@ def environment_awareness_node(state: SessionState) -> SessionState:
     Returns:
         SessionState: 更新后的状态
     """
+    username = state.get("username", "未知")
+    print(f"[节点] environment_awareness_node | 用户={username} | 开始获取环境信息")
+
     try:
         profile_result = tools_get_profile.invoke({})
         profile_data = profile_result if isinstance(profile_result, dict) else {}
@@ -182,6 +188,10 @@ def environment_awareness_node(state: SessionState) -> SessionState:
             "pagination": feed_data.get("pagination", {}),
         }
 
+        followers = environment.get("profile", {}).get("followers_count", 0)
+        following = environment.get("profile", {}).get("following_count", 0)
+        print(f"[节点] environment_awareness_node | 用户={username} | 环境获取成功: 粉丝={followers}, 关注={following}")
+
         return {
             **state,
             "environment": environment,
@@ -191,11 +201,13 @@ def environment_awareness_node(state: SessionState) -> SessionState:
         }
 
     except ToolExecutionError as e:
+        print(f"[节点] environment_awareness_node | 用户={username} | 工具执行错误: {str(e)}")
         return {
             **state,
             "last_error": f"环境感知失败: {str(e)}",
         }
     except Exception as e:
+        print(f"[节点] environment_awareness_node | 用户={username} | 异常: {str(e)}")
         return {
             **state,
             "last_error": f"环境感知异常: {str(e)}",
@@ -216,6 +228,11 @@ def llm_decision_node(
     Returns:
         SessionState: 更新后的状态，包含 pending_tool
     """
+    username = state.get("username", "未知")
+    step_count = state.get("step_count", 0)
+    current_location = state.get("current_location", "未知")
+    print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | 位置={current_location} | 正在请求LLM决策")
+
     system_prompt = build_system_prompt(
         username=state["username"],
         name=state.get("name", state["username"]),
@@ -231,21 +248,28 @@ def llm_decision_node(
 
         if tool_call is None:
             if state["step_count"] >= state["max_steps"]:
+                print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM未返回工具调用 | 达到最大步数，将执行登出")
                 return {
                     **state,
                     "pending_tool": {"tool_name": "logout", "args": {"reason": "达到最大步数限制"}},
                 }
             else:
+                print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM未返回工具调用")
                 return {
                     **state,
                     "pending_tool": None,
                 }
 
         tool_name = tool_call.get("tool_name", "").lower()
+        tool_args = tool_call.get("args", {})
+        print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM决策: tool={tool_name}")
+
         if tool_name == "logout":
+            reason = tool_call.get("args", {}).get("reason", "主动结束会话")
+            print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM选择登出: reason={reason}")
             return {
                 **state,
-                "pending_tool": {"tool_name": "logout", "args": {"reason": tool_call.get("args", {}).get("reason", "主动结束会话")}},
+                "pending_tool": {"tool_name": "logout", "args": {"reason": reason}},
             }
 
         return {
@@ -254,6 +278,7 @@ def llm_decision_node(
         }
 
     except Exception as e:
+        print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM决策异常: {str(e)}")
         return {
             **state,
             "pending_tool": None,
@@ -286,9 +311,12 @@ def tool_execution_node(state: SessionState) -> SessionState:
     Returns:
         SessionState: 更新后的状态
     """
+    username = state.get("username", "未知")
+    step_count = state.get("step_count", 0)
     pending = state.get("pending_tool")
 
     if pending is None:
+        print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 无待执行工具，步数+1")
         return {
             **state,
             "step_count": state["step_count"] + 1,
@@ -296,9 +324,11 @@ def tool_execution_node(state: SessionState) -> SessionState:
 
     tool_name = pending.get("tool_name", "").lower()
     tool_args = pending.get("args", {})
+    print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 开始执行工具: {tool_name} | 参数={tool_args}")
 
     if tool_name == "logout":
         reason = tool_args.get("reason", "主动结束会话")
+        print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 执行登出: reason={reason}")
         return {
             **state,
             "exit_reason": ExitReason.USER_CHOICE,
@@ -315,14 +345,18 @@ def tool_execution_node(state: SessionState) -> SessionState:
 
         if tool_name not in tool_map:
             result = f"未知工具: {tool_name}"
+            print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 工具不存在: {tool_name}")
         else:
             tool = tool_map[tool_name]
             result = tool.invoke(tool_args)
+            print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 工具执行成功: {tool_name}")
 
     except ToolExecutionError as e:
         result = f"工具执行错误: {str(e)}"
+        print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 工具执行错误: {str(e)}")
     except Exception as e:
         result = f"执行异常: {str(e)}"
+        print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 执行异常: {str(e)}")
         traceback.print_exc()
 
     # 检查返回值是否有意义
@@ -342,6 +376,8 @@ def tool_execution_node(state: SessionState) -> SessionState:
 
     new_location = _get_location_after_tool(tool_name, tool_args)
     current_location = new_location if new_location is not None else state.get("current_location", "主页（信息流）")
+
+    print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 操作已记录 | 当前位置={current_location}")
 
     return {
         **state,
@@ -364,12 +400,21 @@ def should_continue_edge(state: SessionState) -> str:
     Returns:
         str: 下一个节点的名称
     """
-    if state.get("exit_reason") is not None:
+    username = state.get("username", "未知")
+    step_count = state.get("step_count", 0)
+    max_steps = state.get("max_steps", 10)
+    exit_reason = state.get("exit_reason")
+
+    if exit_reason is not None:
+        reason_str = exit_reason.value if isinstance(exit_reason, ExitReason) else str(exit_reason)
+        print(f"[边] should_continue_edge | 用户={username} | 步骤={step_count}/{max_steps} | 退出原因={reason_str} | 路由=summarize")
         return "summarize"
 
-    if state["step_count"] >= state["max_steps"]:
+    if step_count >= max_steps:
+        print(f"[边] should_continue_edge | 用户={username} | 步骤={step_count}/{max_steps} | 达到最大步数 | 路由=summarize")
         return "summarize"
 
+    print(f"[边] should_continue_edge | 用户={username} | 步骤={step_count}/{max_steps} | 继续决策 | 路由=llm_decision")
     return "llm_decision"
 
 
@@ -386,10 +431,16 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], str]) 
     Returns:
         SessionState: 更新后的状态，包含 summary
     """
+    username = state.get("username", "未知")
+    action_count = len(state.get("action_history", []))
+    print(f"[节点] summarize_node | 用户={username} | 开始生成总结 | 操作数={action_count}")
+
     if not state.get("action_history"):
+        summary = f"用户 {state.get('username', '未知')} 的本次会话未执行任何操作。"
+        print(f"[节点] summarize_node | 用户={username} | 无操作记录 | 总结={summary}")
         return {
             **state,
-            "summary": f"用户 {state.get('username', '未知')} 的本次会话未执行任何操作。",
+            "summary": summary,
         }
 
     try:
@@ -401,6 +452,7 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], str]) 
 使用中文，100-200字。"""
 
         summary = llm_invoker(system_prompt, user_prompt)
+        print(f"[节点] summarize_node | 用户={username} | LLM总结生成成功 | 长度={len(summary)}字符")
 
         return {
             **state,
@@ -408,10 +460,11 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], str]) 
         }
 
     except Exception as e:
-        basic_summary = f"用户 {state.get('username', '未知')} 执行了 {len(state.get('action_history', []))} 个操作。"
+        summary = f"用户 {state.get('username', '未知')} 执行了 {len(state.get('action_history', []))} 个操作。"
+        print(f"[节点] summarize_node | 用户={username} | 总结生成异常 | 使用默认总结: {summary}")
         return {
             **state,
-            "summary": basic_summary,
+            "summary": summary,
         }
 
 
@@ -425,4 +478,8 @@ def end_node(state: SessionState) -> SessionState:
     Returns:
         SessionState: 不做任何修改的状态
     """
+    username = state.get("username", "未知")
+    step_count = state.get("step_count", 0)
+    summary_preview = str(state.get("summary", ""))[:50] if state.get("summary") else "无"
+    print(f"[节点] end_node | 用户={username} | 会话结束 | 总步骤={step_count} | 总结预览={summary_preview}...")
     return state
