@@ -1,11 +1,19 @@
 # LangChain/LangGraph 工具集模块
 # 为 AI Agent 提供社交平台操作的工具函数，符合 LangChain 工具标准格式
 import requests
+import os
 from typing import Optional, List, Dict, Any
 from langchain_core.tools import tool
 
-from .scheduler import API_BASE_URL
 from .context import get_current_token, get_current_user_id
+
+
+def _get_api_base_url() -> str:
+    """
+    获取 API 基础 URL（延迟加载，避免循环导入）
+    """
+    from .scheduler import API_BASE_URL as _url
+    return _url
 
 
 # ==================== 工具函数错误类型 ====================
@@ -68,7 +76,7 @@ def _make_request(
     if token is None:
         token = get_current_token()
 
-    url = f"{API_BASE_URL}{endpoint}"
+    url = f"{_get_api_base_url()}{endpoint}"
     headers = {"Content-Type": "application/json"}
 
     if token:

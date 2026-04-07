@@ -27,6 +27,8 @@ from .context import (
     set_current_context,
     clear_current_context,
 )
+from .langgraph.executor import SessionExecutor, create_llm_invoker, ExecutionResult
+from .langgraph.config import AgentConfig, SessionConfig, get_default_config
 
 
 # ==================== 环境配置加载 ====================
@@ -530,18 +532,71 @@ def calculate_poisson_interval(monthly_logins: int) -> float:
 
 # ==================== 登录会话处理模块 ====================
 
-def trigger_login_event(username: str, time_system: TimeSystem) -> None:
+def trigger_login_event(
+    username: str,
+    time_system: TimeSystem,
+    user_id: int,
+    ai_config_id: int,
+    personality_prompt: str,
+    personal_signature: str,
+    token: str,
+    session_config: Optional[SessionConfig] = None,
+) -> ExecutionResult:
     """
-    触发登录事件（占位实现）
+    触发登录事件并执行 LangGraph 会话
 
-    当前阶段仅打印登录事件信息，后续可扩展为完整的会话逻辑。
+    当调度器决定让 AI 用户登录时，调用此函数执行完整的 LangGraph 会话。
+    会话流程：环境感知 -> LLM 决策 -> 工具执行 -> ... -> 登出 -> 生成总结
 
     Args:
         username: 用户名
         time_system: 时间系统实例
+        user_id: 用户 ID
+        ai_config_id: AI 配置 ID
+        personality_prompt: 角色性格描述
+        personal_signature: 个性签名
+        token: 访问令牌
+        session_config: 会话配置，默认使用 get_default_config()
+
+    Returns:
+        ExecutionResult: 包含执行结果的 ExecutionResult 对象
     """
     current_scaled_time = time_system.get_scaled_time()
-    print(f"[登录事件] 用户 {username} 于 {current_scaled_time} 触发登录")
+    print(f"[登录事件] 用户 {username} 于 {current_scaled_time} 开始会话")
+
+    if session_config is None:
+        session_config = get_default_config()
+
+    if user_id is None:
+        raise ValueError(f"[登录事件] 用户 {username} 的 user_id 为 None，无法执行会话")
+
+    executor = SessionExecutor(
+        user_id=user_id,
+        username=username,
+        ai_config_id=ai_config_id,
+        personality_prompt=personality_prompt,
+        personal_signature=personal_signature,
+        config=session_config,
+    )
+
+    llm_invoker = create_llm_invoker(
+        provider=session_config.llm_provider,
+        api_key=session_config.openai_api_key or None,
+        base_url=session_config.openai_base_url or None,
+        model_name=session_config.model_name,
+        temperature=session_config.temperature,
+    )
+
+    result = executor.run(llm_invoker)
+
+    if result.success:
+        print(f"[登录事件] 用户 {username} 会话结束: {result.step_count} 步, 退出原因: {result.exit_reason}")
+        if result.summary:
+            print(f"[登录事件] 用户 {username} 总结: {result.summary.narrative[:100]}...")
+    else:
+        print(f"[登录事件] 用户 {username} 会话异常: {result.error_message}")
+
+    return result
 
 
 # ==================== 单用户调度器 ====================
@@ -715,7 +770,15 @@ class AIUserScheduler:
                         }
                     ))
 
-                    trigger_login_event(username, self.time_system)
+                    trigger_login_event(
+                        username=username,
+                        time_system=self.time_system,
+                        user_id=self._registered_user_id,
+                        ai_config_id=self.user_config.id,
+                        personality_prompt=self.user_config.personality_prompt,
+                        personal_signature=self.user_config.personal_signature,
+                        token=token,
+                    )
 
                     clear_current_context()
                 else:
