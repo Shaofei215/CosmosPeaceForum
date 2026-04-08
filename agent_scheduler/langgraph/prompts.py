@@ -188,7 +188,9 @@ def _format_tool_result(result: Any) -> str:
             if comments:
                 lines.append(f"\n【评论】(共{total}条，显示{len(comments)}条):")
                 for c in comments:
-                    lines.append(f"  [评论ID:{c.get('id', '?')}] @{c.get('author_username', '?')}: {c.get('content', '')}")
+                    author_id = c.get("author_id", c.get("owner_id", "?"))
+                    created = c.get('created_at', '')[:19] if c.get('created_at') else ''
+                    lines.append(f"  [评论ID:{c.get('id', '?')}] @{c.get('author_username', '?')} (作者ID:{author_id}) [{created}]: {c.get('content', '')}")
                     lines.append(f"    点赞:{c.get('like_count', 0)} | 回复:{c.get('reply_count', 0)} | 已点赞:{c.get('is_liked', False)}")
             else:
                 lines.append(f"\n【评论】(共{total}条，暂无评论)")
@@ -203,7 +205,8 @@ def _format_tool_result(result: Any) -> str:
             lines = ["【信息列表】"]
             for item in items[:5]:
                 if isinstance(item, dict):
-                    lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', '?')}: {item.get('content', '')}")
+                    author_id = item.get("author_id", "?")
+                    lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', '?')} (作者ID:{author_id}): {item.get('content', '')[:50]}...")
                     lines.append(f"  点赞:{item.get('like_count', 0)} | 评论:{item.get('comment_count', 0)} | 已点赞:{item.get('is_liked', False)}")
                     if item.get("follow_status"):
                         lines.append(f"  关注状态:{item.get('follow_status', '')}")
@@ -219,7 +222,9 @@ def _format_tool_result(result: Any) -> str:
 
             lines = []
             lines.append("【评论详情】")
-            lines.append(f"[评论ID:{comment.get('id', '?')}] @{comment.get('author_username', '?')}: {comment.get('content', '')}")
+            comment_author_id = comment.get("author_id", comment.get("owner_id", "?"))
+            comment_created = comment.get('created_at', '')[:19] if comment.get('created_at') else ''
+            lines.append(f"[评论ID:{comment.get('id', '?')}] @{comment.get('author_username', '?')} (作者ID:{comment_author_id}) [{comment_created}]: {comment.get('content', '')}")
             lines.append(f"  点赞:{comment.get('like_count', 0)} | 回复:{comment.get('reply_count', 0)} | 已点赞:{comment.get('is_liked', False)}")
 
             lines.append(f"\n【原帖子】ID:{post.get('id', '?')} @{post.get('author_username', '?')}: {post.get('content', '')[:50]}...")
@@ -227,7 +232,9 @@ def _format_tool_result(result: Any) -> str:
             if replies:
                 lines.append(f"\n【回复】(共{total}条，显示{len(replies)}条):")
                 for r in replies:
-                    lines.append(f"  [ID:{r.get('id', '?')}] @{r.get('author_username', '?')}: {r.get('content', '')}")
+                    reply_author_id = r.get("author_id", r.get("owner_id", "?"))
+                    reply_created = r.get('created_at', '')[:19] if r.get('created_at') else ''
+                    lines.append(f"  [ID:{r.get('id', '?')}] @{r.get('author_username', '?')} (作者ID:{reply_author_id}) [{reply_created}]: {r.get('content', '')}")
             else:
                 lines.append(f"\n【回复】(共{total}条，暂无回复)")
 
@@ -261,7 +268,9 @@ def _format_tool_result(result: Any) -> str:
         lines = []
         for item in result[:5]:
             if isinstance(item, dict):
-                lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', '?')}: {item.get('content', '')[:50]}...")
+                author_id = item.get("author_id", item.get("owner_id", "?"))
+                created = item.get('created_at', '')[:19] if item.get('created_at') else ''
+                lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', '?')} (作者ID:{author_id}) [{created}]: {item.get('content', '')[:50]}...")
                 if "like_count" in item:
                     lines.append(f"  点赞:{item.get('like_count', 0)} | 回复:{item.get('reply_count', 0)} | 已点赞:{item.get('is_liked', False)}")
             else:
