@@ -258,6 +258,26 @@ def _standardize_comments_list(comments_data: List[Dict[str, Any]]) -> List[Dict
 
 # ==================== 数据获取辅助函数 ====================
 
+def _get_current_user(reason: str = "") -> Dict[str, Any]:
+    """
+    获取当前登录用户信息（内部函数，供系统使用）
+
+    此函数不包含 reason 参数，专为系统级调用设计。
+    Agent 应使用 @tool get_profile 获取用户信息。
+
+    Args:
+        reason: 调用原因
+
+    Returns:
+        Dict[str, Any]: 用户信息
+    """
+    return _make_request(
+        method="GET",
+        endpoint="/auth/me",
+        reason=reason
+    )
+
+
 def _get_user(user_id: int, reason: str = "") -> Dict[str, Any]:
     """
     获取用户基本信息（内部函数）
@@ -393,14 +413,18 @@ def _get_global_feed(page: int = 1, page_size: int = 5) -> Dict[str, Any]:
 # ==================== Agent 可调用的工具函数定义 ====================
 
 @tool
-def get_profile() -> Dict[str, Any]:
+def get_profile(reason: str = "用户想要查看自己的个人资料") -> Dict[str, Any]:
     """
     获取当前登录用户的个人资料信息
 
-    返回当前 Agent 用户的核心信息，包括用户名、个人签名、粉丝数量、关注数量等。
-    此工具用于获取登录用户自身的详细信息。
+    返回当前 Agent 用户的核心信息，包括用户名、个人签名、粉丝数量、关注数量等，
+    以及自己发布的最新 3 条帖子。
 
     注意：此工具会自动从当前执行上下文获取认证信息，无需手动传入 Token。
+
+    Args:
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
+                例如："用户想要查看自己的信息"、"查看个人资料"等。
 
     Returns:
         Dict[str, Any]: 包含以下字段的字典:
@@ -409,18 +433,31 @@ def get_profile() -> Dict[str, Any]:
             - bio: 个人签名/简介
             - following_count: 关注数量
             - followers_count: 粉丝数量
+            - follow_status: 对自己的关注状态（固定为 "self"）
+            - recent_posts: 自己发布的最新 3 条帖子列表
 
     Raises:
         UnauthorizedError: 未登录或 Token 已过期
         AuthenticationError: Token 无效
         ToolExecutionError: 服务器内部错误
     """
+    current_user_id = get_current_user_id()
     data = _make_request(
         method="GET",
-        endpoint="/auth/me"
+        endpoint="/auth/me",
+        reason=reason
     )
     data.pop("avatar_url", None)
     data.pop("created_at", None)
+
+    data["follow_status"] = "self"
+
+    posts_data = _get_user_posts(current_user_id, page=1, page_size=3)
+    data["recent_posts"] = _standardize_posts_list(
+        posts_data.get("data", []),
+        current_user_id
+    )
+
     return data
 
 
@@ -646,10 +683,9 @@ def get_user_profile(user_id: int, reason: str = "") -> Dict[str, Any]:
 @tool
 def get_global_feed(reason: str = "") -> Dict[str, Any]:
     """
-    获取社交平台全局信息流
+    社交平台主页信息流获取，用于回到主页，不可连续调用，如要查看更多内容请调用scroll_global_feed
 
-    获取所有用户发布的公开帖子信息流，返回最新的 5 条帖子。
-    帖子按时间倒序排列（最新的在前）。
+    获取所有用户发布的公开帖子信息流，返回信息流顶端的 5 条帖子。
 
     注意：此工具会自动从当前执行上下文获取认证信息（如有），用于获取点赞状态和关注状态。
 

@@ -88,13 +88,19 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
             history_text += f"    原因：{record['reason']}\n"
         history_text += "\n基于以上记忆，继续做出你的下一步决策。\n"
     else:
-        # 首次决策：从环境信息获取粉丝数、关注数
+        # 首次决策：从环境信息获取用户完整资料
         env = state.get("environment", {})
         profile = env.get("profile", {})
+        user_id = profile.get("user_id") or profile.get("id", "?")
+        username = profile.get("username", "?")
+        bio = profile.get("bio", "暂无签名")
         followers = profile.get("followers_count", 0)
         following = profile.get("following_count", 0)
         history_text = f"""【你的工作记忆】
-这是本次会话的开始，你的信息：
+这是本次会话的开始，你的个人信息：
+- 用户ID: {user_id}
+- 用户名: @{username}
+- 签名: {bio}
 - 粉丝数: {followers}
 - 关注数: {following}
 你还没有执行任何操作。\n\n"""
@@ -171,11 +177,13 @@ def _format_tool_result(result: Any) -> str:
             lines = []
             lines.append("【帖子详情】")
             lines.append(f"ID: {post.get('id', '?')}")
-            lines.append(f"作者: @{post.get('author_username', '?')} (粉丝:{post.get('followers_count', post.get('followers', 0))}, 关注:{post.get('following_count', post.get('following', 0))})")
-            lines.append(f"作者签名: {post.get('author_bio', post.get('bio', ''))[:30]}")
+            lines.append(f"作者: @{post.get('author_username', '?')}")
+            lines.append(f"作者签名: {post.get('author_bio', '')}")
             lines.append(f"内容: {post.get('content', '')}")
             lines.append(f"点赞: {post.get('like_count', 0)} | 评论数: {post.get('comment_count', 0)} | 已点赞: {post.get('is_liked', False)}")
             lines.append(f"发布时间: {post.get('created_at', '')}")
+            if post.get("follow_status"):
+                lines.append(f"关注状态: {post.get('follow_status', '')}")
 
             if comments:
                 lines.append(f"\n【评论】(共{total}条，显示{len(comments)}条):")
@@ -195,8 +203,10 @@ def _format_tool_result(result: Any) -> str:
             lines = ["【信息列表】"]
             for item in items[:5]:
                 if isinstance(item, dict):
-                    lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', item.get('username', '?'))}: {item.get('content', '')}")
-                    lines.append(f"  点赞:{item.get('like_count', 0)} 评论:{item.get('comment_count', 0)} | 已点赞:{item.get('is_liked', False)}")
+                    lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', '?')}: {item.get('content', '')}")
+                    lines.append(f"  点赞:{item.get('like_count', 0)} | 评论:{item.get('comment_count', 0)} | 已点赞:{item.get('is_liked', False)}")
+                    if item.get("follow_status"):
+                        lines.append(f"  关注状态:{item.get('follow_status', '')}")
                 else:
                     lines.append(str(item))
             return "\n".join(lines)
@@ -210,7 +220,7 @@ def _format_tool_result(result: Any) -> str:
             lines = []
             lines.append("【评论详情】")
             lines.append(f"[评论ID:{comment.get('id', '?')}] @{comment.get('author_username', '?')}: {comment.get('content', '')}")
-            lines.append(f"  点赞:{comment.get('like_count', 0)} | 已点赞:{comment.get('is_liked', False)}")
+            lines.append(f"  点赞:{comment.get('like_count', 0)} | 回复:{comment.get('reply_count', 0)} | 已点赞:{comment.get('is_liked', False)}")
 
             lines.append(f"\n【原帖子】ID:{post.get('id', '?')} @{post.get('author_username', '?')}: {post.get('content', '')[:50]}...")
 
@@ -230,7 +240,11 @@ def _format_tool_result(result: Any) -> str:
             lines.append(f"签名: {result.get('bio', result.get('personal_signature', ''))}")
             lines.append(f"粉丝: {result.get('followers_count', result.get('followers', 0))} | 关注: {result.get('following_count', result.get('following', 0))}")
             if "follow_status" in result:
-                lines.append(f"关注状态: {result.get('follow_status', '')}")
+                fs = result.get("follow_status", "")
+                if fs == "self":
+                    lines.append(f"身份: 这是你自己")
+                else:
+                    lines.append(f"你对作者的关注状态: {fs}")
             if "recent_posts" in result:
                 posts = result.get("recent_posts", [])
                 if posts:
@@ -247,7 +261,9 @@ def _format_tool_result(result: Any) -> str:
         lines = []
         for item in result[:5]:
             if isinstance(item, dict):
-                lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', item.get('username', '?'))}: {item.get('content', '')[:50]}...")
+                lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', '?')}: {item.get('content', '')[:50]}...")
+                if "like_count" in item:
+                    lines.append(f"  点赞:{item.get('like_count', 0)} | 回复:{item.get('reply_count', 0)} | 已点赞:{item.get('is_liked', False)}")
             else:
                 lines.append(str(item)[:50])
         return "\n".join(lines)
