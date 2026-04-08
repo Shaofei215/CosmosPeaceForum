@@ -579,12 +579,15 @@ def trigger_login_event(
         config=session_config,
     )
 
+    from .tools import get_social_tools
+
     llm_invoker = create_llm_invoker(
         provider=session_config.llm_provider,
         api_key=session_config.openai_api_key or None,
         base_url=session_config.openai_base_url or None,
         model_name=session_config.model_name,
         temperature=session_config.temperature,
+        tools=get_social_tools(),
     )
 
     result = executor.run(llm_invoker)
@@ -797,6 +800,7 @@ class RegistrationManager:
         self.registration_interval = registration_interval
         self.registered_users: Dict[int, int] = {}
         self.failed_users: List[Tuple[AIUserConfig, str]] = []
+        self.newly_registered_users: set = set()
 
     def register_all_users(self, users: List[AIUserConfig]) -> None:
         """
@@ -831,12 +835,18 @@ class RegistrationManager:
 
             if success:
                 if error == "用户已存在（跳过）":
-                    print(f"[注册管理器] [{index}/{total_users}] {username} - 用户已存在，跳过")
-                    if data:
-                        self.registered_users[user.id] = data.get('id')
+                    print(f"[注册管理器] [{index}/{total_users}] {username} - 用户已存在，尝试获取用户ID...")
+                    existing_user_id = self._get_existing_user_id(username)
+                    if existing_user_id is not None:
+                        self.registered_users[user.id] = existing_user_id
+                        print(f"[注册管理器] [{index}/{total_users}] {username} - 已存在用户ID: {existing_user_id}")
+                    else:
+                        self.failed_users.append((user, "用户已存在但无法获取用户ID"))
+                        print(f"[注册管理器] [{index}/{total_users}] {username} - 用户已存在但无法获取用户ID")
                 else:
                     registered_id = data.get('id') if data else None
                     self.registered_users[user.id] = registered_id
+                    self.newly_registered_users.add(user.id)
                     print(f"[注册管理器] [{index}/{total_users}] {username} - 注册成功 (ID: {registered_id})")
             else:
                 print(f"[注册管理器] [{index}/{total_users}] {username} - 注册失败: {error}")
@@ -938,9 +948,48 @@ class RegistrationManager:
             print(f"[注册管理器] {username} 上传头像失败: {upload_error}")
             return False, upload_error
 
+    def _get_existing_user_id(self, username: str) -> Optional[int]:
+        """
+        通过用户名登录获取已存在用户的 ID
+
+        当用户已存在时，调用此方法通过登录流程获取用户的真实 ID。
+        使用直接 API 调用，不依赖 tools 模块（tools 是 Agent 专用工具集）。
+
+        Args:
+            username: 用户名
+
+        Returns:
+            Optional[int]: 用户 ID，获取失败返回 None
+        """
+        login_success, token, login_error = login_user(username, self.password)
+
+        if login_success and token:
+            try:
+                url = f"{API_BASE_URL}/auth/me"
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                }
+                response = requests.get(url, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    user_id = data.get("id")
+                    return user_id
+                else:
+                    print(f"[注册管理器] 获取用户信息失败: HTTP {response.status_code}")
+                    return None
+            except Exception as e:
+                print(f"[注册管理器] 获取用户信息异常: {e}")
+                return None
+        else:
+            print(f"[注册管理器] 登录获取已存在用户ID失败: {login_error}")
+            return None
+
     def update_all_bios(self, users: List[AIUserConfig]) -> None:
         """
-        按顺序为所有已注册用户更新简介
+        按顺序为新注册用户更新简介
+
+        只有新注册的用户需要更新简介，已存在用户跳过此步骤。
 
         Args:
             users: AI 用户配置列表
@@ -948,14 +997,19 @@ class RegistrationManager:
         users_to_update = [
             (user, self.registered_users.get(user.id))
             for user in users
-            if user.personal_signature and user.id in self.registered_users
+            if user.personal_signature 
+            and user.id in self.registered_users
+            and user.id in self.newly_registered_users
         ]
 
         if not users_to_update:
+            skipped_count = sum(1 for u in users if u.personal_signature and u.id in self.registered_users and u.id not in self.newly_registered_users)
+            if skipped_count > 0:
+                print(f"[注册管理器] 跳过 {skipped_count} 个已存在用户的简介更新")
             return
 
         total = len(users_to_update)
-        print(f"\n[注册管理器] 开始更新 {total} 个用户的简介...")
+        print(f"\n[注册管理器] 开始更新 {total} 个新用户的简介...")
 
         for index, (user, registered_id) in enumerate(users_to_update, 1):
             if registered_id:
@@ -970,7 +1024,9 @@ class RegistrationManager:
 
     def update_all_avatars(self, users: List[AIUserConfig]) -> None:
         """
-        按顺序为所有已注册用户上传头像
+        按顺序为新注册用户上传头像
+
+        只有新注册的用户需要上传头像，已存在用户跳过此步骤。
 
         Args:
             users: AI 用户配置列表
@@ -978,15 +1034,29 @@ class RegistrationManager:
         users_to_update = [
             (user, self.registered_users.get(user.id))
             for user in users
-            if user.avatar and user.avatar.strip() and user.id in self.registered_users
+            if user.avatar and user.avatar.strip()
+            and user.id in self.registered_users
+            and user.id in self.newly_registered_users
         ]
 
+        skipped_count = sum(
+            1 for u in users
+            if u.avatar and u.avatar.strip()
+            and u.id in self.registered_users
+            and u.id not in self.newly_registered_users
+        )
+
         if not users_to_update:
-            print(f"[注册管理器] 没有需要上传头像的用户")
+            if skipped_count > 0:
+                print(f"[注册管理器] 跳过 {skipped_count} 个已存在用户的头像上传")
+            else:
+                print(f"[注册管理器] 没有需要上传头像的用户")
             return
 
         total = len(users_to_update)
-        print(f"\n[注册管理器] 开始上传 {total} 个用户的头像...")
+        print(f"\n[注册管理器] 开始上传 {total} 个新用户的头像...")
+        if skipped_count > 0:
+            print(f"[注册管理器] 跳过 {skipped_count} 个已存在用户的头像上传")
 
         for index, (user, registered_id) in enumerate(users_to_update, 1):
             if registered_id:

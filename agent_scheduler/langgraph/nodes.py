@@ -1,8 +1,10 @@
 # 节点定义模块
 # 定义 LangGraph 图结构中的各个节点，包括环境感知、LLM 决策、工具执行、总结等
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, List, Optional, Callable, Union
 from datetime import datetime
 import traceback
+
+from langchain_core.messages import AIMessage
 
 from ..tools import get_social_tools, ToolExecutionError, get_profile as tools_get_profile
 from ..tools import get_global_feed as tools_get_global_feed
@@ -55,6 +57,38 @@ def _get_location_after_tool(tool_name: str, tool_args: Dict[str, Any]) -> Optio
 
     if tool_name.lower() == "create_post":
         return "主页（信息流）"
+
+    return None
+
+
+def _parse_langchain_tool_call(response: Union[str, AIMessage]) -> Optional[Dict[str, Any]]:
+    """
+    解析 LangChain LLM 响应中的工具调用
+
+    支持 LangChain 的 AIMessage.tool_calls 格式。
+
+    Args:
+        response: LLM 响应，可以是字符串或 AIMessage
+
+    Returns:
+        Optional[Dict[str, Any]]: 解析后的工具调用信息
+            {
+                "tool_name": str,      # 工具名称
+                "args": Dict          # 工具参数
+            }
+            如果解析失败或没有工具调用返回 None
+    """
+    if isinstance(response, AIMessage):
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            tool_call = response.tool_calls[0]
+            return {
+                "tool_name": tool_call.get("name", ""),
+                "args": tool_call.get("args", {})
+            }
+        return None
+
+    if isinstance(response, str):
+        return _parse_llm_tool_call(response)
 
     return None
 
@@ -243,8 +277,8 @@ def llm_decision_node(
     user_prompt = build_decision_prompt(state)
 
     try:
-        response_content = llm_invoker(system_prompt, user_prompt)
-        tool_call = _parse_llm_tool_call(response_content)
+        response = llm_invoker(system_prompt, user_prompt)
+        tool_call = _parse_langchain_tool_call(response)
 
         if tool_call is None:
             if state["step_count"] >= state["max_steps"]:
@@ -327,8 +361,8 @@ def tool_execution_node(state: SessionState) -> SessionState:
     print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 开始执行工具: {tool_name} | 参数={tool_args}")
 
     if tool_name == "logout":
-        reason = tool_args.get("reason", "主动结束会话")
-        print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 执行登出: reason={reason}")
+        logout_reason = tool_args.get("reason", "主动结束会话")
+        print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 执行登出: reason={logout_reason}")
         return {
             **state,
             "exit_reason": ExitReason.USER_CHOICE,

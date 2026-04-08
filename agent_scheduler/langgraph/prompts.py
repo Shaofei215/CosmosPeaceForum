@@ -1,7 +1,6 @@
 # Prompt 模板模块
 # 定义 LangGraph 会话中使用的各种 Prompt 模板
-# 注意：工具描述由 LangGraph/LangChain 自动注入，无需在 prompt 中重复
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 def build_system_prompt(
@@ -14,7 +13,7 @@ def build_system_prompt(
     构建系统提示词
 
     系统提示词定义了 AI Agent 的角色设定和行为准则。
-    注意：工具描述由 LangGraph 自动从 @tool 装饰器注入。
+    注意：工具描述由 LangChain 从 @tool 装饰器自动注入到 LLM。
 
     Args:
         username: 用户名
@@ -37,6 +36,8 @@ def build_system_prompt(
 1. 保持角色一致性：你的所有行为和言论都应该符合角色设定，但可视情况激发创造性
 2. 真实性：像真人一样浏览、点赞、评论，而不是机械执行任务
 3. 选择性：不必阅读所有内容，选择你最感兴趣的
+4. **工具使用【重要】**：每次决策都需要调用一个工具，每个参数都是必填项！请务必确保参数齐全且准确！禁止编造不存在的参数、ID！
+5. 互动优先级与字数限制：点赞>评论，评论仅在想要表达观点时使用；评论字数50字以下为宜，发帖字数100字以下为宜
 
 ## 工作记忆
 你会收到一个 action_history 列表，记录了你在本次会话中已经执行的操作。
@@ -130,6 +131,11 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
 {initial_environment_text}
 {history_text}
 
+## ⚠️ 重要约束
+1. **禁止编造ID**：所有ID必须来自【上一步执行后当前查看的内容】或【首页帖子】中的真实ID！
+2. **禁止猜测**：如果不确定ID，不要猜测，应该先调用工具获取列表！
+3. **参数必须完整**：每个参数都是必填项！
+
 ## 决策要求
 1. 根据你的角色性格做出符合人设的决策
 2. 结合当前位置和工作记忆做出合理选择
@@ -157,24 +163,94 @@ def _format_tool_result(result: Any) -> str:
     elif isinstance(result, str):
         return result
     elif isinstance(result, dict):
-        if "data" in result and isinstance(result["data"], list):
+        if "post" in result:
+            post = result.get("post", {})
+            comments = result.get("comments", [])
+            total = result.get("total", 0)
+
+            lines = []
+            lines.append("【帖子详情】")
+            lines.append(f"ID: {post.get('id', '?')}")
+            lines.append(f"作者: @{post.get('author_username', '?')} (粉丝:{post.get('followers_count', post.get('followers', 0))}, 关注:{post.get('following_count', post.get('following', 0))})")
+            lines.append(f"作者签名: {post.get('author_bio', post.get('bio', ''))[:30]}")
+            lines.append(f"内容: {post.get('content', '')}")
+            lines.append(f"点赞: {post.get('like_count', 0)} | 评论数: {post.get('comment_count', 0)} | 已点赞: {post.get('is_liked', False)}")
+            lines.append(f"发布时间: {post.get('created_at', '')}")
+
+            if comments:
+                lines.append(f"\n【评论】(共{total}条，显示{len(comments)}条):")
+                for c in comments:
+                    lines.append(f"  [评论ID:{c.get('id', '?')}] @{c.get('author_username', '?')}: {c.get('content', '')}")
+                    lines.append(f"    点赞:{c.get('like_count', 0)} | 回复:{c.get('reply_count', 0)} | 已点赞:{c.get('is_liked', False)}")
+            else:
+                lines.append(f"\n【评论】(共{total}条，暂无评论)")
+
+            return "\n".join(lines)
+
+        elif "data" in result and isinstance(result["data"], list):
             items = result["data"]
             if not items:
                 return "空列表"
-            formatted_items = []
+
+            lines = ["【信息列表】"]
             for item in items[:5]:
                 if isinstance(item, dict):
-                    content = item.get("content", "")[:50]
-                    author = item.get("author_username", "未知")
-                    formatted_items.append(f"@{author}: {content}...")
+                    lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', item.get('username', '?'))}: {item.get('content', '')}")
+                    lines.append(f"  点赞:{item.get('like_count', 0)} 评论:{item.get('comment_count', 0)} | 已点赞:{item.get('is_liked', False)}")
                 else:
-                    formatted_items.append(str(item)[:50])
-            return "\n".join(formatted_items)
+                    lines.append(str(item))
+            return "\n".join(lines)
+
+        elif "comment" in result and "post" in result:
+            comment = result.get("comment", {})
+            post = result.get("post", {})
+            replies = result.get("replies", [])
+            total = result.get("total", 0)
+
+            lines = []
+            lines.append("【评论详情】")
+            lines.append(f"[评论ID:{comment.get('id', '?')}] @{comment.get('author_username', '?')}: {comment.get('content', '')}")
+            lines.append(f"  点赞:{comment.get('like_count', 0)} | 已点赞:{comment.get('is_liked', False)}")
+
+            lines.append(f"\n【原帖子】ID:{post.get('id', '?')} @{post.get('author_username', '?')}: {post.get('content', '')[:50]}...")
+
+            if replies:
+                lines.append(f"\n【回复】(共{total}条，显示{len(replies)}条):")
+                for r in replies:
+                    lines.append(f"  [ID:{r.get('id', '?')}] @{r.get('author_username', '?')}: {r.get('content', '')}")
+            else:
+                lines.append(f"\n【回复】(共{total}条，暂无回复)")
+
+            return "\n".join(lines)
+
+        elif "user_id" in result or "username" in result:
+            lines = ["【用户信息】"]
+            lines.append(f"ID: {result.get('id', result.get('user_id', '?'))}")
+            lines.append(f"用户名: @{result.get('username', '?')}")
+            lines.append(f"签名: {result.get('bio', result.get('personal_signature', ''))}")
+            lines.append(f"粉丝: {result.get('followers_count', result.get('followers', 0))} | 关注: {result.get('following_count', result.get('following', 0))}")
+            if "follow_status" in result:
+                lines.append(f"关注状态: {result.get('follow_status', '')}")
+            if "recent_posts" in result:
+                posts = result.get("recent_posts", [])
+                if posts:
+                    lines.append("\n【最新帖子】:")
+                    for p in posts:
+                        lines.append(f"  [ID:{p.get('id', '?')}] {p.get('content', '')[:50]}...")
+            return "\n".join(lines)
+
         return str(result)[:500]
+
     elif isinstance(result, list):
         if not result:
             return "空列表"
-        return "\n".join([str(item)[:100] for item in result[:5]])
+        lines = []
+        for item in result[:5]:
+            if isinstance(item, dict):
+                lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', item.get('username', '?'))}: {item.get('content', '')[:50]}...")
+            else:
+                lines.append(str(item)[:50])
+        return "\n".join(lines)
     else:
         return str(result)[:500]
 

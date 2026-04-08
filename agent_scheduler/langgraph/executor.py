@@ -1,7 +1,7 @@
 # 会话执行器模块
 # 提供 LangGraph 会话的执行器，负责运行单个登录会话的完整生命周期
 import uuid
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, List
 from datetime import datetime
 from dataclasses import dataclass, field
 import traceback
@@ -15,7 +15,8 @@ def _create_openai_llm_invoker(
     model_name: str = "gpt-4o-mini",
     temperature: float = 0.7,
     api_key: Optional[str] = None,
-    base_url: Optional[str] = None
+    base_url: Optional[str] = None,
+    tools: Optional[List] = None
 ) -> Callable[[str, str], str]:
     """
     创建 OpenAI LLM 调用器
@@ -25,6 +26,7 @@ def _create_openai_llm_invoker(
         temperature: 温度参数
         api_key: API 密钥
         base_url: API 基础 URL
+        tools: LangChain 工具列表，用于绑定到 LLM
 
     Returns:
         Callable[[str, str], str]: LLM 调用函数
@@ -36,7 +38,6 @@ def _create_openai_llm_invoker(
             "请安装 langchain-openai: pip install langchain-openai"
         )
 
-    # 创建 LLM 实例
     llm_kwargs = {
         "model": model_name,
         "temperature": temperature,
@@ -50,13 +51,16 @@ def _create_openai_llm_invoker(
 
     llm = ChatOpenAI(**llm_kwargs)
 
+    if tools:
+        llm = llm.bind_tools(tools)
+
     def invoke(system_prompt: str, user_prompt: str) -> str:
         """执行 LLM 调用"""
         response = llm.invoke([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ])
-        return response.content
+        return response
 
     return invoke
 
@@ -65,6 +69,7 @@ def _create_anthropic_llm_invoker(
     model_name: str = "claude-sonnet-4-20250514",
     temperature: float = 0.7,
     api_key: Optional[str] = None,
+    tools: Optional[List] = None,
 ) -> Callable[[str, str], str]:
     """
     创建 Anthropic Claude LLM 调用器
@@ -73,6 +78,7 @@ def _create_anthropic_llm_invoker(
         model_name: 模型名称
         temperature: 温度参数
         api_key: API 密钥
+        tools: LangChain 工具列表，用于绑定到 LLM
 
     Returns:
         Callable[[str, str], str]: LLM 调用函数
@@ -94,19 +100,23 @@ def _create_anthropic_llm_invoker(
 
     llm = ChatAnthropic(**llm_kwargs)
 
+    if tools:
+        llm = llm.bind_tools(tools)
+
     def invoke(system_prompt: str, user_prompt: str) -> str:
         """执行 LLM 调用"""
         response = llm.invoke([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ])
-        return response.content
+        return response
 
     return invoke
 
 
 def create_llm_invoker(
     provider: str = "openai",
+    tools: Optional[List] = None,
     **kwargs
 ) -> Callable[[str, str], str]:
     """
@@ -114,6 +124,7 @@ def create_llm_invoker(
 
     Args:
         provider: LLM 提供者，可选 "openai" 或 "anthropic"
+        tools: LangChain 工具列表，用于绑定到 LLM
         **kwargs: 传递给具体 LLM 实现的其他参数
 
     Returns:
@@ -125,9 +136,9 @@ def create_llm_invoker(
     provider = provider.lower()
 
     if provider == "openai":
-        return _create_openai_llm_invoker(**kwargs)
+        return _create_openai_llm_invoker(tools=tools, **kwargs)
     elif provider == "anthropic":
-        return _create_anthropic_llm_invoker(**kwargs)
+        return _create_anthropic_llm_invoker(tools=tools, **kwargs)
     else:
         raise ValueError(f"不支持的 LLM 提供者: {provider}")
 

@@ -95,7 +95,8 @@ def _make_request(
         if response.status_code == 401:
             raise AuthenticationError("认证失败，Token 可能已过期，请重新登录")
         elif response.status_code == 404:
-            raise NotFoundError(f"资源不存在: {response.text}")
+            detail = response.json().get("detail", response.text) if response.content else "Not Found"
+            raise NotFoundError(f"资源不存在 (404): {detail}。请确保你使用的ID是之前工具返回的真实ID，不要编造ID。")
         elif response.status_code >= 400:
             detail = response.json().get("detail", response.text)
             raise ToolExecutionError(f"请求失败 ({response.status_code}): {detail}")
@@ -133,7 +134,7 @@ def _get_follow_status_text(user_id: int, current_user_id: Optional[int]) -> str
     try:
         follow_data = _make_request(
             method="GET",
-            endpoint=f"/users/{user_id}/follow",
+            endpoint=f"/users/{user_id}/follow-status",
             reason="内部调用：获取关注状态"
         )
         if follow_data.get("is_following"):
@@ -203,6 +204,7 @@ def _standardize_comment(comment_data: Dict[str, Any]) -> Dict[str, Any]:
             - created_at: 创建时间
             - parent_id: 父评论 ID
             - like_count: 点赞数
+            - reply_count: 回复数（包括嵌套回复）
             - is_liked: 当前用户是否已点赞
     """
     owner = comment_data.get("owner", {})
@@ -215,6 +217,7 @@ def _standardize_comment(comment_data: Dict[str, Any]) -> Dict[str, Any]:
         "created_at": comment_data.get("created_at", ""),
         "parent_id": comment_data.get("parent_id"),
         "like_count": comment_data.get("like_count", 0),
+        "reply_count": comment_data.get("reply_count", 0),
         "is_liked": comment_data.get("is_liked", False)
     }
 
@@ -362,7 +365,7 @@ def _get_user_posts(user_id: int, page: int = 1, page_size: int = 5) -> Dict[str
     """
     return _make_request(
         method="GET",
-        endpoint=f"/feeds/user/{user_id}",
+        endpoint=f"/feeds/feed/user/{user_id}",
         params={"page": page, "page_size": page_size},
         reason="内部调用：获取用户帖子"
     )
@@ -422,7 +425,7 @@ def get_profile() -> Dict[str, Any]:
 
 
 @tool
-def toggle_post_like(post_id: int, reason: str) -> None:
+def toggle_post_like(post_id: int, reason: str = "用户想要点赞该帖子") -> None:
     """
     切换指定帖子的点赞状态（点赞或取消点赞）
 
@@ -433,7 +436,7 @@ def toggle_post_like(post_id: int, reason: str) -> None:
 
     Args:
         post_id: 目标帖子的 ID，必须是有效的正整数
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户对这篇帖子感兴趣，想要点赞支持"、"用户想要取消点赞"等。
 
     Raises:
@@ -449,7 +452,7 @@ def toggle_post_like(post_id: int, reason: str) -> None:
 
 
 @tool
-def toggle_comment_like(post_id: int, comment_id: int, reason: str) -> None:
+def toggle_comment_like(post_id: int, comment_id: int, reason: str = "用户想要点赞该评论") -> None:
     """
     切换指定评论的点赞状态（点赞或取消点赞）
 
@@ -461,7 +464,7 @@ def toggle_comment_like(post_id: int, comment_id: int, reason: str) -> None:
     Args:
         post_id: 评论所属帖子的 ID，用于路由匹配
         comment_id: 目标评论的 ID，必须是有效的正整数
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户觉得这条评论说得很有道理，想要点赞"等。
 
     Raises:
@@ -480,7 +483,7 @@ def toggle_comment_like(post_id: int, comment_id: int, reason: str) -> None:
 def create_comment(
     post_id: int,
     content: str,
-    reason: str,
+    reason: str = "用户想要发表评论",
     parent_id: Optional[int] = None
 ) -> None:
     """
@@ -494,7 +497,7 @@ def create_comment(
     Args:
         post_id: 目标帖子的 ID，新评论将创建在此帖子下
         content: 评论的文本内容，至少需要 1 个字符
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要表达对帖子的认同"、"用户想要回复某条评论"等。
         parent_id: 父评论 ID（可选），指定时创建回复，为空时创建一级评论
 
@@ -517,7 +520,7 @@ def create_comment(
 
 
 @tool
-def toggle_follow(user_id: int, reason: str) -> None:
+def toggle_follow(user_id: int, reason: str = "用户想要关注该用户") -> None:
     """
     切换对指定用户的关注状态（关注或取消关注）
 
@@ -529,7 +532,7 @@ def toggle_follow(user_id: int, reason: str) -> None:
 
     Args:
         user_id: 目标用户的 ID，当前用户将关注或取消关注此用户
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户欣赏这位用户的内容，想要关注"、"用户想要取消关注"等。
 
     Raises:
@@ -546,7 +549,7 @@ def toggle_follow(user_id: int, reason: str) -> None:
 
 
 @tool
-def create_post(content: str, reason: str) -> None:
+def create_post(content: str, reason: str = "用户想要分享内容") -> None:
     """
     发布新帖子到社交平台
 
@@ -556,7 +559,7 @@ def create_post(content: str, reason: str) -> None:
 
     Args:
         content: 帖子的文本内容，至少需要 1 个字符
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要分享日常"、"用户想要发布一条重要通知"等。
 
     Raises:
@@ -573,6 +576,30 @@ def create_post(content: str, reason: str) -> None:
 
 
 @tool
+def logout(reason: str = "用户想要结束本次会话") -> None:
+    """
+    退出当前登录会话
+
+    当你决定结束本次社交平台使用会话时调用此工具。
+    这是一个结束会话的信号，会话将在此操作后终止。
+
+    注意：此工具会自动从当前执行上下文获取认证信息，无需手动传入 Token。
+
+    Args:
+        reason: 对视野的简单总结，调用该工具的具体原因，用于记录操作动机和上下文。
+                例如："用户觉得今天差不多了，想休息一下"、"用户完成了想做的事情"等。
+
+    Returns:
+        None: 此工具不返回任何内容
+
+    Raises:
+        UnauthorizedError: 未登录或 Token 已过期
+        ToolExecutionError: 服务器内部错误
+    """
+    pass
+
+
+@tool
 def get_user_profile(user_id: int, reason: str = "") -> Dict[str, Any]:
     """
     查看指定用户的个人主页信息
@@ -586,7 +613,7 @@ def get_user_profile(user_id: int, reason: str = "") -> Dict[str, Any]:
 
     Args:
         user_id: 目标用户的 ID
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对视野的简单总结，调用该工具的具体原因，用于记录操作动机和上下文。75字以内
                 例如："用户想要查看这位作者的详细资料"等。
 
     Returns:
@@ -627,7 +654,7 @@ def get_global_feed(reason: str = "") -> Dict[str, Any]:
     注意：此工具会自动从当前执行上下文获取认证信息（如有），用于获取点赞状态和关注状态。
 
     Args:
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要浏览主页信息流"、"查看最新动态"等。
 
     Returns:
@@ -660,7 +687,7 @@ def expand_post(post_id: int, reason: str = "") -> Dict[str, Any]:
 
     Args:
         post_id: 目标帖子的 ID
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想阅读帖子的完整内容并查看热门评论"等。
 
     Returns:
@@ -700,7 +727,7 @@ def expand_comments(
 
     Args:
         comment_id: 目标一级评论的 ID
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想查看这条评论及其回复"等。
         reply_count: 要返回的回复数量，默认 5
 
@@ -745,7 +772,7 @@ def get_post_detail(
 
     Args:
         post_id: 目标帖子的 ID
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要查看这条帖子的后续评论"等。
         comment_count: 要返回的评论数量，默认 5
 
@@ -787,7 +814,7 @@ def expand_comment_replies(
     Args:
         post_id: 评论所属帖子的 ID
         comment_id: 目标评论的 ID
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想查看这条评论的回复"等。
         reply_count: 要返回的回复数量，默认 5
 
@@ -822,7 +849,7 @@ def scroll_global_feed(reason: str = "") -> Dict[str, Any]:
     注意：此工具会自动从当前执行上下文获取认证信息（如有）。
 
     Args:
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要查看更多帖子"等。
 
     Returns:
@@ -868,7 +895,7 @@ def scroll_user_posts(
 
     Args:
         user_id: 目标用户的 ID
-        reason: LLM 调用该工具的具体原因，用于记录操作动机和上下文。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想查看这位作者更多历史帖子"等。
         page: 页码，从 2 开始（默认 2，表示查看第二页及之后的内容）
 
@@ -910,6 +937,7 @@ def get_social_tools() -> List:
         - create_comment: 创建评论或回复
         - toggle_follow: 切换用户关注状态
         - create_post: 发布新帖子
+        - logout: 退出当前登录会话
         - get_user_profile: 查看用户个人主页（含最新3条帖子）
         - get_global_feed: 获取全局信息流（最新5条）
         - expand_post: 展开帖子完整内容
@@ -931,6 +959,7 @@ def get_social_tools() -> List:
         create_comment,
         toggle_follow,
         create_post,
+        logout,
         get_user_profile,
         get_global_feed,
         expand_post,
