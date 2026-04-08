@@ -258,7 +258,7 @@ def _standardize_comments_list(comments_data: List[Dict[str, Any]]) -> List[Dict
 
 # ==================== 数据获取辅助函数 ====================
 
-def _get_current_user(reason: str = "") -> Dict[str, Any]:
+def _get_current_user() -> Dict[str, Any]:
     """
     获取当前登录用户信息（内部函数，供系统使用）
 
@@ -266,7 +266,7 @@ def _get_current_user(reason: str = "") -> Dict[str, Any]:
     Agent 应使用 @tool get_profile 获取用户信息。
 
     Args:
-        reason: 调用原因
+
 
     Returns:
         Dict[str, Any]: 用户信息
@@ -274,7 +274,6 @@ def _get_current_user(reason: str = "") -> Dict[str, Any]:
     return _make_request(
         method="GET",
         endpoint="/auth/me",
-        reason=reason
     )
 
 

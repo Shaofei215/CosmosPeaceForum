@@ -204,7 +204,7 @@ def environment_awareness_node(state: SessionState) -> SessionState:
     print(f"[节点] environment_awareness_node | 用户={username} | 开始获取环境信息")
 
     try:
-        profile_result = _get_current_user(reason="环境感知：获取当前用户信息")
+        profile_result = _get_current_user()
         profile_data = profile_result if isinstance(profile_result, dict) else {}
 
         feed_result = tools_get_global_feed.invoke({"reason": "初始化环境感知"})
