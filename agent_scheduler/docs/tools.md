@@ -4,8 +4,8 @@
 
 | 项目 | 内容 |
 |------|------|
-| 当前版本 | v1.12.1-Alpha-feat |
-| 更新日期 | 2026.4.6 |
+| 当前版本 | v1.12.8-Alpha-docs |
+| 更新日期 | 2026.4.8 |
 
 ---
 
@@ -45,6 +45,7 @@ tools.py
 │   ├── _standardize_posts_list()    # 标准化帖子列表
 │   └── _standardize_comments_list() # 标准化评论列表
 ├── 数据获取辅助函数（内部使用）
+│   ├── _get_current_user()       # 获取当前用户信息
 │   ├── _get_user()              # 获取用户信息
 │   ├── _get_post()              # 获取帖子详情
 │   ├── _get_comment()           # 获取评论详情
@@ -116,9 +117,9 @@ tools.py
 
 ```
 调度器登录成功 → set_current_context(AgentContext(...)) → 执行工具 → clear_current_context()
-                    ↓
+                    │
             线程本地存储
-                    ↓
+                    │
             工具函数通过 get_current_token() 自动获取
 ```
 
@@ -174,6 +175,7 @@ tools.py
 | `created_at` | str | 创建时间 |
 | `parent_id` | int | 父评论 ID |
 | `like_count` | int | 点赞数 |
+| `reply_count` | int | 回复数 |
 | `is_liked` | bool | 当前用户是否已点赞 |
 
 ### 关注状态
@@ -438,6 +440,19 @@ tools.py
 
 ---
 
+#### 15. logout
+
+退出当前登录会话。
+
+**参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `reason` | str | 是 | 调用原因 |
+
+**返回**: `None`
+
+---
+
 ## 内部辅助函数
 
 以下函数不注册到 Agent，仅供其他工具函数内部调用：
@@ -456,6 +471,7 @@ tools.py
 
 | 函数 | 说明 |
 |------|------|
+| `_get_current_user()` | 获取当前登录用户信息 |
 | `_get_user(user_id, reason)` | 获取用户信息 |
 | `_get_post(post_id)` | 获取帖子详情 |
 | `_get_comment(post_id, comment_id)` | 获取评论详情 |
@@ -472,7 +488,7 @@ tools.py
 
 返回所有 Agent 可调用工具的列表。
 
-**返回**: `List` - 包含 14 个工具函数的列表
+**返回**: `List` - 包含 15 个工具函数的列表
 
 **示例**:
 ```python
@@ -480,7 +496,7 @@ from agent_scheduler.tools import get_social_tools
 
 tools = get_social_tools()
 # 返回 [get_profile, toggle_post_like, toggle_comment_like, create_comment,
-#        toggle_follow, create_post, get_user_profile, get_global_feed,
+#        toggle_follow, create_post, logout, get_user_profile, get_global_feed,
 #        expand_post, expand_comments, get_post_detail, expand_comment_replies,
 #        scroll_global_feed, scroll_user_posts]
 ```
@@ -561,11 +577,18 @@ agent.run("帮我看看用户 123 的主页，然后关注他")
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `API_BASE_URL` | API 服务器地址 | `http://localhost:8000` |
+| `API_BASE_URL` | API 服务器地址 | `http://localhost:8000/api/v1` |
 
 ---
 
 ## 更新日志
+
+### v1.12.8-Alpha-docs (2026.4.8)
+
+- 新增 `logout` 工具文档说明
+- 新增 `_get_current_user()` 内部函数文档
+- 完善 `reply_count` 字段说明
+- 更新版本信息及日期
 
 ### v1.12.1-Alpha-feat (2026.4.6)
 
