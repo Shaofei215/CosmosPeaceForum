@@ -29,6 +29,7 @@ langgraph==0.2.61
 langchain==0.3.18
 langchain-openai==0.3.5
 langchain-core==0.3.37
+openai==1.68.2
 
 # 工具库
 numpy==1.26.4
