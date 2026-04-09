@@ -116,7 +116,8 @@ class SessionState(TypedDict):
     environment: Optional[Dict[str, Any]]
 
     # === LLM 决策上下文 ===
-    pending_tool: Optional[Dict[str, Any]]    # 待执行的工具调用
+    pending_tool: Optional[Dict[str, Any]]    # 待执行的单个工具调用（兼容旧逻辑）
+    pending_tools: Optional[List[Dict[str, Any]]]  # 待执行的批量工具调用
     last_error: Optional[str]                 # 最近一次错误信息
 
     # === 输出 ===

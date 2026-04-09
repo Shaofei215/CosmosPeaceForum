@@ -123,14 +123,16 @@ def build_session_graph(
 
     # 添加条件边
     # tool_execution 之后：
+    # - 如果有待执行的批量工具 -> 回到 tool_execution 继续执行
     # - 如果未达最大步数且未登出 -> 回到 llm_decision 继续决策
     # - 否则 -> summarize 结束会话
     graph.add_conditional_edges(
         "tool_execution",
         should_continue_edge,
         {
-            "llm_decision": "llm_decision",  # 继续决策（基于工作记忆）
-            "summarize": "summarize",          # 结束会话
+            "tool_execution": "tool_execution",  # 继续执行批量工具
+            "llm_decision": "llm_decision",     # 继续决策（基于工作记忆）
+            "summarize": "summarize",            # 结束会话
         }
     )
     print(f"[图构建] 条件边设置完成")
@@ -209,6 +211,7 @@ def get_graph_structure() -> Dict[str, Any]:
                 "from": "tool_execution",
                 "condition": "should_continue_edge",
                 "branches": {
+                    "tool_execution": "继续执行批量工具",
                     "llm_decision": "继续决策（基于工作记忆，不重新获取环境）",
                     "summarize": "结束会话"
                 }

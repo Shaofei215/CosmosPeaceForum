@@ -4,8 +4,8 @@
 
 | 项目 | 内容 |
 |------|------|
-| 当前版本 | v1.12.8-Alpha-docs |
-| 更新日期 | 2026.4.8 |
+| 当前版本 | v1.12.10-Alpha-feat |
+| 更新日期 | 2026.4.9 |
 
 ---
 
@@ -21,6 +21,7 @@
 | 一次性环境感知 | 环境信息仅在会话开始时获取一次 |
 | 当前位置追踪 | 通过 `current_location` 追踪 LLM 所在页面 |
 | 灵活的退出机制 | 支持主动登出和最大步数限制 |
+| **批量工具调用** | **支持 LangChain 原生并行工具调用，操作型工具可批量执行，获取信息型工具每次限一个** |
 
 ---
 
@@ -113,7 +114,8 @@ class SessionState(TypedDict):
     environment: Optional[Dict[str, Any]]   # 环境信息
 
     # === LLM 决策上下文 ===
-    pending_tool: Optional[Dict[str, Any]]   # 待执行的工具调用
+    pending_tool: Optional[Dict[str, Any]]   # 待执行的单个工具调用（兼容旧逻辑）
+    pending_tools: Optional[List[Dict[str, Any]]]  # 待执行的批量工具调用列表
     last_error: Optional[str]                # 最近一次错误信息
 
     # === 输出 ===
@@ -185,7 +187,7 @@ class SessionSummary(TypedDict):
                          ┌─────────────────────────┐
                          │      llm_decision       │
                          │   LLM 基于当前位置+记忆   │
-                         │        做决策            │
+                         │   做决策（支持批量）      │
                          └─────────────┬───────────┘
                                        │
                                        ▼
@@ -199,19 +201,21 @@ class SessionSummary(TypedDict):
                          │                           │
                          ▼                           ▼
               ┌──────────────────┐      ┌──────────────────┐
-              │  未达最大步数     │      │   达到最大步数    │
-              │  且未主动登出     │      │   或主动登出      │
+              │  批量工具有待执行  │      │  无待执行工具     │
+              │  继续执行         │      │  继续决策/结束    │
               └────────┬─────────┘      └────────┬─────────┘
                        │                         │
                        ▼                         ▼
               ┌──────────────────┐      ┌──────────────────┐
-              │   llm_decision   │      │    summarize      │
-              │   (继续循环)      │      │    生成总结       │
-              └──────────────────┘      └────────┬─────────┘
+              │  tool_execution  │      │  达到最大步数？   │
+              │  (继续执行批量)    │      │       ↓         │
+              └──────────────────┘      │   ↓           ↓ │
+                                        │ llm_decision  summarize
+                                        └──────────────────┘
                                                  │
                                                  ▼
                                           ┌──────────┐
-                                          │    end    │
+                                          │  summarize│
                                           └────┬─────┘
                                                │
                                                ▼
@@ -309,15 +313,43 @@ def summarize_node(state: SessionState, llm_invoker: Callable) -> SessionState:
 
 ### should_continue_edge
 
-决策后的路由判断边函数。
+决策后的路由判断边函数，支持批量工具调用。
 
 ```python
 def should_continue_edge(state: SessionState) -> str:
     if exit_reason is not None:
         return "summarize"  # 登出
+    if pending_tools and len(pending_tools) > 0:
+        return "tool_execution"  # 继续执行批量工具
     if step_count >= max_steps:
         return "summarize"  # 达到最大步数
     return "llm_decision"  # 继续决策
+```
+
+### 工具分类
+
+LLM 可一次调用多个工具，但有约束：
+
+| 分类 | 工具 | 说明 |
+|------|------|------|
+| `TOOLS_WITH_RETURN_VALUE` | get_profile, get_user_profile, get_global_feed, expand_post, expand_comments, get_post_detail, expand_comment_replies, scroll_global_feed, scroll_user_posts | 有返回值的工具，每次批量只能有 1 个 |
+| `TOOL_NO_RETURN_VALUE` | toggle_post_like, toggle_comment_like, toggle_follow, create_comment, create_post, logout | 无返回值工具，每次批量可执行多个 |
+
+### 批量执行流程
+
+```
+LLM 返回 [tool1, tool2, tool3]
+        ↓
+_normalize_tool_calls_for_batch() 过滤
+        ↓
+pending_tool = tool1 (第一个有返回值工具)
+pending_tools = [tool2, tool3] (其余操作型工具)
+        ↓
+tool_execution_node 执行 tool1
+        ↓
+should_continue_edge 检测 pending_tools 不为空
+        ↓
+继续执行 tool_execution_node 直到全部完成
 ```
 
 ---
@@ -621,6 +653,20 @@ result = run_session(
 ---
 
 ## 更新日志
+
+### v1.12.10-Alpha-feat (2026.4.9)
+
+- 新增批量工具调用功能
+- 支持 LangChain 原生并行工具调用
+- 添加 `pending_tools` 字段支持批量工具列表
+- 添加 `TOOLS_WITH_RETURN_VALUE` 和 `TOOL_NO_RETURN_VALUE` 工具分类
+- 添加 `_parse_tool_calls_from_response` 批量解析函数
+- 添加 `_normalize_tool_calls_for_batch` 批量规范化函数
+- 修改 `llm_decision_node` 支持批量决策
+- 修改 `tool_execution_node` 支持批量执行
+- 修改 `should_continue_edge` 支持批量工具路由
+- 更新 `session_graph.py` 添加 `tool_execution` 条件边分支
+- 提示词更新：添加批量调用说明
 
 ### v1.12.8-Alpha-docs (2026.4.8)
 

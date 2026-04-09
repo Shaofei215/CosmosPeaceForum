@@ -40,6 +40,27 @@ TOOL_TO_LOCATION = {
     "logout": None,
 }
 
+TOOLS_WITH_RETURN_VALUE = {
+    "get_profile",
+    "get_user_profile",
+    "get_global_feed",
+    "expand_post",
+    "expand_comments",
+    "get_post_detail",
+    "expand_comment_replies",
+    "scroll_global_feed",
+    "scroll_user_posts",
+}
+
+TOOL_NO_RETURN_VALUE = {
+    "toggle_post_like",
+    "toggle_comment_like",
+    "toggle_follow",
+    "create_comment",
+    "create_post",
+    "logout",  
+}
+
 
 def _get_location_after_tool(tool_name: str, tool_args: Dict[str, Any]) -> Optional[str]:
     """
@@ -64,7 +85,7 @@ def _get_location_after_tool(tool_name: str, tool_args: Dict[str, Any]) -> Optio
 
 def _parse_langchain_tool_call(response: Union[str, AIMessage]) -> Optional[Dict[str, Any]]:
     """
-    解析 LangChain LLM 响应中的工具调用
+    解析 LangChain LLM 响应中的工具调用（单个）
 
     支持 LangChain 的 AIMessage.tool_calls 格式。
 
@@ -79,24 +100,143 @@ def _parse_langchain_tool_call(response: Union[str, AIMessage]) -> Optional[Dict
             }
             如果解析失败或没有工具调用返回 None
     """
+    tool_calls = _parse_tool_calls_from_response(response)
+    if not tool_calls:
+        return None
+    return tool_calls[0]
+
+
+def _parse_tool_calls_from_response(response: Union[str, AIMessage]) -> List[Dict[str, Any]]:
+    """
+    解析 LLM 响应中的所有工具调用
+
+    支持 LangChain 的 AIMessage.tool_calls 格式和字符串格式。
+
+    Args:
+        response: LLM 响应，可以是字符串或 AIMessage
+
+    Returns:
+        List[Dict[str, Any]]: 解析后的工具调用列表
+    """
     if isinstance(response, AIMessage):
         if hasattr(response, 'tool_calls') and response.tool_calls:
-            tool_call = response.tool_calls[0]
-            return {
-                "tool_name": tool_call.get("name", ""),
-                "args": tool_call.get("args", {})
-            }
-        return None
+            return [{"name": tc.get("name", ""), "args": tc.get("args", {})} for tc in response.tool_calls]
+        return []
 
     if isinstance(response, str):
-        return _parse_llm_tool_call(response)
+        return _parse_tool_calls_from_string(response)
 
-    return None
+    return []
+
+
+def _normalize_tool_calls_for_batch(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    规范化批量工具调用，确保有返回值的工具只有一个
+
+    规则：
+    1. 如果有多个有返回值的工具调用，只保留第一个
+    2. 无返回值的工具调用全部保留
+
+    Args:
+        tool_calls: 原始工具调用列表
+
+    Returns:
+        List[Dict[str, Any]]: 规范化后的工具调用列表
+    """
+    result = []
+    has_return_value_tool = False
+
+    for tc in tool_calls:
+        tool_name = tc.get("name", "").lower()
+        if tool_name in TOOLS_WITH_RETURN_VALUE:
+            if not has_return_value_tool:
+                result.append(tc)
+                has_return_value_tool = True
+        else:
+            result.append(tc)
+
+    return result
+
+
+def _parse_tool_calls_from_string(content: str) -> List[Dict[str, Any]]:
+    """
+    从字符串响应中解析所有工具调用
+
+    支持多种响应格式：
+    1. JSON 格式: {"tool_name": "xxx", "args": {...}}
+    2. 简单格式: tool_name(arg1=value1, arg2=value2) 或多个工具连续调用
+
+    Args:
+        content: LLM 响应内容字符串
+
+    Returns:
+        List[Dict[str, Any]]: 解析后的工具调用列表
+    """
+    import json
+    import re
+
+    content = content.strip()
+    results = []
+
+    json_pattern = re.compile(r'\{[^{}]*"tool_name"[^{}]*\}', re.DOTALL)
+    for json_match in json_pattern.finditer(content):
+        try:
+            data = json.loads(json_match.group())
+            tool_name = data.get("tool_name", "")
+            if tool_name:
+                results.append({
+                    "name": tool_name,
+                    "args": data.get("args", {})
+                })
+        except (json.JSONDecodeError, AttributeError):
+            continue
+
+    simple_pattern = re.compile(r'(\w+)\(([^)]*)\)', re.MULTILINE)
+    for match in simple_pattern.finditer(content):
+        tool_name = match.group(1).strip()
+        if tool_name and tool_name.lower() not in ['if', 'else', 'for', 'while', 'def', 'return', 'true', 'false', 'none']:
+            args_str = match.group(2).strip()
+            args = _parse_args_string(args_str)
+            results.append({"name": tool_name, "args": args})
+
+    return results
+
+
+def _parse_args_string(args_str: str) -> Dict[str, Any]:
+    """
+    解析工具参数字符串
+
+    Args:
+        args_str: 参数字符串，如 "post_id=123, reason='test'"
+
+    Returns:
+        Dict[str, Any]: 解析后的参数字典
+    """
+    args = {}
+    if not args_str:
+        return args
+
+    for arg_pair in args_str.split(','):
+        if '=' in arg_pair:
+            key, value = arg_pair.split('=', 1)
+            key = key.strip()
+            value = value.strip().strip('"\'')
+            if value.isdigit():
+                value = int(value)
+            elif value.lower() == 'true':
+                value = True
+            elif value.lower() == 'false':
+                value = False
+            elif value.lower() == 'none':
+                value = None
+            args[key] = value
+
+    return args
 
 
 def _parse_llm_tool_call(response_content: str) -> Optional[Dict[str, Any]]:
     """
-    解析 LLM 响应中的工具调用
+    解析 LLM 响应中的工具调用（单个，兼容旧逻辑）
 
     支持多种响应格式：
     1. JSON 格式: {"tool_name": "xxx", "args": {...}}
@@ -113,46 +253,8 @@ def _parse_llm_tool_call(response_content: str) -> Optional[Dict[str, Any]]:
             }
             如果解析失败返回 None
     """
-    import json
-    import re
-
-    content = response_content.strip()
-
-    try:
-        json_match = re.search(r'\{[^{}]*"tool_name"[^{}]*\}', content, re.DOTALL)
-        if json_match:
-            data = json.loads(json_match.group())
-            return {
-                "tool_name": data.get("tool_name", ""),
-                "args": data.get("args", {})
-            }
-    except (json.JSONDecodeError, AttributeError):
-        pass
-
-    simple_pattern = re.compile(r'^(\w+)\((.*)\)$', re.MULTILINE)
-    match = simple_pattern.search(content)
-    if match:
-        tool_name = match.group(1).strip()
-        args_str = match.group(2).strip()
-
-        args = {}
-        if args_str:
-            for arg_pair in args_str.split(','):
-                if '=' in arg_pair:
-                    key, value = arg_pair.split('=', 1)
-                    key = key.strip()
-                    value = value.strip().strip('"\'')
-                    if value.isdigit():
-                        value = int(value)
-                    elif value.lower() == 'true':
-                        value = True
-                    elif value.lower() == 'false':
-                        value = False
-                    args[key] = value
-
-        return {"tool_name": tool_name, "args": args}
-
-    return None
+    results = _parse_tool_calls_from_string(response_content)
+    return results[0] if results else None
 
 
 # ============================================================
@@ -183,6 +285,7 @@ def start_node(state: SessionState) -> SessionState:
         "last_tool_result": None,
         "environment": None,
         "pending_tool": None,
+        "pending_tools": None,
         "last_error": None,
         "summary": None,
     }
@@ -256,12 +359,14 @@ def llm_decision_node(
     """
     LLM 决策节点
 
+    支持批量工具调用。每次批量调用中，有返回值的工具只能有一个。
+
     Args:
         state: 当前状态
         llm_invoker: LLM 调用函数，签名：(system_prompt, user_prompt) -> str
 
     Returns:
-        SessionState: 更新后的状态，包含 pending_tool
+        SessionState: 更新后的状态，包含 pending_tool 或 pending_tools
     """
     username = state.get("username", "未知")
     step_count = state.get("step_count", 0)
@@ -279,44 +384,78 @@ def llm_decision_node(
 
     try:
         response = llm_invoker(system_prompt, user_prompt)
-        tool_call = _parse_langchain_tool_call(response)
+        tool_calls = _parse_tool_calls_from_response(response)
 
-        if tool_call is None:
+        if not tool_calls:
             if state["step_count"] >= state["max_steps"]:
                 print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM未返回工具调用 | 达到最大步数，将执行登出")
                 return {
                     **state,
                     "pending_tool": {"tool_name": "logout", "args": {"reason": "达到最大步数限制"}},
+                    "pending_tools": None,
                 }
             else:
                 print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM未返回工具调用")
                 return {
                     **state,
                     "pending_tool": None,
+                    "pending_tools": None,
                 }
 
-        tool_name = tool_call.get("tool_name", "").lower()
-        tool_args = tool_call.get("args", {})
-        print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM决策: tool={tool_name}")
+        normalized_calls = _normalize_tool_calls_for_batch(tool_calls)
+        call_names = [tc.get("name", "") for tc in normalized_calls]
+        print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM决策: {call_names}")
 
-        if tool_name == "logout":
-            reason = tool_call.get("args", {}).get("reason", "主动结束会话")
-            print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM选择登出: reason={reason}")
+        if len(normalized_calls) == 1:
+            tool_name = normalized_calls[0].get("name", "").lower()
+            tool_args = normalized_calls[0].get("args", {})
+
+            if tool_name == "logout":
+                reason = tool_args.get("reason", "主动结束会话")
+                print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM选择登出: reason={reason}")
+                return {
+                    **state,
+                    "pending_tool": {"tool_name": "logout", "args": {"reason": reason}},
+                    "pending_tools": None,
+                }
+
             return {
                 **state,
-                "pending_tool": {"tool_name": "logout", "args": {"reason": reason}},
+                "pending_tool": {"tool_name": tool_name, "args": tool_args},
+                "pending_tools": None,
             }
+        else:
+            logout_call = None
+            non_logout_calls = []
+            for tc in normalized_calls:
+                name = tc.get("name", "").lower()
+                if name == "logout":
+                    logout_call = tc
+                else:
+                    non_logout_calls.append(tc)
 
-        return {
-            **state,
-            "pending_tool": tool_call,
-        }
+            if logout_call:
+                reason = logout_call.get("args", {}).get("reason", "主动结束会话")
+                print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM批量决策中包含登出: reason={reason}")
+                return {
+                    **state,
+                    "pending_tool": {"tool_name": "logout", "args": {"reason": reason}},
+                    "pending_tools": None,
+                }
+
+            first_call = non_logout_calls[0]
+            return {
+                **state,
+                "pending_tool": {"tool_name": first_call.get("name", "").lower(), "args": first_call.get("args", {})},
+                "pending_tools": [{"name": tc.get("name", "").lower(), "args": tc.get("args", {})} for tc in non_logout_calls[1:]],
+            }
 
     except Exception as e:
         print(f"[节点] llm_decision_node | 用户={username} | 步骤={step_count} | LLM决策异常: {str(e)}")
         return {
             **state,
             "pending_tool": None,
+            "pending_tools": None,
             "last_error": f"LLM 决策失败: {str(e)}",
         }
 
@@ -325,7 +464,11 @@ def tool_execution_node(state: SessionState) -> SessionState:
     """
     工具执行节点
 
-    执行 LLM 选择的工具。
+    支持批量工具调用执行。每次批量调用中，有返回值的工具只能有一个。
+    批量执行流程：
+    1. 执行 pending_tool
+    2. 如果 pending_tools 还有待执行工具，保留在 state 中，下次仍进入此节点
+    3. 直到所有工具执行完毕，才更新 step_count 和 last_tool_result
 
     工作流程：
     1. 检查是否有待执行的工具（pending_tool）
@@ -334,11 +477,12 @@ def tool_execution_node(state: SessionState) -> SessionState:
     4. 将执行结果存储到 last_tool_result（给下一次决策看）
     5. 将决策原因记录到 action_history（用于登出后总结）
     6. 更新当前位置
-    7. 更新步数计数
+    7. 如果有待执行的批量工具，保留 pending_tools；否则清空并更新步数
 
     关键设计：
     - last_tool_result: 工具的完整返回值，下一次决策时作为上下文
     - action_history: 只记录决策原因（reason），登出后用于总结
+    - pending_tools: 待执行的批量工具列表，执行完毕后清空
 
     Args:
         state: 当前状态，包含 pending_tool
@@ -351,6 +495,16 @@ def tool_execution_node(state: SessionState) -> SessionState:
     pending = state.get("pending_tool")
 
     if pending is None:
+        pending_tools = state.get("pending_tools")
+        if pending_tools:
+            next_tool = pending_tools[0]
+            remaining_tools = pending_tools[1:]
+            print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 执行批量中的下一个工具: {next_tool.get('name', '')}")
+            return {
+                **state,
+                "pending_tool": {"tool_name": next_tool.get("name", "").lower(), "args": next_tool.get("args", {})},
+                "pending_tools": remaining_tools if remaining_tools else None,
+            }
         print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 无待执行工具，步数+1")
         return {
             **state,
@@ -368,6 +522,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
             **state,
             "exit_reason": ExitReason.USER_CHOICE,
             "pending_tool": None,
+            "pending_tools": None,
             "last_error": None,
         }
 
@@ -394,12 +549,8 @@ def tool_execution_node(state: SessionState) -> SessionState:
         print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 执行异常: {str(e)}")
         traceback.print_exc()
 
-    # 检查返回值是否有意义
-    # 如果工具没有有意义的返回值（如 toggle_like），保留上一次的结果
-    if result is not None and result != "" and result != {}:
-        new_last_tool_result = result
-    else:
-        new_last_tool_result = state.get("last_tool_result")
+    pending_tools = state.get("pending_tools")
+    has_pending = pending_tools and len(pending_tools) > 0
 
     new_record: ActionRecord = {
         "step": state["step_count"] + 1,
@@ -412,15 +563,27 @@ def tool_execution_node(state: SessionState) -> SessionState:
     new_location = _get_location_after_tool(tool_name, tool_args)
     current_location = new_location if new_location is not None else state.get("current_location", "主页（信息流）")
 
-    print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 操作已记录 | 当前位置={current_location}")
+    if has_pending:
+        print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 批量工具还有 {len(pending_tools)} 个待执行")
+        return {
+            **state,
+            "action_history": state["action_history"] + [new_record],
+            "current_location": current_location,
+            "last_tool_result": result if result else state.get("last_tool_result"),
+            "pending_tool": None,
+            "last_error": None,
+        }
+
+    print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 批量执行完毕 | 操作已记录 | 当前位置={current_location}")
 
     return {
         **state,
         "step_count": state["step_count"] + 1,
         "action_history": state["action_history"] + [new_record],
         "current_location": current_location,
-        "last_tool_result": new_last_tool_result,
+        "last_tool_result": result if result else state.get("last_tool_result"),
         "pending_tool": None,
+        "pending_tools": None,
         "last_error": None,
     }
 
@@ -444,6 +607,11 @@ def should_continue_edge(state: SessionState) -> str:
         reason_str = exit_reason.value if isinstance(exit_reason, ExitReason) else str(exit_reason)
         print(f"[边] should_continue_edge | 用户={username} | 步骤={step_count}/{max_steps} | 退出原因={reason_str} | 路由=summarize")
         return "summarize"
+
+    pending_tools = state.get("pending_tools")
+    if pending_tools and len(pending_tools) > 0:
+        print(f"[边] should_continue_edge | 用户={username} | 步骤={step_count}/{max_steps} | 批量工具还有 {len(pending_tools)} 个待执行 | 路由=tool_execution")
+        return "tool_execution"
 
     if step_count >= max_steps:
         print(f"[边] should_continue_edge | 用户={username} | 步骤={step_count}/{max_steps} | 达到最大步数 | 路由=summarize")
