@@ -245,7 +245,6 @@ class SessionExecutor:
             "max_steps": self.config.max_steps,
             "exit_reason": None,
             "action_history": [],
-            "environment": None,
             "pending_tool": None,
             "last_error": None,
             "summary": None,

@@ -1,5 +1,5 @@
 # 节点定义模块
-# 定义 LangGraph 图结构中的各个节点，包括环境感知、LLM 决策、工具执行、总结等
+# 定义 LangGraph 图结构中的各个节点，包括LLM决策、工具执行、总结等
 from typing import Dict, Any, List, Optional, Callable, Union
 from datetime import datetime
 import traceback
@@ -7,9 +7,6 @@ import traceback
 from langchain_core.messages import AIMessage
 
 from agent_scheduler.langgraph.tools import get_social_tools, ToolExecutionError
-from agent_scheduler.langgraph.tools import get_global_feed as tools_get_global_feed
-from agent_scheduler.langgraph.tools import _get_current_user
-from agent_scheduler.context import get_current_user_id
 from agent_scheduler.langgraph.state import SessionState, ExitReason, ActionRecord
 from agent_scheduler.langgraph.prompts import (
     build_system_prompt,
@@ -28,7 +25,6 @@ TOOL_TO_LOCATION = {
     "expand_comments": "评论页",
     "get_user_profile": "用户主页",
     "get_post_detail": "帖子详情页",
-    "expand_comment_replies": "评论页",
     "scroll_global_feed": "主页（信息流）",
     "scroll_user_posts": "用户主页",
     "toggle_post_like": None,
@@ -47,7 +43,6 @@ TOOLS_WITH_RETURN_VALUE = {
     "expand_post",
     "expand_comments",
     "get_post_detail",
-    "expand_comment_replies",
     "scroll_global_feed",
     "scroll_user_posts",
 }
@@ -283,73 +278,11 @@ def start_node(state: SessionState) -> SessionState:
         "action_history": [],
         "current_location": "主页（信息流）",
         "last_tool_result": None,
-        "environment": None,
         "pending_tool": None,
         "pending_tools": None,
         "last_error": None,
         "summary": None,
     }
-
-
-def environment_awareness_node(state: SessionState) -> SessionState:
-    """
-    环境感知节点
-
-    仅在会话开始时执行一次，获取主页信息。
-
-    Args:
-        state: 当前状态
-
-    Returns:
-        SessionState: 更新后的状态
-    """
-    username = state.get("username", "未知")
-    print(f"[节点] environment_awareness_node | 用户={username} | 开始获取环境信息")
-
-    try:
-        profile_result = _get_current_user()
-        profile_data = profile_result if isinstance(profile_result, dict) else {}
-
-        feed_result = tools_get_global_feed.invoke({"reason": "初始化环境感知"})
-        feed_data = feed_result if isinstance(feed_result, dict) else {}
-
-        environment = {
-            "timestamp": datetime.now().isoformat(),
-            "profile": {
-                "user_id": profile_data.get("id"),
-                "username": profile_data.get("username"),
-                "bio": profile_data.get("bio"),
-                "followers_count": profile_data.get("followers_count", 0),
-                "following_count": profile_data.get("following_count", 0),
-            },
-            "feed": feed_data.get("data", [])[:3],
-            "pagination": feed_data.get("pagination", {}),
-        }
-
-        followers = environment.get("profile", {}).get("followers_count", 0)
-        following = environment.get("profile", {}).get("following_count", 0)
-        print(f"[节点] environment_awareness_node | 用户={username} | 环境获取成功: 粉丝={followers}, 关注={following}")
-
-        return {
-            **state,
-            "environment": environment,
-            "current_location": "主页（信息流）",
-            "last_tool_result": feed_data,
-            "last_error": None,
-        }
-
-    except ToolExecutionError as e:
-        print(f"[节点] environment_awareness_node | 用户={username} | 工具执行错误: {str(e)}")
-        return {
-            **state,
-            "last_error": f"环境感知失败: {str(e)}",
-        }
-    except Exception as e:
-        print(f"[节点] environment_awareness_node | 用户={username} | 异常: {str(e)}")
-        return {
-            **state,
-            "last_error": f"环境感知异常: {str(e)}",
-        }
 
 
 def llm_decision_node(
@@ -527,6 +460,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
         }
 
     reason = tool_args.pop("reason", "未提供原因")
+    summary = tool_args.pop("summary", "")
     result = None
 
     try:
@@ -534,31 +468,39 @@ def tool_execution_node(state: SessionState) -> SessionState:
         tool_map = {t.name.lower(): t for t in tools}
 
         if tool_name not in tool_map:
-            result = f"未知工具: {tool_name}"
+            result = {"action": f"执行了未知工具: {tool_name}", "data": {}}
             print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 工具不存在: {tool_name}")
         else:
             tool = tool_map[tool_name]
-            result = tool.invoke(tool_args)
+            raw_result = tool.invoke(tool_args)
+            if isinstance(raw_result, dict) and "action" in raw_result:
+                result = raw_result
+            else:
+                result = {"action": f"执行了 {tool_name}", "data": raw_result if raw_result else {}}
             print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 工具执行成功: {tool_name}")
 
     except ToolExecutionError as e:
-        result = f"工具执行错误: {str(e)}"
+        result = {"action": f"工具执行错误: {str(e)}", "data": {}}
         print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 工具执行错误: {str(e)}")
     except Exception as e:
-        result = f"执行异常: {str(e)}"
+        result = {"action": f"执行异常: {str(e)}", "data": {}}
         print(f"[节点] tool_execution_node | 用户={username} | 步骤={step_count} | 执行异常: {str(e)}")
         traceback.print_exc()
 
     pending_tools = state.get("pending_tools")
     has_pending = pending_tools and len(pending_tools) > 0
 
+    action = result.get("action", "") if isinstance(result, dict) else str(result)
+
     new_record: ActionRecord = {
         "step": state["step_count"] + 1,
         "timestamp": datetime.now().isoformat(),
-        "tool_name": tool_name,
-        "tool_args": tool_args,
+        "summary": summary,
+        "action": action,
         "reason": reason,
     }
+
+    last_tool_result = result.get("data", {}) if isinstance(result, dict) else result
 
     new_location = _get_location_after_tool(tool_name, tool_args)
     current_location = new_location if new_location is not None else state.get("current_location", "主页（信息流）")
@@ -569,7 +511,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
             **state,
             "action_history": state["action_history"] + [new_record],
             "current_location": current_location,
-            "last_tool_result": result if result else state.get("last_tool_result"),
+            "last_tool_result": last_tool_result if last_tool_result else state.get("last_tool_result"),
             "pending_tool": None,
             "last_error": None,
         }
@@ -581,7 +523,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
         "step_count": state["step_count"] + 1,
         "action_history": state["action_history"] + [new_record],
         "current_location": current_location,
-        "last_tool_result": result if result else state.get("last_tool_result"),
+        "last_tool_result": last_tool_result if last_tool_result else state.get("last_tool_result"),
         "pending_tool": None,
         "pending_tools": None,
         "last_error": None,

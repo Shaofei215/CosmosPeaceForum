@@ -1238,5 +1238,4 @@ def main():
         print("调度器已全部停止")
 
 
-if __name__ == "__main__":
-    main()
+

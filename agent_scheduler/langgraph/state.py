@@ -20,12 +20,13 @@ class ActionRecord(TypedDict):
     """
     单条操作记录
 
-    工作记忆的核心组成部分。记录 LLM 执行的每个操作，但不记录返回值。
+    工作记忆的核心组成部分。记录 LLM 执行的每个操作。
 
     设计要点：
     - step: 步骤编号，让 LLM 知道执行到第几步
-    - tool_name + tool_args: 让 LLM 知道自己调用了什么工具
-    - reason: 让 LLM 知道自己的决策动机
+    - summary: 对当前视野的第一人称总结，让 LLM 知道自己"看到了什么"
+    - action: 自然语言格式的动作描述，如 "点赞了 @用户 的帖子"
+    - reason: LLM 调用该工具的具体原因
 
     注意：工具返回值不存储在这里，而是在 SessionState.last_tool_result 中，
     在下一次决策时作为上下文显示给 LLM。
@@ -33,14 +34,14 @@ class ActionRecord(TypedDict):
     Attributes:
         step: 步骤编号，从 1 开始递增
         timestamp: 操作执行时的 ISO 格式时间戳
-        tool_name: 被调用的工具名称
-        tool_args: 工具调用时的参数
+        summary: 对当前视野的第一人称总结
+        action: 自然语言格式的动作描述
         reason: LLM 调用该工具的具体原因
     """
     step: int                              # 步骤编号
     timestamp: str                          # ISO 格式时间戳
-    tool_name: str                          # 工具名称
-    tool_args: Dict[str, Any]               # 工具参数
+    summary: str                            # 对当前视野的第一人称总结
+    action: str                             # 自然语言格式的动作描述
     reason: str                             # 调用原因
 
 
@@ -79,8 +80,6 @@ class SessionState(TypedDict):
 
         last_tool_result: 上一次工具调用的完整返回值，给下一次决策看
 
-        environment: 最近一次环境感知的结果，包含个人资料、信息流等
-
         pending_tool: 待执行的工具调用，由 LLM 决策节点设置
         last_error: 最近一次错误信息，用于错误处理和恢复
 
@@ -110,10 +109,6 @@ class SessionState(TypedDict):
     # === 上一次工具返回值（给下一次决策看）===
     # 工具调用的完整返回值，在下一次决策时作为上下文显示
     last_tool_result: Optional[Union[Dict[str, Any], List, str, int, bool]]
-
-    # === 环境感知数据 ===
-    # 每次环境感知节点执行时更新，包含当前可见的上下文信息
-    environment: Optional[Dict[str, Any]]
 
     # === LLM 决策上下文 ===
     pending_tool: Optional[Dict[str, Any]]    # 待执行的单个工具调用（兼容旧逻辑）

@@ -2,7 +2,7 @@
 # 为 AI Agent 提供社交平台操作的工具函数，符合 LangChain 工具标准格式
 import requests
 import os
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TypedDict
 from langchain_core.tools import tool
 
 from agent_scheduler.context import get_current_token, get_current_user_id
@@ -43,6 +43,37 @@ class UnauthorizedError(ToolExecutionError):
     pass
 
 
+# ==================== 统一工具返回值结构 ====================
+
+class ToolResult(TypedDict):
+    """
+    统一工具返回值结构
+
+    所有 @tool 装饰的函数都应返回此结构。
+
+    设计要点：
+    - action: 自然语言格式的动作描述，描述"你做了什么"
+    - data: 工具返回的原始数据，供 LLM 下次决策使用
+
+    Example:
+        return ToolResult(
+            action="点赞了 @景元 的帖子：今天入手了新角色...",
+            data={"post": {...}, "comments": [...]}
+        )
+    """
+    action: str                              # 自然语言格式的动作描述
+    data: Dict[str, Any]                     # 工具返回的原始数据
+
+
+def _truncate(text: str, max_len: int = 100) -> str:
+    """截断文本到指定长度"""
+    if not text:
+        return ""
+    if len(text) <= max_len:
+        return text
+    return text[:max_len] + "..."
+
+
 # ==================== 基础请求函数 ====================
 
 def _make_request(
@@ -51,7 +82,8 @@ def _make_request(
     token: Optional[str] = None,
     json_data: Optional[Dict[str, Any]] = None,
     params: Optional[Dict[str, Any]] = None,
-    reason: str = ""
+    reason: str = "",
+    summary: str = ""
 ) -> Dict[str, Any]:
     """
     发送 HTTP 请求到社交平台 API
@@ -62,7 +94,8 @@ def _make_request(
         token: 访问令牌（可选），如未提供则从线程上下文获取
         json_data: JSON 请求体
         params: URL 查询参数
-        reason: 调用原因（用于日志记录）
+        reason: 调用原因
+        summary: 对当前视野的第一人称总结
 
     Returns:
         Dict[str, Any]: API 响应数据
@@ -277,13 +310,14 @@ def _get_current_user() -> Dict[str, Any]:
     )
 
 
-def _get_user(user_id: int, reason: str = "") -> Dict[str, Any]:
+def _get_user(user_id: int, reason: str = "", summary: str = "") -> Dict[str, Any]:
     """
     获取用户基本信息（内部函数）
 
     Args:
         user_id: 目标用户的 ID
         reason: 调用原因
+        summary: 对当前视野的第一人称总结
 
     Returns:
         Dict[str, Any]: 用户信息
@@ -291,7 +325,8 @@ def _get_user(user_id: int, reason: str = "") -> Dict[str, Any]:
     return _make_request(
         method="GET",
         endpoint=f"/users/{user_id}",
-        reason=reason
+        reason=reason,
+        summary=summary
     )
 
 
@@ -412,7 +447,10 @@ def _get_global_feed(page: int = 1, page_size: int = 5) -> Dict[str, Any]:
 # ==================== Agent 可调用的工具函数定义 ====================
 
 @tool
-def get_profile(reason: str = "用户想要查看自己的个人资料") -> Dict[str, Any]:
+def get_profile(
+    reason: str = "用户想要查看自己的个人资料",
+    summary: str = ""
+) -> ToolResult:
     """
     获取当前登录用户的个人资料信息
 
@@ -424,16 +462,13 @@ def get_profile(reason: str = "用户想要查看自己的个人资料") -> Dict
     Args:
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要查看自己的信息"、"查看个人资料"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我打开了个人主页，看到我的粉丝数是xxx，关注数是xxx"等。
 
     Returns:
-        Dict[str, Any]: 包含以下字段的字典:
-            - id: 用户 ID
-            - username: 用户名
-            - bio: 个人签名/简介
-            - following_count: 关注数量
-            - followers_count: 粉丝数量
-            - follow_status: 对自己的关注状态（固定为 "self"）
-            - recent_posts: 自己发布的最新 3 条帖子列表
+        ToolResult: 包含以下字段:
+            - action: "查看了自己的个人资料（@{username}）"
+            - data: 用户信息字典，包含 id, username, bio, following_count, followers_count, follow_status, recent_posts
 
     Raises:
         UnauthorizedError: 未登录或 Token 已过期
@@ -444,7 +479,8 @@ def get_profile(reason: str = "用户想要查看自己的个人资料") -> Dict
     data = _make_request(
         method="GET",
         endpoint="/auth/me",
-        reason=reason
+        reason=reason,
+        summary=summary
     )
     data.pop("avatar_url", None)
     data.pop("created_at", None)
@@ -457,11 +493,18 @@ def get_profile(reason: str = "用户想要查看自己的个人资料") -> Dict
         current_user_id
     )
 
-    return data
+    username = data.get("username", "")
+    action = f"查看了自己的个人资料（@{username}）" if username else "查看了自己的个人资料"
+
+    return ToolResult(action=action, data=data)
 
 
 @tool
-def toggle_post_like(post_id: int, reason: str = "用户想要点赞该帖子") -> None:
+def toggle_post_like(
+    post_id: int,
+    reason: str = "用户想要点赞该帖子",
+    summary: str = ""
+) -> ToolResult:
     """
     切换指定帖子的点赞状态（点赞或取消点赞）
 
@@ -474,21 +517,50 @@ def toggle_post_like(post_id: int, reason: str = "用户想要点赞该帖子") 
         post_id: 目标帖子的 ID，必须是有效的正整数
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户对这篇帖子感兴趣，想要点赞支持"、"用户想要取消点赞"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我看到了一个有趣的帖子，内容是xxx，作者是xxx"等。
+
+    Returns:
+        ToolResult: 包含以下字段:
+            - action: "点赞了 @{author} 的帖子：{content}"
+            - data: 包含 post 信息的字典
 
     Raises:
         UnauthorizedError: 未登录或 Token 已过期
         NotFoundError: 帖子不存在
         ToolExecutionError: 服务器内部错误
     """
+    current_user_id = get_current_user_id()
     _make_request(
         method="POST",
         endpoint=f"/posts/{post_id}/like",
-        reason=reason
+        reason=reason,
+        summary=summary
     )
+
+    post_data = _get_post(post_id)
+    standardized_post = _standardize_post(post_data, current_user_id)
+
+    post_author = standardized_post.get("author_username", "")
+    post_content = _truncate(standardized_post.get("content", ""), 50)
+
+    if post_author and post_content:
+        action = f"点赞了 @{post_author} 的帖子：{post_content}"
+    elif post_author:
+        action = f"点赞了 @{post_author} 的帖子"
+    else:
+        action = f"点赞了帖子 {post_id}"
+
+    return ToolResult(action=action, data={"post": standardized_post})
 
 
 @tool
-def toggle_comment_like(post_id: int, comment_id: int, reason: str = "用户想要点赞该评论") -> None:
+def toggle_comment_like(
+    post_id: int,
+    comment_id: int,
+    reason: str = "用户想要点赞该评论",
+    summary: str = ""
+) -> ToolResult:
     """
     切换指定评论的点赞状态（点赞或取消点赞）
 
@@ -502,17 +574,48 @@ def toggle_comment_like(post_id: int, comment_id: int, reason: str = "用户想�
         comment_id: 目标评论的 ID，必须是有效的正整数
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户觉得这条评论说得很有道理，想要点赞"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我看到了这条评论，内容是xxx，作者是xxx"等。
+
+    Returns:
+        ToolResult: 包含以下字段:
+            - action: "在 @{post_author} 的帖子（{post_content}）下点赞了 @{comment_author} 的评论：{comment_content}"
+            - data: 包含 post 和 comment 信息的字典
 
     Raises:
         UnauthorizedError: 未登录或 Token 已过期
         NotFoundError: 评论不存在
         ToolExecutionError: 服务器内部错误
     """
+    current_user_id = get_current_user_id()
+
     _make_request(
         method="POST",
         endpoint=f"/posts/{post_id}/comments/{comment_id}/like",
-        reason=reason
+        reason=reason,
+        summary=summary
     )
+
+    post_data = _get_post(post_id)
+    comment_data = _get_comment(post_id, comment_id)
+    standardized_post = _standardize_post(post_data, current_user_id)
+    standardized_comment = _standardize_comment(comment_data)
+
+    post_author = standardized_post.get("author_username", "")
+    post_content = _truncate(standardized_post.get("content", ""), 40)
+    comment_author = standardized_comment.get("author_username", "") or standardized_comment.get("owner_username", "")
+    comment_content = _truncate(standardized_comment.get("content", ""), 30)
+
+    if post_author and post_content and comment_author and comment_content:
+        action = f"在 @{post_author} 的帖子（{post_content}）下点赞了 @{comment_author} 的评论：{comment_content}"
+    elif comment_author and comment_content:
+        action = f"点赞了 @{comment_author} 的评论：{comment_content}"
+    elif comment_author:
+        action = f"点赞了 @{comment_author} 的评论"
+    else:
+        action = f"点赞了评论 {comment_id}"
+
+    return ToolResult(action=action, data={"post": standardized_post, "comment": standardized_comment})
 
 
 @tool
@@ -520,8 +623,9 @@ def create_comment(
     post_id: int,
     content: str,
     reason: str = "用户想要发表评论",
+    summary: str = "",
     parent_id: Optional[int] = None
-) -> None:
+) -> ToolResult:
     """
     在指定帖子下创建新评论或回复
 
@@ -535,7 +639,14 @@ def create_comment(
         content: 评论的文本内容，至少需要 1 个字符
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要表达对帖子的认同"、"用户想要回复某条评论"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我在帖子下方看到了很多评论，想自己也说两句"等。
         parent_id: 父评论 ID（可选），指定时创建回复，为空时创建一级评论
+
+    Returns:
+        ToolResult: 包含以下字段:
+            - action: "在 @{post_author} 的帖子（{post_content}）下评论了：{content}" 或 "在 @{post_author} 的帖子（{post_content}）下回复了 @{parent_author} 的评论（{parent_content}）：{content}"
+            - data: 包含 post, parent_comment, new_comment 的字典
 
     Raises:
         UnauthorizedError: 未登录或 Token 已过期
@@ -543,6 +654,8 @@ def create_comment(
         ValidationError: 参数验证失败
         ToolExecutionError: 服务器内部错误
     """
+    current_user_id = get_current_user_id()
+
     json_data = {"content": content}
     if parent_id is not None:
         json_data["parent_id"] = parent_id
@@ -551,12 +664,56 @@ def create_comment(
         method="POST",
         endpoint=f"/posts/{post_id}/comments",
         json_data=json_data,
-        reason=reason
+        reason=reason,
+        summary=summary
+    )
+
+    post_data = _get_post(post_id)
+    standardized_post = _standardize_post(post_data, current_user_id)
+
+    parent_comment_data = None
+    if parent_id is not None:
+        parent_comment_data = _get_comment(post_id, parent_id)
+        standardized_parent = _standardize_comment(parent_comment_data)
+    else:
+        standardized_parent = None
+
+    post_author = standardized_post.get("author_username", "")
+    post_content = _truncate(standardized_post.get("content", ""), 40)
+    parent_author = ""
+    parent_content = ""
+    if standardized_parent:
+        parent_author = standardized_parent.get("author_username", "") or standardized_parent.get("owner_username", "")
+        parent_content = _truncate(standardized_parent.get("content", ""), 30)
+
+    if post_author and post_content:
+        base = f"@{post_author} 的帖子（{post_content}）"
+    else:
+        base = f"帖子 {post_id}"
+
+    if parent_author and parent_content:
+        action = f"在 {base} 下回复了 @{parent_author} 的评论（{parent_content}）：{_truncate(content)}"
+    elif parent_author:
+        action = f"在 {base} 下回复了 @{parent_author} 的评论：{_truncate(content)}"
+    else:
+        action = f"在 {base} 下评论了：{_truncate(content)}"
+
+    return ToolResult(
+        action=action,
+        data={
+            "post": standardized_post,
+            "parent_comment": standardized_parent,
+            "new_comment": {"content": content},
+        }
     )
 
 
 @tool
-def toggle_follow(user_id: int, reason: str = "用户想要关注该用户") -> None:
+def toggle_follow(
+    user_id: int,
+    reason: str = "用户想要关注该用户",
+    summary: str = ""
+) -> ToolResult:
     """
     切换对指定用户的关注状态（关注或取消关注）
 
@@ -570,6 +727,13 @@ def toggle_follow(user_id: int, reason: str = "用户想要关注该用户") -> 
         user_id: 目标用户的 ID，当前用户将关注或取消关注此用户
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户欣赏这位用户的内容，想要关注"、"用户想要取消关注"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我在浏览这位作者的主页，内容很有趣"等。
+
+    Returns:
+        ToolResult: 包含以下字段:
+            - action: "关注了 @{username}"
+            - data: 包含用户信息的字典
 
     Raises:
         UnauthorizedError: 未登录或 Token 已过期
@@ -580,12 +744,27 @@ def toggle_follow(user_id: int, reason: str = "用户想要关注该用户") -> 
     _make_request(
         method="POST",
         endpoint=f"/users/{user_id}/follow",
-        reason=reason
+        reason=reason,
+        summary=summary
     )
+
+    user_data = _get_user(user_id)
+    username = user_data.get("username", "")
+
+    if username:
+        action = f"关注了 @{username}"
+    else:
+        action = f"关注了用户 {user_id}"
+
+    return ToolResult(action=action, data=user_data)
 
 
 @tool
-def create_post(content: str, reason: str = "用户想要分享内容") -> None:
+def create_post(
+    content: str,
+    reason: str = "用户想要分享内容",
+    summary: str = ""
+) -> ToolResult:
     """
     发布新帖子到社交平台
 
@@ -597,6 +776,13 @@ def create_post(content: str, reason: str = "用户想要分享内容") -> None:
         content: 帖子的文本内容，至少需要 1 个字符
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要分享日常"、"用户想要发布一条重要通知"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我看到首页有一些有趣的讨论，想自己也发一个帖子"等。
+
+    Returns:
+        ToolResult: 包含以下字段:
+            - action: "发布了新帖子：{content}"
+            - data: 包含新帖子信息的字典
 
     Raises:
         UnauthorizedError: 未登录或 Token 已过期
@@ -607,12 +793,20 @@ def create_post(content: str, reason: str = "用户想要分享内容") -> None:
         method="POST",
         endpoint="/posts/",
         json_data={"content": content},
-        reason=reason
+        reason=reason,
+        summary=summary
     )
+
+    action = f"发布了新帖子：{_truncate(content)}"
+
+    return ToolResult(action=action, data={"content": content})
 
 
 @tool
-def logout(reason: str = "用户想要结束本次会话") -> None:
+def logout(
+    reason: str = "用户想要结束本次会话",
+    summary: str = ""
+) -> ToolResult:
     """
     退出当前登录会话
 
@@ -624,19 +818,27 @@ def logout(reason: str = "用户想要结束本次会话") -> None:
     Args:
         reason: 对视野的简单总结，调用该工具的具体原因，用于记录操作动机和上下文。
                 例如："用户觉得今天差不多了，想休息一下"、"用户完成了想做的事情"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："今天在平台上逛了很久，看了很多有趣的内容"等。
 
     Returns:
-        None: 此工具不返回任何内容
+        ToolResult: 包含以下字段:
+            - action: "结束了本次会话"
+            - data: 空字典
 
     Raises:
         UnauthorizedError: 未登录或 Token 已过期
         ToolExecutionError: 服务器内部错误
     """
-    pass
+    return ToolResult(action="结束了本次会话", data={})
 
 
 @tool
-def get_user_profile(user_id: int, reason: str = "") -> Dict[str, Any]:
+def get_user_profile(
+    user_id: int,
+    reason: str = "",
+    summary: str = ""
+) -> ToolResult:
     """
     查看指定用户的个人主页信息
 
@@ -651,23 +853,20 @@ def get_user_profile(user_id: int, reason: str = "") -> Dict[str, Any]:
         user_id: 目标用户的 ID
         reason: 对视野的简单总结，调用该工具的具体原因，用于记录操作动机和上下文。75字以内
                 例如："用户想要查看这位作者的详细资料"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我正在浏览@xxx的主页，看到他的签名是xxx"等。
 
     Returns:
-        Dict[str, Any]: 包含以下字段的字典:
-            - id: 用户 ID
-            - username: 用户名
-            - bio: 个人签名/简介
-            - following_count: 关注数量
-            - followers_count: 粉丝数量
-            - follow_status: 当前用户对目标用户的关注状态
-            - recent_posts: 该用户发布的最新 3 条帖子列表
+        ToolResult: 包含以下字段:
+            - action: "查看了 @{username} 的个人主页"
+            - data: 用户信息字典
 
     Raises:
         NotFoundError: 用户不存在
         ToolExecutionError: 服务器内部错误
     """
     current_user_id = get_current_user_id()
-    user_data = _get_user(user_id, reason)
+    user_data = _get_user(user_id, reason, summary)
     user_data["follow_status"] = _get_follow_status_text(user_id, current_user_id)
 
     posts_data = _get_user_posts(user_id, page=1, page_size=3)
@@ -676,11 +875,17 @@ def get_user_profile(user_id: int, reason: str = "") -> Dict[str, Any]:
         current_user_id
     )
 
-    return user_data
+    username = user_data.get("username", "")
+    action = f"查看了 @{username} 的个人主页" if username else f"查看了用户 {user_id} 的个人主页"
+
+    return ToolResult(action=action, data=user_data)
 
 
 @tool
-def get_global_feed(reason: str = "") -> Dict[str, Any]:
+def get_global_feed(
+    reason: str = "",
+    summary: str = ""
+) -> ToolResult:
     """
     社交平台主页信息流获取，用于回到主页，不可连续调用，如要查看更多内容请调用scroll_global_feed
 
@@ -691,11 +896,13 @@ def get_global_feed(reason: str = "") -> Dict[str, Any]:
     Args:
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要浏览主页信息流"、"查看最新动态"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我回到了主页，看到了5条最新帖子"等。
 
     Returns:
-        Dict[str, Any]: 包含以下字段的字典:
-            - data: 帖子列表（标准化格式）
-            - pagination: 分页信息
+        ToolResult: 包含以下字段:
+            - action: "浏览了主页信息流"
+            - data: 包含 data 和 pagination 的字典
 
     Raises:
         ToolExecutionError: 服务器内部错误
@@ -707,11 +914,15 @@ def get_global_feed(reason: str = "") -> Dict[str, Any]:
         current_user_id
     )
 
-    return feed_data
+    return ToolResult(action="浏览了主页信息流", data=feed_data)
 
 
 @tool
-def expand_post(post_id: int, reason: str = "") -> Dict[str, Any]:
+def expand_post(
+    post_id: int,
+    reason: str = "",
+    summary: str = ""
+) -> ToolResult:
     """
     展开查看帖子的完整内容及前5条顶级评论
 
@@ -724,12 +935,13 @@ def expand_post(post_id: int, reason: str = "") -> Dict[str, Any]:
         post_id: 目标帖子的 ID
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想阅读帖子的完整内容并查看热门评论"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我在主页看到了这个帖子的预览，想点进来看看完整内容"等。
 
     Returns:
-        Dict[str, Any]: 包含以下字段的字典:
-            - post: 帖子信息（标准化格式）
-            - comments: 前5条顶级评论列表（标准化格式）
-            - total: 顶级评论总数
+        ToolResult: 包含以下字段:
+            - action: "展开了 @{author} 的帖子：{content}"
+            - data: 包含 post, comments, total 的字典
 
     Raises:
         NotFoundError: 帖子不存在
@@ -737,21 +949,36 @@ def expand_post(post_id: int, reason: str = "") -> Dict[str, Any]:
     """
     current_user_id = get_current_user_id()
     post_data = _get_post(post_id)
+    standardized_post = _standardize_post(post_data, current_user_id)
     comments_data = _get_post_comments(post_id, skip=0, limit=5)
 
-    return {
-        "post": _standardize_post(post_data, current_user_id),
-        "comments": _standardize_comments_list(comments_data.get("items", [])),
-        "total": comments_data.get("total", 0)
-    }
+    post_author = standardized_post.get("author_username", "")
+    post_content = _truncate(standardized_post.get("content", ""), 50)
+
+    if post_author and post_content:
+        action = f"展开了 @{post_author} 的帖子：{post_content}"
+    elif post_author:
+        action = f"展开了 @{post_author} 的帖子详情"
+    else:
+        action = f"展开了帖子 {post_id} 的详情"
+
+    return ToolResult(
+        action=action,
+        data={
+            "post": standardized_post,
+            "comments": _standardize_comments_list(comments_data.get("items", [])),
+            "total": comments_data.get("total", 0)
+        }
+    )
 
 
 @tool
 def expand_comments(
     comment_id: int,
     reason: str = "",
+    summary: str = "",
     reply_count: int = 5
-) -> Dict[str, Any]:
+) -> ToolResult:
     """
     展开查看指定评论及其回复
 
@@ -764,14 +991,14 @@ def expand_comments(
         comment_id: 目标一级评论的 ID
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想查看这条评论及其回复"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我在帖子详情页看到了这条评论，想看看大家都在说什么"等。
         reply_count: 要返回的回复数量，默认 5
 
     Returns:
-        Dict[str, Any]: 包含以下字段的字典:
-            - post: 原帖子信息（标准化格式）
-            - comment: 目标评论信息（标准化格式）
-            - replies: 回复列表（标准化格式）
-            - total: 回复总数
+        ToolResult: 包含以下字段:
+            - action: "展开了 @{comment_author} 的评论：{comment_content}（来自 @{post_author} 的帖子：{post_content}）"
+            - data: 包含 post, comment, replies, total 的字典
 
     Raises:
         NotFoundError: 评论不存在
@@ -781,20 +1008,38 @@ def expand_comments(
     comment_data = _get_comment(1, comment_id)
     post_id = comment_data.get("post_id", 1)
     post_data = _get_post(post_id)
+    standardized_post = _standardize_post(post_data, current_user_id)
+    standardized_comment = _standardize_comment(comment_data)
     replies_data = _get_comment_replies(post_id, comment_id, limit=reply_count)
 
-    return {
-        "post": _standardize_post(post_data, current_user_id),
-        "comment": _standardize_comment(comment_data),
-        "replies": _standardize_comments_list(replies_data.get("items", [])),
-        "total": replies_data.get("total", 0)
-    }
+    post_author = standardized_post.get("author_username", "")
+    post_content = _truncate(standardized_post.get("content", ""), 30)
+    comment_author = standardized_comment.get("author_username", "") or standardized_comment.get("owner_username", "")
+    comment_content = _truncate(standardized_comment.get("content", ""), 30)
+
+    if post_author and post_content and comment_author and comment_content:
+        action = f"展开了 @{comment_author} 的评论：{comment_content}（来自 @{post_author} 的帖子：{post_content}）"
+    elif comment_author and comment_content:
+        action = f"展开了 @{comment_author} 的评论：{comment_content}"
+    else:
+        action = f"展开了评论 {comment_id} 的详情"
+
+    return ToolResult(
+        action=action,
+        data={
+            "post": standardized_post,
+            "comment": standardized_comment,
+            "replies": _standardize_comments_list(replies_data.get("items", [])),
+            "total": replies_data.get("total", 0)
+        }
+    )
 
 
 @tool
 def get_post_detail(
     post_id: int,
     reason: str = "",
+    summary: str = "",
     comment_count: int = 5
 ) -> Dict[str, Any]:
     """
@@ -809,13 +1054,14 @@ def get_post_detail(
         post_id: 目标帖子的 ID
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要查看这条帖子的后续评论"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我在帖子详情页看到了前5条评论，想看看后面还有什么"等。
         comment_count: 要返回的评论数量，默认 5
 
     Returns:
-        Dict[str, Any]: 包含以下字段的字典:
-            - post: 帖子信息（标准化格式）
-            - comments: 第5条之后的一级评论列表（标准化格式）
-            - total: 后续评论总数
+        ToolResult: 包含以下字段:
+            - action: "查看了 @{author} 的帖子（{content}）的更多评论"
+            - data: 包含 post, comments, total 的字典
 
     Raises:
         NotFoundError: 帖子不存在
@@ -823,58 +1069,32 @@ def get_post_detail(
     """
     current_user_id = get_current_user_id()
     post_data = _get_post(post_id)
+    standardized_post = _standardize_post(post_data, current_user_id)
     comments_data = _get_post_comments(post_id, skip=5, limit=comment_count)
 
-    return {
-        "post": _standardize_post(post_data, current_user_id),
-        "comments": _standardize_comments_list(comments_data.get("items", [])),
-        "total": comments_data.get("total", 0)
-    }
+    post_author = standardized_post.get("author_username", "")
+    post_content = _truncate(standardized_post.get("content", ""), 30)
+
+    if post_author and post_content:
+        action = f"查看了 @{post_author} 的帖子（{post_content}）的更多评论"
+    else:
+        action = f"查看了帖子 {post_id} 的更多评论"
+
+    return ToolResult(
+        action=action,
+        data={
+            "post": standardized_post,
+            "comments": _standardize_comments_list(comments_data.get("items", [])),
+            "total": comments_data.get("total", 0)
+        }
+    )
 
 
 @tool
-def expand_comment_replies(
-    post_id: int,
-    comment_id: int,
+def scroll_global_feed(
     reason: str = "",
-    reply_count: int = 5
-) -> Dict[str, Any]:
-    """
-    展开查看指定评论的回复列表
-
-    获取指定评论下的回复列表。适用于需要查看某条评论的所有回复的场景。
-
-    注意：此工具会自动从当前执行上下文获取认证信息（如有）。
-
-    Args:
-        post_id: 评论所属帖子的 ID
-        comment_id: 目标评论的 ID
-        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
-                例如："用户想查看这条评论的回复"等。
-        reply_count: 要返回的回复数量，默认 5
-
-    Returns:
-        Dict[str, Any]: 包含以下字段的字典:
-            - parent_comment: 父评论信息（标准化格式）
-            - replies: 回复列表（标准化格式）
-            - total: 回复总数
-
-    Raises:
-        NotFoundError: 评论不存在
-        ToolExecutionError: 服务器内部错误
-    """
-    parent_comment = _get_comment(post_id, comment_id)
-    replies_data = _get_comment_replies(post_id, comment_id, limit=reply_count)
-
-    return {
-        "parent_comment": _standardize_comment(parent_comment),
-        "replies": _standardize_comments_list(replies_data.get("items", [])),
-        "total": replies_data.get("total", 0)
-    }
-
-
-@tool
-def scroll_global_feed(reason: str = "") -> Dict[str, Any]:
+    summary: str = ""
+) -> ToolResult:
     """
     滑动查看主页信息流中的更多帖子
 
@@ -886,71 +1106,74 @@ def scroll_global_feed(reason: str = "") -> Dict[str, Any]:
     Args:
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要查看更多帖子"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我在主页看完了第一页，想看看后面还有什么"等。
 
     Returns:
-        Dict[str, Any]: 包含以下字段的字典:
-            - data: 帖子列表（标准化格式）
-            - pagination: 分页信息
+        ToolResult: 包含以下字段:
+            - action: "向下滑动浏览了更多信息流帖子"
+            - data: 包含 data 和 pagination 的字典
 
     Raises:
         ToolExecutionError: 服务器内部错误
     """
     current_user_id = get_current_user_id()
-    page = 1
-
-    while True:
-        feed_data = _get_global_feed(page=page, page_size=5)
-        if not feed_data.get("data"):
-            break
-
-        feed_data["data"] = _standardize_posts_list(
-            feed_data.get("data", []),
-            current_user_id
-        )
-
-        if not feed_data.get("pagination", {}).get("has_next"):
-            break
-
-        page += 1
-
-    return feed_data
+    feed_data = _get_global_feed(page=2, page_size=5)
+    feed_data["data"] = _standardize_posts_list(
+        feed_data.get("data", []),
+        current_user_id
+    )
+    return ToolResult(action="向下滑动浏览了更多信息流帖子", data=feed_data)
 
 
 @tool
 def scroll_user_posts(
     user_id: int,
     reason: str = "",
-    page: int = 2
-) -> Dict[str, Any]:
+    summary: str = ""
+) -> ToolResult:
     """
-    滑动查看指定用户更多历史帖子
+    滑动查看用户个人主页中的更多帖子
 
-    获取指定用户更多历史帖子，用于翻页查看。
-    第一页之后的帖子需要通过此工具查看。
+    获取当前信息流之后的下一批帖子（每批 5 条），用于持续浏览。
+    每次调用返回不同的帖子内容。
+
+    注意：此工具会自动从当前执行上下文获取认证信息（如有）。
 
     Args:
         user_id: 目标用户的 ID
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想查看这位作者更多历史帖子"等。
-        page: 页码，从 2 开始（默认 2，表示查看第二页及之后的内容）
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我在@xxx的主页看完了第一页，想看看他还有什么帖子"等。
 
     Returns:
-        Dict[str, Any]: 包含以下字段的字典:
-            - data: 帖子列表（标准化格式）
-            - pagination: 分页信息
+        ToolResult: 包含以下字段:
+            - action: "向下滑动浏览了 @{author} 的更多帖子"
+            - data: 包含 data 和 pagination 的字典
 
     Raises:
         NotFoundError: 用户不存在
         ToolExecutionError: 服务器内部错误
     """
     current_user_id = get_current_user_id()
-    posts_data = _get_user_posts(user_id, page=page, page_size=5)
+    posts_data = _get_user_posts(user_id, page=2, page_size=5)
     posts_data["data"] = _standardize_posts_list(
         posts_data.get("data", []),
         current_user_id
     )
 
-    return posts_data
+    target_username = ""
+    if posts_data.get("data"):
+        first_post = posts_data["data"][0] if posts_data["data"] else {}
+        target_username = first_post.get("author_username", "")
+
+    if target_username:
+        action = f"向下滑动浏览了 @{target_username} 的更多帖子"
+    else:
+        action = f"向下滑动浏览了用户 {user_id} 的更多帖子"
+
+    return ToolResult(action=action, data=posts_data)
 
 
 # ==================== 工具注册函数 ====================
@@ -1000,7 +1223,6 @@ def get_social_tools() -> List:
         expand_post,
         expand_comments,
         get_post_detail,
-        expand_comment_replies,
         scroll_global_feed,
         scroll_user_posts,
     ]
