@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from app.models.email_verification import EmailVerificationCode
-from app.db.session import SessionLocal
+from app_platform.app.models.email_verification import EmailVerificationCode
+from app_platform.app.db.session import SessionLocal
 
 
 def cleanup_expired_verification_codes():

@@ -6,7 +6,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from string import Template
 
-from app.core.config import get_settings
+from app_platform.app.core.config import get_settings
 
 
 settings = get_settings()

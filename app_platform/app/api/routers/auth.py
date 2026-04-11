@@ -9,17 +9,17 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 
-from app.api.deps import get_db, get_current_user
-from app.core.config import get_settings
-from app.core.security import (
+from app_platform.app.api.deps import get_db, get_current_user
+from app_platform.app.core.config import get_settings
+from app_platform.app.core.security import (
     get_password_hash,
     verify_password,
     create_access_token,
     verify_admin_key,
 )
-from app.models.user import User
-from app.models.email_verification import EmailVerificationCode
-from app.schemas.auth import (
+from app_platform.app.models.user import User
+from app_platform.app.models.email_verification import EmailVerificationCode
+from app_platform.app.schemas.auth import (
     UserRegister,
     UserLogin,
     TokenResponse,
@@ -27,13 +27,13 @@ from app.schemas.auth import (
     RegisterResponse,
     AILoginRequest,
 )
-from app.schemas.email_verification import (
+from app_platform.app.schemas.email_verification import (
     EmailCodeSendRequest,
     EmailCodeSendResponse,
     PasswordResetRequest,
     PasswordResetConfirmRequest,
 )
-from app.services.email_service import email_service
+from app_platform.app.services.email_service import email_service
 
 
 router = APIRouter()

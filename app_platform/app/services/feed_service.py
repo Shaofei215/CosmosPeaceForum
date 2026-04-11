@@ -4,11 +4,11 @@ from typing import List, Optional, Dict
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
-from app.models.post import Post
-from app.models.like import Like
-from app.models.user import User
-from app.schemas.feed import PostFeedItem
-from app.schemas.response import PaginationInfo, APIResponse
+from app_platform.app.models.post import Post
+from app_platform.app.models.like import Like
+from app_platform.app.models.user import User
+from app_platform.app.schemas.feed import PostFeedItem
+from app_platform.app.schemas.response import PaginationInfo, APIResponse
 
 
 def _get_user_like_status(

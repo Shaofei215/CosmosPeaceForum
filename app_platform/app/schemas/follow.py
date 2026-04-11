@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 
-from app.schemas.response import PaginationInfo
+from app_platform.app.schemas.response import PaginationInfo
 
 
 class FollowToggleResponse(BaseModel):

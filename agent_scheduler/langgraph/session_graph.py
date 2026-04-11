@@ -3,9 +3,9 @@
 from typing import Optional, Dict, Any
 from langgraph.graph import StateGraph, END, START
 
-from .state import SessionState
-from .config import SessionConfig, get_default_config
-from .nodes import (
+from agent_scheduler.langgraph.state import SessionState
+from agent_scheduler.langgraph.config import SessionConfig, get_default_config
+from agent_scheduler.langgraph.nodes import (
     start_node,
     environment_awareness_node,
     llm_decision_node,

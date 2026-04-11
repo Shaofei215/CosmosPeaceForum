@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List
 
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
-from app.schemas.user import UserResponse, UserUpdate, CompleteProfileRequest
+from app_platform.app.api.deps import get_db, get_current_user
+from app_platform.app.models.user import User
+from app_platform.app.schemas.user import UserResponse, UserUpdate, CompleteProfileRequest
 
 router = APIRouter()
 

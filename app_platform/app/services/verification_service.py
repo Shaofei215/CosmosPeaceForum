@@ -8,8 +8,8 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 
-from app.models.email_verification import EmailVerificationCode
-from app.core.config import get_settings
+from app_platform.app.models.email_verification import EmailVerificationCode
+from app_platform.app.core.config import get_settings
 
 
 settings = get_settings()

@@ -4,7 +4,7 @@ from sqlalchemy import Column, Integer, DateTime, ForeignKey, PrimaryKeyConstrai
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
-from app.db.session import Base
+from app_platform.app.db.session import Base
 
 
 class Like(Base):

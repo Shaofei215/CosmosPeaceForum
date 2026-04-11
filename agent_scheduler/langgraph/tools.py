@@ -5,14 +5,14 @@ import os
 from typing import Optional, List, Dict, Any
 from langchain_core.tools import tool
 
-from .context import get_current_token, get_current_user_id
+from agent_scheduler.context import get_current_token, get_current_user_id
 
 
 def _get_api_base_url() -> str:
     """
     获取 API 基础 URL（延迟加载，避免循环导入）
     """
-    from .scheduler import API_BASE_URL as _url
+    from agent_scheduler.scheduler import API_BASE_URL as _url
     return _url
 
 

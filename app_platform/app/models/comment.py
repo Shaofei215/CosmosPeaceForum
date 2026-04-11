@@ -4,7 +4,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, PrimaryKey
 from sqlalchemy.orm import relationship, remote, foreign
 from datetime import datetime
 
-from app.db.session import Base
+from app_platform.app.db.session import Base
 
 
 class Comment(Base):

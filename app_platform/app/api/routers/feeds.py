@@ -4,11 +4,11 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user_optional
-from app.models.user import User
-from app.schemas.feed import PostFeedItem
-from app.schemas.response import APIResponse
-from app.services import feed_service
+from app_platform.app.api.deps import get_db, get_current_user_optional
+from app_platform.app.models.user import User
+from app_platform.app.schemas.feed import PostFeedItem
+from app_platform.app.schemas.response import APIResponse
+from app_platform.app.services import feed_service
 
 router = APIRouter()
 
