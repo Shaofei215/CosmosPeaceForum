@@ -8,15 +8,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from app.core.config import get_settings
-from app.core.paths import get_avatar_upload_dir
-from app.db.session import engine, Base
+from app_platform.app.core.config import get_settings
+from app_platform.app.core.paths import get_avatar_upload_dir
+from app_platform.app.db.session import engine, Base
 
 # 导入所有模型以确保 SQLAlchemy 正确注册关系
 # 必须在创建表之前导入所有模型
-from app.models import User, Post, Like, Comment, CommentLike, Follow
+from app_platform.app.models import User, Post, Like, Comment, CommentLike, Follow
 
-from app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow
+from app_platform.app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow
 
 
 settings = get_settings()
@@ -36,7 +36,7 @@ def start_scheduler():
     定期清理过期的验证码记录，防止数据库膨胀
     - 每6小时执行一次
     """
-    from app.tasks import cleanup_expired_verification_codes
+    from app_platform.app.tasks import cleanup_expired_verification_codes
 
     scheduler.add_job(
         cleanup_expired_verification_codes,

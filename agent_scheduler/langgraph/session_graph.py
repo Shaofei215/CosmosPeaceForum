@@ -3,11 +3,10 @@
 from typing import Optional, Dict, Any
 from langgraph.graph import StateGraph, END, START
 
-from .state import SessionState
-from .config import SessionConfig, get_default_config
-from .nodes import (
+from agent_scheduler.langgraph.state import SessionState
+from agent_scheduler.langgraph.config import SessionConfig, get_default_config
+from agent_scheduler.langgraph.nodes import (
     start_node,
-    environment_awareness_node,
     llm_decision_node,
     tool_execution_node,
     summarize_node,
@@ -49,33 +48,32 @@ def build_session_graph(
 
     图结构如下：
     ```
-    START -> start -> environment_awareness -> llm_decision
-                                                          |
-                                                          v
-                                                tool_execution
-                                                          |
-                                                          v
-                                              should_continue (条件边)
-                                               /           \
-                                             /             \
-                                            v               v
-                                llm_decision (继续)      summarize (结束)
-                                                              |
-                                                              v
-                                                             END
+    START -> start -> llm_decision
+                              |
+                              v
+                    tool_execution
+                              |
+                              v
+                  should_continue (条件边)
+                    /           \
+                   /             \
+                  v               v
+       llm_decision (继续)  summarize (结束)
+                                      |
+                                      v
+                                     END
     ```
 
     流程说明：
     1. start: 初始化状态，重置工作记忆
-    2. environment_awareness: 仅在开始时执行一次，获取"主页"信息（profile + 3条feed）
-    3. llm_decision: LLM 根据工作记忆（action_history）做决策
-    4. tool_execution: 执行 LLM 选择的工具，结果追加到工作记忆
-    5. summarize: 会话结束时生成总结
+    2. llm_decision: LLM 首次决策时会自动调用 get_global_feed 获取信息流
+    3. tool_execution: 执行 LLM 选择的工具，结果追加到工作记忆
+    4. summarize: 会话结束时生成总结
 
     关键设计：
-    - environment_awareness 只在开始时执行一次，之后不再重复获取"主页"
+    - LLM 首次决策时主动调用 get_global_feed 获取初始环境
     - LLM 决策基于工作记忆（action_history），而非每次重新获取环境信息
-    - 工具的返回值作为上下文，通过 result_summary 传递给 LLM
+    - 工具的返回值作为上下文，通过 last_tool_result 传递给 LLM
 
     Args:
         config: 会话配置，如果为 None 则使用默认配置
@@ -102,35 +100,34 @@ def build_session_graph(
 
     # 添加节点
     graph.add_node("start", start_node)
-    graph.add_node("environment_awareness", environment_awareness_node)
     graph.add_node("llm_decision", lambda state: llm_decision_node(state, llm_invoker))
     graph.add_node("tool_execution", tool_execution_node)
     graph.add_node("summarize", lambda state: summarize_node(state, llm_invoker))
     graph.add_node("end", end_node)
-    print(f"[图构建] 节点注册完成: start, environment_awareness, llm_decision, tool_execution, summarize, end")
+    print(f"[图构建] 节点注册完成: start, llm_decision, tool_execution, summarize, end")
 
     # 设置入口点
     graph.set_entry_point("start")
 
     # 添加普通边
-    # 1. start -> environment_awareness: 初始化后获取主页信息
-    graph.add_edge("start", "environment_awareness")
-    # 2. environment_awareness -> llm_decision: 获取环境后开始决策
-    graph.add_edge("environment_awareness", "llm_decision")
-    # 3. llm_decision -> tool_execution: 决策后执行工具
+    # 1. start -> llm_decision: 初始化后开始决策
+    graph.add_edge("start", "llm_decision")
+    # 2. llm_decision -> tool_execution: 决策后执行工具
     graph.add_edge("llm_decision", "tool_execution")
     print(f"[图构建] 普通边设置完成")
 
     # 添加条件边
     # tool_execution 之后：
+    # - 如果有待执行的批量工具 -> 回到 tool_execution 继续执行
     # - 如果未达最大步数且未登出 -> 回到 llm_decision 继续决策
     # - 否则 -> summarize 结束会话
     graph.add_conditional_edges(
         "tool_execution",
         should_continue_edge,
         {
-            "llm_decision": "llm_decision",  # 继续决策（基于工作记忆）
-            "summarize": "summarize",          # 结束会话
+            "tool_execution": "tool_execution",  # 继续执行批量工具
+            "llm_decision": "llm_decision",     # 继续决策（基于工作记忆）
+            "summarize": "summarize",            # 结束会话
         }
     )
     print(f"[图构建] 条件边设置完成")
@@ -176,12 +173,8 @@ def get_graph_structure() -> Dict[str, Any]:
                 "description": "会话开始，初始化状态，重置工作记忆"
             },
             {
-                "name": "environment_awareness",
-                "description": "获取主页信息（仅执行一次）：profile + 3条feed"
-            },
-            {
                 "name": "llm_decision",
-                "description": "LLM 决策节点，根据工作记忆选择操作"
+                "description": "LLM 决策节点，首次决策时会调用 get_global_feed 获取初始信息流"
             },
             {
                 "name": "tool_execution",
@@ -198,8 +191,7 @@ def get_graph_structure() -> Dict[str, Any]:
         ],
         "edges": [
             {"from": "START", "to": "start"},
-            {"from": "start", "to": "environment_awareness"},
-            {"from": "environment_awareness", "to": "llm_decision"},
+            {"from": "start", "to": "llm_decision"},
             {"from": "llm_decision", "to": "tool_execution"},
             {"from": "summarize", "to": "end"},
             {"from": "end", "to": "END"}
@@ -209,6 +201,7 @@ def get_graph_structure() -> Dict[str, Any]:
                 "from": "tool_execution",
                 "condition": "should_continue_edge",
                 "branches": {
+                    "tool_execution": "继续执行批量工具",
                     "llm_decision": "继续决策（基于工作记忆，不重新获取环境）",
                     "summarize": "结束会话"
                 }

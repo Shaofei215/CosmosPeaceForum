@@ -1,24 +1,29 @@
-# Herta-Tree Docker Compose 配置
-# 开发环境使用此配置
+# Herta-Tree Docker Compose 配置文件
+# 统一支持 app_platform 后端、agent_scheduler 调度器和前端
+#
+# 使用方法：
+# 1. 启动所有服务：docker-compose up -d
+# 2. 仅启动后端和调度器：docker-compose up -d backend agent-scheduler
 
 services:
-  # 后端服务
+  # ==================== 后端服务 ====================
   backend:
     build:
-      context: ./app_platform
+      context: .
       dockerfile: Dockerfile
     container_name: herta-backend
     ports:
       - "8000:8000"
     volumes:
-      # 将整个 app_platform 挂载到 /app，保持与原来相同的目录结构
-      - ./app_platform:/app
+      # 挂载 app_platform 目录以便开发时代码修改即时生效
+      - ./app_platform:/app/app_platform
       # 数据持久化：将数据库文件挂载到宿主机，防止容器删除后数据丢失
       - ./data:/app/data
     env_file:
       # 从 app_platform/.env 加载环境变量
       - ./app_platform/.env
     healthcheck:
+      # 健康检查：使用 curl 检查 /health 端点
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
@@ -28,16 +33,38 @@ services:
     networks:
       - herta-network
 
-  # 前端服务 - 开发模式
-  frontend-dev:
+  # ==================== AI Agent 调度器服务 ====================
+  agent-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: herta-agent-scheduler
+    volumes:
+      # 挂载 AI 用户配置文件为只读，确保配置更新时调度器使用最新配置
+      - ./agent_scheduler/ai_users_config.json:/app/agent_scheduler/ai_users_config.json:ro
+    env_file:
+      # 从 agent_scheduler/.env 加载环境变量
+      - ./agent_scheduler/.env
+    depends_on:
+      # 等待后端服务健康检查通过后再启动
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - herta-network
+    # 直接使用 python 命令运行调度器模块
+    command: python -u -m agent_scheduler
+
+  # ==================== 前端服务（默认开发模式）====================
+  frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    container_name: herta-frontend-dev
+    container_name: herta-frontend
     ports:
       - "5173:5173"
     volumes:
-      # 开发热重载
+      # 开发热重载：挂载源代码目录
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
       - ./frontend/index.html:/app/index.html
@@ -47,7 +74,6 @@ services:
       - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
       - ./frontend/tailwind.config.js:/app/tailwind.config.js
       - ./frontend/postcss.config.js:/app/postcss.config.js
-      # 挂载 .env 文件确保配置更新
       - ./frontend/.env:/app/.env
     env_file:
       - ./frontend/.env
@@ -56,50 +82,13 @@ services:
     restart: unless-stopped
     networks:
       - herta-network
-    profiles:
-      - dev
 
-  # 前端服务 - 生产模式
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: herta-frontend
-    ports:
-      - "80:80"
-    env_file:
-      - ./frontend/.env
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - herta-network
-    profiles:
-      - prod
-
-  # AI Agent 调度器服务
-  agent-scheduler:
-    build:
-      context: .
-      dockerfile: agent_scheduler/Dockerfile
-    container_name: herta-agent-scheduler
-    volumes:
-      # 挂载配置文件确保配置更新生效
-      - ./agent_scheduler/ai_users_config.json:/app/agent_scheduler/ai_users_config.json:ro
-    env_file:
-      # 从 agent_scheduler/.env 加载环境变量
-      - ./agent_scheduler/.env
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - herta-network
-
+# ==================== 网络配置 ====================
 networks:
   herta-network:
     driver: bridge
 
+# ==================== 数据卷配置 ====================
 volumes:
   herta-data:
     driver: local

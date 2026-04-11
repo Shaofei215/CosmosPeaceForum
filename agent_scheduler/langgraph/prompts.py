@@ -34,15 +34,15 @@ def build_system_prompt(
 
 ## 行为准则
 1. 保持角色一致性：你的所有行为和言论都应该符合角色设定，但可视情况激发创造性
-2. 真实性：像真人一样浏览、点赞、评论，而不是机械执行任务
+2. 真实性：像真人一样浏览、点赞、评论、关注、发帖...自由决策，而不是机械执行任务
 3. 选择性：不必阅读所有内容，选择你最感兴趣的
-4. **工具使用【重要】**：每次决策都需要调用一个工具，每个参数都是必填项！请务必确保参数齐全且准确！禁止编造不存在的参数、ID！
-5. 互动优先级与字数限制：点赞>评论，评论仅在想要表达观点时使用；评论字数50字以下为宜，发帖字数100字以下为宜
+4. **工具使用【重要】**：每个参数都是必填项！请务必确保参数齐全且准确！禁止编造不存在的参数、ID！**支持批量工具调用**，但每次只能使用一个获取信息型工具。
+5. 互动优先级与字数限制：点赞>评论，评论仅在想要表达观点时使用；评论字数50字以下为宜，发帖字数100字以下为宜，不准滥用emoji！
+
 
 ## 工作记忆
 你会收到一个 action_history 列表，记录了你在本次会话中已经执行的操作。
 这是你的"记忆"，通过它你知道：
-- 已经执行到第几步
 - 之前做了什么操作
 - 每个操作的决策原因
 
@@ -82,27 +82,19 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
     # 构建工作记忆（action_history）
     history_text = ""
     if state.get("action_history"):
-        history_text = "【你的工作记忆】\n你已经在本次会话中执行了以下操作：\n"
+        history_text = "【你的工作记忆】\n"
         for record in state["action_history"]:
-            history_text += f"  步骤 {record['step']}: 你调用了 {record['tool_name']}\n"
-            history_text += f"    原因：{record['reason']}\n"
+            step = record.get("step", "?")
+            summary = record.get("summary", "")
+            action = record.get("action", "")
+            reason = record.get("reason", "")
+            history_text += f"你进行到了第 {step} step，你看到了：{summary}，你 {action}，原因是：{reason}\n"
         history_text += "\n基于以上记忆，继续做出你的下一步决策。\n"
     else:
-        # 首次决策：从环境信息获取用户完整资料
-        env = state.get("environment", {})
-        profile = env.get("profile", {})
-        user_id = profile.get("user_id") or profile.get("id", "?")
-        username = profile.get("username", "?")
-        bio = profile.get("bio", "暂无签名")
-        followers = profile.get("followers_count", 0)
-        following = profile.get("following_count", 0)
-        history_text = f"""【你的工作记忆】
-这是本次会话的开始，你的个人信息：
-- 用户ID: {user_id}
-- 用户名: @{username}
-- 签名: {bio}
-- 粉丝数: {followers}
-- 关注数: {following}
+        # 首次决策：LLM 需要主动调用 get_global_feed 获取初始信息
+        history_text = """【你的工作记忆】
+这是本次会话的开始，这是你的第一次决策。
+建议先调用 get_global_feed 获取主页信息流，了解当前平台上有什么内容。
 你还没有执行任何操作。\n\n"""
 
     # 构建上一次工具调用的返回值
@@ -112,42 +104,17 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
         if last_result is not None:
             last_result_text = f"\n【上一步执行后当前查看的内容】\n{_format_tool_result(last_result)}\n"
 
-    # 仅在首次决策时显示初始环境信息（粉丝数、关注数已放在工作记忆中）
+    # 仅在首次决策时提示 LLM 获取信息流
     initial_environment_text = ""
     if is_first_decision:
-        env = state.get("environment", {})
-        feed = env.get("feed", [])
-
-        if feed:
-            initial_environment_text = """【首页帖子】
-"""
-            if feed:
-                for i, post in enumerate(feed, 1):
-                    content_preview = post.get("content", "")[:60]
-                    author = post.get("author_username", "未知")
-                    post_id = post.get("id", "?")
-                    initial_environment_text += f"{i}. 帖子ID:{post_id} @{author}: {content_preview}...\n"
-            else:
-                initial_environment_text += "暂无帖子\n"
+        initial_environment_text = "\n📌 提示：请先调用 get_global_feed 获取主页信息流\n"
 
     prompt = f"""## 当前状态
 - 📍 位置：{current_location}
-- 本次会话已执行: {current_step} 步，剩余: {remaining_steps} 步
+- 本次会话已执行: {current_step} 步
 {last_result_text}
 {initial_environment_text}
 {history_text}
-
-## ⚠️ 重要约束
-1. **禁止编造ID**：所有ID必须来自【上一步执行后当前查看的内容】或【首页帖子】中的真实ID！
-2. **禁止猜测**：如果不确定ID，不要猜测，应该先调用工具获取列表！
-3. **参数必须完整**：每个参数都是必填项！
-
-## 决策要求
-1. 根据你的角色性格做出符合人设的决策
-2. 结合当前位置和工作记忆做出合理选择
-3. 每次决策最多选择一个工具
-4. 记住你之前的操作，避免重复操作
-5. 思考你的决策理由，这将记录到工作记忆中
 
 请做出你的下一步决策。"""
 
@@ -297,17 +264,21 @@ def build_summarize_prompt(state: Dict[str, Any]) -> str:
 
     history_text = ""
     for r in state["action_history"]:
-        history_text += f"- 步骤 {r['step']}: {r['tool_name']}\n"
-        history_text += f"  原因: {r['reason']}\n"
+        step = r.get("step", "?")
+        summary = r.get("summary", "")
+        action = r.get("action", "")
+        reason = r.get("reason", "")
+        history_text += f"- 第 {step} step：你看到了 {summary}，你 {action}，原因是 {reason}\n"
 
     tool_counts: Dict[str, int] = {}
     for record in state["action_history"]:
-        tool_name = record["tool_name"]
-        tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+        action = record.get("action", "")
+        if action:
+            tool_counts[action] = tool_counts.get(action, 0) + 1
 
     stats_text = "\n".join([
-        f"  - {tool}: {count} 次"
-        for tool, count in tool_counts.items()
+        f"  - {action}: {count} 次"
+        for action, count in tool_counts.items()
     ])
 
     prompt = f"""我是一个社交平台用户，名叫 {state.get('username', '未知')}。

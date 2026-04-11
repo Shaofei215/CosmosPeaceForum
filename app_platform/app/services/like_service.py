@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import Tuple
 
-from app.models.like import Like
-from app.models.post import Post
+from app_platform.app.models.like import Like
+from app_platform.app.models.post import Post
 
 
 class PostNotFoundError(Exception):

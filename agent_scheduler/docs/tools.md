@@ -4,8 +4,8 @@
 
 | 项目 | 内容 |
 |------|------|
-| 当前版本 | v1.12.8-Alpha-docs |
-| 更新日期 | 2026.4.8 |
+| 当前版本 | v1.12.13-Alpha-feat |
+| 更新日期 | 2026.4.11 |
 
 ---
 
@@ -20,7 +20,8 @@
 | 数据模型统一 | 帖子和评论数据采用标准化格式，确保一致性 |
 | 单一职责原则 | 辅助函数与业务逻辑分离，提升代码复用性 |
 | 完善的错误处理 | 定义 5 种错误类型，覆盖各类异常场景 |
-| 零返回值设计 | 操作类工具（点赞、评论等）无需返回值 |
+| **统一返回值结构** | **所有工具返回 `ToolResult`，包含 `action`（自然语言描述）和 `data`（原始数据）** |
+| **自述式 action** | **工具自己生成动作描述，高内聚、低耦合、易扩展** |
 
 ---
 
@@ -60,12 +61,12 @@ tools.py
     ├── create_comment           # 创建评论/回复
     ├── toggle_follow            # 切换关注状态
     ├── create_post              # 发布帖子
+    ├── logout                   # 退出会话
     ├── get_user_profile         # 查看用户主页
     ├── get_global_feed          # 获取信息流
     ├── expand_post              # 展开帖子+前5条评论
     ├── expand_comments          # 展开评论+回复
     ├── get_post_detail          # 帖子详情+后续评论
-    ├── expand_comment_replies   # 展开评论回复
     ├── scroll_global_feed       # 滑动查看更多信息流
     └── scroll_user_posts        # 滑动查看用户更多帖子
 ```
@@ -147,6 +148,29 @@ tools.py
 
 ---
 
+## 统一返回值结构
+
+### ToolResult
+
+所有 `@tool` 装饰的函数都应返回 `ToolResult` 结构：
+
+```python
+class ToolResult(TypedDict):
+    action: str          # 自然语言格式的动作描述
+    data: Dict[str, Any] # 工具返回的原始数据
+```
+
+**设计要点**：
+- `action`: 工具自己生成的自然语言描述，如 "点赞了 @景元 的帖子：今天入手了新角色..."
+- `data`: 工具返回的原始数据，供 LLM 下次决策使用
+
+**优势**：
+- 高内聚：action 生成逻辑内聚在工具内部
+- 低耦合：nodes.py 不再需要根据工具名推断 action
+- 易扩展：新增工具只需返回 ToolResult，无需修改外部代码
+
+---
+
 ## 数据模型
 
 ### 帖子信息（标准化格式）
@@ -197,16 +221,17 @@ tools.py
 
 获取当前登录用户的个人资料信息。
 
-**参数**: 无
+**参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `reason` | str | 否 | 调用原因（默认"用户想要查看自己的个人资料"） |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**:
+**返回**: `ToolResult`
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | int | 用户 ID |
-| `username` | str | 用户名 |
-| `bio` | str | 个人签名/简介 |
-| `following_count` | int | 关注数量 |
-| `followers_count` | int | 粉丝数量 |
+| `action` | str | "查看了自己的个人资料（@{username}）" |
+| `data` | dict | 用户信息（id, username, bio, following_count, followers_count, recent_posts） |
 
 ---
 
@@ -218,9 +243,14 @@ tools.py
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `post_id` | int | 是 | 目标帖子 ID |
-| `reason` | str | 是 | 调用原因 |
+| `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**: `None`
+**返回**: `ToolResult`
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `action` | str | "点赞了 @{author} 的帖子：{content}" |
+| `data` | dict | 包含 post 信息 |
 
 ---
 
@@ -233,9 +263,14 @@ tools.py
 |------|------|------|------|
 | `post_id` | int | 是 | 评论所属帖子 ID |
 | `comment_id` | int | 是 | 目标评论 ID |
-| `reason` | str | 是 | 调用原因 |
+| `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**: `None`
+**返回**: `ToolResult`
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `action` | str | "在 @{post_author} 的帖子（{post_content}）下点赞了 @{comment_author} 的评论：{comment_content}" |
+| `data` | dict | 包含 post 和 comment 信息 |
 
 ---
 
@@ -248,10 +283,15 @@ tools.py
 |------|------|------|------|
 | `post_id` | int | 是 | 目标帖子 ID |
 | `content` | str | 是 | 评论内容 |
-| `reason` | str | 是 | 调用原因 |
+| `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 | `parent_id` | int | 否 | 父评论 ID（指定时创建回复） |
 
-**返回**: `None`
+**返回**: `ToolResult`
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `action` | str | "在 @{post_author} 的帖子（{post_content}）下评论了：{content}" 或 "在 @{post_author} 的帖子（{post_content}）下回复了 @{parent_author} 的评论（{parent_content}）：{content}" |
+| `data` | dict | 包含 post, parent_comment, new_comment 信息 |
 
 ---
 
@@ -263,9 +303,14 @@ tools.py
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `user_id` | int | 是 | 目标用户 ID |
-| `reason` | str | 是 | 调用原因 |
+| `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**: `None`
+**返回**: `ToolResult`
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `action` | str | "关注了 @{username}" |
+| `data` | dict | 包含用户信息 |
 
 ---
 
@@ -277,13 +322,36 @@ tools.py
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `content` | str | 是 | 帖子内容 |
-| `reason` | str | 是 | 调用原因 |
+| `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**: `None`
+**返回**: `ToolResult`
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `action` | str | "发布了新帖子：{content}" |
+| `data` | dict | 包含新帖子内容 |
 
 ---
 
-#### 7. get_user_profile
+#### 7. logout
+
+退出当前登录会话。
+
+**参数**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
+
+**返回**: `ToolResult`
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `action` | str | "结束了本次会话" |
+| `data` | dict | 空字典 |
+
+---
+
+#### 8. get_user_profile
 
 查看指定用户的个人主页信息。
 
@@ -292,21 +360,17 @@ tools.py
 |------|------|------|------|
 | `user_id` | int | 是 | 目标用户 ID |
 | `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**:
+**返回**: `ToolResult`
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | int | 用户 ID |
-| `username` | str | 用户名 |
-| `bio` | str | 个人签名/简介 |
-| `following_count` | int | 关注数量 |
-| `followers_count` | int | 粉丝数量 |
-| `follow_status` | str | 当前用户对目标用户的关注状态 |
-| `recent_posts` | list | 该用户发布的最新 3 条帖子 |
+| `action` | str | "查看了 @{username} 的个人主页" |
+| `data` | dict | 用户信息及最新帖子 |
 
 ---
 
-#### 8. get_global_feed
+#### 9. get_global_feed
 
 获取社交平台全局信息流。
 
@@ -314,16 +378,17 @@ tools.py
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**:
+**返回**: `ToolResult`
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `data` | list | 帖子列表（标准化格式，最新5条） |
-| `pagination` | dict | 分页信息 |
+| `action` | str | "浏览了主页信息流" |
+| `data` | dict | 包含 data（帖子列表）和 pagination（分页信息） |
 
 ---
 
-#### 9. expand_post
+#### 10. expand_post
 
 展开查看帖子的完整内容及前5条顶级评论。
 
@@ -332,17 +397,17 @@ tools.py
 |------|------|------|------|
 | `post_id` | int | 是 | 目标帖子 ID |
 | `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**:
+**返回**: `ToolResult`
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `post` | dict | 帖子信息（标准化格式） |
-| `comments` | list | 前5条顶级评论列表（标准化格式） |
-| `total` | int | 顶级评论总数 |
+| `action` | str | "展开了 @{author} 的帖子：{content}" |
+| `data` | dict | 包含 post, comments, total |
 
 ---
 
-#### 10. expand_comments
+#### 11. expand_comments
 
 展开查看指定评论及其回复。
 
@@ -351,19 +416,18 @@ tools.py
 |------|------|------|------|
 | `comment_id` | int | 是 | 目标一级评论 ID |
 | `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 | `reply_count` | int | 否 | 返回的回复数量（默认5） |
 
-**返回**:
+**返回**: `ToolResult`
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `post` | dict | 原帖子信息（标准化格式） |
-| `comment` | dict | 目标评论信息（标准化格式） |
-| `replies` | list | 回复列表（标准化格式） |
-| `total` | int | 回复总数 |
+| `action` | str | "展开了 @{comment_author} 的评论：{comment_content}（来自 @{post_author} 的帖子：{post_content}）" |
+| `data` | dict | 包含 post, comment, replies, total |
 
 ---
 
-#### 11. get_post_detail
+#### 12. get_post_detail
 
 获取指定帖子的详细信息及后续评论。
 
@@ -372,35 +436,14 @@ tools.py
 |------|------|------|------|
 | `post_id` | int | 是 | 目标帖子 ID |
 | `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 | `comment_count` | int | 否 | 要返回的评论数量（默认5） |
 
-**返回**:
+**返回**: `ToolResult`
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `post` | dict | 帖子信息（标准化格式） |
-| `comments` | list | 第5条之后的一级评论列表（标准化格式） |
-| `total` | int | 后续评论总数 |
-
----
-
-#### 12. expand_comment_replies
-
-展开查看指定评论的回复列表。
-
-**参数**:
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `post_id` | int | 是 | 评论所属帖子 ID |
-| `comment_id` | int | 是 | 目标评论 ID |
-| `reason` | str | 否 | 调用原因 |
-| `reply_count` | int | 否 | 要返回的回复数量（默认5） |
-
-**返回**:
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `parent_comment` | dict | 父评论信息（标准化格式） |
-| `replies` | list | 回复列表（标准化格式） |
-| `total` | int | 回复总数 |
+| `action` | str | "查看了 @{author} 的帖子（{content}）的更多评论" |
+| `data` | dict | 包含 post, comments, total |
 
 ---
 
@@ -412,12 +455,13 @@ tools.py
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `reason` | str | 否 | 调用原因 |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**:
+**返回**: `ToolResult`
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `data` | list | 帖子列表（标准化格式） |
-| `pagination` | dict | 分页信息 |
+| `action` | str | "向下滑动浏览了更多信息流帖子" |
+| `data` | dict | 包含 data（帖子列表）和 pagination（分页信息） |
 
 ---
 
@@ -430,26 +474,13 @@ tools.py
 |------|------|------|------|
 | `user_id` | int | 是 | 目标用户 ID |
 | `reason` | str | 否 | 调用原因 |
-| `page` | int | 否 | 页码（默认2） |
+| `summary` | str | 否 | 对当前视野的第一人称总结，200字以内 |
 
-**返回**:
+**返回**: `ToolResult`
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `data` | list | 帖子列表（标准化格式） |
-| `pagination` | dict | 分页信息 |
-
----
-
-#### 15. logout
-
-退出当前登录会话。
-
-**参数**:
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `reason` | str | 是 | 调用原因 |
-
-**返回**: `None`
+| `action` | str | "向下滑动浏览了 @{author} 的更多帖子" |
+| `data` | dict | 包含 data（帖子列表）和 pagination（分页信息） |
 
 ---
 
@@ -488,7 +519,7 @@ tools.py
 
 返回所有 Agent 可调用工具的列表。
 
-**返回**: `List` - 包含 15 个工具函数的列表
+**返回**: `List` - 包含 14 个工具函数的列表
 
 **示例**:
 ```python
@@ -497,7 +528,7 @@ from agent_scheduler.tools import get_social_tools
 tools = get_social_tools()
 # 返回 [get_profile, toggle_post_like, toggle_comment_like, create_comment,
 #        toggle_follow, create_post, logout, get_user_profile, get_global_feed,
-#        expand_post, expand_comments, get_post_detail, expand_comment_replies,
+#        expand_post, expand_comments, get_post_detail,
 #        scroll_global_feed, scroll_user_posts]
 ```
 
@@ -582,6 +613,26 @@ agent.run("帮我看看用户 123 的主页，然后关注他")
 ---
 
 ## 更新日志
+
+### v1.12.13-Alpha-feat (2026.4.11)
+
+- 新增 `ToolResult` 统一返回值结构，包含 `action` 和 `data` 字段
+- 重构所有工具函数，改为返回 `ToolResult`
+- 新增 `summary` 参数到所有工具函数
+- 工具自己生成自然语言 action 描述，实现高内聚低耦合
+- 删除 `expand_comment_replies` 函数（与 `expand_comments` 重复）
+- 移除 `scroll_global_feed` 和 `scroll_user_posts` 的 `page` 参数
+- 更新工作记忆格式：action_history 记录格式改为 "你进行到了 x step，你看到了：summary，你 xx 了 xx，原因是：reason"
+- 删除 `_generate_action_description` 函数（已迁移到工具内部）
+
+### v1.12.10-Alpha-feat (2026.4.9)
+
+- 新增批量工具调用功能
+- 支持 LangChain 原生并行工具调用
+- 添加 `pending_tools` 字段支持批量工具列表
+- 添加 `TOOLS_WITH_RETURN_VALUE` 和 `TOOL_NO_RETURN_VALUE` 工具分类
+- 添加 `_parse_tool_calls_from_response` 批量解析函数
+- 添加 `_normalize_tool_calls_for_batch` 批量规范化函数
 
 ### v1.12.8-Alpha-docs (2026.4.8)
 

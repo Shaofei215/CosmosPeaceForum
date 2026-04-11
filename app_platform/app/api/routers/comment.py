@@ -4,16 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.api.deps import get_db, get_current_user, get_current_user_optional
-from app.models.user import User
-from app.schemas.comment import (
+from app_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
+from app_platform.app.models.user import User
+from app_platform.app.schemas.comment import (
     CommentCreate,
     CommentResponse,
     CommentTreeResponse,
     CommentLikeToggleResponse,
     CommentListResponse
 )
-from app.services import comment_service
+from app_platform.app.services import comment_service
 
 router = APIRouter()
 

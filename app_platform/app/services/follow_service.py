@@ -5,8 +5,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from typing import Tuple, List, Dict, Optional
 
-from app.models.follow import Follow
-from app.models.user import User
+from app_platform.app.models.follow import Follow
+from app_platform.app.models.user import User
 
 
 class SelfFollowError(Exception):

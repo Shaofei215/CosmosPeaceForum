@@ -5,16 +5,16 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import Optional
 
-from app.api.deps import get_db, get_current_user, get_current_user_optional
-from app.models.user import User
-from app.models.follow import Follow
-from app.schemas.follow import (
+from app_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
+from app_platform.app.models.user import User
+from app_platform.app.models.follow import Follow
+from app_platform.app.schemas.follow import (
     FollowToggleResponse,
     FollowStatusResponse,
     FollowUserItem,
 )
-from app.schemas.response import PaginationInfo, APIResponse
-from app.services import follow_service
+from app_platform.app.schemas.response import PaginationInfo, APIResponse
+from app_platform.app.services import follow_service
 
 router = APIRouter()
 

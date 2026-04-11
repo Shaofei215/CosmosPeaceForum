@@ -1,0 +1,1 @@
+__pkg_name__ = "app_platform"

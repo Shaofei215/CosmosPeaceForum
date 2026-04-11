@@ -5,9 +5,9 @@ from sqlalchemy.exc import IntegrityError
 from typing import Tuple, List, Optional, Dict
 from collections import defaultdict
 
-from app.models.comment import Comment, CommentLike
-from app.models.post import Post
-from app.models.user import User
+from app_platform.app.models.comment import Comment, CommentLike
+from app_platform.app.models.post import Post
+from app_platform.app.models.user import User
 
 
 class PostNotFoundError(Exception):

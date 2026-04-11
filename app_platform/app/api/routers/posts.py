@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from app.api.deps import get_db, get_current_user, get_current_user_optional
-from app.models.post import Post
-from app.models.user import User
-from app.models.like import Like
-from app.schemas.post import PostCreate, PostResponse, PostUpdate, PostResponseWithLikeStatus
+from app_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
+from app_platform.app.models.post import Post
+from app_platform.app.models.user import User
+from app_platform.app.models.like import Like
+from app_platform.app.schemas.post import PostCreate, PostResponse, PostUpdate, PostResponseWithLikeStatus
 
 router = APIRouter()
 

@@ -3,15 +3,15 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
-from app.schemas.user import UserResponse
-from app.services.avatar_service import (
+from app_platform.app.api.deps import get_db, get_current_user
+from app_platform.app.models.user import User
+from app_platform.app.schemas.user import UserResponse
+from app_platform.app.services.avatar_service import (
     validate_avatar_file,
     save_avatar_file,
     delete_avatar_file,
 )
-from app.core.config import get_settings
+from app_platform.app.core.config import get_settings
 
 router = APIRouter()
 settings = get_settings()

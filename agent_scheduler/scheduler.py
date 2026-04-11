@@ -15,20 +15,20 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 
-from .time_system import (
+from agent_scheduler.time_system import (
     TimeSystem,
     get_scaled_time,
     get_scaled_timestamp,
     get_time_system,
     set_time_scale,
 )
-from .context import (
+from agent_scheduler.context import (
     AgentContext,
     set_current_context,
     clear_current_context,
 )
-from .langgraph.executor import SessionExecutor, create_llm_invoker, ExecutionResult
-from .langgraph.config import AgentConfig, SessionConfig, get_default_config
+from agent_scheduler.langgraph.executor import SessionExecutor, create_llm_invoker, ExecutionResult
+from agent_scheduler.langgraph.config import AgentConfig, SessionConfig, get_default_config
 
 
 # ==================== 环境配置加载 ====================
@@ -579,7 +579,7 @@ def trigger_login_event(
         config=session_config,
     )
 
-    from .tools import get_social_tools
+    from agent_scheduler.langgraph.tools import get_social_tools
 
     llm_invoker = create_llm_invoker(
         provider=session_config.llm_provider,
@@ -1238,5 +1238,4 @@ def main():
         print("调度器已全部停止")
 
 
-if __name__ == "__main__":
-    main()
+

@@ -3,10 +3,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
-from app.schemas.like import LikeToggleResponse
-from app.services import like_service
+from app_platform.app.api.deps import get_db, get_current_user
+from app_platform.app.models.user import User
+from app_platform.app.schemas.like import LikeToggleResponse
+from app_platform.app.services import like_service
 
 router = APIRouter()
 

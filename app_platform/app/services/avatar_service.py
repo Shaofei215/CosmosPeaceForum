@@ -6,8 +6,8 @@ import aiofiles
 from fastapi import UploadFile, HTTPException
 from typing import Optional
 
-from app.core.config import get_settings
-from app.core.paths import get_avatar_upload_dir
+from app_platform.app.core.config import get_settings
+from app_platform.app.core.paths import get_avatar_upload_dir
 
 
 def get_avatar_upload_dir_path() -> str:

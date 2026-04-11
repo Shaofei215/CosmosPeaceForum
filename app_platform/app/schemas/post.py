@@ -4,8 +4,8 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
 
-from app.schemas.user import UserResponse
-from app.schemas.comment import CommentTreeResponse
+from app_platform.app.schemas.user import UserResponse
+from app_platform.app.schemas.comment import CommentTreeResponse
 
 
 class PostBase(BaseModel):
