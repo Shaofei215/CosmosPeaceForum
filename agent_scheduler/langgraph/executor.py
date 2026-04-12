@@ -41,7 +41,7 @@ def create_llm_invoker(
         use_openai = True
         use_anthropic = False
 
-    if config.llm_provider.lower() == "anthropic" or use_anthropic:
+    if config.llm_provider.lower() == "anthropic":
         model_name = config.anthropic_model_name or config.model_name
         temperature = config.temperature
         api_key = config.anthropic_api_key or None

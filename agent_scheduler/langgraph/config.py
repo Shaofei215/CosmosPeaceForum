@@ -22,17 +22,21 @@ def _load_env_file() -> None:
     if not os.path.exists(env_file):
         return
 
-    with open(env_file, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            if '=' in line:
-                key, value = line.split('=', 1)
-                key = key.strip()
-                value = value.strip()
-                if key not in os.environ:
-                    os.environ[key] = value
+    try:
+        with open(env_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if key not in os.environ:
+                        os.environ[key] = value
+    except (FileNotFoundError, PermissionError, UnicodeDecodeError) as e:
+        print(f"[配置加载][warning]无法加载环境文件 {env_file}: {e}")
+        return
 
 
 @dataclass
