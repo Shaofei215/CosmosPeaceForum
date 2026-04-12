@@ -2,6 +2,7 @@
 # 定义 LangGraph 的图结构，包括节点、边、路由逻辑等
 from typing import Optional, Dict, Any
 from langgraph.graph import StateGraph, END, START
+from langchain_core.messages import AIMessage
 
 from agent_scheduler.langgraph.state import SessionState
 from agent_scheduler.langgraph.config import SessionConfig, get_default_config
@@ -15,7 +16,7 @@ from agent_scheduler.langgraph.nodes import (
 )
 
 
-def _default_llm_invoker(system_prompt: str, user_prompt: str) -> str:
+def _default_llm_invoker(system_prompt: str, user_prompt: str) -> AIMessage:
     """
     默认的 LLM 调用函数
 
@@ -28,7 +29,7 @@ def _default_llm_invoker(system_prompt: str, user_prompt: str) -> str:
         user_prompt: 用户提示词
 
     Returns:
-        str: LLM 响应内容
+        AIMessage: LLM 响应
 
     Raises:
         NotImplementedError: 此函数需要被真正的 LLM 实现替代
@@ -77,7 +78,7 @@ def build_session_graph(
 
     Args:
         config: 会话配置，如果为 None 则使用默认配置
-        llm_invoker: LLM 调用函数，签名为 (system_prompt: str, user_prompt: str) -> str
+        llm_invoker: LLM 调用函数，签名为 (system_prompt: str, user_prompt: str) -> AIMessage
                      如果为 None，则使用默认的 _default_llm_invoker
 
     Returns:

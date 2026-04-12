@@ -27,8 +27,8 @@ from agent_scheduler.context import (
     set_current_context,
     clear_current_context,
 )
-from agent_scheduler.langgraph.executor import SessionExecutor, create_llm_invoker, ExecutionResult
-from agent_scheduler.langgraph.config import AgentConfig, SessionConfig, get_default_config
+from agent_scheduler.langgraph.executor import run_session, ExecutionResult
+from agent_scheduler.langgraph.config import AgentConfig
 
 
 # ==================== 环境配置加载 ====================
@@ -540,13 +540,14 @@ def trigger_login_event(
     personality_prompt: str,
     personal_signature: str,
     token: str,
-    session_config: Optional[SessionConfig] = None,
 ) -> ExecutionResult:
     """
     触发登录事件并执行 LangGraph 会话
 
     当调度器决定让 AI 用户登录时，调用此函数执行完整的 LangGraph 会话。
     会话流程：环境感知 -> LLM 决策 -> 工具执行 -> ... -> 登出 -> 生成总结
+
+    注意：此函数只负责在登录时机触发会话执行，配置和工具由 executor 内部处理。
 
     Args:
         username: 用户名
@@ -556,7 +557,6 @@ def trigger_login_event(
         personality_prompt: 角色性格描述
         personal_signature: 个性签名
         token: 访问令牌
-        session_config: 会话配置，默认使用 get_default_config()
 
     Returns:
         ExecutionResult: 包含执行结果的 ExecutionResult 对象
@@ -564,33 +564,19 @@ def trigger_login_event(
     current_scaled_time = time_system.get_scaled_time()
     print(f"[登录事件] 用户 {username} 于 {current_scaled_time} 开始会话")
 
-    if session_config is None:
-        session_config = get_default_config()
-
     if user_id is None:
         raise ValueError(f"[登录事件] 用户 {username} 的 user_id 为 None，无法执行会话")
 
-    executor = SessionExecutor(
+    agent_config = AgentConfig(
         user_id=user_id,
         username=username,
         ai_config_id=ai_config_id,
         personality_prompt=personality_prompt,
         personal_signature=personal_signature,
-        config=session_config,
+        token=token,
     )
 
-    from agent_scheduler.langgraph.tools import get_social_tools
-
-    llm_invoker = create_llm_invoker(
-        provider=session_config.llm_provider,
-        api_key=session_config.openai_api_key or None,
-        base_url=session_config.openai_base_url or None,
-        model_name=session_config.model_name,
-        temperature=session_config.temperature,
-        tools=get_social_tools(),
-    )
-
-    result = executor.run(llm_invoker)
+    result = run_session(agent_config)
 
     if result.success:
         print(f"[登录事件] 用户 {username} 会话结束: {result.step_count} 步, 退出原因: {result.exit_reason}")

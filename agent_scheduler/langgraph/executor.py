@@ -9,138 +9,72 @@ import traceback
 from agent_scheduler.langgraph.state import SessionState, SessionSummary, ExitReason
 from agent_scheduler.langgraph.config import SessionConfig, AgentConfig, get_default_config
 from agent_scheduler.langgraph.session_graph import build_session_graph
+from langchain_core.messages import AIMessage
 
 
-def _create_openai_llm_invoker(
-    model_name: str = "gpt-4o-mini",
-    temperature: float = 0.7,
-    api_key: Optional[str] = None,
-    base_url: Optional[str] = None,
-    tools: Optional[List] = None
-) -> Callable[[str, str], str]:
+def create_llm_invoker(
+    config: SessionConfig,
+    tools: Optional[List] = None,
+) -> Callable[[str, str], AIMessage]:
     """
-    创建 OpenAI LLM 调用器
+    根据 SessionConfig 创建 LLM 调用器
 
     Args:
-        model_name: 模型名称
-        temperature: 温度参数
-        api_key: API 密钥
-        base_url: API 基础 URL
+        config: 会话配置，包含 LLM 相关的所有配置
         tools: LangChain 工具列表，用于绑定到 LLM
 
     Returns:
-        Callable[[str, str], str]: LLM 调用函数
+        Callable[[str, str], AIMessage]: LLM 调用函数，返回 AIMessage
     """
     try:
         from langchain_openai import ChatOpenAI
     except ImportError:
-        raise ImportError(
-            "请安装 langchain-openai: pip install langchain-openai"
-        )
-
-    llm_kwargs = {
-        "model": model_name,
-        "temperature": temperature,
-    }
-
-    if api_key:
-        llm_kwargs["api_key"] = api_key
-
-    if base_url:
-        llm_kwargs["base_url"] = base_url
-
-    llm = ChatOpenAI(**llm_kwargs)
-
-    if tools:
-        llm = llm.bind_tools(tools)
-
-    def invoke(system_prompt: str, user_prompt: str) -> str:
-        """执行 LLM 调用"""
-        response = llm.invoke([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ])
-        return response
-
-    return invoke
-
-
-def _create_anthropic_llm_invoker(
-    model_name: str = "claude-sonnet-4-20250514",
-    temperature: float = 0.7,
-    api_key: Optional[str] = None,
-    tools: Optional[List] = None,
-) -> Callable[[str, str], str]:
-    """
-    创建 Anthropic Claude LLM 调用器
-
-    Args:
-        model_name: 模型名称
-        temperature: 温度参数
-        api_key: API 密钥
-        tools: LangChain 工具列表，用于绑定到 LLM
-
-    Returns:
-        Callable[[str, str], str]: LLM 调用函数
-    """
-    try:
-        from langchain_anthropic import ChatAnthropic
-    except ImportError:
-        raise ImportError(
-            "请安装 langchain-anthropic: pip install langchain-anthropic"
-        )
-
-    llm_kwargs = {
-        "model": model_name,
-        "temperature": temperature,
-    }
-
-    if api_key:
-        llm_kwargs["api_key"] = api_key
-
-    llm = ChatAnthropic(**llm_kwargs)
-
-    if tools:
-        llm = llm.bind_tools(tools)
-
-    def invoke(system_prompt: str, user_prompt: str) -> str:
-        """执行 LLM 调用"""
-        response = llm.invoke([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ])
-        return response
-
-    return invoke
-
-
-def create_llm_invoker(
-    provider: str = "openai",
-    tools: Optional[List] = None,
-    **kwargs
-) -> Callable[[str, str], str]:
-    """
-    创建 LLM 调用器的工厂函数
-
-    Args:
-        provider: LLM 提供者，可选 "openai" 或 "anthropic"
-        tools: LangChain 工具列表，用于绑定到 LLM
-        **kwargs: 传递给具体 LLM 实现的其他参数
-
-    Returns:
-        Callable[[str, str], str]: LLM 调用函数
-
-    Raises:
-        ValueError: 不支持的 provider
-    """
-    provider = provider.lower()
-
-    if provider == "openai":
-        return _create_openai_llm_invoker(tools=tools, **kwargs)
-    elif provider == "anthropic":
-        return _create_anthropic_llm_invoker(tools=tools, **kwargs)
+        try:
+            from langchain_anthropic import ChatAnthropic
+            use_anthropic = True
+            use_openai = False
+        except ImportError:
+            raise ImportError(
+                "请安装 langchain-openai 或 langchain-anthropic"
+            )
     else:
-        raise ValueError(f"不支持的 LLM 提供者: {provider}")
+        use_openai = True
+        use_anthropic = False
+
+    if config.llm_provider.lower() == "anthropic" or use_anthropic:
+        model_name = config.anthropic_model_name or config.model_name
+        temperature = config.temperature
+        api_key = config.anthropic_api_key or None
+
+        if not use_anthropic:
+            from langchain_anthropic import ChatAnthropic
+
+        llm = ChatAnthropic(model=model_name, temperature=temperature, api_key=api_key)
+    else:
+        model_name = config.model_name
+        temperature = config.temperature
+        api_key = config.openai_api_key or None
+        base_url = config.openai_base_url or None
+
+        llm_kwargs = {"model": model_name, "temperature": temperature}
+        if api_key:
+            llm_kwargs["api_key"] = api_key
+        if base_url:
+            llm_kwargs["base_url"] = base_url
+
+        llm = ChatOpenAI(**llm_kwargs)
+
+    if tools:
+        llm = llm.bind_tools(tools)
+
+    def invoke(system_prompt: str, user_prompt: str) -> AIMessage:
+        response = llm.invoke([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ])
+        return response
+
+    return invoke
 
 
 @dataclass
@@ -195,8 +129,8 @@ class SessionExecutor:
         personal_signature="..."
     )
 
-    # 创建 LLM 调用器
-    llm_invoker = create_llm_invoker("openai", api_key="sk-...")
+    # 从配置创建 LLM 调用器
+    llm_invoker = create_llm_invoker(executor.config)
 
     # 执行会话
     result = executor.run(llm_invoker)
@@ -252,14 +186,14 @@ class SessionExecutor:
 
     def run(
         self,
-        llm_invoker: Callable[[str, str], str],
+        llm_invoker: Callable[[str, str], AIMessage],
         thread_id: Optional[str] = None
     ) -> ExecutionResult:
         """
         执行完整会话
 
         Args:
-            llm_invoker: LLM 调用函数，签名为 (system_prompt: str, user_prompt: str) -> str
+            llm_invoker: LLM 调用函数，签名为 (system_prompt: str, user_prompt: str) -> AIMessage
             thread_id: 线程 ID，用于检查点保存
 
         Returns:
@@ -382,22 +316,32 @@ class SessionExecutor:
 
 def run_session(
     agent_config: AgentConfig,
-    llm_invoker: Callable[[str, str], str],
     config: Optional[SessionConfig] = None,
 ) -> ExecutionResult:
     """
     运行会话的便捷函数
 
-    这是一个一键执行会话的函数，适用于简单的使用场景。
+    封装会话执行的完整流程：
+    1. 加载配置（如未提供）
+    2. 获取工具列表
+    3. 创建 LLM 调用器
+    4. 创建执行器
+    5. 执行会话
 
     Args:
         agent_config: Agent 配置
-        llm_invoker: LLM 调用函数
-        config: 会话配置
+        config: 会话配置，默认使用环境变量配置
 
     Returns:
         ExecutionResult: 包含执行结果的 ExecutionResult 对象
     """
+    if config is None:
+        config = get_default_config()
+
+    from agent_scheduler.langgraph.tools import get_social_tools
+    tools = get_social_tools()
+    llm_invoker = create_llm_invoker(config, tools=tools)
+
     executor = SessionExecutor(
         user_id=agent_config.user_id,
         username=agent_config.username,

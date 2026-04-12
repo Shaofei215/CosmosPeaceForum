@@ -1,6 +1,6 @@
 # 节点定义模块
 # 定义 LangGraph 图结构中的各个节点，包括LLM决策、工具执行、总结等
-from typing import Dict, Any, List, Optional, Callable, Union
+from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime
 import traceback
 
@@ -31,7 +31,7 @@ TOOL_TO_LOCATION = {
     "toggle_comment_like": None,
     "toggle_follow": None,
     "create_comment": None,
-    "create_post": "主页（信息流）",
+    "create_post": None,
     "get_profile": "主页（信息流）",
     "logout": None,
 }
@@ -57,13 +57,12 @@ TOOL_NO_RETURN_VALUE = {
 }
 
 
-def _get_location_after_tool(tool_name: str, tool_args: Dict[str, Any]) -> Optional[str]:
+def _get_location_after_tool(tool_name: str) -> Optional[str]:
     """
     获取工具执行后的页面位置
 
     Args:
         tool_name: 工具名称
-        tool_args: 工具参数
 
     Returns:
         Optional[str]: 页面位置，如果工具不改变位置则返回 None
@@ -72,56 +71,26 @@ def _get_location_after_tool(tool_name: str, tool_args: Dict[str, Any]) -> Optio
     if location is not None:
         return location
 
-    if tool_name.lower() == "create_post":
-        return "主页（信息流）"
-
     return None
 
 
-def _parse_langchain_tool_call(response: Union[str, AIMessage]) -> Optional[Dict[str, Any]]:
+def parse_tool_calls(response: AIMessage) -> List[Dict[str, Any]]:
     """
-    解析 LangChain LLM 响应中的工具调用（单个）
-
-    支持 LangChain 的 AIMessage.tool_calls 格式。
+    从 LangChain AIMessage 中提取所有工具调用
 
     Args:
-        response: LLM 响应，可以是字符串或 AIMessage
+        response: LLM 响应（AIMessage）
 
     Returns:
-        Optional[Dict[str, Any]]: 解析后的工具调用信息
-            {
-                "tool_name": str,      # 工具名称
-                "args": Dict          # 工具参数
-            }
-            如果解析失败或没有工具调用返回 None
+        List[Dict[str, Any]]: 工具调用列表
+            每个元素包含 {"name": str, "args": Dict}
     """
-    tool_calls = _parse_tool_calls_from_response(response)
-    if not tool_calls:
-        return None
-    return tool_calls[0]
-
-
-def _parse_tool_calls_from_response(response: Union[str, AIMessage]) -> List[Dict[str, Any]]:
-    """
-    解析 LLM 响应中的所有工具调用
-
-    支持 LangChain 的 AIMessage.tool_calls 格式和字符串格式。
-
-    Args:
-        response: LLM 响应，可以是字符串或 AIMessage
-
-    Returns:
-        List[Dict[str, Any]]: 解析后的工具调用列表
-    """
-    if isinstance(response, AIMessage):
-        if hasattr(response, 'tool_calls') and response.tool_calls:
-            return [{"name": tc.get("name", ""), "args": tc.get("args", {})} for tc in response.tool_calls]
+    if not hasattr(response, 'tool_calls') or not response.tool_calls:
         return []
-
-    if isinstance(response, str):
-        return _parse_tool_calls_from_string(response)
-
-    return []
+    return [
+        {"name": tc.get("name", ""), "args": tc.get("args", {})}
+        for tc in response.tool_calls
+    ]
 
 
 def _normalize_tool_calls_for_batch(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -151,105 +120,6 @@ def _normalize_tool_calls_for_batch(tool_calls: List[Dict[str, Any]]) -> List[Di
             result.append(tc)
 
     return result
-
-
-def _parse_tool_calls_from_string(content: str) -> List[Dict[str, Any]]:
-    """
-    从字符串响应中解析所有工具调用
-
-    支持多种响应格式：
-    1. JSON 格式: {"tool_name": "xxx", "args": {...}}
-    2. 简单格式: tool_name(arg1=value1, arg2=value2) 或多个工具连续调用
-
-    Args:
-        content: LLM 响应内容字符串
-
-    Returns:
-        List[Dict[str, Any]]: 解析后的工具调用列表
-    """
-    import json
-    import re
-
-    content = content.strip()
-    results = []
-
-    json_pattern = re.compile(r'\{[^{}]*"tool_name"[^{}]*\}', re.DOTALL)
-    for json_match in json_pattern.finditer(content):
-        try:
-            data = json.loads(json_match.group())
-            tool_name = data.get("tool_name", "")
-            if tool_name:
-                results.append({
-                    "name": tool_name,
-                    "args": data.get("args", {})
-                })
-        except (json.JSONDecodeError, AttributeError):
-            continue
-
-    simple_pattern = re.compile(r'(\w+)\(([^)]*)\)', re.MULTILINE)
-    for match in simple_pattern.finditer(content):
-        tool_name = match.group(1).strip()
-        if tool_name and tool_name.lower() not in ['if', 'else', 'for', 'while', 'def', 'return', 'true', 'false', 'none']:
-            args_str = match.group(2).strip()
-            args = _parse_args_string(args_str)
-            results.append({"name": tool_name, "args": args})
-
-    return results
-
-
-def _parse_args_string(args_str: str) -> Dict[str, Any]:
-    """
-    解析工具参数字符串
-
-    Args:
-        args_str: 参数字符串，如 "post_id=123, reason='test'"
-
-    Returns:
-        Dict[str, Any]: 解析后的参数字典
-    """
-    args = {}
-    if not args_str:
-        return args
-
-    for arg_pair in args_str.split(','):
-        if '=' in arg_pair:
-            key, value = arg_pair.split('=', 1)
-            key = key.strip()
-            value = value.strip().strip('"\'')
-            if value.isdigit():
-                value = int(value)
-            elif value.lower() == 'true':
-                value = True
-            elif value.lower() == 'false':
-                value = False
-            elif value.lower() == 'none':
-                value = None
-            args[key] = value
-
-    return args
-
-
-def _parse_llm_tool_call(response_content: str) -> Optional[Dict[str, Any]]:
-    """
-    解析 LLM 响应中的工具调用（单个，兼容旧逻辑）
-
-    支持多种响应格式：
-    1. JSON 格式: {"tool_name": "xxx", "args": {...}}
-    2. 简单格式: tool_name(arg1=value1, arg2=value2)
-
-    Args:
-        response_content: LLM 响应内容
-
-    Returns:
-        Optional[Dict[str, Any]]: 解析后的工具调用信息
-            {
-                "tool_name": str,      # 工具名称
-                "args": Dict          # 工具参数
-            }
-            如果解析失败返回 None
-    """
-    results = _parse_tool_calls_from_string(response_content)
-    return results[0] if results else None
 
 
 # ============================================================
@@ -287,7 +157,7 @@ def start_node(state: SessionState) -> SessionState:
 
 def llm_decision_node(
     state: SessionState,
-    llm_invoker: Callable[[str, str], str]
+    llm_invoker: Callable[[str, str], AIMessage]
 ) -> SessionState:
     """
     LLM 决策节点
@@ -296,7 +166,7 @@ def llm_decision_node(
 
     Args:
         state: 当前状态
-        llm_invoker: LLM 调用函数，签名：(system_prompt, user_prompt) -> str
+        llm_invoker: LLM 调用函数，签名：(system_prompt, user_prompt) -> AIMessage
 
     Returns:
         SessionState: 更新后的状态，包含 pending_tool 或 pending_tools
@@ -317,7 +187,7 @@ def llm_decision_node(
 
     try:
         response = llm_invoker(system_prompt, user_prompt)
-        tool_calls = _parse_tool_calls_from_response(response)
+        tool_calls = parse_tool_calls(response)
 
         if not tool_calls:
             if state["step_count"] >= state["max_steps"]:
@@ -502,7 +372,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
 
     last_tool_result = result.get("data", {}) if isinstance(result, dict) else result
 
-    new_location = _get_location_after_tool(tool_name, tool_args)
+    new_location = _get_location_after_tool(tool_name)
     current_location = new_location if new_location is not None else state.get("current_location", "主页（信息流）")
 
     if has_pending:
@@ -563,7 +433,7 @@ def should_continue_edge(state: SessionState) -> str:
     return "llm_decision"
 
 
-def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], str]) -> SessionState:
+def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMessage]) -> SessionState:
     """
     总结节点
 
@@ -596,7 +466,8 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], str]) 
 总结应该真实反映你在平台上的活动和感受。
 使用中文，100-200字。"""
 
-        summary = llm_invoker(system_prompt, user_prompt)
+        response = llm_invoker(system_prompt, user_prompt)
+        summary = response.content if hasattr(response, 'content') else str(response)
         print(f"[节点] summarize_node | 用户={username} | LLM总结生成成功 | 长度={len(summary)}字符")
 
         return {
