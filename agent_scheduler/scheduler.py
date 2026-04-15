@@ -29,7 +29,7 @@ from agent_scheduler.context import (
 )
 from agent_scheduler.langgraph.executor import run_session, ExecutionResult
 from agent_scheduler.langgraph.config import AgentConfig
-from agent_scheduler.relation_map import get_relation_mapping_service
+from agent_scheduler.relation_map import build_relation_maps, get_relation_mapping_service
 
 
 # ==================== 环境配置加载 ====================
