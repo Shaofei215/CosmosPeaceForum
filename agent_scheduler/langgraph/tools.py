@@ -1,5 +1,6 @@
 # LangChain/LangGraph 工具集模块
 # 为 AI Agent 提供社交平台操作的工具函数，符合 LangChain 工具标准格式
+import re
 import requests
 import os
 from typing import Optional, List, Dict, Any, TypedDict
@@ -14,6 +15,14 @@ def _get_api_base_url() -> str:
     """
     from agent_scheduler.scheduler import API_BASE_URL as _url
     return _url
+
+
+def _get_relation_mapping_service():
+    """
+    获取关系映射服务（延迟加载，避免循环导入）
+    """
+    from agent_scheduler.relation_map import get_relation_mapping_service as _get_service
+    return _get_service()
 
 
 # ==================== 工具函数错误类型 ====================
@@ -177,12 +186,63 @@ def _get_follow_status_text(user_id: int, current_user_id: Optional[int]) -> str
         return ""
 
 
+def _expand_username_by_relation(
+    username: str,
+    user_id: int,
+    owner_id: int
+) -> str:
+    """
+    根据关系映射拓展用户名
+
+    Args:
+        username: 用户名
+        user_id: 用户 ID
+        owner_id: 当前 Agent 的用户 ID
+
+    Returns:
+        str: 拓展后的用户名，如 "人生几何（瓦尔特）"
+    """
+    if not owner_id or not user_id:
+        return username
+
+    try:
+        service = _get_relation_mapping_service()
+        return service.expand_author(username, user_id, owner_id)
+    except Exception:
+        return username
+
+
+def _expand_content_mentions_by_relation(
+    content: str,
+    owner_id: int
+) -> str:
+    """
+    根据关系映射拓展内容中的 @mention
+
+    Args:
+        content: 原始内容
+        owner_id: 当前 Agent 的用户 ID
+
+    Returns:
+        str: 拓展后的内容
+    """
+    if not content or not owner_id:
+        return content
+
+    try:
+        service = _get_relation_mapping_service()
+        return service.expand_content_mentions(content, owner_id)
+    except Exception:
+        return content
+
+
 def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] = None) -> Dict[str, Any]:
     """
     标准化帖子数据模型
 
     统一帖子信息包含：作者用户名、签名、创建时间、内容、点赞数、评论数、
     点赞状态、作者关注状态、作者ID、帖子ID
+    自动根据关系映射拓展作者用户名和内容中的 @mention。
 
     Args:
         post_data: 原始帖子数据
@@ -192,9 +252,9 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
         Dict[str, Any]: 标准化的帖子数据，包含字段：
             - id: 帖子 ID
             - author_id: 作者 ID
-            - author_username: 作者用户名
+            - author_username: 作者用户名（已根据关系映射拓展）
             - author_bio: 作者签名
-            - content: 帖子内容
+            - content: 帖子内容（已根据关系映射拓展 @mention）
             - created_at: 创建时间
             - like_count: 点赞数
             - comment_count: 评论数
@@ -202,13 +262,18 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
             - follow_status: 当前用户对作者的关注状态
     """
     author_id = post_data.get("author_id")
+    raw_username = post_data.get("author_name") or post_data.get("author", {}).get("username", "")
+    raw_content = post_data.get("content", "")
+
+    author_username = _expand_username_by_relation(raw_username, author_id, current_user_id)
+    content = _expand_content_mentions_by_relation(raw_content, current_user_id)
 
     standardized = {
         "id": post_data.get("id"),
         "author_id": author_id,
-        "author_username": post_data.get("author_name") or post_data.get("author", {}).get("username", ""),
+        "author_username": author_username,
         "author_bio": post_data.get("author_bio") or post_data.get("author", {}).get("bio", ""),
-        "content": post_data.get("content", ""),
+        "content": content,
         "created_at": post_data.get("created_at", ""),
         "like_count": post_data.get("like_count", 0),
         "comment_count": post_data.get("comment_count", 0),
@@ -219,21 +284,26 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
     return standardized
 
 
-def _standardize_comment(comment_data: Dict[str, Any]) -> Dict[str, Any]:
+def _standardize_comment(
+    comment_data: Dict[str, Any],
+    current_user_id: Optional[int] = None
+) -> Dict[str, Any]:
     """
     标准化评论数据模型
 
     统一评论信息包含：作者、评论内容、创建时间、父评论、作者ID、评论ID
+    自动根据关系映射拓展评论者用户名。
 
     Args:
         comment_data: 原始评论数据
+        current_user_id: 当前用户 ID（可选）
 
     Returns:
         Dict[str, Any]: 标准化的评论数据，包含字段：
             - id: 评论 ID
             - author_id: 评论者 ID
-            - author_username: 评论者用户名
-            - content: 评论内容
+            - author_username: 评论者用户名（已根据关系映射拓展）
+            - content: 评论内容（已根据关系映射拓展 @mention）
             - created_at: 创建时间
             - parent_id: 父评论 ID
             - like_count: 点赞数
@@ -241,12 +311,18 @@ def _standardize_comment(comment_data: Dict[str, Any]) -> Dict[str, Any]:
             - is_liked: 当前用户是否已点赞
     """
     owner = comment_data.get("owner", {})
+    author_id = comment_data.get("owner_id") or owner.get("id")
+    raw_username = owner.get("username", "")
+    raw_content = comment_data.get("content", "")
+
+    author_username = _expand_username_by_relation(raw_username, author_id, current_user_id)
+    content = _expand_content_mentions_by_relation(raw_content, current_user_id)
 
     return {
         "id": comment_data.get("id"),
-        "author_id": comment_data.get("owner_id") or owner.get("id"),
-        "author_username": owner.get("username", ""),
-        "content": comment_data.get("content", ""),
+        "author_id": author_id,
+        "author_username": author_username,
+        "content": content,
         "created_at": comment_data.get("created_at", ""),
         "parent_id": comment_data.get("parent_id"),
         "like_count": comment_data.get("like_count", 0),
@@ -255,9 +331,28 @@ def _standardize_comment(comment_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _standardize_comments_list(
+    comments_data: List[Dict[str, Any]],
+    current_user_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """
+    标准化评论列表
+
+    将原始评论列表转换为标准化格式，自动根据关系映射拓展用户名。
+
+    Args:
+        comments_data: 原始评论列表
+        current_user_id: 当前用户 ID（可选）
+
+    Returns:
+        List[Dict[str, Any]]: 标准化后的评论列表
+    """
+    return [_standardize_comment(comment, current_user_id) for comment in comments_data]
+
+
 def _standardize_posts_list(
     posts_data: List[Dict[str, Any]],
-    current_user_id: Optional[int]
+    current_user_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     标准化帖子列表
@@ -266,27 +361,12 @@ def _standardize_posts_list(
 
     Args:
         posts_data: 原始帖子列表
-        current_user_id: 当前用户 ID
+        current_user_id: 当前用户 ID（可选）
 
     Returns:
         List[Dict[str, Any]]: 标准化后的帖子列表
     """
     return [_standardize_post(post, current_user_id) for post in posts_data]
-
-
-def _standardize_comments_list(comments_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    标准化评论列表
-
-    将原始评论列表转换为标准化格式。
-
-    Args:
-        comments_data: 原始评论列表
-
-    Returns:
-        List[Dict[str, Any]]: 标准化后的评论列表
-    """
-    return [_standardize_comment(comment) for comment in comments_data]
 
 
 # ==================== 数据获取辅助函数 ====================
@@ -599,7 +679,7 @@ def toggle_comment_like(
     post_data = _get_post(post_id)
     comment_data = _get_comment(post_id, comment_id)
     standardized_post = _standardize_post(post_data, current_user_id)
-    standardized_comment = _standardize_comment(comment_data)
+    standardized_comment = _standardize_comment(comment_data, current_user_id)
 
     post_author = standardized_post.get("author_username", "")
     post_content = _truncate(standardized_post.get("content", ""), 40)
@@ -674,7 +754,7 @@ def create_comment(
     parent_comment_data = None
     if parent_id is not None:
         parent_comment_data = _get_comment(post_id, parent_id)
-        standardized_parent = _standardize_comment(parent_comment_data)
+        standardized_parent = _standardize_comment(parent_comment_data, current_user_id)
     else:
         standardized_parent = None
 
@@ -966,7 +1046,7 @@ def expand_post(
         action=action,
         data={
             "post": standardized_post,
-            "comments": _standardize_comments_list(comments_data.get("items", [])),
+            "comments": _standardize_comments_list(comments_data.get("items", []), current_user_id),
             "total": comments_data.get("total", 0)
         }
     )
@@ -1009,7 +1089,7 @@ def expand_comments(
     post_id = comment_data.get("post_id", 1)
     post_data = _get_post(post_id)
     standardized_post = _standardize_post(post_data, current_user_id)
-    standardized_comment = _standardize_comment(comment_data)
+    standardized_comment = _standardize_comment(comment_data, current_user_id)
     replies_data = _get_comment_replies(post_id, comment_id, limit=reply_count)
 
     post_author = standardized_post.get("author_username", "")
@@ -1029,7 +1109,7 @@ def expand_comments(
         data={
             "post": standardized_post,
             "comment": standardized_comment,
-            "replies": _standardize_comments_list(replies_data.get("items", [])),
+            "replies": _standardize_comments_list(replies_data.get("items", []), current_user_id),
             "total": replies_data.get("total", 0)
         }
     )
@@ -1084,7 +1164,7 @@ def get_post_detail(
         action=action,
         data={
             "post": standardized_post,
-            "comments": _standardize_comments_list(comments_data.get("items", [])),
+            "comments": _standardize_comments_list(comments_data.get("items", []), current_user_id),
             "total": comments_data.get("total", 0)
         }
     )

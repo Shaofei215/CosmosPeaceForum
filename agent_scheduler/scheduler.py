@@ -8,7 +8,7 @@ import random
 import threading
 import time
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -29,6 +29,7 @@ from agent_scheduler.context import (
 )
 from agent_scheduler.langgraph.executor import run_session, ExecutionResult
 from agent_scheduler.langgraph.config import AgentConfig
+from agent_scheduler.relation_map import get_relation_mapping_service
 
 
 # ==================== 环境配置加载 ====================
@@ -225,6 +226,7 @@ class AIUserConfig:
         monthly_logins: 每月理想登录次数
         personal_signature: 个性签名
         personality_prompt: 角色性格描述
+        knows_ids: 该角色认识的其他 AI 用户 ID 列表
     """
     id: int
     username: str
@@ -233,6 +235,7 @@ class AIUserConfig:
     monthly_logins: int
     personal_signature: str
     personality_prompt: str
+    knows_ids: List[int] = field(default_factory=list)
 
 
 # ==================== 配置加载模块 ====================
@@ -274,6 +277,7 @@ def load_ai_users_config(config_path: str = CONFIG_FILE_PATH) -> List[AIUserConf
                 monthly_logins=user_data.get('monthly_logins', 1),
                 personal_signature=user_data.get('personal_signature', ''),
                 personality_prompt=user_data.get('personality_prompt', ''),
+                knows_ids=user_data.get('knows_ids', []),
             )
             users.append(user)
         except Exception as e:
@@ -545,7 +549,7 @@ def trigger_login_event(
     触发登录事件并执行 LangGraph 会话
 
     当调度器决定让 AI 用户登录时，调用此函数执行完整的 LangGraph 会话。
-    会话流程：环境感知 -> LLM 决策 -> 工具执行 -> ... -> 登出 -> 生成总结
+    会话流程：LLM 决策 -> 工具执行 -> ... -> 登出 -> 生成总结
 
     注意：此函数只负责在登录时机触发会话执行，配置和工具由 executor 内部处理。
 
@@ -562,10 +566,10 @@ def trigger_login_event(
         ExecutionResult: 包含执行结果的 ExecutionResult 对象
     """
     current_scaled_time = time_system.get_scaled_time()
-    print(f"[登录事件] 用户 {username} 于 {current_scaled_time} 开始会话")
+    print(f"[调度器] 用户 {username} 于 {current_scaled_time} 开始会话")
 
     if user_id is None:
-        raise ValueError(f"[登录事件] 用户 {username} 的 user_id 为 None，无法执行会话")
+        raise ValueError(f"[调度器] 用户 {username} 的 user_id 为 None，无法执行会话")
 
     agent_config = AgentConfig(
         user_id=user_id,
@@ -579,12 +583,12 @@ def trigger_login_event(
     result = run_session(agent_config)
 
     if result.success:
-        print(f"[登录事件] 用户 {username} 会话结束: {result.step_count} 步, 退出原因: {result.exit_reason}")
+        print(f"[调度器] 用户 {username} 会话结束: {result.step_count} 步, 退出原因: {result.exit_reason}")
         if result.summary:
             narrative = result.summary.get('narrative', '') if isinstance(result.summary, dict) else result.summary.narrative
-            print(f"[登录事件] 用户 {username} 总结: {narrative[:100]}...")
+            print(f"[调度器] 用户 {username} 总结: {narrative[:100]}...")
     else:
-        print(f"[登录事件] 用户 {username} 会话异常: {result.error_message}")
+        print(f"[调度器] 用户 {username} 会话异常: {result.error_message}")
 
     return result
 
@@ -648,7 +652,7 @@ class AIUserScheduler:
         """
         username = self.user_config.username if self.user_config.username else self.user_config.name
 
-        print(f"[{username}] 调度循环已启动")
+        print(f"[调度器][{username}] 调度循环已启动")
 
         while self.running:
             try:
@@ -657,7 +661,7 @@ class AIUserScheduler:
                 interval = calculate_poisson_interval(self.user_config.monthly_logins)
                 next_login_time = current_time + interval
 
-                print(f"[{username}] 下次登录: {format_relative_time(interval)}")
+                print(f"[调度器][{username}] 下次登录: {format_relative_time(interval)}")
 
                 while self.running:
                     current_time = self.time_system.get_scaled_timestamp()
@@ -700,14 +704,14 @@ class AIUserScheduler:
 
                     clear_current_context()
                 else:
-                    print(f"[{username}] 登录失败: {login_error}")
+                    print(f"[调度器][{username}] 登录失败: {login_error}")
 
             except Exception as e:
-                print(f"[{username}] 调度循环异常: {e}")
+                print(f"[调度器][{username}] 调度循环异常: {e}")
                 traceback.print_exc()
                 time.sleep(1)
 
-        print(f"[{username}] 调度循环已停止")
+        print(f"[调度器][{username}] 调度循环已停止")
 
     def start(self) -> None:
         """
@@ -1117,6 +1121,18 @@ class AgentSchedulerManager:
         except Exception as e:
             print(f"[错误] 加载配置失败: {e}")
             return
+
+        users_config = [
+            {
+                'id': u.id,
+                'username': u.username,
+                'name': u.name,
+                'knows_ids': u.knows_ids,
+            }
+            for u in users
+        ]
+        build_relation_maps(users_config)
+        print(f"[信息] 关系映射表已初始化，共 {len(users)} 个角色")
 
         if not ADMIN_KEY:
             print("[警告] 未配置 ADMIN_KEY，将跳过用户注册")
