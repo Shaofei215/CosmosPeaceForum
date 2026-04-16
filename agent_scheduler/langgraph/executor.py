@@ -212,7 +212,10 @@ class SessionExecutor:
             )
 
             print(f"[会话执行器] 开始执行图")
-            final_state = graph.invoke(self.initial_state)
+            final_state = graph.invoke(
+                self.initial_state,
+                config={"recursion_limit": 100}
+            )
 
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()

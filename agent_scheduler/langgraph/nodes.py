@@ -2,6 +2,7 @@
 # 定义 LangGraph 图结构中的各个节点，包括LLM决策、工具执行、总结等
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime
+import asyncio
 import traceback
 
 from langchain_core.messages import AIMessage
@@ -12,7 +13,59 @@ from agent_scheduler.langgraph.prompts import (
     build_system_prompt,
     build_decision_prompt,
     build_summarize_prompt,
+    build_summarize_system_prompt,
 )
+from agent_scheduler.memory.config import get_memory_config
+
+
+# ============================================================
+# 同步包装函数（避免在同步节点中使用 asyncio.run 阻塞事件循环）
+# ============================================================
+
+def _sync_recall_memories(
+    owner_id: int,
+    context: str,
+    current_time: float,
+    limit: int
+) -> list:
+    """
+    同步包装的记忆召回函数
+
+    使用新线程中的事件循环执行异步操作，避免阻塞主事件循环。
+
+    Args:
+        owner_id: 用户 ID
+        context: 查询上下文
+        current_time: 当前时间戳
+        limit: 召回数量
+
+    Returns:
+        list: 召回的记忆列表
+    """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    async def _coro():
+        from agent_scheduler.memory.service import get_memory_service
+        service = get_memory_service()
+        return await service.recall_memories(
+            owner_id=owner_id,
+            context=context,
+            current_time=current_time,
+            limit=limit
+        )
+
+    def _run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_coro())
+        finally:
+            loop.close()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_run)
+        return future.result()
 
 
 # ============================================================
@@ -152,7 +205,98 @@ def start_node(state: SessionState) -> SessionState:
         "pending_tools": None,
         "last_error": None,
         "summary": None,
+        "recalled_memories": "",
     }
+
+
+def recall_memory_node(state: SessionState) -> SessionState:
+    """
+    记忆召回节点
+
+    在 LLM 决策之前执行，从长期记忆库检索相关记忆并注入 Prompt。
+    使用完整上下文（current_location + last_tool_result + action_history）检索。
+
+    注意：第一次决策前不检索记忆（因为没有工作记忆作为查询上下文）。
+
+    Args:
+        state: 当前状态
+
+    Returns:
+        SessionState: 更新后的状态，包含 recalled_memories
+    """
+    config = get_memory_config()
+
+    if not config.memory_enabled:
+        return state
+
+    owner_id = state.get("user_id")
+    if not owner_id:
+        return state
+
+    username = state.get("username", "未知")
+    current_location = state.get("current_location", "未知")
+    step_count = state.get("step_count", 0)
+
+    # 第一次决策前不检索记忆（因为没有工作记忆作为查询上下文）
+    if step_count == 0:
+        state["recalled_memories"] = ""
+        print(f"[节点] recall_memory_node | 用户={username} | 首次决策，跳过记忆召回")
+        return state
+
+    try:
+        from agent_scheduler.time_system import get_time_system
+        ts = get_time_system()
+        current_time = ts.get_scaled_timestamp()
+
+        # 构建查询上下文（与 build_decision_prompt 保持一致）
+        context_parts = [current_location]
+
+        # 添加 last_tool_result
+        last_result = state.get("last_tool_result")
+        if last_result and isinstance(last_result, dict):
+            action = last_result.get("action", "")
+            if action:
+                context_parts.append(action)
+
+        # 添加 action_history（工作记忆）的关键信息
+        action_history = state.get("action_history", [])
+        if action_history:
+            for record in action_history[-3:]:  # 取最近 3 条
+                summary = record.get("summary", "")
+                action = record.get("action", "")
+                if summary:
+                    context_parts.append(f"我{action}了：{summary[:30]}")
+                elif action:
+                    context_parts.append(f"我{action}了")
+
+        query_context = "；".join(context_parts)
+
+        # 执行记忆召回
+        recalled = _sync_recall_memories(
+            owner_id=owner_id,
+            context=query_context,
+            current_time=current_time,
+            limit=config.recall_limit
+        )
+
+        # 构建记忆注入文本
+        if recalled:
+            memory_lines = ["\n\n## 相关记忆"]
+            for chunk, time_desc in recalled:
+                memory_lines.append(f"[记忆片段 - {time_desc}]")
+                memory_lines.append(chunk.content)
+                memory_lines.append("---")
+            state["recalled_memories"] = "\n".join(memory_lines)
+            print(f"[节点] recall_memory_node | 用户={username} | 召回{len(recalled)}条记忆 | 上下文={query_context[:30]}...")
+        else:
+            state["recalled_memories"] = ""
+            print(f"[节点] recall_memory_node | 用户={username} | 无相关记忆 | 上下文={query_context[:30]}...")
+
+    except Exception as e:
+        print(f"[节点] recall_memory_node | 用户={username} | 记忆召回异常: {e}")
+        state["recalled_memories"] = ""
+
+    return state
 
 
 def llm_decision_node(
@@ -163,6 +307,7 @@ def llm_decision_node(
     LLM 决策节点
 
     支持批量工具调用。每次批量调用中，有返回值的工具只能有一个。
+    注意：记忆召回在 recall_memory_node 中已完成，此处直接使用 state["recalled_memories"]。
 
     Args:
         state: 当前状态
@@ -429,8 +574,8 @@ def should_continue_edge(state: SessionState) -> str:
         print(f"[边] should_continue_edge | 用户={username} | 步骤={step_count}/{max_steps} | 达到最大步数 | 路由=summarize")
         return "summarize"
 
-    print(f"[边] should_continue_edge | 用户={username} | 步骤={step_count}/{max_steps} | 继续决策 | 路由=llm_decision")
-    return "llm_decision"
+    print(f"[边] should_continue_edge | 用户={username} | 步骤={step_count}/{max_steps} | 继续决策 | 路由=recall_memory")
+    return "recall_memory"
 
 
 def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMessage]) -> SessionState:
@@ -438,6 +583,8 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
     总结节点
 
     在登出后，根据 action_history（工作记忆）生成会话总结。
+    只做节点流程控制，提示词工程全部在 prompts.py 中完成。
+    LLM 可能会调用 write_memory 工具写入记忆，需要执行这些工具调用。
 
     Args:
         state: 当前状态
@@ -459,15 +606,53 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
         }
 
     try:
+        # 使用共用的系统提示词（与决策节点一致的角色设定）
+        system_prompt = build_summarize_system_prompt(
+            username=state["username"],
+            name=state.get("name", state["username"]),
+            personality_prompt=state["personality_prompt"],
+            personal_signature=state["personal_signature"]
+        )
+
+        # 用户提示词包含操作历史和记忆写入指令
         user_prompt = build_summarize_prompt(state)
 
-        system_prompt = """你是一个社交平台用户，正在回顾你在平台上的活动。
-请根据你的操作记录，以第一人称"我"生成一段总结。
-总结应该真实反映你在平台上的活动和感受。
-使用中文，100-200字。"""
-
         response = llm_invoker(system_prompt, user_prompt)
-        summary = response.content if hasattr(response, 'content') else str(response)
+
+        # 检查 LLM 是否返回了工具调用
+        tool_calls = []
+        summary = ""
+
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            tool_calls = response.tool_calls
+            print(f"[节点] summarize_node | 用户={username} | LLM返回{len(tool_calls)}个工具调用")
+
+            # 执行工具调用（主要是 write_memory）
+            from agent_scheduler.langgraph.tools import get_social_tools
+            tools_map = {t.name: t for t in get_social_tools()}
+
+            for tc in tool_calls:
+                tool_name = tc.get("name", "").lower()
+                tool_args = tc.get("args", {})
+
+                if tool_name in tools_map:
+                    try:
+                        tool_func = tools_map[tool_name]
+                        result = tool_func.invoke(tool_args)
+                        print(f"[节点] summarize_node | 工具执行: {tool_name} | 结果: {result.action if hasattr(result, 'action') else str(result)}")
+                    except Exception as e:
+                        print(f"[节点] summarize_node | 工具执行失败: {tool_name} | 错误: {e}")
+
+        # 提取总结内容
+        if hasattr(response, 'content'):
+            summary = response.content
+        else:
+            summary = str(response)
+
+        # 如果总结内容为空或只包含工具调用，生成默认总结
+        if not summary or len(summary.strip()) < 10:
+            summary = f"用户 {username} 执行了 {action_count} 个操作，并写入了相关记忆。"
+
         print(f"[节点] summarize_node | 用户={username} | LLM总结生成成功 | 长度={len(summary)}字符")
 
         return {

@@ -118,6 +118,9 @@ class SessionState(TypedDict):
     # === 输出 ===
     summary: Optional[str]                   # 会话总结
 
+    # === 记忆系统 ===
+    recalled_memories: Optional[str]          # 召回的记忆注入文本
+
 
 class SessionSummary(TypedDict):
     """

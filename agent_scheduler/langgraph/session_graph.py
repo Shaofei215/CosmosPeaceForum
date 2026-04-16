@@ -8,6 +8,7 @@ from agent_scheduler.langgraph.state import SessionState
 from agent_scheduler.langgraph.config import SessionConfig, get_default_config
 from agent_scheduler.langgraph.nodes import (
     start_node,
+    recall_memory_node,
     llm_decision_node,
     tool_execution_node,
     summarize_node,
@@ -49,32 +50,34 @@ def build_session_graph(
 
     图结构如下：
     ```
-    START -> start -> llm_decision
-                              |
-                              v
-                    tool_execution
-                              |
-                              v
-                  should_continue (条件边)
-                    /           \
-                   /             \
-                  v               v
-       llm_decision (继续)  summarize (结束)
-                                      |
-                                      v
-                                     END
+    START -> start -> recall_memory -> llm_decision
+                                             |
+                                             v
+                                       tool_execution
+                                             |
+                                             v
+                                 should_continue (条件边)
+                                   /           \
+                                  /             \
+                                 v               v
+                      llm_decision (继续)  summarize (结束)
+                                                     |
+                                                     v
+                                                    END
     ```
 
     流程说明：
     1. start: 初始化状态，重置工作记忆
-    2. llm_decision: LLM 首次决策时会自动调用 get_global_feed 获取信息流
-    3. tool_execution: 执行 LLM 选择的工具，结果追加到工作记忆
-    4. summarize: 会话结束时生成总结
+    2. recall_memory: 从长期记忆库召回相关记忆并注入 Prompt
+    3. llm_decision: LLM 首次决策时会自动调用 get_global_feed 获取信息流
+    4. tool_execution: 执行 LLM 选择的工具，结果追加到工作记忆
+    5. summarize: 会话结束时生成总结
 
     关键设计：
     - LLM 首次决策时主动调用 get_global_feed 获取初始环境
     - LLM 决策基于工作记忆（action_history），而非每次重新获取环境信息
     - 工具的返回值作为上下文，通过 last_tool_result 传递给 LLM
+    - 记忆召回在每次决策前执行，让 LLM 能想起相关的长期记忆
 
     Args:
         config: 会话配置，如果为 None 则使用默认配置
@@ -101,19 +104,22 @@ def build_session_graph(
 
     # 添加节点
     graph.add_node("start", start_node)
+    graph.add_node("recall_memory", recall_memory_node)
     graph.add_node("llm_decision", lambda state: llm_decision_node(state, llm_invoker))
     graph.add_node("tool_execution", tool_execution_node)
     graph.add_node("summarize", lambda state: summarize_node(state, llm_invoker))
     graph.add_node("end", end_node)
-    print(f"[图构建] 节点注册完成: start, llm_decision, tool_execution, summarize, end")
+    print(f"[图构建] 节点注册完成: start, recall_memory, llm_decision, tool_execution, summarize, end")
 
     # 设置入口点
     graph.set_entry_point("start")
 
     # 添加普通边
-    # 1. start -> llm_decision: 初始化后开始决策
-    graph.add_edge("start", "llm_decision")
-    # 2. llm_decision -> tool_execution: 决策后执行工具
+    # 1. start -> recall_memory: 初始化后召回记忆
+    graph.add_edge("start", "recall_memory")
+    # 2. recall_memory -> llm_decision: 记忆召回后开始决策
+    graph.add_edge("recall_memory", "llm_decision")
+    # 3. llm_decision -> tool_execution: 决策后执行工具
     graph.add_edge("llm_decision", "tool_execution")
     print(f"[图构建] 普通边设置完成")
 
@@ -121,13 +127,14 @@ def build_session_graph(
     # tool_execution 之后：
     # - 如果有待执行的批量工具 -> 回到 tool_execution 继续执行
     # - 如果未达最大步数且未登出 -> 回到 llm_decision 继续决策
+    #   （注意：记忆召回在 llm_decision_node 内部进行，使用完整上下文检索）
     # - 否则 -> summarize 结束会话
     graph.add_conditional_edges(
         "tool_execution",
         should_continue_edge,
         {
             "tool_execution": "tool_execution",  # 继续执行批量工具
-            "llm_decision": "llm_decision",     # 继续决策（基于工作记忆）
+            "llm_decision": "llm_decision",     # 继续决策（记忆召回在节点内进行）
             "summarize": "summarize",            # 结束会话
         }
     )

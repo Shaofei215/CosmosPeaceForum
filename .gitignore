@@ -229,3 +229,7 @@ test_*.py
 
 # Uploaded files (user avatars, etc.)
 uploads/
+.gitignore
+
+# Memory system data (SQLite, ChromaDB, Tantivy)
+agent_scheduler/memory/data/

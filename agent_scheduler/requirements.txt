@@ -44,3 +44,9 @@ typing-extensions==4.15.0
 
 #异步文件操作
 aiofiles==24.1.0
+
+# 记忆系统 - 向量检索
+chromadb==0.5.0
+
+# 记忆系统 - BM25 检索
+tantivy==0.24.0

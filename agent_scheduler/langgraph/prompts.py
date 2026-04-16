@@ -109,11 +109,16 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
     if is_first_decision:
         initial_environment_text = "\n📌 提示：请先调用 get_global_feed 获取主页信息流\n"
 
+    # 构建召回的记忆注入文本
+    recalled_memories = state.get("recalled_memories", "")
+    recalled_memory_text = recalled_memories if recalled_memories else ""
+
     prompt = f"""## 当前状态
 - 📍 位置：{current_location}
 - 本次会话已执行: {current_step} 步
 {last_result_text}
 {initial_environment_text}
+{recalled_memory_text}
 {history_text}
 
 请做出你的下一步决策。"""
@@ -247,11 +252,35 @@ def _format_tool_result(result: Any) -> str:
         return str(result)[:500]
 
 
+def build_summarize_system_prompt(
+    username: str,
+    name: str,
+    personality_prompt: str,
+    personal_signature: str
+) -> str:
+    """
+    构建总结节点的系统提示词
+
+    复用 build_system_prompt 的角色设定，保持一致性。
+
+    Args:
+        username: 用户名
+        name: 昵称
+        personality_prompt: 角色性格描述
+        personal_signature: 个性签名
+
+    Returns:
+        str: 格式化后的系统提示词
+    """
+    return build_system_prompt(username, name, personality_prompt, personal_signature)
+
+
 def build_summarize_prompt(state: Dict[str, Any]) -> str:
     """
-    构建总结 Prompt
+    构建总结节点的用户提示词
 
     在登出后，根据 action_history（工作记忆）生成会话总结。
+    同时提示 LLM 调用 write_memory 工具将重要经历写入长期记忆库。
 
     Args:
         state: 当前会话状态
@@ -281,14 +310,19 @@ def build_summarize_prompt(state: Dict[str, Any]) -> str:
         for action, count in tool_counts.items()
     ])
 
-    prompt = f"""我是一个社交平台用户，名叫 {state.get('username', '未知')}。
-
-我的角色设定：{state.get('personality_prompt', '')[:100]}...
-
-本次会话我的操作：
+    prompt = f"""本次会话你的操作：
 {history_text}
 
-请以"我"第一人称生成一段总结，描述我在这次会话中的活动和感受。
-100-200字。"""
+## 记忆写入指令
+
+你刚刚结束了在「星际和平论坛」的会话。请根据本次会话的操作历史，调用 write_memory 工具
+生成你认为有必要的 n 条记忆片段，写入你的长期记忆库。
+
+要求：
+1. 每条记忆以"我"为主语，第一人称描述
+2. 内容应包含：你看到了什么、你做了什么、你的感受或想法
+3. 单条记忆长度 50-200 字
+4. 记忆应是语义完整独立单元
+"""
 
     return prompt
