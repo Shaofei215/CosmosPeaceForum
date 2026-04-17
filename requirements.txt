@@ -11,7 +11,6 @@ sqlmodel==0.0.31
 # 数据校验
 pydantic==2.10.6
 pydantic-settings==2.12.0
-python-dotenv==1.2.1
 email-validator==2.1.0
 
 # 认证
@@ -32,7 +31,7 @@ langchain-core==0.3.37
 openai==1.68.2
 
 # 工具库
-numpy==2.1.0
+numpy==1.26.4
 pandas==2.3.3
 
 # 日志
@@ -45,3 +44,15 @@ typing-extensions==4.15.0
 
 #异步文件操作
 aiofiles==24.1.0
+
+# 记忆系统 - 向量检索
+chromadb==0.5.0
+
+# 记忆系统 - BM25 检索
+tantivy==0.24.0
+
+# 中文分词
+jieba==0.42.1
+
+# 测试
+pytest==8.3.5

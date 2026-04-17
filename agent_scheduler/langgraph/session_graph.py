@@ -125,16 +125,15 @@ def build_session_graph(
 
     # 添加条件边
     # tool_execution 之后：
-    # - 如果有待执行的批量工具 -> 回到 tool_execution 继续执行
-    # - 如果未达最大步数且未登出 -> 回到 llm_decision 继续决策
-    #   （注意：记忆召回在 llm_decision_node 内部进行，使用完整上下文检索）
+    # - 如果有待执行的批量工具 -> 回到 tool_execution 继续执行（不召回记忆，因为工具是连续执行的）
+    # - 如果未达最大步数且未登出 -> 回到 recall_memory 继续决策（每次决策前都召回记忆）
     # - 否则 -> summarize 结束会话
     graph.add_conditional_edges(
         "tool_execution",
         should_continue_edge,
         {
             "tool_execution": "tool_execution",  # 继续执行批量工具
-            "llm_decision": "llm_decision",     # 继续决策（记忆召回在节点内进行）
+            "recall_memory": "recall_memory",    # 继续决策前先召回记忆
             "summarize": "summarize",            # 结束会话
         }
     )

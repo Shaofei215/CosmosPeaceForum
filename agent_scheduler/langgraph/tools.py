@@ -1245,41 +1245,24 @@ def write_memory(
         )
 
     try:
-        from concurrent.futures import ThreadPoolExecutor
-        import asyncio
-
         service = get_memory_service()
+        import asyncio
+        
         memory_ids = []
-
-        async def _write_all():
-            ids = []
-            for mem in memories:
-                content = mem.get("content", "")
-                coefficient = mem.get("memory_coefficient", 0.85)
-
-                if not content:
-                    continue
-
-                memory_id = await service.write_memory(
-                    content=content,
-                    owner_id=owner_id,
-                    memory_coefficient=coefficient
-                )
-                ids.append(memory_id)
-            return ids
-
-        def _run():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                return loop.run_until_complete(_write_all())
-            finally:
-                loop.close()
-
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_run)
-            memory_ids = future.result()
-
+        for mem in memories:
+            content = mem.get("content", "")
+            coefficient = mem.get("memory_coefficient", 0.85)
+            
+            if not content:
+                continue
+                
+            memory_id = asyncio.run(service.write_memory(
+                content=content,
+                owner_id=owner_id,
+                memory_coefficient=coefficient
+            ))
+            memory_ids.append(memory_id)
+        
         return ToolResult(
             action=f"将{len(memory_ids)}条记忆写入长期记忆库",
             data={"memory_ids": memory_ids}
