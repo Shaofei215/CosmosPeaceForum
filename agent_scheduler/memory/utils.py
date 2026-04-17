@@ -1,7 +1,7 @@
 # 记忆系统工具函数模块
 # 提供时间描述计算等辅助功能
 
-from agent_scheduler.time_system import get_time_system
+from agent_scheduler.scheduler.time_system import get_time_system
 
 
 def calculate_time_description(timestamp: float, current_time: float = None) -> str:

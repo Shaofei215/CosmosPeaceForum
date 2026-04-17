@@ -11,7 +11,7 @@ from agent_scheduler.memory.vector_store import VectorStore
 from agent_scheduler.memory.bm25_index import BM25Index
 from agent_scheduler.memory.embedding import EmbeddingModel, get_embedding_model
 from agent_scheduler.memory.utils import calculate_time_description
-from agent_scheduler.time_system import get_time_system
+from agent_scheduler.scheduler.time_system import get_time_system
 
 
 class MemoryService:

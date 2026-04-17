@@ -6,7 +6,7 @@ import os
 from typing import Optional, List, Dict, Any, TypedDict
 from langchain_core.tools import tool
 
-from agent_scheduler.context import get_current_token, get_current_user_id
+from agent_scheduler.scheduler.context import get_current_token, get_current_user_id
 from agent_scheduler.memory.service import get_memory_service
 from agent_scheduler.memory.config import get_memory_config
 
@@ -15,7 +15,8 @@ def _get_api_base_url() -> str:
     """
     获取 API 基础 URL（延迟加载，避免循环导入）
     """
-    from agent_scheduler.scheduler import API_BASE_URL as _url
+    from agent_scheduler.scheduler.config import get_scheduler_config as _get_config
+    _url = _get_config().api_base_url
     return _url
 
 
@@ -23,7 +24,7 @@ def _get_relation_mapping_service():
     """
     获取关系映射服务（延迟加载，避免循环导入）
     """
-    from agent_scheduler.relation_map import get_relation_mapping_service as _get_service
+    from agent_scheduler.scheduler.relation_map import get_relation_mapping_service as _get_service
     return _get_service()
 
 

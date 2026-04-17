@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
-from agent_scheduler.time_system import get_time_system
+from agent_scheduler.scheduler.time_system import get_time_system
 
 
 @dataclass

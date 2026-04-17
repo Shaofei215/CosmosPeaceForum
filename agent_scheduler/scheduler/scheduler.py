@@ -15,24 +15,31 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 
-from agent_scheduler.time_system import (
+from agent_scheduler.scheduler.time_system import (
     TimeSystem,
     get_scaled_time,
     get_scaled_timestamp,
     get_time_system,
     set_time_scale,
 )
-from agent_scheduler.context import (
+from agent_scheduler.scheduler.context import (
     AgentContext,
     set_current_context,
     clear_current_context,
 )
+from agent_scheduler.scheduler.config import get_scheduler_config
+from agent_scheduler.scheduler.relation_map import build_relation_maps, get_relation_mapping_service
 from agent_scheduler.langgraph.executor import run_session, ExecutionResult
 from agent_scheduler.langgraph.config import AgentConfig
-from agent_scheduler.relation_map import build_relation_maps, get_relation_mapping_service
 
 
-# ==================== 环境配置加载 ====================
+_scheduler_config = get_scheduler_config()
+
+API_BASE_URL = _scheduler_config.api_base_url
+ADMIN_KEY = _scheduler_config.admin_key
+AI_USER_PASSWORD = _scheduler_config.ai_user_password
+CONFIG_FILE_PATH = _scheduler_config.ai_users_config_path
+
 
 def get_avatar_dir() -> str:
     """
@@ -102,86 +109,6 @@ def is_valid_avatar_file(avatar_filename: str) -> bool:
     return ext.lower() in valid_extensions
 
 
-# ==================== 环境配置加载 ====================
-
-def load_env_config(env_file_path: str = ".env") -> Dict[str, str]:
-    """
-    从 .env 文件加载环境配置
-
-    Args:
-        env_file_path: .env 文件路径
-
-    Returns:
-        Dict[str, str]: 配置字典
-    """
-    config = {}
-    if not os.path.exists(env_file_path):
-        return config
-
-    with open(env_file_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            if '=' in line:
-                key, value = line.split('=', 1)
-                config[key.strip()] = value.strip()
-    return config
-
-
-def get_env_config() -> Dict[str, str]:
-    """
-    获取环境配置
-
-    优先从 agent_scheduler/.env 文件读取配置
-
-    Returns:
-        Dict[str, str]: 配置字典
-    """
-    scheduler_dir = os.path.dirname(os.path.abspath(__file__))
-    env_file = os.path.join(scheduler_dir, '.env')
-    return load_env_config(env_file)
-
-
-# ==================== 配置常量 ====================
-
-_env_config = get_env_config()
-
-_api_base = os.environ.get('AGENT_SCHEDULER_API_BASE_URL') or _env_config.get('AGENT_SCHEDULER_API_BASE_URL')
-if not _api_base:
-    _api_base = os.environ.get('API_BASE_URL') or _env_config.get('API_BASE_URL')
-if not _api_base:
-    _api_base = os.environ.get('VITE_API_BASE_URL') or _env_config.get('VITE_API_BASE_URL', 'http://localhost:8000/api/v1')
-if _api_base.endswith('/api/v1'):
-    API_BASE_URL = _api_base
-elif _api_base.endswith('/api/v1/'):
-    API_BASE_URL = _api_base[:-1]
-else:
-    API_BASE_URL = _api_base if _api_base.endswith('/') else f"{_api_base}/api/v1"
-
-ADMIN_KEY = os.environ.get('ADMIN_KEY') or _env_config.get('ADMIN_KEY', '')
-
-AI_USER_PASSWORD = os.environ.get('AI_USER_PASSWORD') or _env_config.get('AI_USER_PASSWORD', 'ai123456')
-
-LOGIN_CHECK_INTERVAL_REAL = 0.1
-
-
-def _get_config_file_path() -> str:
-    scheduler_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.environ.get('AI_USERS_CONFIG_PATH') or _env_config.get('AI_USERS_CONFIG_PATH', 'ai_users_config.json')
-    if config_path.startswith('./'):
-        return os.path.join(scheduler_dir, config_path[2:])
-    elif os.path.isabs(config_path):
-        return config_path
-    else:
-        return os.path.join(scheduler_dir, config_path)
-
-
-CONFIG_FILE_PATH = _get_config_file_path()
-
-
-# ==================== 工具函数 ====================
-
 def format_relative_time(seconds: float) -> str:
     """
     将秒数格式化为相对时间字符串
@@ -211,8 +138,6 @@ def format_relative_time(seconds: float) -> str:
             return f"{hours}小时后"
 
 
-# ==================== 数据模型 ====================
-
 @dataclass
 class AIUserConfig:
     """
@@ -237,8 +162,6 @@ class AIUserConfig:
     personality_prompt: str
     knows_ids: List[int] = field(default_factory=list)
 
-
-# ==================== 配置加载模块 ====================
 
 def load_ai_users_config(config_path: str = CONFIG_FILE_PATH) -> List[AIUserConfig]:
     """
@@ -287,8 +210,6 @@ def load_ai_users_config(config_path: str = CONFIG_FILE_PATH) -> List[AIUserConf
     print(f"[信息] 成功加载 {len(users)} 个 AI 用户配置")
     return users
 
-
-# ==================== API 通信模块 ====================
 
 def register_ai_user(
     username: str,
@@ -507,8 +428,6 @@ def upload_avatar(
         return False, None, f"请求异常: {str(e)}"
 
 
-# ==================== 泊松过程登录间隔计算模块 ====================
-
 def calculate_poisson_interval(monthly_logins: int) -> float:
     """
     使用泊松过程模型计算登录时间间隔
@@ -533,8 +452,6 @@ def calculate_poisson_interval(monthly_logins: int) -> float:
 
     return interval
 
-
-# ==================== 登录会话处理模块 ====================
 
 def trigger_login_event(
     username: str,
@@ -592,8 +509,6 @@ def trigger_login_event(
 
     return result
 
-
-# ==================== 单用户调度器 ====================
 
 class AIUserScheduler:
     """
@@ -749,8 +664,6 @@ class AIUserScheduler:
             self._thread.join(timeout=5)
         print(f"[{self.user_config.name}] 调度器已停止")
 
-
-# ==================== 全局调度器 ====================
 
 class RegistrationManager:
     """
@@ -1194,8 +1107,6 @@ class AgentSchedulerManager:
         print()
 
 
-# ==================== 主函数 ====================
-
 def main():
     """
     主函数
@@ -1238,6 +1149,3 @@ def main():
         print("\n正在停止所有调度器...")
         manager.stop_all()
         print("调度器已全部停止")
-
-
-

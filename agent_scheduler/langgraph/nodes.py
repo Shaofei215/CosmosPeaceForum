@@ -219,7 +219,7 @@ def llm_decision_node(
         owner_id = state.get("user_id")
         if owner_id:
             try:
-                from agent_scheduler.time_system import get_time_system
+                from agent_scheduler.scheduler.time_system import get_time_system
                 ts = get_time_system()
                 current_time = ts.get_scaled_timestamp()
 

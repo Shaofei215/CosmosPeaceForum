@@ -5,15 +5,14 @@
 ### 现状问题
 
 - **配置安全**：API Key 等敏感信息明文存储在 `.env` 文件中
-- **配置管理**：Agent 配置（`ai_users_config.json`）无法动态管理，需手动编辑文件
+- **配置管理**：系统配置与Agent 配置（`ai_users_config.json`）无法动态管理，需手动编辑文件
 - **架构耦合**：scheduler.py 集成了注册流程和调度流程，职责不清
 
 ### 建设目标
 
 - 构建独立的 Agent 管理系统，包含前端和后端
-- 实现配置的安全存储（加密）和动态管理（CRUD）
-- 支持热更新配置，无需完整重启服务
-- 与 `app_platform` 完全解耦
+- 实现配置的安全存储（加密）和动态热更新管理（CRUD）
+- 项目完全置于agent\_scheduler中，与 `app_platform` 完全解耦
 
 ***
 
@@ -21,7 +20,7 @@
 
 | 层级       | 技术选型                          | 说明                             |
 | -------- | ----------------------------- | ------------------------------ |
-| **后端框架** | FastAPI                       | 复用 `agent_scheduler` 已有技术栈     |
+| **后端框架** | Python + FastAPI              | 复用 `agent_scheduler` 已有技术栈     |
 | **前端框架** | React + TypeScript + Tailwind | 与 `app_platform/frontend` 保持一致 |
 | **构建工具** | Vite                          | 与 `app_platform/frontend` 保持一致 |
 | **数据库**  | SQLite                        | 轻量，零部署成本                       |
@@ -31,63 +30,7 @@
 
 ***
 
-## 三、伪项目结构
-
-```
-agent_scheduler/
-│
-├── management/                    # 管理系统后端 (FastAPI)
-│   ├── __init__.py
-│   ├── database.py               # SQLite 数据库连接
-│   ├── models.py                # ORM 模型
-│   ├── schemas.py               # Pydantic schemas
-│   ├── routers/                 # API 路由
-│   │   ├── __init__.py
-│   │   ├── auth.py              # 管理员认证
-│   │   ├── agents.py            # Agent CRUD + 批量导入
-│   │   ├── models.py             # 模型配置
-│   │   ├── memory.py            # 记忆管理
-│   │   └── system.py             # 系统配置
-│   └── services/
-│       ├── __init__.py
-│       ├── encryption.py         # Fernet 加密/解密
-│       └── importer.py           # JSON 批量导入
-│
-├── ui/                           # 管理系统前端 (React)
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── LoginPage.tsx
-│   │   │   ├── AgentListPage.tsx
-│   │   │   ├── AgentEditPage.tsx
-│   │   │   ├── ModelConfigPage.tsx
-│   │   │   ├── MemoryPage.tsx
-│   │   │   └── SystemPage.tsx
-│   │   ├── components/
-│   │   ├── api/                  # API 调用封装
-│   │   └── stores/               # 状态管理
-│   └── vite.config.ts
-│
-├── scheduler/                    # 调度器（重构 分离注册器 仅保留用户线程调度）
-│   ├── __init__.py
-│   ├── scheduler.py              # 主调度器（从数据库读取配置）
-│   ├── config_reloader.py        # 配置热更新模块
-│   └── llm_registry.py          # LLM 客户端注册表
-│
-├── registrar/                    # 注册服务模块
-│   ├── __init__.py
-│   ├── service.py                # 注册逻辑（供 management 后端调用）
-│   └── models.py                 # 注册相关的数据模型
-│
-├── memory/                       # 现有记忆系统（保持不变）
-├── langgraph/                    # 现有 LangGraph（保持不变）
-├── avatar/                       # 头像目录（弃用删除）
-└── data/                         # 新增：SQLite 数据库目录
-    └── management.db
-```
-
-***
-
-## 四、端口规划
+## 三、端口规划
 
 | 服务                | 端口       | 说明 |
 | ----------------- | -------- | -- |
@@ -98,7 +41,7 @@ agent_scheduler/
 
 ***
 
-## 四、配置信息 注：配置信息均通过SQLite数据库存储
+## 四、配置信息 注：配置信息均通过SQLite数据库存储以实现热更新与加密
 
 ### 4.1.1 管理后台认证配置
 
@@ -116,24 +59,18 @@ agent_scheduler/
 | --------------- | ----------- | -------------------- |
 | ENCRYPTION\_KEY | Fernet 加密密钥 | 64字节 URL-safe Base64 |
 
-### 4.1.3 数据库配置
-
-| 变量名                  | 说明           | 示例                   |
-| -------------------- | ------------ | -------------------- |
-| MANAGEMENT\_DB\_PATH | SQLite 数据库路径 | ./data/management.db |
-
-### 4.1.4 服务器配置
+### 4.1.3 服务器配置
 
 | 变量名                      | 说明     | 示例      |
 | ------------------------ | ------ | ------- |
 | MANAGEMENT\_SERVER\_HOST | 后端监听地址 | 0.0.0.0 |
 | MANAGEMENT\_SERVER\_PORT | 后端监听端口 | 8001    |
 
-### 4.1.5 复用现有配置（无需新增）
+### 4.1.4 复用现有配置（无需新增）
 
 以下配置沿用 `agent_scheduler/.env` 中已有的定义
 
-#### 4.1.5.1 通用配置
+#### 4.1.4.1 通用配置
 
 | 变量名                | 说明                   | 来源                  |
 | ------------------ | -------------------- | ------------------- |
@@ -267,12 +204,12 @@ agent_scheduler/
 
 ### 6.3 模型配置 `/api/models`
 
-| 端点             | 方法     | 说明       |
-| -------------- | ------ | -------- |
-| `/`            | GET    | 获取模型配置列表 |
-| `/`            | POST   | 创建模型配置   |
-| `/{id}`        | PUT    | 更新模型配置   |
-| `/{id}`        | DELETE | 删除模型配置   |
+| 端点      | 方法     | 说明       |
+| ------- | ------ | -------- |
+| `/`     | GET    | 获取模型配置列表 |
+| `/`     | POST   | 创建模型配置   |
+| `/{id}` | PUT    | 更新模型配置   |
+| `/{id}` | DELETE | 删除模型配置   |
 
 ### 6.4 系统配置 `/api/system`
 
@@ -284,10 +221,10 @@ agent_scheduler/
 
 ### 6.5 内部接口 `/internal`（scheduler 暴露）
 
-| 端点               | 方法   | 说明          |
-| ---------------- | ---- | ----------- |
-| `/reload/system` | POST | 重载系统配置      |
-| `/health`        | GET  | 健康检查        |
+| 端点               | 方法   | 说明     |
+| ---------------- | ---- | ------ |
+| `/reload/system` | POST | 重载系统配置 |
+| `/health`        | GET  | 健康检查   |
 
 ***
 
@@ -302,7 +239,6 @@ agent_scheduler/
 /models                   # 模型配置列表页
   /models/new            # 创建配置页
   /models/:id/edit       # 编辑配置页
-/memory                  # 记忆管理页
 /system                  # 系统配置页
 ```
 
@@ -316,7 +252,7 @@ agent_scheduler/
 | -------- | -------------------- | ------ |
 | 系统配置     | 修改数据库 → 调用 reload 接口 | 立即生效   |
 | 模型配置     | 修改数据库 → 调用 reload 接口 | 下次会话生效 |
-| Agent 配置 | 修改数据库 → 重启该 Agent 线程   | 立即生效   |
+| Agent 配置 | 修改数据库 → 重启该 Agent 线程 | 立即生效   |
 
 ### 8.2 热更新流程
 

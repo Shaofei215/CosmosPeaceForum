@@ -6,16 +6,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 
-# ==================== 硬编码配置 ====================
-# 时间倍率配置
-# 默认时间流速为 1.0，即与真实时间一致
-# 设置大于 1 的值会加速时间（如 60.0 表示 1 秒等于 1 分钟）
-# 设置小于 1 的值会减速时间（如 0.1 表示 1 秒等于 0.1 秒）
 TIME_SCALE: float = 100
 
-# 时间偏移配置（可选）
-# 用于设置相对于真实时间的偏移量，单位为秒
-# 正值表示快进，负值表示回退
 TIME_OFFSET_SECONDS: int = 0
 
 
@@ -282,7 +274,6 @@ def get_time_system() -> TimeSystem:
     return TimeSystem()
 
 
-# 全局时间系统实例，供直接使用
 global_time_system = get_time_system()
 
 
