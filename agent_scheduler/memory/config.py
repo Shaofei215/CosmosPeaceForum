@@ -1,23 +1,15 @@
-# 记忆系统配置模块
-# 从 .env 加载记忆系统相关配置，保证扩展性、内聚性、解耦性
+"""
+记忆系统配置模块
+
+从 management 数据库读取系统配置（优先级最高）
+如果数据库未配置，则 fallback 到 .env 文件
+"""
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
-
-def _get_default_memory_dir() -> str:
-    """
-    获取默认记忆存储目录
-
-    默认存储在 agent_scheduler/memory 目录下，
-    而不是相对于当前工作目录。
-
-    Returns:
-        str: 默认记忆存储目录路径
-    """
-    scheduler_dir = Path(__file__).parent.parent
-    return str(scheduler_dir / "memory")
+from agent_scheduler.management.backend.db_client import get_db_client
 
 
 @dataclass
@@ -25,29 +17,14 @@ class MemoryConfig:
     """
     记忆系统配置类
 
-    包含控制记忆系统行为的所有配置参数。
-
     配置加载顺序（优先级从高到低）：
-    1. 环境变量
-    2. .env 文件
-    3. 程序默认值
-
-    Attributes:
-        memory_enabled: 是否启用记忆系统
-        memory_dir: 记忆存储目录
-        recall_limit: 召回记忆数量
-        recall_vector_results: 向量检索返回数量
-        recall_bm25_results: BM25 检索返回数量
-        threshold: 记忆系数最低阈值
-        boost_factor: 唤醒时系数增量
-        decay_rate: 衰减率（每日）
-        embedding_base_url: 向量化模型 Base URL
-        embedding_api_key: 向量化模型 API Key
-        embedding_model_name: 向量化模型名称
-        embedding_dimension: 向量维度
+    1. 数据库 system_configs 表（主存储）
+    2. 环境变量
+    3. .env 文件
+    4. 程序默认值
     """
     memory_enabled: bool = True
-    memory_dir: str = field(default_factory=_get_default_memory_dir)
+    memory_dir: str = ""
     recall_limit: int = 5
     recall_vector_results: int = 5
     recall_bm25_results: int = 5
@@ -60,36 +37,36 @@ class MemoryConfig:
     embedding_dimension: int = 1536
 
     @classmethod
-    def from_env(cls) -> "MemoryConfig":
-        """
-        从环境变量创建配置实例
+    def from_db_or_env(cls) -> "MemoryConfig":
+        """从数据库或环境变量加载配置"""
+        db = get_db_client()
 
-        优先从环境变量获取配置值，环境变量不存在时使用默认值。
+        def _get(key: str, default: str) -> str:
+            val = db.get_system_config(key)
+            return val if val else os.environ.get(key, default)
 
-        Returns:
-            MemoryConfig: 配置实例
-        """
+        scheduler_dir = Path(__file__).parent.parent
+        default_mem_dir = os.environ.get("MEMORY_DIR", "")
+        if not default_mem_dir:
+            default_mem_dir = str(scheduler_dir / "memory")
+
         return cls(
-            memory_enabled=os.environ.get("MEMORY_ENABLED", "true").lower() in ("true", "1", "yes"),
-            memory_dir=os.environ.get("MEMORY_DIR", "./memory"),
-            recall_limit=int(os.environ.get("MEMORY_RECALL_LIMIT", "5")),
-            recall_vector_results=int(os.environ.get("MEMORY_RECALL_VECTOR_RESULTS", "5")),
-            recall_bm25_results=int(os.environ.get("MEMORY_RECALL_BM25_RESULTS", "5")),
-            threshold=float(os.environ.get("MEMORY_THRESHOLD", "0.3")),
-            boost_factor=float(os.environ.get("MEMORY_BOOST_FACTOR", "0.3")),
-            decay_rate=float(os.environ.get("MEMORY_DECAY_RATE", "0.01")),
-            embedding_base_url=os.environ.get("EMBEDDING_BASE_URL", ""),
-            embedding_api_key=os.environ.get("EMBEDDING_API_KEY", ""),
-            embedding_model_name=os.environ.get("EMBEDDING_MODEL_NAME", "text-embedding-3-small"),
-            embedding_dimension=int(os.environ.get("EMBEDDING_DIMENSION", "1536")),
+            memory_enabled=_get("MEMORY_ENABLED", "true").lower() in ("true", "1", "yes"),
+            memory_dir=_get("MEMORY_DIR", default_mem_dir),
+            recall_limit=int(_get("MEMORY_RECALL_LIMIT", "5")),
+            recall_vector_results=int(_get("MEMORY_RECALL_VECTOR_RESULTS", "5")),
+            recall_bm25_results=int(_get("MEMORY_RECALL_BM25_RESULTS", "5")),
+            threshold=float(_get("MEMORY_THRESHOLD", "0.3")),
+            boost_factor=float(_get("MEMORY_BOOST_FACTOR", "0.3")),
+            decay_rate=float(_get("MEMORY_DECAY_RATE", "0.01")),
+            embedding_base_url=_get("EMBEDDING_BASE_URL", ""),
+            embedding_api_key=_get("EMBEDDING_API_KEY", ""),
+            embedding_model_name=_get("EMBEDDING_MODEL_NAME", "text-embedding-3-small"),
+            embedding_dimension=int(_get("EMBEDDING_DIMENSION", "1536")),
         )
 
     def __post_init__(self):
-        """
-        配置验证
-
-        在初始化后验证配置参数的合法性。
-        """
+        """配置验证"""
         if self.recall_limit <= 0:
             raise ValueError("recall_limit 必须大于 0")
         if self.recall_vector_results <= 0:
@@ -106,23 +83,13 @@ class MemoryConfig:
             raise ValueError("embedding_dimension 必须大于 0")
 
     def get_memory_db_path(self) -> str:
-        """
-        获取 SQLite 数据库文件路径
-
-        Returns:
-            str: 数据库文件完整路径
-        """
+        """获取 SQLite 数据库文件路径"""
         memory_dir = Path(self.memory_dir)
         memory_dir.mkdir(parents=True, exist_ok=True)
         return str(memory_dir / "memories.db")
 
     def get_chroma_db_path(self) -> str:
-        """
-        获取 ChromaDB 存储目录路径
-
-        Returns:
-            str: ChromaDB 存储目录路径
-        """
+        """获取 ChromaDB 存储目录路径"""
         memory_dir = Path(self.memory_dir)
         memory_dir.mkdir(parents=True, exist_ok=True)
         chroma_dir = memory_dir / "chroma_db"
@@ -130,12 +97,7 @@ class MemoryConfig:
         return str(chroma_dir)
 
     def get_tantivy_index_path(self) -> str:
-        """
-        获取 Tantivy 索引存储目录路径
-
-        Returns:
-            str: Tantivy 索引存储目录路径
-        """
+        """获取 Tantivy 索引存储目录路径"""
         memory_dir = Path(self.memory_dir)
         memory_dir.mkdir(parents=True, exist_ok=True)
         tantivy_dir = memory_dir / "tantivy_index"
@@ -147,15 +109,15 @@ _memory_config: MemoryConfig | None = None
 
 
 def get_memory_config() -> MemoryConfig:
-    """
-    获取记忆系统配置单例
-
-    首次调用时从环境变量加载配置，后续调用返回缓存实例。
-
-    Returns:
-        MemoryConfig: 记忆系统配置实例
-    """
+    """获取记忆系统配置单例"""
     global _memory_config
     if _memory_config is None:
-        _memory_config = MemoryConfig.from_env()
+        _memory_config = MemoryConfig.from_db_or_env()
+    return _memory_config
+
+
+def reload_memory_config():
+    """重载记忆系统配置（热更新）"""
+    global _memory_config
+    _memory_config = MemoryConfig.from_db_or_env()
     return _memory_config

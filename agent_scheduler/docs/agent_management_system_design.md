@@ -12,7 +12,7 @@
 
 - 构建独立的 Agent 管理系统，包含前端和后端
 - 实现配置的安全存储（加密）和动态热更新管理（CRUD）
-- 项目完全置于agent\_scheduler中，与 `app_platform` 完全解耦
+- 项目完全置于agent\_scheduler\_management中，与 `app_platform` 完全解耦
 
 ***
 
@@ -177,6 +177,17 @@
 | details      | TEXT       | 操作详情（JSON）               |
 | created\_at  | DATETIME   | 操作时间                     |
 
+#### system\_configs（系统配置）
+
+| 字段          | 类型             | 说明              |
+| ----------- | -------------- | --------------- |
+| id          | INTEGER PK     | 自增 ID           |
+| key         | VARCHAR UNIQUE | 配置键名            |
+| value       | VARCHAR        | 配置值             |
+| description | VARCHAR        | 配置说明            |
+| created\_at | DATETIME       | 创建时间            |
+| updated\_at | DATETIME       | 更新时间            |
+
 ***
 
 ## 六、API 设计
@@ -208,6 +219,7 @@
 | ------- | ------ | -------- |
 | `/`     | GET    | 获取模型配置列表 |
 | `/`     | POST   | 创建模型配置   |
+| `/{id}` | GET    | 获取模型配置详情 |
 | `/{id}` | PUT    | 更新模型配置   |
 | `/{id}` | DELETE | 删除模型配置   |
 
@@ -221,10 +233,15 @@
 
 ### 6.5 内部接口 `/internal`（scheduler 暴露）
 
-| 端点               | 方法   | 说明     |
-| ---------------- | ---- | ------ |
-| `/reload/system` | POST | 重载系统配置 |
-| `/health`        | GET  | 健康检查   |
+| 端点               | 方法   | 说明                |
+| ---------------- | ---- | ----------------- |
+| `/reload/system` | POST | 重载系统配置            |
+| `/reload/model`  | POST | 重载模型配置（body 可带 model_config_id） |
+| `/reload/agent`  | POST | 重载 Agent 配置（body 可带 agent_id） |
+| `/reload/all`    | POST | 重载全部配置            |
+| `/health`        | GET  | 健康检查              |
+
+**注意**：内部接口通过 HTTP JSON body 传递目标 ID，而非 URL 路径参数。
 
 ***
 
@@ -272,15 +289,44 @@ scheduler 内部重载相关组件
 
 ```python
 class LLMRegistry:
-    """LLM 客户端注册表，支持热更新"""
+    """
+    LLM 调用器注册表，支持热更新
+    
+    提供 LLM 调用器的缓存和热更新功能，支持两种缓存模式：
+    1. 基于 model_config_id 的缓存（数据库驱动，推荐）
+    2. 基于配置参数的缓存（兼容旧接口）
+    
+    通过 langgraph.config.get_model_config_from_db() 从数据库读取配置，
+    由 config 模块负责数据库访问和 API Key 解密。
+    """
 
-    _clients: Dict[int, BaseChatModel] = {}
+    _cache = {}           # 参数缓存（兼容旧接口）
+    _model_cache = {}     # model_config_id 缓存（推荐）
 
-    def get(self, model_config_id: int) -> BaseChatModel:
-        """获取客户端，不存在则创建"""
+    @classmethod
+    def get_invoker_by_model_id(cls, model_config_id: int, tools: Optional[List] = None) -> Callable:
+        """基于 model_config_id 获取 LLM 调用器（数据库驱动，推荐）"""
+        from agent_scheduler.langgraph.config import get_model_config_from_db
+        session_config = get_model_config_from_db(model_config_id)
+        # 创建并缓存调用器
 
-    def reload(self, model_config_id: int):
-        """热更新：删除旧实例，创建新实例"""
+    @classmethod
+    def get_invoker(cls, config: SessionConfig, tools: Optional[List] = None) -> Callable:
+        """获取 LLM 调用器（带参数缓存，兼容旧接口）"""
+
+    @classmethod
+    def reload(cls, model_config_id: int):
+        """热更新：清除指定模型配置的缓存"""
+
+    @classmethod
+    def clear_cache(cls):
+        """清除所有缓存（热更新时调用）"""
+
+def reload_llm_registry(model_config_id: Optional[int] = None):
+    """重载 LLM 注册表（热更新）
+    - model_config_id 指定时：仅清除该模型缓存
+    - model_config_id 为 None 时：清除全部缓存
+    """
 ```
 
 ***
@@ -359,7 +405,7 @@ npm run build
 
 ***
 
-## 十三、架构设计补充（关键决策）
+## 十二、架构设计补充（关键决策）
 
 ### 13.1 热更新通信机制
 
@@ -377,12 +423,12 @@ scheduler 接收通知，重载内存配置
 返回结果给管理后端 → 返回给管理面板
 ```
 
-| 配置类型 | 内部接口 | 生效方式 |
-|---------|---------|---------|
-| 系统配置 | `/internal/reload/system` | 更新单例配置，立即生效 |
-| 模型配置 | `/internal/reload/model/{id}` | 调用 `LLMRegistry.reload()` 重建客户端 |
-| Agent 配置 | `/internal/reload/agent/{id}` | 重启该 Agent 的调度线程 |
-| 全部配置 | `/internal/reload/all` | 重载所有配置 |
+| 配置类型 | 内部接口 | 请求方式 | 生效方式 |
+|---------|---------|---------|---------|
+| 系统配置 | `/internal/reload/system` | POST（无 body） | 更新单例配置，立即生效 |
+| 模型配置 | `/internal/reload/model` | POST（body: `{"model_config_id": id}`） | 调用 `LLMRegistry.reload()` 清除指定缓存 |
+| Agent 配置 | `/internal/reload/agent` | POST（body: `{"agent_id": id}`） | 重启该 Agent 的调度线程 |
+| 全部配置 | `/internal/reload/all` | POST（无 body） | 重载所有配置 |
 
 ### 13.2 配置加载策略
 
@@ -524,25 +570,46 @@ export default defineConfig({
 
 ### 13.8 现有配置模块的适配方案
 
-现有代码中的配置模块需要逐步迁移到数据库驱动：
+现有代码中的配置模块已经迁移到数据库驱动：
 
-| 模块 | 当前方式 | 迁移后方式 | 迁移难度 |
+| 模块 | 当前方式 | 迁移后方式 | 迁移状态 |
 |------|---------|-----------|---------|
-| `scheduler/config.py` | 环境变量 | 从数据库读取 `system_configs` 表 | 中 |
-| `langgraph/config.py` | 环境变量 | 从数据库读取 `system_configs` 表 | 中 |
-| `memory/config.py` | 环境变量 | 从数据库读取 `system_configs` 表 | 中 |
-| `scheduler/relation_map.py` | `ai_users_config.json` | 从数据库读取 `agent_configs` 表 | 低 |
-| LLM 客户端创建 | 环境变量 | 从数据库读取 `model_configs` 表，通过 `LLMRegistry` 管理 | 高 |
+| `scheduler/config.py` | 环境变量 | 从数据库读取 `system_configs` 表 | ✅ 已完成 |
+| `langgraph/config.py` | 环境变量 | 从数据库读取 `system_configs` / `model_configs` 表 | ✅ 已完成 |
+| `memory/config.py` | 环境变量 | 从数据库读取 `system_configs` 表 | ✅ 已完成 |
+| `scheduler/relation_map.py` | `ai_users_config.json` | 从数据库读取 `agent_configs` 表 | ✅ 已完成 |
+| LLM 客户端创建 | 环境变量 | 通过 `config.get_model_config_from_db()` 读取，由 `LLMRegistry` 管理缓存 | ✅ 已完成 |
 
-**迁移策略**：分阶段实施
+**配置加载架构**：
 
-- **阶段一**：管理后端 CRUD + 数据库存储（不改变 scheduler 读取方式）
-- **阶段二**：scheduler 改为从数据库加载配置（实现热更新）
-- **阶段三**：清理 `.env` 中的业务配置
+```
+┌─────────────────────────────────────────────────────┐
+│  Scheduler 进程                                       │
+│  ┌─────────────────────────────────────────────────┐ │
+│  │  配置层（langgraph/config.py 等）                  │ │
+│  │  ├── 从 db_client 读取 system_configs 表         │ │
+│  │  ├── 解密 model_configs 表中的 API Key           │ │
+│  │  └── 转换为 SessionConfig 对象                   │ │
+│  └─────────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────┐ │
+│  │  执行层（langgraph/executor.py）                   │ │
+│  │  ├── LLMRegistry 缓存 LLM 调用器                  │ │
+│  │  ├── 通过 config 层获取配置，不直接访问数据库      │ │
+│  │  └── 支持精准热更新（按 model_config_id）          │ │
+│  └─────────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────┐ │
+│  │  内部 HTTP 服务器（端口 8002）                     │ │
+│  │  └── 接收热更新通知，清除对应缓存                  │ │
+│  └─────────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────┐ │
+│  │  数据库抽象层（management/backend/db_client.py）   │ │
+│  └─────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+```
 
 ***
 
-## 十二、开发优先级
+## 十三、开发优先级
 
 | 优先级 | 模块              | 说明           |
 | --- | --------------- | ------------ |

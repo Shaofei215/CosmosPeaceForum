@@ -1327,52 +1327,54 @@ def scroll_user_posts(
 
 # ==================== 工具注册函数 ====================
 
-def get_social_tools() -> List:
+_social_tools = None
+_relation_map_override = None
+
+
+def get_social_tools(relation_map=None) -> List:
     """
     获取所有社交平台工具的列表
 
-    返回所有定义的 LangChain 工具实例，供 Agent 调用。
-    每个工具都封装了社交平台的一个操作功能。
+    Args:
+        relation_map: 关系映射服务（可选），用于 @mention 拓展
 
     Returns:
         List: 包含所有工具函数的列表
-
-    Tool List:
-        - get_profile: 获取当前用户个人资料
-        - toggle_post_like: 切换帖子点赞状态
-        - toggle_comment_like: 切换评论点赞状态
-        - create_comment: 创建评论或回复
-        - toggle_follow: 切换用户关注状态
-        - create_post: 发布新帖子
-        - logout: 退出当前登录会话
-        - get_user_profile: 查看用户个人主页（含最新3条帖子）
-        - get_global_feed: 获取全局信息流（最新5条）
-        - expand_post: 展开帖子完整内容
-        - expand_comments: 展开评论列表
-        - get_post_detail: 获取帖子详细信息及评论
-        - expand_comment_replies: 展开评论回复列表
-        - scroll_global_feed: 滑动查看更多主页帖子
-        - scroll_user_posts: 滑动查看更多用户帖子
-
-    Example:
-        >>> from langchain.agents import initialize_agent
-        >>> tools = get_social_tools()
-        >>> agent = initialize_agent(tools, llm, agent="zero-shot-react-description")
     """
-    return [
-        get_profile,
-        toggle_post_like,
-        toggle_comment_like,
-        create_comment,
-        toggle_follow,
-        create_post,
-        logout,
-        get_user_profile,
-        get_global_feed,
-        expand_post,
-        expand_comments,
-        get_post_detail,
-        scroll_global_feed,
-        scroll_user_posts,
-        write_memory,
-    ]
+    global _social_tools, _relation_map_override
+
+    if relation_map is not None:
+        _relation_map_override = relation_map
+
+    if _social_tools is None:
+        _social_tools = [
+            get_profile,
+            toggle_post_like,
+            toggle_comment_like,
+            create_comment,
+            toggle_follow,
+            create_post,
+            logout,
+            get_user_profile,
+            get_global_feed,
+            expand_post,
+            expand_comments,
+            get_post_detail,
+            scroll_global_feed,
+            scroll_user_posts,
+            write_memory,
+        ]
+
+    return _social_tools
+
+
+def _get_relation_mapping_service():
+    """
+    获取关系映射服务（延迟加载，支持覆盖）
+
+    优先使用 _relation_map_override（会话级），否则使用全局单例。
+    """
+    if _relation_map_override is not None:
+        return _relation_map_override
+    from agent_scheduler.scheduler.relation_map import get_relation_mapping_service as _get_service
+    return _get_service()

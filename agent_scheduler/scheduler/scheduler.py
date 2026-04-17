@@ -1,1151 +1,430 @@
-# AI Agent 调度器核心模块
-# 实现 AI 用户的注册、登录时间计算和会话调度功能
+"""
+AI Agent 调度模块
+
+职责：
+1. 从管理数据库加载启用的 Agent 列表
+2. 为每个 Agent 创建独立调度线程（AIUserScheduler）
+3. 基于泊松过程计算登录间隔
+4. 触发 LangGraph 会话
+5. 提供 Agent 线程的启停和重启功能
+
+不再包含：注册流程、配置管理（已迁移至 management）
+"""
+
 import json
+import logging
 import math
-import mimetypes
 import os
 import random
-import threading
 import time
+import threading
 import traceback
-from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Dict, Optional, List
 
-import requests
-
-from agent_scheduler.scheduler.time_system import (
-    TimeSystem,
-    get_scaled_time,
-    get_scaled_timestamp,
-    get_time_system,
-    set_time_scale,
-)
+from agent_scheduler.scheduler.config import get_scheduler_config
+from agent_scheduler.langgraph.executor import SessionExecutor, run_session
+from agent_scheduler.langgraph.config import AgentConfig as SessionAgentConfig
 from agent_scheduler.scheduler.context import (
     AgentContext,
-    set_current_context,
+    get_current_context,
     clear_current_context,
 )
-from agent_scheduler.scheduler.config import get_scheduler_config
-from agent_scheduler.scheduler.relation_map import build_relation_maps, get_relation_mapping_service
-from agent_scheduler.langgraph.executor import run_session, ExecutionResult
-from agent_scheduler.langgraph.config import AgentConfig
+from agent_scheduler.scheduler.time_system import get_time_system
+from agent_scheduler.management.backend.db_client import get_db_client
+
+logger = logging.getLogger(__name__)
 
 
-_scheduler_config = get_scheduler_config()
-
-API_BASE_URL = _scheduler_config.api_base_url
-ADMIN_KEY = _scheduler_config.admin_key
-AI_USER_PASSWORD = _scheduler_config.ai_user_password
-CONFIG_FILE_PATH = _scheduler_config.ai_users_config_path
-
-
-def get_avatar_dir() -> str:
+def login_user(username: str, password: str) -> Optional[Dict]:
     """
-    获取 AI 用户头像目录的绝对路径
-
-    头像文件存储在 agent_scheduler/avatar/ 目录下
-
-    Returns:
-        str: 头像目录的绝对路径
-    """
-    scheduler_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(scheduler_dir, 'avatar')
-
-
-def get_avatar_file_path(avatar_filename: str) -> Optional[str]:
-    """
-    获取头像文件的完整路径
+    通过 app_platform API 登录用户
 
     Args:
-        avatar_filename: 头像文件名（来自 ai_users_config.json）
+        username: 用户名
+        password: 密码
 
     Returns:
-        Optional[str]: 完整的头像文件路径，如果文件不存在或文件名为空则返回 None
+        Optional[Dict]: 用户信息，失败返回 None
     """
-    if not avatar_filename or not avatar_filename.strip():
+    try:
+        from agent_scheduler.app_platform.user.user_api import login_user as platform_login
+        return platform_login(username, password)
+    except ImportError:
+        import requests
+        config = get_scheduler_config()
+        url = f"{config.api_base_url}/auth/ai-login"
+        response = requests.post(
+            url,
+            json={"username": username, "password": password},
+            headers={"Content-Type": "application/json"},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return response.json()
+        logger.error(f"用户 {username} 登录失败: HTTP {response.status_code}")
         return None
 
-    avatar_dir = get_avatar_dir()
-    file_path = os.path.join(avatar_dir, avatar_filename)
 
-    if os.path.exists(file_path) and os.path.isfile(file_path):
-        return file_path
-
-    return None
-
-
-def is_valid_avatar_file(avatar_filename: str) -> bool:
+class AIUserScheduler(threading.Thread):
     """
-    检查头像文件是否为有效的图片格式
+    AI 用户调度线程
 
-    支持的格式：JPEG, PNG, GIF, WebP
+    每个 Agent 独立运行在自己的线程中，循环执行：
+    计算登录间隔 → 休眠 → 登录 → 触发会话 → 清理上下文
 
-    Args:
-        avatar_filename: 头像文件名
-
-    Returns:
-        bool: 文件是否为有效的图片格式
+    支持运行时启停和重启。
     """
-    if not avatar_filename or not avatar_filename.strip():
-        return False
 
-    file_path = get_avatar_file_path(avatar_filename)
-    if not file_path:
-        return False
+    def __init__(
+        self,
+        user_id: int,
+        username: str,
+        ai_config_id: int,
+        monthly_logins: int,
+        password: str,
+        personality_prompt: str,
+        personal_signature: str,
+        time_system,
+        relation_map=None,
+        pre_registered_user_id: Optional[int] = None,
+    ):
+        super().__init__(daemon=True, name=f"AIUser-{username}")
+        self.user_id = user_id
+        self.username = username
+        self.ai_config_id = ai_config_id
+        self.monthly_logins = monthly_logins
+        self.password = password
+        self.personality_prompt = personality_prompt
+        self.personal_signature = personal_signature
+        self.time_system = time_system
+        self.relation_map = relation_map
+        self.pre_registered_user_id = pre_registered_user_id
 
-    mime_type, _ = mimetypes.guess_type(file_path)
-    if mime_type:
-        return mime_type.startswith('image/') and mime_type in [
-            'image/jpeg',
-            'image/png',
-            'image/gif',
-            'image/webp'
-        ]
+        self._stop_event = threading.Event()
+        self._is_active = True
 
-    valid_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
-    _, ext = os.path.splitext(avatar_filename)
-    return ext.lower() in valid_extensions
+        self.next_login_time = None
+        self.is_logged_in = False
 
+    def stop(self, timeout: float = 5.0):
+        """停止调度线程"""
+        self._is_active = False
+        self._stop_event.set()
+        self.join(timeout=timeout)
 
-def format_relative_time(seconds: float) -> str:
-    """
-    将秒数格式化为相对时间字符串
+    def pause(self):
+        """暂停调度（不退出线程）"""
+        self._is_active = False
 
-    Args:
-        seconds: 秒数
+    def resume(self):
+        """恢复调度"""
+        self._is_active = True
 
-    Returns:
-        str: 格式化后的相对时间字符串，如 "2小时30分后"
-    """
-    if seconds < 0:
-        seconds = 0
+    def run(self):
+        """线程主循环"""
+        thread_id = threading.get_ident()
+        logger.info(f"[{self.username}] 调度线程启动 (ID:{thread_id})")
 
-    if seconds < 60:
-        return f"{seconds:.0f}秒后"
-    elif seconds < 3600:
-        minutes = int(seconds // 60)
-        secs = int(seconds % 60)
-        return f"{minutes}分{secs}秒后" if secs > 0 else f"{minutes}分后"
-    else:
-        hours = int(seconds // 3600)
-        remainder = seconds % 3600
-        minutes = int(remainder // 60)
-        if minutes > 0:
-            return f"{hours}小时{minutes}分后"
-        else:
-            return f"{hours}小时后"
-
-
-@dataclass
-class AIUserConfig:
-    """
-    AI 用户配置数据类
-
-    Attributes:
-        id: AI 配置 ID
-        username: 用户名
-        name: 角色名称
-        avatar: 头像文件名
-        monthly_logins: 每月理想登录次数
-        personal_signature: 个性签名
-        personality_prompt: 角色性格描述
-        knows_ids: 该角色认识的其他 AI 用户 ID 列表
-    """
-    id: int
-    username: str
-    name: str
-    avatar: str
-    monthly_logins: int
-    personal_signature: str
-    personality_prompt: str
-    knows_ids: List[int] = field(default_factory=list)
-
-
-def load_ai_users_config(config_path: str = CONFIG_FILE_PATH) -> List[AIUserConfig]:
-    """
-    从 JSON 配置文件加载 AI 用户配置
-
-    Args:
-        config_path: 配置文件路径
-
-    Returns:
-        List[AIUserConfig]: AI 用户配置列表
-
-    Raises:
-        FileNotFoundError: 配置文件不存在
-        json.JSONDecodeError: JSON 解析失败
-    """
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config_data = json.load(f)
-    except FileNotFoundError:
-        print(f"[错误] 配置文件不存在: {config_path}")
-        raise
-    except json.JSONDecodeError as e:
-        print(f"[错误] JSON 解析失败: {e}")
-        raise
-
-    ai_users = config_data.get('ai_users', [])
-    users = []
-
-    for user_data in ai_users:
         try:
-            user = AIUserConfig(
-                id=user_data.get('id', 0),
-                username=user_data.get('username', ''),
-                name=user_data.get('name', ''),
-                avatar=user_data.get('avatar', ''),
-                monthly_logins=user_data.get('monthly_logins', 1),
-                personal_signature=user_data.get('personal_signature', ''),
-                personality_prompt=user_data.get('personality_prompt', ''),
-                knows_ids=user_data.get('knows_ids', []),
-            )
-            users.append(user)
+            self._scheduling_loop()
         except Exception as e:
-            print(f"[警告] 解析用户配置失败: {user_data.get('username', '未知')}, 错误: {e}")
-            continue
-
-    print(f"[信息] 成功加载 {len(users)} 个 AI 用户配置")
-    return users
-
-
-def register_ai_user(
-    username: str,
-    password: str,
-    ai_config_id: int,
-    admin_key: str
-) -> Tuple[bool, Optional[Dict], Optional[str]]:
-    """
-    通过 AdminKey 注册 AI 用户账号
-
-    Args:
-        username: 用户名
-        password: 密码
-        ai_config_id: AI 配置 ID
-        admin_key: 管理员密钥
-
-    Returns:
-        Tuple[bool, Optional[Dict], Optional[str]]:
-            - 成功标志
-            - 响应数据（成功时）
-            - 错误信息（失败时）
-    """
-    url = f"{API_BASE_URL}/auth/register"
-
-    headers = {
-        "X-Admin-Key": admin_key,
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "username": username,
-        "password": password,
-        "is_ai_agent": True,
-        "ai_config_id": ai_config_id
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-
-        if response.status_code == 201:
-            return True, response.json(), None
-        elif response.status_code == 400:
-            response_data = response.json()
-            detail = response_data.get('detail', '参数错误')
-            if '已存在' in str(detail) or 'exists' in str(detail).lower():
-                return True, None, "用户已存在（跳过）"
-            return False, None, f"参数错误: {detail}"
-        elif response.status_code == 401:
-            return False, None, "管理员密钥无效"
-        else:
-            return False, None, f"HTTP {response.status_code}: {response.text}"
-
-    except requests.exceptions.ConnectionError:
-        return False, None, "无法连接到 API 服务器"
-    except requests.exceptions.Timeout:
-        return False, None, "API 请求超时"
-    except Exception as e:
-        return False, None, f"请求异常: {str(e)}"
-
-
-def update_user_profile(
-    user_id: int,
-    bio: str,
-    token: str
-) -> Tuple[bool, Optional[Dict], Optional[str]]:
-    """
-    更新用户资料
-
-    Args:
-        user_id: 用户 ID
-        bio: 个人简介
-        token: 访问令牌
-
-    Returns:
-        Tuple[bool, Optional[Dict], Optional[str]]:
-            - 成功标志
-            - 响应数据（成功时）
-            - 错误信息（失败时）
-    """
-    url = f"{API_BASE_URL}/users/{user_id}"
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "bio": bio
-    }
-
-    try:
-        response = requests.put(url, json=payload, headers=headers, timeout=10)
-
-        if response.status_code == 200:
-            return True, response.json(), None
-        elif response.status_code == 401:
-            return False, None, "无权限修改此用户"
-        elif response.status_code == 404:
-            return False, None, "用户不存在"
-        else:
-            return False, None, f"HTTP {response.status_code}: {response.text}"
-
-    except requests.exceptions.ConnectionError:
-        return False, None, "无法连接到 API 服务器"
-    except requests.exceptions.Timeout:
-        return False, None, "API 请求超时"
-    except Exception as e:
-        return False, None, f"请求异常: {str(e)}"
-
-
-def login_user(
-    username: str,
-    password: str
-) -> Tuple[bool, Optional[str], Optional[str]]:
-    """
-    AI 用户登录获取访问令牌
-
-    Args:
-        username: 用户名
-        password: 密码
-
-    Returns:
-        Tuple[bool, Optional[str], Optional[str]]:
-            - 成功标志
-            - 访问令牌（成功时）
-            - 错误信息（失败时）
-    """
-    url = f"{API_BASE_URL}/auth/ai-login"
-
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "username": username,
-        "password": password
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-
-        if response.status_code == 200:
-            data = response.json()
-            return True, data.get('access_token'), None
-        elif response.status_code == 401:
-            return False, None, "用户名或密码错误"
-        else:
-            return False, None, f"HTTP {response.status_code}: {response.text}"
-
-    except requests.exceptions.ConnectionError:
-        return False, None, "无法连接到 API 服务器"
-    except requests.exceptions.Timeout:
-        return False, None, "API 请求超时"
-    except Exception as e:
-        return False, None, f"请求异常: {str(e)}"
-
-
-def upload_avatar(
-    user_id: int,
-    avatar_filename: str,
-    token: str
-) -> Tuple[bool, Optional[str], Optional[str]]:
-    """
-    上传用户头像到服务器
-
-    Args:
-        user_id: 用户 ID
-        avatar_filename: 头像文件名（来自 ai_users_config.json）
-        token: 访问令牌
-
-    Returns:
-        Tuple[bool, Optional[str], Optional[str]]:
-            - 成功标志
-            - 头像 URL（成功时）
-            - 错误信息（失败时）
-    """
-    file_path = get_avatar_file_path(avatar_filename)
-    if not file_path:
-        return False, None, f"头像文件不存在或无效: {avatar_filename}"
-
-    mime_type, _ = mimetypes.guess_type(file_path)
-    if mime_type is None:
-        mime_type = 'application/octet-stream'
-
-    url = f"{API_BASE_URL}/users/avatar"
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-    }
-
-    try:
-        with open(file_path, 'rb') as f:
-            files = {
-                'file': (avatar_filename, f, mime_type)
-            }
-            response = requests.post(url, headers=headers, files=files, timeout=30)
-
-        if response.status_code == 200:
-            data = response.json()
-            avatar_url = data.get('avatar_url', '')
-            return True, avatar_url, None
-        elif response.status_code == 400:
-            response_data = response.json()
-            detail = response_data.get('detail', '文件格式不支持')
-            return False, None, f"头像上传失败: {detail}"
-        elif response.status_code == 401:
-            return False, None, "无权限上传头像"
-        else:
-            return False, None, f"HTTP {response.status_code}: {response.text}"
-
-    except requests.exceptions.ConnectionError:
-        return False, None, "无法连接到 API 服务器"
-    except requests.exceptions.Timeout:
-        return False, None, "头像上传超时"
-    except Exception as e:
-        return False, None, f"请求异常: {str(e)}"
-
-
-def calculate_poisson_interval(monthly_logins: int) -> float:
-    """
-    使用泊松过程模型计算登录时间间隔
-
-    泊松过程假设事件在时间上随机发生，平均率为 lambda。
-    相邻事件间隔服从指数分布：T = -ln(U) / lambda
-    其中 U 是 [0,1] 区间的均匀随机数。
-
-    Args:
-        monthly_logins: 每月平均登录次数（lambda）
-
-    Returns:
-        float: 登录时间间隔（秒）
-    """
-    if monthly_logins <= 0:
-        monthly_logins = 1
-
-    lambda_rate = monthly_logins / (30 * 24 * 3600)
-
-    u = random.uniform(0.0001, 0.9999)
-    interval = -math.log(u) / lambda_rate
-
-    return interval
-
-
-def trigger_login_event(
-    username: str,
-    time_system: TimeSystem,
-    user_id: int,
-    ai_config_id: int,
-    personality_prompt: str,
-    personal_signature: str,
-    token: str,
-) -> ExecutionResult:
-    """
-    触发登录事件并执行 LangGraph 会话
-
-    当调度器决定让 AI 用户登录时，调用此函数执行完整的 LangGraph 会话。
-    会话流程：LLM 决策 -> 工具执行 -> ... -> 登出 -> 生成总结
-
-    注意：此函数只负责在登录时机触发会话执行，配置和工具由 executor 内部处理。
-
-    Args:
-        username: 用户名
-        time_system: 时间系统实例
-        user_id: 用户 ID
-        ai_config_id: AI 配置 ID
-        personality_prompt: 角色性格描述
-        personal_signature: 个性签名
-        token: 访问令牌
-
-    Returns:
-        ExecutionResult: 包含执行结果的 ExecutionResult 对象
-    """
-    current_scaled_time = time_system.get_scaled_time()
-    print(f"[调度器] 用户 {username} 于 {current_scaled_time} 开始会话")
-
-    if user_id is None:
-        raise ValueError(f"[调度器] 用户 {username} 的 user_id 为 None，无法执行会话")
-
-    agent_config = AgentConfig(
-        user_id=user_id,
-        username=username,
-        ai_config_id=ai_config_id,
-        personality_prompt=personality_prompt,
-        personal_signature=personal_signature,
-        token=token,
-    )
-
-    result = run_session(agent_config)
-
-    if result.success:
-        print(f"[调度器] 用户 {username} 会话结束: {result.step_count} 步, 退出原因: {result.exit_reason}")
-        if result.summary:
-            narrative = result.summary.get('narrative', '') if isinstance(result.summary, dict) else result.summary.narrative
-            print(f"[调度器] 用户 {username} 总结: {narrative[:100]}...")
-    else:
-        print(f"[调度器] 用户 {username} 会话异常: {result.error_message}")
-
-    return result
-
-
-class AIUserScheduler:
-    """
-    单个 AI 用户的调度器
-
-    每个 AI 用户拥有独立的线程，运行独立的调度循环：
-    1. 注册用户（如需要）
-    2. 更新用户简介（如需要）
-    3. 循环：
-       - 计算下次登录时间
-       - 休眠至该时间
-       - 触发登录事件
-       - 计算下次登录时间（重复）
-
-    Attributes:
-        user_config: 用户配置
-        time_system: 时间系统实例
-        admin_key: 管理员密钥
-        password: 用户密码
-        running: 调度器运行状态
-        _thread: 调度线程
-        _registered_user_id: 注册后的用户 ID
-    """
-
-    def __init__(
-        self,
-        user_config: AIUserConfig,
-        time_system: TimeSystem,
-        admin_key: str,
-        password: str,
-        pre_registered_user_id: Optional[int] = None
-    ):
-        """
-        初始化单用户调度器
-
-        Args:
-            user_config: 用户配置
-            time_system: 时间系统实例
-            admin_key: 管理员密钥
-            password: 用户密码
-            pre_registered_user_id: 预注册的用户 ID（由 RegistrationManager 注册后传入）
-        """
-        self.user_config = user_config
-        self.time_system = time_system
-        self.admin_key = admin_key
-        self.password = password
-        self.running = False
-        self._thread: Optional[threading.Thread] = None
-        self._registered_user_id: Optional[int] = pre_registered_user_id
-
-    def _scheduling_loop(self) -> None:
-        """
-        调度循环
-
-        持续运行：计算下次登录时间 -> 休眠 -> 登录 -> 设置上下文 -> 触发登录事件 -> 清理上下文 -> 重复
-        """
-        username = self.user_config.username if self.user_config.username else self.user_config.name
-
-        print(f"[调度器][{username}] 调度循环已启动")
-
-        while self.running:
-            try:
-                current_time = self.time_system.get_scaled_timestamp()
-
-                interval = calculate_poisson_interval(self.user_config.monthly_logins)
-                next_login_time = current_time + interval
-
-                print(f"[调度器][{username}] 下次登录: {format_relative_time(interval)}")
-
-                while self.running:
-                    current_time = self.time_system.get_scaled_timestamp()
-                    remaining = next_login_time - current_time
-
-                    if remaining <= 0:
-                        break
-
-                    sleep_time = min(remaining, 0.5)
-                    time.sleep(sleep_time)
-
-                if not self.running:
-                    break
-
-                login_success, token, login_error = login_user(username, self.password)
-
-                if login_success and token:
-                    set_current_context(AgentContext(
-                        user_id=self._registered_user_id,
-                        username=username,
-                        ai_config_id=self.user_config.id,
-                        token=token,
-                        user_config={
-                            "name": self.user_config.name,
-                            "avatar": self.user_config.avatar,
-                            "personal_signature": self.user_config.personal_signature,
-                            "personality_prompt": self.user_config.personality_prompt,
-                        }
-                    ))
-
-                    trigger_login_event(
-                        username=username,
-                        time_system=self.time_system,
-                        user_id=self._registered_user_id,
-                        ai_config_id=self.user_config.id,
-                        personality_prompt=self.user_config.personality_prompt,
-                        personal_signature=self.user_config.personal_signature,
-                        token=token,
-                    )
-
-                    clear_current_context()
-                else:
-                    print(f"[调度器][{username}] 登录失败: {login_error}")
-
-            except Exception as e:
-                print(f"[调度器][{username}] 调度循环异常: {e}")
-                traceback.print_exc()
-                time.sleep(1)
-
-        print(f"[调度器][{username}] 调度循环已停止")
-
-    def start(self) -> None:
-        """
-        启动调度器
-        """
-        if self.running:
-            print(f"[{self.user_config.name}] 调度器已在运行中")
+            logger.error(f"[{self.username}] 调度线程异常: {e}\n{traceback.format_exc()}")
+        finally:
+            clear_current_context()
+            logger.info(f"[{self.username}] 调度线程退出")
+
+    def _scheduling_loop(self):
+        """调度循环"""
+        if self.monthly_logins <= 0:
+            logger.warning(f"[{self.username}] monthly_logins={self.monthly_logins}，跳过调度")
             return
 
-        self.running = True
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-        print(f"[{self.user_config.name}] 调度器已启动")
+        logger.info(f"[{self.username}] 开始调度循环 (月登录次数: {self.monthly_logins})")
 
-    def _run(self) -> None:
-        """
-        运行流程：调度时间计算循环
-        """
-        if self._registered_user_id is None:
-            print(f"[{self.user_config.name}] 错误：未获取到注册用户ID，跳过调度")
-            return
-
-        self._scheduling_loop()
-
-    def stop(self) -> None:
-        """
-        停止调度器
-        """
-        if not self.running:
-            print(f"[{self.user_config.name}] 调度器未在运行")
-            return
-
-        self.running = False
-        if self._thread:
-            self._thread.join(timeout=5)
-        print(f"[{self.user_config.name}] 调度器已停止")
-
-
-class RegistrationManager:
-    """
-    AI 用户注册管理器
-
-    专门负责在主线程中按顺序完成所有 AI 用户的注册流程，
-    避免多线程同时注册导致 API 接口拥塞和超时问题。
-
-    Attributes:
-        time_system: 时间系统实例
-        admin_key: 管理员密钥
-        password: 用户密码
-        registration_interval: 两次注册之间的间隔秒数
-        registered_users: 已成功注册的用户字典 {user_id: registered_user_id}
-        failed_users: 注册失败的用户列表
-    """
-
-    def __init__(
-        self,
-        time_system: TimeSystem,
-        admin_key: str,
-        password: str,
-        registration_interval: float = 0.5
-    ):
-        """
-        初始化注册管理器
-
-        Args:
-            time_system: 时间系统实例
-            admin_key: 管理员密钥
-            password: 用户密码
-            registration_interval: 两次注册之间的间隔秒数，默认 0.5 秒
-        """
-        self.time_system = time_system
-        self.admin_key = admin_key
-        self.password = password
-        self.registration_interval = registration_interval
-        self.registered_users: Dict[int, int] = {}
-        self.failed_users: List[Tuple[AIUserConfig, str]] = []
-        self.newly_registered_users: set = set()
-
-    def register_all_users(self, users: List[AIUserConfig]) -> None:
-        """
-        按顺序注册所有 AI 用户
-
-        在主线程中顺序执行注册请求，每个请求之间有固定间隔，
-        避免同时发送大量请求导致 API 超时。
-
-        Args:
-            users: AI 用户配置列表
-        """
-        total_users = len(users)
-        print(f"\n[注册管理器] 开始注册 {total_users} 个 AI 用户...")
-        print(f"[注册管理器] 注册间隔: {self.registration_interval} 秒")
-
-        for index, user in enumerate(users, 1):
-            username = user.username if user.username else user.name
-
-            if not username:
-                print(f"[注册管理器] 用户名为空，跳过 (配置ID: {user.id})")
-                self.failed_users.append((user, "用户名为空"))
+        while not self._stop_event.is_set():
+            if not self._is_active:
+                time.sleep(5)
                 continue
 
-            print(f"[注册管理器] [{index}/{total_users}] 正在注册: {username}")
+            self.next_login_time = self._calculate_next_login_time()
 
-            success, data, error = register_ai_user(
-                username=username,
-                password=self.password,
-                ai_config_id=user.id,
-                admin_key=self.admin_key
+            logger.info(
+                f"[{self.username}] 下次登录: {self.next_login_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                f"({self.time_system.to_human_readable_duration(self.next_login_time - self.time_system.now())})"
             )
 
-            if success:
-                if error == "用户已存在（跳过）":
-                    print(f"[注册管理器] [{index}/{total_users}] {username} - 用户已存在，尝试获取用户ID...")
-                    existing_user_id = self._get_existing_user_id(username)
-                    if existing_user_id is not None:
-                        self.registered_users[user.id] = existing_user_id
-                        print(f"[注册管理器] [{index}/{total_users}] {username} - 已存在用户ID: {existing_user_id}")
-                    else:
-                        self.failed_users.append((user, "用户已存在但无法获取用户ID"))
-                        print(f"[注册管理器] [{index}/{total_users}] {username} - 用户已存在但无法获取用户ID")
-                else:
-                    registered_id = data.get('id') if data else None
-                    self.registered_users[user.id] = registered_id
-                    self.newly_registered_users.add(user.id)
-                    print(f"[注册管理器] [{index}/{total_users}] {username} - 注册成功 (ID: {registered_id})")
-            else:
-                print(f"[注册管理器] [{index}/{total_users}] {username} - 注册失败: {error}")
-                self.failed_users.append((user, error))
+            if not self._wait_until_login_time():
+                continue
 
-            if index < total_users and self.registration_interval > 0:
-                time.sleep(self.registration_interval)
+            self._execute_login_and_session()
 
-        success_count = len(self.registered_users)
-        fail_count = len(self.failed_users)
-        print(f"[注册管理器] 注册完成: 成功 {success_count}, 失败 {fail_count}")
+    def _calculate_next_login_time(self) -> datetime:
+        """使用泊松过程计算下次登录时间"""
+        avg_interval_hours = 720.0 / self.monthly_logins
+        interval_hours = random.expovariate(1.0 / avg_interval_hours)
+        interval_hours = max(0.1, interval_hours)
 
-    def update_bio_for_user(self, user: AIUserConfig, registered_user_id: int) -> bool:
-        """
-        为已注册用户更新简介
+        return self.time_system.now() + timedelta(hours=interval_hours)
 
-        Args:
-            user: 用户配置
-            registered_user_id: 注册后的用户 ID
+    def _wait_until_login_time(self) -> bool:
+        """休眠直到登录时间，返回 True 表示正常唤醒，False 表示被中断"""
+        while not self._stop_event.is_set():
+            remaining = self.next_login_time - self.time_system.now()
+            if remaining.total_seconds() <= 0:
+                return True
 
-        Returns:
-            bool: 更新是否成功
-        """
-        if not user.personal_signature:
-            return True
+            sleep_seconds = min(30, remaining.total_seconds())
+            slept = 0
+            while slept < sleep_seconds and not self._stop_event.is_set():
+                time.sleep(min(1, sleep_seconds - slept))
+                slept += 1
 
-        username = user.username if user.username else user.name
+            if self._stop_event.is_set():
+                return False
 
-        print(f"[注册管理器] 正在更新 {username} 的用户简介...")
+        return not self._stop_event.is_set()
 
-        login_success, token, login_error = login_user(username, self.password)
+    def _execute_login_and_session(self):
+        """执行登录和会话"""
+        logger.info(f"[{self.username}] 开始登录")
 
-        if not login_success or not token:
-            print(f"[注册管理器] {username} 登录获取令牌失败: {login_error}")
-            return False
-
-        bio_success, _, bio_error = update_user_profile(
-            registered_user_id,
-            user.personal_signature,
-            token
-        )
-
-        if bio_success:
-            print(f"[注册管理器] {username} 更新用户简介成功")
-            return True
-        else:
-            print(f"[注册管理器] {username} 更新用户简介失败: {bio_error}")
-            return False
-
-    def update_avatar_for_user(
-        self,
-        user: AIUserConfig,
-        registered_user_id: int
-    ) -> Tuple[bool, Optional[str]]:
-        """
-        为已注册用户上传并更新头像
-
-        Args:
-            user: 用户配置
-            registered_user_id: 注册后的用户 ID
-
-        Returns:
-            Tuple[bool, Optional[str]]: (是否成功, 错误信息或头像URL)
-        """
-        avatar_filename = user.avatar
-
-        if not avatar_filename or not avatar_filename.strip():
-            return True, None
-
-        if not is_valid_avatar_file(avatar_filename):
-            print(f"[注册管理器] 跳过无效的头像文件: {avatar_filename}")
-            return True, None
-
-        file_path = get_avatar_file_path(avatar_filename)
-        if not file_path:
-            print(f"[注册管理器] 头像文件不存在: {avatar_filename}")
-            return True, None
-
-        username = user.username if user.username else user.name
-
-        print(f"[注册管理器] 正在上传 {username} 的用户头像: {avatar_filename}")
-
-        login_success, token, login_error = login_user(username, self.password)
-
-        if not login_success or not token:
-            print(f"[注册管理器] {username} 登录获取令牌失败: {login_error}")
-            return False, login_error
-
-        upload_success, avatar_url, upload_error = upload_avatar(
-            registered_user_id,
-            avatar_filename,
-            token
-        )
-
-        if upload_success:
-            print(f"[注册管理器] {username} 上传头像成功: {avatar_url}")
-            return True, avatar_url
-        else:
-            print(f"[注册管理器] {username} 上传头像失败: {upload_error}")
-            return False, upload_error
-
-    def _get_existing_user_id(self, username: str) -> Optional[int]:
-        """
-        通过用户名登录获取已存在用户的 ID
-
-        当用户已存在时，调用此方法通过登录流程获取用户的真实 ID。
-        使用直接 API 调用，不依赖 tools 模块（tools 是 Agent 专用工具集）。
-
-        Args:
-            username: 用户名
-
-        Returns:
-            Optional[int]: 用户 ID，获取失败返回 None
-        """
-        login_success, token, login_error = login_user(username, self.password)
-
-        if login_success and token:
-            try:
-                url = f"{API_BASE_URL}/auth/me"
-                headers = {
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
-                }
-                response = requests.get(url, headers=headers, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    user_id = data.get("id")
-                    return user_id
-                else:
-                    print(f"[注册管理器] 获取用户信息失败: HTTP {response.status_code}")
-                    return None
-            except Exception as e:
-                print(f"[注册管理器] 获取用户信息异常: {e}")
-                return None
-        else:
-            print(f"[注册管理器] 登录获取已存在用户ID失败: {login_error}")
-            return None
-
-    def update_all_bios(self, users: List[AIUserConfig]) -> None:
-        """
-        按顺序为新注册用户更新简介
-
-        只有新注册的用户需要更新简介，已存在用户跳过此步骤。
-
-        Args:
-            users: AI 用户配置列表
-        """
-        users_to_update = [
-            (user, self.registered_users.get(user.id))
-            for user in users
-            if user.personal_signature 
-            and user.id in self.registered_users
-            and user.id in self.newly_registered_users
-        ]
-
-        if not users_to_update:
-            skipped_count = sum(1 for u in users if u.personal_signature and u.id in self.registered_users and u.id not in self.newly_registered_users)
-            if skipped_count > 0:
-                print(f"[注册管理器] 跳过 {skipped_count} 个已存在用户的简介更新")
+        user_info = login_user(self.username, self.password)
+        if not user_info:
+            logger.error(f"[{self.username}] 登录失败，跳过本次会话")
             return
 
-        total = len(users_to_update)
-        print(f"\n[注册管理器] 开始更新 {total} 个新用户的简介...")
+        user_id = user_info.get('id')
+        token = user_info.get('token')
+        logger.info(f"[{self.username}] 登录成功 (用户ID: {user_id})")
 
-        for index, (user, registered_id) in enumerate(users_to_update, 1):
-            if registered_id:
-                username = user.username if user.username else user.name
-                print(f"[注册管理器] [{index}/{total}] 更新简介: {username}")
-                self.update_bio_for_user(user, registered_id)
+        try:
+            self.is_logged_in = True
+            agent_ctx = AgentContext(
+                user_id=user_id,
+                token=token,
+                ai_config_id=self.ai_config_id,
+            )
+            agent_ctx.set_thread_context()
 
-                if index < total and self.registration_interval > 0:
-                    time.sleep(self.registration_interval)
+            session_cfg = SessionAgentConfig(
+                user_id=user_id,
+                username=self.username,
+                ai_config_id=self.ai_config_id,
+                personality_prompt=self.personality_prompt,
+                personal_signature=self.personal_signature,
+                token=token,
+            )
 
-        print(f"[注册管理器] 简介更新完成")
-
-    def update_all_avatars(self, users: List[AIUserConfig]) -> None:
-        """
-        按顺序为新注册用户上传头像
-
-        只有新注册的用户需要上传头像，已存在用户跳过此步骤。
-
-        Args:
-            users: AI 用户配置列表
-        """
-        users_to_update = [
-            (user, self.registered_users.get(user.id))
-            for user in users
-            if user.avatar and user.avatar.strip()
-            and user.id in self.registered_users
-            and user.id in self.newly_registered_users
-        ]
-
-        skipped_count = sum(
-            1 for u in users
-            if u.avatar and u.avatar.strip()
-            and u.id in self.registered_users
-            and u.id not in self.newly_registered_users
-        )
-
-        if not users_to_update:
-            if skipped_count > 0:
-                print(f"[注册管理器] 跳过 {skipped_count} 个已存在用户的头像上传")
-            else:
-                print(f"[注册管理器] 没有需要上传头像的用户")
-            return
-
-        total = len(users_to_update)
-        print(f"\n[注册管理器] 开始上传 {total} 个新用户的头像...")
-        if skipped_count > 0:
-            print(f"[注册管理器] 跳过 {skipped_count} 个已存在用户的头像上传")
-
-        for index, (user, registered_id) in enumerate(users_to_update, 1):
-            if registered_id:
-                username = user.username if user.username else user.name
-                print(f"[注册管理器] [{index}/{total}] 上传头像: {username} ({user.avatar})")
-                self.update_avatar_for_user(user, registered_id)
-
-                if index < total and self.registration_interval > 0:
-                    time.sleep(self.registration_interval)
-
-        print(f"[注册管理器] 头像上传完成")
-
-    def get_registered_user_id(self, config_id: int) -> Optional[int]:
-        """
-        获取配置 ID 对应的注册用户 ID
-
-        Args:
-            config_id: AI 用户配置 ID
-
-        Returns:
-            Optional[int]: 注册后的用户 ID，未注册返回 None
-        """
-        return self.registered_users.get(config_id)
+            logger.info(f"[{self.username}] 开始 LangGraph 会话")
+            result = run_session(session_cfg, self.relation_map)
+            logger.info(
+                f"[{self.username}] 会话完成: "
+                f"步骤={result.total_steps}, "
+                f"工具调用={result.total_tool_calls}, "
+                f"退出原因={result.exit_reason}"
+            )
+        except Exception as e:
+            logger.error(f"[{self.username}] 会话执行失败: {e}\n{traceback.format_exc()}")
+        finally:
+            self.is_logged_in = False
+            clear_current_context()
 
 
 class AgentSchedulerManager:
     """
-    AI Agent 调度器管理器
+    Agent 调度管理器
 
-    统一管理所有 AI 用户的调度器，为每个用户创建独立的调度线程。
-    用户注册流程由 RegistrationManager 在主线程中顺序完成，
-    调度器线程仅负责登录时间计算和事件触发。
+    职责：
+    1. 从数据库加载启用的 Agent
+    2. 创建和管理 AIUserScheduler 线程
+    3. 提供线程的启停、重启功能
+    4. 提供调度状态查询
 
-    Attributes:
-        time_system: 时间系统实例
-        schedulers: 用户调度器字典
-        registration_manager: 注册管理器实例
+    不再负责：注册、配置管理
     """
 
-    def __init__(self):
-        """
-        初始化调度器管理器
-        """
-        self.time_system = get_time_system()
+    def __init__(self, time_system=None):
         self.schedulers: Dict[int, AIUserScheduler] = {}
-        self.registration_manager: Optional[RegistrationManager] = None
+        self._thread_lock = threading.Lock()
+        self._is_running = False
+        self.time_system = time_system or get_time_system()
+        self._relation_map = None
 
-    def load_and_start(
-        self,
-        config_path: str = CONFIG_FILE_PATH,
-        registration_interval: float = 0.5,
-        skip_registration: bool = False
-    ) -> None:
+    def start(self, relation_map=None):
         """
-        加载配置并启动所有用户的调度器
+        启动所有 Agent 调度线程
 
-        注册流程在主线程中顺序执行，完成后再启动调度器线程。
-        调度器线程会跳过已完成的注册流程，直接进入调度循环。
-
-        注册流程包括：
-        1. 用户注册
-        2. 更新用户简介（personal_signature）
-        3. 上传用户头像（avatar）
+        流程：
+        1. 从数据库加载启用的 Agent
+        2. 为每个 Agent 创建 AIUserScheduler
+        3. 启动调度线程
 
         Args:
-            config_path: AI 用户配置文件路径
-            registration_interval: 两次注册之间的间隔秒数，默认 0.5 秒
-            skip_registration: 是否跳过注册流程（当用户已注册时使用）
+            relation_map: 关系映射服务（可选）
         """
-        try:
-            users = load_ai_users_config(config_path)
-        except Exception as e:
-            print(f"[错误] 加载配置失败: {e}")
+        if self._is_running:
+            logger.warning("调度管理器已在运行中")
             return
 
-        users_config = [
-            {
-                'id': u.id,
-                'username': u.username,
-                'name': u.name,
-                'knows_ids': u.knows_ids,
-            }
-            for u in users
-        ]
-        build_relation_maps(users_config)
-        print(f"[信息] 关系映射表已初始化，共 {len(users)} 个角色")
+        self._relation_map = relation_map
+        self._is_running = True
 
-        if not ADMIN_KEY:
-            print("[警告] 未配置 ADMIN_KEY，将跳过用户注册")
-            skip_registration = True
+        agents = get_db_client().get_agent_configs()
+        if not agents:
+            logger.warning("数据库中未找到启用的 Agent")
+            return
 
-        if not skip_registration and ADMIN_KEY:
-            self.registration_manager = RegistrationManager(
-                time_system=self.time_system,
-                admin_key=ADMIN_KEY,
-                password=AI_USER_PASSWORD,
-                registration_interval=registration_interval
-            )
-            self.registration_manager.register_all_users(users)
-            self.registration_manager.update_all_bios(users)
-            self.registration_manager.update_all_avatars(users)
+        logger.info(f"从数据库加载了 {len(agents)} 个 Agent")
 
-        for user in users:
-            registered_user_id = None
-            if self.registration_manager:
-                registered_user_id = self.registration_manager.get_registered_user_id(user.id)
+        for agent_data in agents:
+            self._create_scheduler(agent_data)
 
-            scheduler = AIUserScheduler(
-                user_config=user,
-                time_system=self.time_system,
-                admin_key=ADMIN_KEY,
-                password=AI_USER_PASSWORD,
-                pre_registered_user_id=registered_user_id
-            )
-            self.schedulers[user.id] = scheduler
+        logger.info(f"已启动 {len(self.schedulers)} 个 Agent 调度线程")
 
-        for scheduler in self.schedulers.values():
-            scheduler.start()
+    def stop(self):
+        """停止所有 Agent 调度线程"""
+        logger.info("停止所有 Agent 调度线程...")
+        self._is_running = False
 
-        print(f"[信息] 已启动 {len(self.schedulers)} 个用户调度器")
-
-    def stop_all(self) -> None:
-        """
-        停止所有用户的调度器
-        """
-        for scheduler in self.schedulers.values():
-            scheduler.stop()
+        with self._thread_lock:
+            for scheduler in self.schedulers.values():
+                scheduler.stop(timeout=5)
 
         self.schedulers.clear()
-        print("[信息] 所有调度器已停止")
+        logger.info("所有 Agent 调度线程已停止")
 
-    def print_status(self) -> None:
+    def restart_agent(self, agent_id: int):
         """
-        打印调度状态
+        重启指定 Agent 的调度线程
+
+        流程：
+        1. 从 schedulers 字典中找到对应 scheduler
+        2. 调用 scheduler.stop()（等待最多 5 秒）
+        3. 从数据库重新加载 Agent 配置
+        4. 创建新的 AIUserScheduler
+        5. 替换 schedulers 字典中的旧实例
+        6. 调用 scheduler.start() 启动新线程
+
+        Args:
+            agent_id: Agent ID
         """
-        print("\n" + "=" * 50)
-        print(f"调度器管理器状态")
-        print(f"当前缩放时间: {self.time_system.format_scaled_time()}")
-        print(f"时间倍率: {self.time_system.get_scale()}")
-        print(f"总用户数: {len(self.schedulers)}")
-        print("=" * 50)
+        scheduler = self.schedulers.get(agent_id)
+        if scheduler:
+            logger.info(f"[重启] 停止 Agent {agent_id} 的旧调度线程...")
+            scheduler.stop(timeout=5)
 
-        running_count = sum(1 for s in self.schedulers.values() if s.running)
-        print(f"运行中的调度器: {running_count}/{len(self.schedulers)}")
-        print()
+        agent_config = get_db_client().get_agent_config(agent_id)
+        if not agent_config:
+            logger.error(f"[重启] 未找到 Agent ID={agent_id} 的配置")
+            return
 
+        logger.info(f"[重启] 为 Agent {agent_config['username']} (ID:{agent_id}) 创建新调度线程...")
+        self._create_scheduler(agent_config)
+        logger.info(f"[重启] Agent {agent_config['username']} (ID:{agent_id}) 已重启")
 
-def main():
-    """
-    主函数
+    def start_agent(self, agent_id: int) -> bool:
+        """
+        启动单个 Agent 线程
 
-    启动 AI Agent 调度器管理器，加载配置并为每个用户创建独立的调度线程。
-    用户注册流程由 RegistrationManager 在主线程中顺序完成，
-    调度器线程仅负责登录时间计算和事件触发。
-    """
-    print("=" * 60)
-    print("Herta-Tree AI Agent 调度器")
-    print("=" * 60)
+        Args:
+            agent_id: Agent ID
 
-    print("\n[配置信息]")
-    print(f"  API 地址: {API_BASE_URL}")
-    print(f"  配置文件: {CONFIG_FILE_PATH}")
-    print(f"  头像目录: {get_avatar_dir()}")
-    if ADMIN_KEY:
-        print(f"  Admin Key: 已配置")
-    else:
-        print(f"  Admin Key: 未配置（将跳过用户注册，如需注册请配置 ADMIN_KEY）")
+        Returns:
+            bool: 是否成功
+        """
+        with self._thread_lock:
+            if agent_id in self.schedulers:
+                existing = self.schedulers[agent_id]
+                existing.resume()
+                return True
 
-    try:
-        users = load_ai_users_config(CONFIG_FILE_PATH)
-        users_with_avatar = [u for u in users if u.avatar and u.avatar.strip()]
-        print(f"\n[头像配置]")
-        print(f"  AI 用户总数: {len(users)}")
-        print(f"  有头像配置的用户数: {len(users_with_avatar)}")
-    except Exception as e:
-        print(f"\n[警告] 无法加载用户配置: {e}")
+        agent_data = get_db_client().get_agent_config(agent_id)
+        if not agent_data:
+            return False
 
-    manager = AgentSchedulerManager()
-    manager.load_and_start(CONFIG_FILE_PATH)
+        return self._create_scheduler(agent_data)
 
-    print("\n调度器已启动，按 Ctrl+C 停止")
+    def stop_agent(self, agent_id: int) -> bool:
+        """
+        停止单个 Agent 线程
 
-    try:
-        while True:
-            time.sleep(10)
-    except KeyboardInterrupt:
-        print("\n正在停止所有调度器...")
-        manager.stop_all()
-        print("调度器已全部停止")
+        Args:
+            agent_id: Agent ID
+
+        Returns:
+            bool: 是否成功
+        """
+        with self._thread_lock:
+            scheduler = self.schedulers.get(agent_id)
+            if scheduler:
+                scheduler.stop(timeout=5)
+                del self.schedulers[agent_id]
+                return True
+        return False
+
+    def get_agent_status(self, agent_id: int) -> Optional[Dict]:
+        """获取单个 Agent 状态"""
+        with self._thread_lock:
+            scheduler = self.schedulers.get(agent_id)
+
+        if not scheduler:
+            return None
+
+        return {
+            "agent_id": agent_id,
+            "username": scheduler.username,
+            "is_alive": scheduler.is_alive(),
+            "is_active": scheduler._is_active,
+            "is_logged_in": scheduler.is_logged_in,
+            "next_login_time": scheduler.next_login_time.isoformat() if scheduler.next_login_time else None,
+        }
+
+    def get_all_statuses(self) -> List[Dict]:
+        """获取所有 Agent 状态"""
+        statuses = []
+        with self._thread_lock:
+            for agent_id in list(self.schedulers.keys()):
+                status = self.get_agent_status(agent_id)
+                if status:
+                    statuses.append(status)
+        return statuses
+
+    def _create_scheduler(self, agent_data: Dict) -> bool:
+        """
+        创建 AIUserScheduler 并启动
+
+        Args:
+            agent_data: Agent 配置数据
+
+        Returns:
+            bool: 是否成功
+        """
+        config = get_scheduler_config()
+
+        agent_id = agent_data.get('id')
+        username = agent_data.get('username', '')
+        monthly_logins = agent_data.get('monthly_logins', 30)
+        password = config.ai_user_password
+        personality_prompt = agent_data.get('personality_prompt', '')
+        personal_signature = agent_data.get('personal_signature', '')
+        app_platform_user_id = agent_data.get('app_platform_user_id')
+
+        scheduler = AIUserScheduler(
+            user_id=agent_id,
+            username=username,
+            ai_config_id=agent_id,
+            monthly_logins=monthly_logins,
+            password=password,
+            personality_prompt=personality_prompt,
+            personal_signature=personal_signature,
+            time_system=self.time_system,
+            relation_map=self._relation_map,
+            pre_registered_user_id=app_platform_user_id,
+        )
+        scheduler.start()
+
+        with self._thread_lock:
+            self.schedulers[agent_id] = scheduler
+
+        return True

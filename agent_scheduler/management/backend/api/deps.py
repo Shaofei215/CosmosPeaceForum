@@ -1,0 +1,76 @@
+"""
+Management Backend - API 依赖注入
+"""
+
+from typing import Optional
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlmodel import Session
+
+from agent_scheduler.management.backend.core.database import get_db
+from agent_scheduler.management.backend.core.security import decode_access_token
+from agent_scheduler.management.backend.models.admin_user import AdminUser
+from agent_scheduler.management.backend.models.operation_log import OperationLog
+from agent_scheduler.management.backend.services.auth_service import get_admin_by_username
+from agent_scheduler.management.backend.services.log_service import create_log
+
+security = HTTPBearer()
+
+
+def get_current_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> AdminUser:
+    """获取当前认证的管理员"""
+    payload = decode_access_token(credentials.credentials)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的认证凭证",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    username: Optional[str] = payload.get("username")
+    if username is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的认证凭证",
+        )
+
+    admin = get_admin_by_username(db, username)
+    if admin is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户不存在",
+        )
+
+    return admin
+
+
+def log_action(
+    action: str,
+    target_type: str,
+    target_id: Optional[int] = None,
+):
+    """
+    返回一个日志操作的依赖注入函数
+
+    使用方式：
+    @router.post("/agents")
+    def create_agent(..., current_admin: AdminUser = Depends(get_current_admin)):
+        ...
+        log_fn = Depends(log_action("create_agent", "agent", agent.id))
+    """
+    def _log(
+        db: Session = Depends(get_db),
+        current_admin: AdminUser = Depends(get_current_admin),
+    ):
+        create_log(
+            db=db,
+            operator_id=current_admin.id,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+        )
+    return _log

@@ -1,5 +1,6 @@
 # 会话执行器模块
 # 提供 LangGraph 会话的执行器，负责运行单个登录会话的完整生命周期
+import threading
 import uuid
 from typing import Optional, Dict, Any, Callable, List
 from datetime import datetime
@@ -317,8 +318,142 @@ class SessionExecutor:
         )
 
 
+class LLMRegistry:
+    """
+    LLM 调用器注册表
+
+    提供 LLM 调用器的缓存和热更新功能，支持两种缓存模式：
+    1. 基于 model_config_id 的缓存（数据库驱动，推荐）
+    2. 基于配置参数的缓存（兼容旧接口）
+
+    当模型配置变更时，可以通过 reload_llm_registry(model_config_id) 清除指定缓存，
+    下次创建 LLM 调用器时会自动从数据库读取最新配置。
+    """
+    _instance = None
+    _cache = {}
+    _model_cache = {}
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    @classmethod
+    def get_invoker(cls, config: SessionConfig, tools: Optional[List] = None) -> Callable:
+        """
+        获取 LLM 调用器（带参数缓存，兼容旧接口）
+
+        Args:
+            config: 会话配置
+            tools: 工具列表
+
+        Returns:
+            Callable: LLM 调用器
+        """
+        cache_key = (
+            config.llm_provider,
+            config.openai_api_key,
+            config.openai_base_url,
+            config.openai_model_name,
+            config.anthropic_api_key,
+            config.anthropic_model_name,
+            config.temperature,
+        )
+
+        with cls._lock:
+            if cache_key in cls._cache:
+                return cls._cache[cache_key]
+
+            invoker = create_llm_invoker(config, tools=tools)
+            cls._cache[cache_key] = invoker
+            return invoker
+
+    @classmethod
+    def get_invoker_by_model_id(cls, model_config_id: int, tools: Optional[List] = None) -> Callable:
+        """
+        基于 model_config_id 获取 LLM 调用器（数据库驱动，推荐）
+
+        通过 config 模块从 management 数据库读取模型配置，创建 LLM 调用器并缓存。
+        缓存键为 model_config_id，便于热更新时精准清除。
+
+        Args:
+            model_config_id: 模型配置 ID（对应 model_configs 表的主键）
+            tools: 工具列表
+
+        Returns:
+            Callable: LLM 调用器
+
+        Raises:
+            ValueError: 模型配置不存在
+        """
+        from agent_scheduler.langgraph.config import get_model_config_from_db
+
+        with cls._lock:
+            if model_config_id in cls._model_cache:
+                return cls._model_cache[model_config_id]
+
+        session_config = get_model_config_from_db(model_config_id)
+
+        with cls._lock:
+            if model_config_id in cls._model_cache:
+                return cls._model_cache[model_config_id]
+
+            invoker = create_llm_invoker(session_config, tools=tools)
+            cls._model_cache[model_config_id] = invoker
+            return invoker
+
+    @classmethod
+    def reload(cls, model_config_id: int):
+        """
+        热更新：清除指定模型配置的缓存
+
+        Args:
+            model_config_id: 模型配置 ID
+        """
+        with cls._lock:
+            if model_config_id in cls._model_cache:
+                del cls._model_cache[model_config_id]
+                print(f"[LLMRegistry] 已清除模型配置缓存: id={model_config_id}")
+
+    @classmethod
+    def clear_cache(cls):
+        """清除所有缓存（热更新时调用）"""
+        with cls._lock:
+            cls._cache.clear()
+            cls._model_cache.clear()
+
+    @classmethod
+    def clear_model_cache(cls, model_config_id: Optional[int] = None):
+        """
+        清除模型配置缓存
+
+        Args:
+            model_config_id: 指定模型 ID，清除全部
+        """
+        with cls._lock:
+            if model_config_id is not None:
+                cls._model_cache.pop(model_config_id, None)
+            else:
+                cls._model_cache.clear()
+
+
+def reload_llm_registry(model_config_id: Optional[int] = None):
+    """
+    重载 LLM 注册表（热更新）
+    
+    Args:
+        model_config_id: 模型配置 ID，指定时仅清除该模型缓存，None 时清除全部
+    """
+    if model_config_id is not None:
+        LLMRegistry.clear_model_cache(model_config_id)
+    else:
+        LLMRegistry.clear_cache()
+
+
 def run_session(
     agent_config: AgentConfig,
+    relation_map=None,
     config: Optional[SessionConfig] = None,
 ) -> ExecutionResult:
     """
@@ -333,7 +468,8 @@ def run_session(
 
     Args:
         agent_config: Agent 配置
-        config: 会话配置，默认使用环境变量配置
+        relation_map: 关系映射服务（可选）
+        config: 会话配置，默认使用环境变量/数据库配置
 
     Returns:
         ExecutionResult: 包含执行结果的 ExecutionResult 对象
@@ -342,8 +478,8 @@ def run_session(
         config = get_default_config()
 
     from agent_scheduler.langgraph.tools import get_social_tools
-    tools = get_social_tools()
-    llm_invoker = create_llm_invoker(config, tools=tools)
+    tools = get_social_tools(relation_map=relation_map)
+    llm_invoker = LLMRegistry.get_invoker(config, tools=tools)
 
     executor = SessionExecutor(
         user_id=agent_config.user_id,
