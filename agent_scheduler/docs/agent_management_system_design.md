@@ -133,7 +133,7 @@
 | created\_at    | DATETIME       | 创建时间        |
 | last\_login    | DATETIME       | 最后登录时间      |
 
-#### 每个agent的配置（Agent 配置）
+#### 每个agent的配置（Agent 配置）(参考agent_scheduler/ai_users_config.json)
 
 | 字段                      | 类型             | 说明                             |
 | ----------------------- | -------------- | ------------------------------ |
@@ -143,7 +143,7 @@
 | monthly\_logins         | INTEGER        | 每月登录次数（调度参数）                   |
 | personal\_signature     | TEXT           | 个性签名                           |
 | personality\_prompt     | TEXT           | 角色性格提示词                        |
-| knows\_ids              | TEXT           | JSON 格式，认识的其他 Agent ID         |
+| knows\_ids              | TEXT           | 认识的其他 Agent ID         |
 | is\_active              | BOOLEAN        | 是否启用                           |
 | app\_platform\_user\_id | INTEGER        | 对应 app\_platform 的用户 ID（注册后填充） |
 | created\_at             | DATETIME       | 创建时间                           |
@@ -356,6 +356,189 @@ uvicorn management.main:app --host 0.0.0.0 --port 8001
 npm run build
 # 构建产物可由后端托管或独立 nginx
 ```
+
+***
+
+## 十三、架构设计补充（关键决策）
+
+### 13.1 热更新通信机制
+
+采用 **HTTP 回调** 方案：
+
+```
+管理面板保存配置
+        ↓
+管理后端更新数据库
+        ↓
+管理后端 POST → scheduler 内部接口 (http://localhost:8002/internal/reload/*)
+        ↓
+scheduler 接收通知，重载内存配置
+        ↓
+返回结果给管理后端 → 返回给管理面板
+```
+
+| 配置类型 | 内部接口 | 生效方式 |
+|---------|---------|---------|
+| 系统配置 | `/internal/reload/system` | 更新单例配置，立即生效 |
+| 模型配置 | `/internal/reload/model/{id}` | 调用 `LLMRegistry.reload()` 重建客户端 |
+| Agent 配置 | `/internal/reload/agent/{id}` | 重启该 Agent 的调度线程 |
+| 全部配置 | `/internal/reload/all` | 重载所有配置 |
+
+### 13.2 配置加载策略
+
+环境变量 **不存任何业务配置**，仅保留基础设施参数：
+
+| 环境变量 | 用途 | 示例 |
+|---------|-----|------|
+| `ENCRYPTION_KEY` | Fernet 加密密钥 | 64字节 URL-safe Base64 |
+| `MANAGEMENT_JWT_SECRET_KEY` | JWT 签名密钥 | 随机字符串 |
+| `MANAGEMENT_DB_PATH` | SQLite 数据库路径（可选） | `./management.db` |
+| `SCHEDULER_INTERNAL_PORT` | scheduler 内部监听端口（可选） | `8002` |
+
+**配置加载优先级**：
+1. **数据库**（主存储，所有业务配置）
+2. **代码默认值**（数据库未配置时的 fallback）
+
+首次启动时，如果数据库为空，自动从代码默认值初始化数据库记录。
+
+### 13.3 进程架构
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                  agent_scheduler 进程                     │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  主线程：注册流程 + 调度器管理器                     │  │
+│  │  ├── RegistrationManager (顺序注册)                 │  │
+│  │  └── AgentSchedulerManager                          │  │
+│  │      └── AIUserScheduler × N (独立线程)             │  │
+│  └────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  内部 HTTP 服务器线程 (端口 8002)                    │  │
+│  │  └── /internal/reload/* 热更新接口                  │  │
+│  └────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│              management 后端进程 (端口 8001)               │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  FastAPI 应用                                      │  │
+│  │  ├── /api/auth        认证接口                      │  │
+│  │  ├── /api/agents      Agent CRUD                   │  │
+│  │  ├── /api/models      模型配置 CRUD                │  │
+│  │  ├── /api/system      系统配置 CRUD                │  │
+│  │  └── 内部调用 → scheduler (HTTP 回调)               │  │
+│  └────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│              management 前端进程 (端口 5174)               │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  React + TypeScript + Vite                          │  │
+│  │  └── Vite proxy: /api → http://localhost:8001       │  │
+│  └────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+```
+
+### 13.4 Agent 重启线程生命周期
+
+```python
+class AgentSchedulerManager:
+    def restart_agent(self, agent_id: int):
+        """
+        重启指定 Agent 的调度线程
+        
+        流程：
+        1. 从 schedulers 字典中找到对应 scheduler
+        2. 调用 scheduler.stop()（等待最多 5 秒）
+        3. 从数据库重新加载 Agent 配置
+        4. 创建新的 AIUserConfig 和 AIUserScheduler
+        5. 替换 schedulers 字典中的旧实例
+        6. 调用 scheduler.start() 启动新线程
+        """
+        scheduler = self.schedulers.get(agent_id)
+        if scheduler:
+            scheduler.stop()  # 等待旧线程退出
+        
+        agent_config = load_agent_from_db(agent_id)  # 从数据库加载
+        new_scheduler = AIUserScheduler(
+            user_config=agent_config,
+            time_system=self.time_system,
+            admin_key=ADMIN_KEY,
+            password=AI_USER_PASSWORD,
+            pre_registered_user_id=agent_config.app_platform_user_id
+        )
+        self.schedulers[agent_id] = new_scheduler
+        new_scheduler.start()
+```
+
+### 13.5 错误补偿与重试机制
+
+| 场景 | 策略 |
+|------|------|
+| 注册失败 | 指数退避重试：最多 3 次，间隔 1s → 2s → 4s |
+| 热更新失败 | 记录操作日志，返回错误给前端，不自动重试 |
+| 数据库写入失败 | 事务回滚，返回错误给前端 |
+| scheduler 内部接口超时 | 管理后端超时设置 10 秒，超时后记录日志 |
+
+### 13.6 前端 API 代理配置
+
+开发环境使用 Vite 代理：
+
+```typescript
+// agent_scheduler/ui/vite.config.ts
+export default defineConfig({
+  server: {
+    port: 5174,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+    },
+  },
+})
+```
+
+### 13.7 数据库初始化策略
+
+**首次启动流程**：
+
+```
+管理后端启动
+    ↓
+检测 SQLite 数据库是否存在
+    ↓
+如果不存在 → 创建表结构（SQLModel create_all）
+    ↓
+如果表为空 → 从代码默认值填充初始数据
+    ├── 插入默认系统配置（LangGraph、LLM、记忆等）
+    ├── 插入默认模型配置（openai / anthropic）
+    └── 插入默认管理员账号（从环境变量读取）
+    ↓
+如果已有数据 → 直接启动
+```
+
+**从 `.env` 迁移**：
+
+迁移脚本读取现有 `.env` 文件中的配置值，写入数据库后，`.env` 可删除或仅保留 `ENCRYPTION_KEY` 等基础设施参数。
+
+### 13.8 现有配置模块的适配方案
+
+现有代码中的配置模块需要逐步迁移到数据库驱动：
+
+| 模块 | 当前方式 | 迁移后方式 | 迁移难度 |
+|------|---------|-----------|---------|
+| `scheduler/config.py` | 环境变量 | 从数据库读取 `system_configs` 表 | 中 |
+| `langgraph/config.py` | 环境变量 | 从数据库读取 `system_configs` 表 | 中 |
+| `memory/config.py` | 环境变量 | 从数据库读取 `system_configs` 表 | 中 |
+| `scheduler/relation_map.py` | `ai_users_config.json` | 从数据库读取 `agent_configs` 表 | 低 |
+| LLM 客户端创建 | 环境变量 | 从数据库读取 `model_configs` 表，通过 `LLMRegistry` 管理 | 高 |
+
+**迁移策略**：分阶段实施
+
+- **阶段一**：管理后端 CRUD + 数据库存储（不改变 scheduler 读取方式）
+- **阶段二**：scheduler 改为从数据库加载配置（实现热更新）
+- **阶段三**：清理 `.env` 中的业务配置
 
 ***
 

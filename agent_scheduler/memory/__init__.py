@@ -5,6 +5,7 @@ from agent_scheduler.memory.config import MemoryConfig, get_memory_config
 from agent_scheduler.memory.models import MemoryChunk
 from agent_scheduler.memory.service import MemoryService, get_memory_service
 from agent_scheduler.memory.utils import calculate_time_description
+from agent_scheduler.memory.chinese_tokenizer import tokenize_chinese, tokenize_query
 
 __all__ = [
     "MemoryConfig",
@@ -13,4 +14,6 @@ __all__ = [
     "MemoryService",
     "get_memory_service",
     "calculate_time_description",
+    "tokenize_chinese",
+    "tokenize_query",
 ]

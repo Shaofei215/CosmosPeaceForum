@@ -1,11 +1,13 @@
 # Tantivy BM25 检索层
 # 提供基于关键词匹配的记忆检索功能
+# 使用 jieba 搜索引擎模式进行中文分词
 
 import tantivy
 from typing import List, Dict, Optional
 from pathlib import Path
 
 from agent_scheduler.memory.config import MemoryConfig
+from agent_scheduler.memory.chinese_tokenizer import tokenize_chinese, tokenize_query
 
 
 class BM25Index:
@@ -14,6 +16,8 @@ class BM25Index:
 
     提供基于关键词匹配的记忆检索功能。
     使用 BM25 算法计算文档相关性。
+
+    中文分词使用 jieba 的搜索引擎模式，在索引构建和搜索时自动分词。
 
     所有操作都通过 owner_id 实现所有权隔离。
     """
@@ -29,9 +33,11 @@ class BM25Index:
         index_path = config.get_tantivy_index_path()
 
         # 定义 Schema
+        # content 字段使用 'raw' 分词器，因为我们已经通过 jieba 预分词
+        # tantivy 的 SimpleAnalyzer 会对 'raw' 字段按空格分割 token
         schema_builder = tantivy.SchemaBuilder()
-        schema_builder.add_text_field("id", stored=True)
-        schema_builder.add_text_field("content", stored=True)
+        schema_builder.add_text_field("id", stored=True, tokenizer_name="raw")
+        schema_builder.add_text_field("content", stored=True, tokenizer_name="raw")
         schema_builder.add_unsigned_field("owner_id", stored=True)
         schema = schema_builder.build()
 
@@ -44,6 +50,22 @@ class BM25Index:
 
         self.writer = self.index.writer()
         self.writer.commit()
+
+    def _ensure_writer(self):
+        """确保 writer 可用，如果已被消耗则重新创建"""
+        try:
+            self.writer.commit()
+        except Exception:
+            self.writer = self.index.writer()
+
+    def _flush_writer(self):
+        """提交并等待合并线程完成，然后重建 writer"""
+        self.writer.commit()
+        try:
+            self.writer.wait_merging_threads()
+        except Exception:
+            pass
+        self.writer = self.index.writer()
 
     def add_doc(
         self,
@@ -59,12 +81,14 @@ class BM25Index:
             content: 记忆内容
             owner_id: 用户 ID
         """
+        self._ensure_writer()
+        tokenized_content = tokenize_chinese(content)
         self.writer.add_document(tantivy.Document(
             id=memory_id,
-            content=content,
+            content=tokenized_content,
             owner_id=owner_id
         ))
-        self.writer.commit()
+        self._flush_writer()
 
     def search(
         self,
@@ -83,29 +107,38 @@ class BM25Index:
         Returns:
             List[Dict]: 检索结果列表，每个结果包含 id, score, content
         """
-        self.writer.commit()
+        self._ensure_writer()
+        self._flush_writer()
+        self.index.reload()
         searcher = self.index.searcher()
 
-        # 使用 index.parse_query 构建查询（tantivy 0.24.0 API）
+        # 使用 jieba 对查询分词，然后用空格连接供 tantivy 解析
+        tokenized_tokens = tokenize_query(query)
+        tokenized_query = " ".join(tokenized_tokens)
+
+        # 使用 parse_query_lenient 构建查询
         try:
-            parsed_query = self.index.parse_query(query, ["content"])
+            parsed_query, errors = self.index.parse_query_lenient(tokenized_query, ["content"])
         except Exception:
             # 如果查询解析失败，返回空结果
             return []
 
         # 执行搜索
+        # search 返回的 hits 是 (score, DocAddress) 元组列表
         results = []
         top_docs = searcher.search(parsed_query, limit=limit * 3)
 
-        for doc_address in top_docs.hits:
-            doc = searcher.doc(doc_address.doc_id)
+        for hit in top_docs.hits:
+            # hit 是 (score, DocAddress) 元组
+            score, doc_address = hit
+            doc = searcher.doc(doc_address)
             doc_owner_id = doc.get_first("owner_id")
 
             # 所有权过滤
             if doc_owner_id == owner_id:
                 results.append({
                     "id": doc.get_first("id") or "",
-                    "score": doc_address.score,
+                    "score": score,
                     "content": doc.get_first("content") or "",
                 })
 
@@ -121,10 +154,9 @@ class BM25Index:
         Args:
             memory_id: 要删除的记忆 ID
         """
-        # Tantivy 0.24.0 使用 delete_term 删除
-        term = tantivy.Term("id", memory_id)
-        self.writer.delete_term(term)
-        self.writer.commit()
+        self._ensure_writer()
+        self.writer.delete_documents("id", memory_id)
+        self._flush_writer()
 
     def get_doc_count(self, owner_id: Optional[int] = None) -> int:
         """
@@ -136,16 +168,19 @@ class BM25Index:
         Returns:
             int: 文档数量
         """
-        self.writer.commit()
+        self._ensure_writer()
+        self._flush_writer()
+        self.index.reload()
         searcher = self.index.searcher()
 
         if owner_id is not None:
             # 遍历所有文档并过滤
             count = 0
-            all_query = self.index.parse_query("*", ["content"])
+            all_query, _ = self.index.parse_query_lenient("*", ["content"])
             top_docs = searcher.search(all_query, limit=searcher.num_docs)
-            for doc_address in top_docs.hits:
-                doc = searcher.doc(doc_address.doc_id)
+            for hit in top_docs.hits:
+                score, doc_address = hit
+                doc = searcher.doc(doc_address)
                 doc_owner_id = doc.get_first("owner_id")
                 if doc_owner_id == owner_id:
                     count += 1
