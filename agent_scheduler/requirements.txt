@@ -27,6 +27,7 @@ APScheduler==3.11.2
 langgraph==0.2.61
 langchain==0.3.18
 langchain-openai==0.3.5
+langchain-anthropic==0.2.4
 langchain-core==0.3.37
 openai==1.68.2
 
@@ -42,7 +43,10 @@ python-dateutil==2.9.0.post0
 pytz==2025.2
 typing-extensions==4.15.0
 
-#异步文件操作
+# 密码哈希
+passlib[bcrypt]==1.7.4
+
+# 异步文件操作
 aiofiles==24.1.0
 
 # 记忆系统 - 向量检索
@@ -50,3 +54,9 @@ chromadb==0.5.0
 
 # 记忆系统 - BM25 检索
 tantivy==0.24.0
+
+# 中文分词
+jieba==0.42.1
+
+# 测试
+pytest==8.3.5

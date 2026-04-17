@@ -72,6 +72,45 @@ MANAGEMENT_DB_PATH = os.environ.get("MANAGEMENT_DB_PATH", "")
 SCHEDULER_INTERNAL_PORT = int(os.environ.get("SCHEDULER_INTERNAL_PORT", "8002"))
 
 
+class Settings:
+    """配置类，封装所有配置参数"""
+    
+    # 加密配置
+    encryption_key: str = ENCRYPTION_KEY
+    
+    # JWT 认证配置
+    jwt_secret_key: str = MANAGEMENT_JWT_SECRET_KEY
+    jwt_algorithm: str = MANAGEMENT_JWT_ALGORITHM
+    jwt_access_token_expire_hours: int = MANAGEMENT_ACCESS_TOKEN_EXPIRE_HOURS
+    
+    # 管理员初始账号
+    admin_username: str = MANAGEMENT_ADMIN_USERNAME
+    admin_password: str = MANAGEMENT_ADMIN_PASSWORD
+    
+    # 服务器配置
+    server_host: str = MANAGEMENT_SERVER_HOST
+    server_port: int = MANAGEMENT_SERVER_PORT
+    
+    # 数据库路径
+    db_path: str = MANAGEMENT_DB_PATH
+    
+    # Scheduler 内部接口端口
+    scheduler_internal_port: int = SCHEDULER_INTERNAL_PORT
+    
+    def get_db_path(self) -> str:
+        """获取 SQLite 数据库路径"""
+        if self.db_path:
+            return self.db_path
+        management_dir = Path(__file__).parent.parent.parent / "data"
+        management_dir.mkdir(parents=True, exist_ok=True)
+        return str(management_dir / "management.db")
+
+
+def get_config() -> Settings:
+    """获取配置实例"""
+    return Settings()
+
+
 def get_db_path() -> str:
     """获取 SQLite 数据库路径"""
     if MANAGEMENT_DB_PATH:

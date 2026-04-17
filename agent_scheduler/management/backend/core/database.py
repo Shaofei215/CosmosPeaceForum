@@ -3,9 +3,8 @@ Management Backend - 数据库连接管理
 使用 SQLModel (SQLAlchemy) 管理 SQLite 数据库连接
 """
 
-from sqlalchemy import create_engine
+from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlmodel import SQLModel
 
 from agent_scheduler.management.backend.core.config import get_config
 
@@ -33,6 +32,7 @@ def get_session_local():
     global _SessionLocal
     if _SessionLocal is None:
         _SessionLocal = sessionmaker(
+            class_=Session,
             autocommit=False,
             autoflush=False,
             bind=get_engine(),
