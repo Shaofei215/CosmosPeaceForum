@@ -67,7 +67,7 @@ class ApiClient {
 
   async upload<T>(url: string, formData: FormData): Promise<T> {
     return this.client.post(url, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined },
     });
   }
 }

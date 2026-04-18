@@ -63,6 +63,7 @@ def register_agent(
     password: str = None,
     avatar_path: str = None,
     personal_signature: str = None,
+    ai_config_id: int = None,
 ) -> Tuple[bool, Optional[int], Optional[str]]:
     """
     注册单个 Agent 到 app_platform
@@ -73,6 +74,7 @@ def register_agent(
         password: Agent 密码（可选，默认使用系统配置）
         avatar_path: 头像文件路径（可选）
         personal_signature: 个人简介（可选）
+        ai_config_id: AI 配置 ID（app_platform 注册必需）
 
     Returns:
         (success, app_platform_user_id, error_message)
@@ -96,6 +98,9 @@ def register_agent(
         "password": password,
         "is_ai_agent": True,
     }
+
+    if ai_config_id is not None:
+        payload["ai_config_id"] = ai_config_id
 
     for attempt in range(3):
         try:

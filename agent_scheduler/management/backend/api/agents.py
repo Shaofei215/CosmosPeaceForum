@@ -5,9 +5,12 @@ Management Backend - Agent 管理路由
 import json
 import os
 import tempfile
+import time
 import zipfile
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from agent_scheduler.management.backend.core.database import get_db
@@ -15,7 +18,8 @@ from agent_scheduler.management.backend.api.deps import get_current_admin
 from agent_scheduler.management.backend.models.admin_user import AdminUser
 from agent_scheduler.management.backend.models.agent_config import AgentConfig
 from agent_scheduler.management.backend.schemas import (
-    AgentCreate, AgentUpdate, AgentResponse, AgentListResponse, MessageResponse
+    AgentCreate, AgentUpdate, AgentResponse, AgentListResponse,
+    AgentRelationUpdate, MessageResponse
 )
 from agent_scheduler.management.backend.services import agent_service
 from agent_scheduler.management.backend.services.log_service import create_log
@@ -67,6 +71,7 @@ def create_agent(
         username=agent.username,
         avatar_path=avatar_path,
         personal_signature=agent.personal_signature if agent.personal_signature else None,
+        ai_config_id=agent.id,
     )
 
     if success and platform_id:
@@ -75,7 +80,9 @@ def create_agent(
         db.commit()
         db.refresh(agent)
     else:
-        print(f"[创建 Agent] 注册到 app_platform 失败: {error}")
+        print(f"[创建 Agent] 注册到 app_platform 失败: {error}，回滚数据库记录")
+        agent_service.delete_agent(db, agent.id)
+        raise HTTPException(status_code=502, detail=f"Agent 注册到 app_platform 失败: {error}")
 
     create_log(db, current_admin.id, "create_agent", "agent", agent.id)
 
@@ -212,7 +219,6 @@ async def import_agents(
                 monthly_logins=user_data.get('monthly_logins', 30),
                 personal_signature=user_data.get('personal_signature', ''),
                 personality_prompt=user_data.get('personality_prompt', ''),
-                knows_ids=user_data.get('knows_ids', []),
             )
             agent = agent_service.create_agent(db, agent_in)
 
@@ -223,6 +229,7 @@ async def import_agents(
                 username=agent.username,
                 avatar_path=avatar_path,
                 personal_signature=agent.personal_signature if agent.personal_signature else None,
+                ai_config_id=agent.id,
             )
 
             if success and platform_id:
@@ -230,8 +237,10 @@ async def import_agents(
                 db.add(agent)
                 db.commit()
                 db.refresh(agent)
-
-            imported.append(agent)
+                imported.append(agent)
+            else:
+                print(f"[导入] 注册 {username} 失败: {error}，回滚数据库记录")
+                agent_service.delete_agent(db, agent.id)
 
         notify_scheduler_reload("all")
 
@@ -239,6 +248,150 @@ async def import_agents(
 
         responses = [agent_service.agent_to_response(a) for a in imported]
         return AgentListResponse(items=responses, total=len(imported))
+
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        if tmp_dir and os.path.exists(tmp_dir):
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@router.post("/import-stream")
+async def import_agents_stream(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """批量导入 Agent（SSE 流式推送）"""
+    if not file.filename.endswith('.zip'):
+        raise HTTPException(status_code=400, detail="仅支持 zip 格式压缩包")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    tmp_dir = None
+    try:
+        tmp_dir = tempfile.mkdtemp()
+        with zipfile.ZipFile(tmp_path, 'r') as zf:
+            zf.extractall(tmp_dir)
+
+        json_path = None
+        for root, dirs, files in os.walk(tmp_dir):
+            for f in files:
+                if f.endswith('.json') and 'ai_users_config' in f.lower():
+                    json_path = os.path.join(root, f)
+                    break
+            if json_path:
+                break
+
+        if not json_path:
+            raise HTTPException(status_code=400, detail="压缩包中未找到 ai_users_config.json")
+
+        with open(json_path, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+
+        ai_users = config_data.get('ai_users', [])
+        if not ai_users:
+            raise HTTPException(status_code=400, detail="JSON 中未找到 ai_users 配置")
+
+        avatar_dir = os.path.join(tmp_dir, 'avatar')
+        if not os.path.exists(avatar_dir):
+            avatar_dir = _get_avatar_dir()
+
+        def event_stream():
+            total = len(ai_users)
+            success_count = 0
+            exists_count = 0
+            failed_count = 0
+
+            yield f"event: start\ndata: {json.dumps({'total': total}, ensure_ascii=False)}\n\n"
+
+            for user_data in ai_users:
+                username = user_data.get('username', '')
+
+                try:
+                    existing = agent_service.get_agent_by_username(db, username)
+                    if existing:
+                        exists_count += 1
+                        event_data = {
+                            'event': 'exists',
+                            'username': username,
+                            'id': existing.id,
+                            'app_platform_user_id': existing.app_platform_user_id,
+                        }
+                        yield f"event: progress\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                        continue
+
+                    agent_in = AgentCreate(
+                        name=user_data.get('name', ''),
+                        username=username,
+                        monthly_logins=user_data.get('monthly_logins', 30),
+                        personal_signature=user_data.get('personal_signature', ''),
+                        personality_prompt=user_data.get('personality_prompt', ''),
+                    )
+                    agent = agent_service.create_agent(db, agent_in)
+
+                    avatar_path = find_avatar_file(avatar_dir, agent.name, agent.username)
+
+                    success, platform_id, error = register_agent(
+                        db=db,
+                        username=agent.username,
+                        avatar_path=avatar_path,
+                        personal_signature=agent.personal_signature if agent.personal_signature else None,
+                        ai_config_id=agent.id,
+                    )
+
+                    if success and platform_id:
+                        agent.app_platform_user_id = platform_id
+                        db.add(agent)
+                        db.commit()
+                        db.refresh(agent)
+                        success_count += 1
+                        event_data = {
+                            'event': 'success',
+                            'username': username,
+                            'id': agent.id,
+                            'app_platform_user_id': platform_id,
+                        }
+                    else:
+                        failed_count += 1
+                        agent_service.delete_agent(db, agent.id)
+                        event_data = {
+                            'event': 'error',
+                            'username': username,
+                            'message': error or '未知错误',
+                        }
+
+                    yield f"event: progress\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+                except Exception as e:
+                    failed_count += 1
+                    event_data = {
+                        'event': 'error',
+                        'username': username,
+                        'message': str(e),
+                    }
+                    yield f"event: progress\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+                time.sleep(0.5)
+
+            notify_scheduler_reload("all")
+            create_log(db, current_admin.id, "import_agents", "agent", details=json.dumps({
+                "total": total, "success": success_count, "exists": exists_count, "failed": failed_count
+            }))
+
+            done_data = {
+                'total': total,
+                'success': success_count,
+                'exists': exists_count,
+                'failed': failed_count,
+            }
+            yield f"event: done\ndata: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     finally:
         if os.path.exists(tmp_path):
@@ -309,3 +462,24 @@ async def upload_agent_avatar(
     create_log(db, current_admin.id, "upload_avatar", "agent", agent_id)
 
     return MessageResponse(message="头像上传成功")
+
+
+@router.put("/{agent_id}/relation", response_model=AgentResponse)
+def update_agent_relation(
+    agent_id: int,
+    relation_in: AgentRelationUpdate,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """更新 Agent 相识关系"""
+    agent = agent_service.get_agent(db, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
+
+    updated = agent_service.update_agent_knows(db, agent_id, relation_in.knows_ids, relation_in.bidirectional)
+
+    notify_scheduler_reload("all")
+
+    create_log(db, current_admin.id, "update_agent_relation", "agent", agent_id)
+
+    return agent_service.agent_to_response(updated)

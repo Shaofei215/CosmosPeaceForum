@@ -423,8 +423,8 @@ def tool_execution_node(state: SessionState) -> SessionState:
             "last_error": None,
         }
 
-    reason = tool_args.pop("reason", "未提供原因")
-    summary = tool_args.pop("summary", "")
+    reason = tool_args.get("reason", "未提供原因")
+    summary = tool_args.get("summary", "")
     result = None
 
     try:

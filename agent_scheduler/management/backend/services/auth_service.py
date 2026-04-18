@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from agent_scheduler.management.backend.models.admin_user import AdminUser
 from agent_scheduler.management.backend.core.security import verify_password, get_password_hash, create_access_token
 from agent_scheduler.management.backend.core.config import get_config
+from agent_scheduler.management.backend.schemas import UpdateProfileRequest
 
 
 def get_admin_by_username(db: Session, username: str) -> Optional[AdminUser]:
@@ -56,3 +57,23 @@ def init_default_admin(db: Session) -> bool:
     db.add(admin)
     db.commit()
     return True
+
+
+def update_admin_profile(db: Session, admin: AdminUser, request: UpdateProfileRequest) -> AdminUser:
+    """修改管理员用户名/密码"""
+    if not verify_password(request.current_password, admin.password_hash):
+        raise ValueError("当前密码不正确")
+
+    if request.username and request.username != admin.username:
+        existing = get_admin_by_username(db, request.username)
+        if existing:
+            raise ValueError("用户名已存在")
+        admin.username = request.username
+
+    if request.new_password:
+        admin.password_hash = get_password_hash(request.new_password)
+
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    return admin

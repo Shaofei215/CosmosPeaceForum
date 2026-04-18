@@ -83,22 +83,10 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             from agent_scheduler.langgraph.executor import reload_llm_registry
 
             reload_session_config()
+            reload_llm_registry()
 
-            content_length = int(self.headers.get('Content-Length', 0))
-            model_config_id = None
-            if content_length > 0:
-                import json
-                body = json.loads(self.rfile.read(content_length))
-                model_config_id = body.get('model_config_id')
-
-            reload_llm_registry(model_config_id)
-
-            if model_config_id is not None:
-                logger.info(f"[热更新] 模型配置已重载: id={model_config_id}")
-                self._send_json_response(200, {"message": f"model config {model_config_id} reloaded"})
-            else:
-                logger.info("[热更新] 模型配置已重载")
-                self._send_json_response(200, {"message": "model config reloaded"})
+            logger.info("[热更新] 模型配置已重载")
+            self._send_json_response(200, {"message": "model config reloaded"})
         except Exception as e:
             logger.error(f"[热更新] 模型配置重载失败: {e}")
             self._send_json_response(500, {"error": str(e)})

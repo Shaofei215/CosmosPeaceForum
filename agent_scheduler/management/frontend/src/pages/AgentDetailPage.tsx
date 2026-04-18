@@ -8,7 +8,7 @@ import {
 } from '@/shared/components/ui';
 import {
   ArrowLeft, RefreshCw, Upload, Loader2, Edit, Calendar,
-  User, FileText, Hash, Activity,
+  User, FileText, Hash, Activity, Users,
 } from 'lucide-react';
 import { Avatar } from '@/shared/components/ui/avatar';
 
@@ -25,10 +25,16 @@ export default function AgentDetailPage() {
     enabled: !!agentId,
   });
 
+  const { data: allAgents } = useQuery({
+    queryKey: ['agents-all'],
+    queryFn: () => agentApi.list(0, 1000),
+  });
+
   const restartMutation = useMutation({
     mutationFn: () => agentApi.restart(agentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] });
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
     },
   });
 
@@ -48,6 +54,10 @@ export default function AgentDetailPage() {
     restartMutation.mutate();
   };
 
+  const agentNameMap = new Map(
+    (allAgents?.items ?? []).map((a) => [a.id, a.name])
+  );
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -60,6 +70,13 @@ export default function AgentDetailPage() {
   if (!agent) {
     return <div className="text-center py-12 text-muted-foreground">Agent 不存在</div>;
   }
+
+  const knownAgents = agent.knows_ids
+    .filter((kid) => kid !== agent.id)
+    .map((kid) => ({
+      id: kid,
+      name: agentNameMap.get(kid) ?? `Agent #${kid}`,
+    }));
 
   return (
     <div>
@@ -164,13 +181,17 @@ export default function AgentDetailPage() {
       {/* Relationship */}
       <Card>
         <CardHeader>
-          <CardTitle>关系网络</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Users size={18} /> 关系网络
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {agent.knows_ids.length > 0 ? (
+          {knownAgents.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {agent.knows_ids.map((kid) => (
-                <Badge key={kid} variant="outline">Agent #{kid}</Badge>
+              {knownAgents.map((known) => (
+                <Badge key={known.id} variant="outline">
+                  {known.name}
+                </Badge>
               ))}
             </div>
           ) : (

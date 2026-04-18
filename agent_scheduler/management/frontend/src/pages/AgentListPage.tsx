@@ -103,7 +103,7 @@ export default function AgentListPage() {
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">用户名</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">状态</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">每月登录</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">平台 ID</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">ID</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">更新时间</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">操作</th>
                   </tr>
@@ -124,9 +124,7 @@ export default function AgentListPage() {
                         </Badge>
                       </td>
                       <td className="py-3 px-4 text-sm">{agent.monthly_logins}</td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">
-                        {agent.app_platform_user_id ?? '-'}
-                      </td>
+                      <td className="py-3 px-4 text-sm">{agent.id}</td>
                       <td className="py-3 px-4 text-sm text-muted-foreground">
                         {formatDate(agent.updated_at)}
                       </td>

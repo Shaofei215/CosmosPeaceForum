@@ -44,7 +44,6 @@ def create_agent(db: Session, agent_in: AgentCreate) -> AgentConfig:
         monthly_logins=agent_in.monthly_logins,
         personal_signature=agent_in.personal_signature,
         personality_prompt=agent_in.personality_prompt,
-        knows_ids=json.dumps(agent_in.knows_ids),
         is_active=agent_in.is_active,
     )
     db.add(db_agent)
@@ -60,8 +59,6 @@ def update_agent(db: Session, agent_id: int, agent_in: AgentUpdate) -> Optional[
         return None
 
     update_data = agent_in.model_dump(exclude_unset=True)
-    if "knows_ids" in update_data:
-        update_data["knows_ids"] = json.dumps(update_data["knows_ids"])
     update_data["updated_at"] = datetime.utcnow()
 
     for key, value in update_data.items():
@@ -91,6 +88,42 @@ def parse_knows_ids(agent: AgentConfig) -> List[int]:
         return json.loads(agent.knows_ids)
     except (json.JSONDecodeError, TypeError):
         return []
+
+
+def update_agent_knows(db: Session, agent_id: int, knows_ids: List[int], bidirectional: bool = False) -> Optional[AgentConfig]:
+    """更新 Agent 的相识关系"""
+    db_agent = db.get(AgentConfig, agent_id)
+    if not db_agent:
+        return None
+
+    db_agent.knows_ids = json.dumps(knows_ids)
+    db_agent.updated_at = datetime.utcnow()
+    db.add(db_agent)
+
+    if bidirectional:
+        all_agents = db.exec(select(AgentConfig)).all()
+        for other in all_agents:
+            if other.id == agent_id:
+                continue
+
+            other_knows = parse_knows_ids(other)
+            should_have_relation = other.id in knows_ids
+            has_relation = agent_id in other_knows
+
+            if should_have_relation and not has_relation:
+                other_knows.append(agent_id)
+                other.knows_ids = json.dumps(other_knows)
+                other.updated_at = datetime.utcnow()
+                db.add(other)
+            elif not should_have_relation and has_relation:
+                other_knows.remove(agent_id)
+                other.knows_ids = json.dumps(other_knows)
+                other.updated_at = datetime.utcnow()
+                db.add(other)
+
+    db.commit()
+    db.refresh(db_agent)
+    return db_agent
 
 
 def agent_to_response(agent: AgentConfig) -> dict:
@@ -147,7 +180,6 @@ def import_agents_from_zip(db: Session, zip_path: str) -> List[AgentConfig]:
                 monthly_logins=user_data.get('monthly_logins', 30),
                 personal_signature=user_data.get('personal_signature', ''),
                 personality_prompt=user_data.get('personality_prompt', ''),
-                knows_ids=user_data.get('knows_ids', []),
             )
             agent = create_agent(db, agent_in)
             imported.append(agent)

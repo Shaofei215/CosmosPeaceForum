@@ -50,8 +50,8 @@ def main():
     setup_logging(config.log_level)
 
     time_system = get_time_system()
-    print(f"[时间] 当前时间: {time_system.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"[时间] 时间流速: {time_system.time_scale}x")
+    print(f"[时间] 当前时间: {time_system.get_scaled_time().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"[时间] 时间流速: {time_system.get_scale()}x")
 
     from agent_scheduler.scheduler.internal_server import SchedulerInternalServer
     from agent_scheduler.management.backend.db_client import get_db_client

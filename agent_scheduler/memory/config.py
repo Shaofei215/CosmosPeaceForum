@@ -1,11 +1,9 @@
 """
 记忆系统配置模块
 
-从 management 数据库读取系统配置（优先级最高）
-如果数据库未配置，则 fallback 到 .env 文件
+所有业务配置均通过 management 数据库抽象层加载（system_configs 表）
 """
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,11 +15,7 @@ class MemoryConfig:
     """
     记忆系统配置类
 
-    配置加载顺序（优先级从高到低）：
-    1. 数据库 system_configs 表（主存储）
-    2. 环境变量
-    3. .env 文件
-    4. 程序默认值
+    所有业务配置均从 management 数据库加载，无环境变量 fallback。
     """
     memory_enabled: bool = True
     memory_dir: str = ""
@@ -37,18 +31,16 @@ class MemoryConfig:
     embedding_dimension: int = 1536
 
     @classmethod
-    def from_db_or_env(cls) -> "MemoryConfig":
-        """从数据库或环境变量加载配置"""
+    def from_db(cls) -> "MemoryConfig":
+        """从数据库加载配置"""
         db = get_db_client()
 
         def _get(key: str, default: str) -> str:
             val = db.get_system_config(key)
-            return val if val else os.environ.get(key, default)
+            return val if val else default
 
         scheduler_dir = Path(__file__).parent.parent
-        default_mem_dir = os.environ.get("MEMORY_DIR", "")
-        if not default_mem_dir:
-            default_mem_dir = str(scheduler_dir / "memory")
+        default_mem_dir = str(scheduler_dir / "memory")
 
         return cls(
             memory_enabled=_get("MEMORY_ENABLED", "true").lower() in ("true", "1", "yes"),
@@ -112,12 +104,12 @@ def get_memory_config() -> MemoryConfig:
     """获取记忆系统配置单例"""
     global _memory_config
     if _memory_config is None:
-        _memory_config = MemoryConfig.from_db_or_env()
+        _memory_config = MemoryConfig.from_db()
     return _memory_config
 
 
 def reload_memory_config():
     """重载记忆系统配置（热更新）"""
     global _memory_config
-    _memory_config = MemoryConfig.from_db_or_env()
+    _memory_config = MemoryConfig.from_db()
     return _memory_config

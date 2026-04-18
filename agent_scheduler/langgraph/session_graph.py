@@ -60,10 +60,10 @@ def build_session_graph(
                                    /           \
                                   /             \
                                  v               v
-                      llm_decision (继续)  summarize (结束)
-                                                     |
-                                                     v
-                                                    END
+                     recall_memory (继续)   summarize (结束)
+                                                    |
+                                                    v
+                                                   END
     ```
 
     流程说明：
@@ -180,8 +180,12 @@ def get_graph_structure() -> Dict[str, Any]:
                 "description": "会话开始，初始化状态，重置工作记忆"
             },
             {
+                "name": "recall_memory",
+                "description": "从长期记忆库召回相关记忆并注入 Prompt"
+            },
+            {
                 "name": "llm_decision",
-                "description": "LLM 决策节点，首次决策时会调用 get_global_feed 获取初始信息流"
+                "description": "LLM 决策节点，根据工作记忆和工具返回做出下一步决策"
             },
             {
                 "name": "tool_execution",
@@ -198,7 +202,8 @@ def get_graph_structure() -> Dict[str, Any]:
         ],
         "edges": [
             {"from": "START", "to": "start"},
-            {"from": "start", "to": "llm_decision"},
+            {"from": "start", "to": "recall_memory"},
+            {"from": "recall_memory", "to": "llm_decision"},
             {"from": "llm_decision", "to": "tool_execution"},
             {"from": "summarize", "to": "end"},
             {"from": "end", "to": "END"}
@@ -209,7 +214,7 @@ def get_graph_structure() -> Dict[str, Any]:
                 "condition": "should_continue_edge",
                 "branches": {
                     "tool_execution": "继续执行批量工具",
-                    "llm_decision": "继续决策（基于工作记忆，不重新获取环境）",
+                    "recall_memory": "继续决策前先召回记忆",
                     "summarize": "结束会话"
                 }
             }

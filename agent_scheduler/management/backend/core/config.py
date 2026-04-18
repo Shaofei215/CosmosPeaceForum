@@ -35,22 +35,9 @@ def _load_env_file(env_path: str = None) -> None:
         pass
 
 
-def _ensure_encryption_key() -> str:
-    """确保 ENCRYPTION_KEY 存在，不存在则生成"""
-    key = os.environ.get("ENCRYPTION_KEY", "")
-    if not key:
-        from cryptography.fernet import Fernet
-        key = Fernet.generate_key().decode()
-        print(f"[配置][警告] 未设置 ENCRYPTION_KEY，已自动生成: {key[:16]}...")
-    return key
-
-
 _load_env_file()
 
 # ==================== 基础设施参数（仅环境变量） ====================
-
-# 加密配置
-ENCRYPTION_KEY = _ensure_encryption_key()
 
 # JWT 认证配置
 MANAGEMENT_JWT_SECRET_KEY = os.environ.get("MANAGEMENT_JWT_SECRET_KEY", "dev-secret-key-change-in-production")
@@ -74,9 +61,6 @@ SCHEDULER_INTERNAL_PORT = int(os.environ.get("SCHEDULER_INTERNAL_PORT", "8002"))
 
 class Settings:
     """配置类，封装所有配置参数"""
-    
-    # 加密配置
-    encryption_key: str = ENCRYPTION_KEY
     
     # JWT 认证配置
     jwt_secret_key: str = MANAGEMENT_JWT_SECRET_KEY

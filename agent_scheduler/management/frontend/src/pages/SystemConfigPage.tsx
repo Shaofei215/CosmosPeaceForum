@@ -6,12 +6,13 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   DialogDescription,
 } from '@/shared/components/ui';
-import { Settings, Edit, RefreshCw, Loader2 } from 'lucide-react';
+import { Settings, Edit, RefreshCw, Loader2, Eye, EyeOff } from 'lucide-react';
+
+const PASSWORD_KEYS = ['AI_USER_PASSWORD', 'EMBEDDING_API_KEY'];
 
 const configGroupLabels: Record<string, string[]> = {
   '通用': ['ADMIN_KEY', 'AI_USER_PASSWORD', 'API_BASE_URL', 'LOG_LEVEL'],
   'LangGraph': ['LANGGRAPH_MAX_STEPS', 'LANGGRAPH_MAX_CONSECUTIVE_ERRORS', 'LANGGRAPH_TOOL_TIMEOUT', 'LANGGRAPH_ENVIRONMENT_CACHE_TTL'],
-  'LLM': ['LLM_PROVIDER', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL_NAME', 'ANTHROPIC_API_KEY', 'ANTHROPIC_MODEL_NAME', 'LLM_TEMPERATURE'],
   '记忆': ['MEMORY_ENABLED', 'MEMORY_DIR', 'MEMORY_RECALL_LIMIT', 'MEMORY_RECALL_VECTOR_RESULTS', 'MEMORY_RECALL_BM25_RESULTS', 'MEMORY_THRESHOLD', 'MEMORY_BOOST_FACTOR', 'MEMORY_DECAY_RATE'],
   'Embedding': ['EMBEDDING_BASE_URL', 'EMBEDDING_API_KEY', 'EMBEDDING_MODEL_NAME', 'EMBEDDING_DIMENSION'],
 };
@@ -27,6 +28,7 @@ export default function SystemConfigPage() {
   const queryClient = useQueryClient();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
 
   const { data: configs, isLoading } = useQuery({
     queryKey: ['system'],
@@ -109,12 +111,35 @@ export default function SystemConfigPage() {
                       <td className="py-2 px-4 text-sm font-mono">{config.key}</td>
                       <td className="py-2 px-4 text-sm text-muted-foreground">{config.description}</td>
                       <td className="py-2 px-4 text-sm">
-                        <Input
-                          value={config.value}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          disabled={editingKey !== config.key}
-                          className="text-sm h-7"
-                        />
+                        <div className="relative">
+                          <Input
+                            type={PASSWORD_KEYS.includes(config.key) && !visiblePasswords.has(config.key) ? 'password' : 'text'}
+                            value={editingKey === config.key ? editValue : config.value}
+                            onChange={(e) => {
+                              if (editingKey === config.key) setEditValue(e.target.value);
+                            }}
+                            disabled={editingKey !== config.key}
+                            className={`text-sm h-7 ${PASSWORD_KEYS.includes(config.key) ? 'pr-10' : ''}`}
+                          />
+                          {PASSWORD_KEYS.includes(config.key) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = new Set(visiblePasswords);
+                                if (next.has(config.key)) {
+                                  next.delete(config.key);
+                                } else {
+                                  next.add(config.key);
+                                }
+                                setVisiblePasswords(next);
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                              tabIndex={-1}
+                            >
+                              {visiblePasswords.has(config.key) ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="py-2 px-4 text-right">
                         {editingKey === config.key ? (

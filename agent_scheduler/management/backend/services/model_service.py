@@ -8,7 +8,6 @@ from typing import List, Optional
 from sqlmodel import Session, select
 
 from agent_scheduler.management.backend.models.model_config import ModelConfig
-from agent_scheduler.management.backend.core.encryption import encrypt_value, decrypt_value
 from agent_scheduler.management.backend.schemas import ModelConfigCreate, ModelConfigUpdate
 
 
@@ -25,10 +24,15 @@ def get_model_config(db: Session, config_id: int) -> Optional[ModelConfig]:
 
 def create_model_config(db: Session, config_in: ModelConfigCreate) -> ModelConfig:
     """创建模型配置"""
+    if not 0.0 <= config_in.temperature <= 2.0:
+        raise ValueError("temperature 必须在 0.0 到 2.0 之间")
+    if config_in.max_token < 1:
+        raise ValueError("max_token 必须大于 0")
+
     db_config = ModelConfig(
         name=config_in.name,
         provider=config_in.provider,
-        api_key_encrypted=encrypt_value(config_in.api_key),
+        api_key=config_in.api_key,
         base_url=config_in.base_url,
         model_name=config_in.model_name,
         temperature=config_in.temperature,
@@ -48,8 +52,15 @@ def update_model_config(db: Session, config_id: int, config_in: ModelConfigUpdat
         return None
 
     update_data = config_in.model_dump(exclude_unset=True)
-    if "api_key" in update_data and update_data["api_key"]:
-        update_data["api_key_encrypted"] = encrypt_value(update_data.pop("api_key"))
+
+    if "temperature" in update_data:
+        if not 0.0 <= update_data["temperature"] <= 2.0:
+            raise ValueError("temperature 必须在 0.0 到 2.0 之间")
+
+    if "max_token" in update_data:
+        if update_data["max_token"] < 1:
+            raise ValueError("max_token 必须大于 0")
+
     update_data["updated_at"] = datetime.utcnow()
 
     for key, value in update_data.items():
@@ -72,14 +83,11 @@ def delete_model_config(db: Session, config_id: int) -> bool:
 
 
 def get_api_key(db: Session, config_id: int) -> Optional[str]:
-    """获取解密后的 API Key"""
+    """获取 API Key"""
     db_config = db.get(ModelConfig, config_id)
     if not db_config:
         return None
-    try:
-        return decrypt_value(db_config.api_key_encrypted)
-    except ValueError:
-        return None
+    return db_config.api_key
 
 
 def model_config_to_response(config: ModelConfig) -> dict:

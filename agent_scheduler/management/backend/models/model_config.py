@@ -17,7 +17,7 @@ class ModelConfig(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True, max_length=100)
     provider: str = Field(max_length=50, description="提供商（openai/anthropic）")
-    api_key_encrypted: str = Field(max_length=500, description="加密后的 API Key")
+    api_key: str = Field(max_length=500, description="API Key（明文存储）")
     base_url: str = Field(default="", max_length=500)
     model_name: str = Field(max_length=100)
     temperature: float = Field(default=0.7)

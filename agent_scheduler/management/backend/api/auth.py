@@ -9,12 +9,13 @@ from sqlmodel import Session
 
 from agent_scheduler.management.backend.core.database import get_db
 from agent_scheduler.management.backend.core.security import get_password_hash
-from agent_scheduler.management.backend.schemas import LoginRequest, LoginResponse, AdminUserResponse
+from agent_scheduler.management.backend.schemas import LoginRequest, LoginResponse, AdminUserResponse, UpdateProfileRequest
 from agent_scheduler.management.backend.models.admin_user import AdminUser
 from agent_scheduler.management.backend.services.auth_service import (
     authenticate_admin,
     create_admin_token,
     update_last_login,
+    update_admin_profile,
 )
 from agent_scheduler.management.backend.api.deps import get_current_admin
 
@@ -52,3 +53,25 @@ def get_me(current_admin: AdminUser = Depends(get_current_admin)):
         created_at=current_admin.created_at,
         last_login=current_admin.last_login,
     )
+
+
+@router.put("/profile", response_model=AdminUserResponse)
+def update_profile(
+    request: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """修改管理员用户名/密码"""
+    try:
+        admin = update_admin_profile(db, current_admin, request)
+        return AdminUserResponse(
+            id=admin.id,
+            username=admin.username,
+            created_at=admin.created_at,
+            last_login=admin.last_login,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )

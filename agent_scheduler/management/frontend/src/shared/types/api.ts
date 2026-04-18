@@ -15,6 +15,12 @@ export interface LoginResponse {
   token_type: string;
 }
 
+export interface UpdateProfileRequest {
+  username?: string;
+  current_password: string;
+  new_password?: string;
+}
+
 export interface AgentConfig {
   id: number;
   name: string;
@@ -35,7 +41,6 @@ export interface AgentCreate {
   monthly_logins?: number;
   personal_signature?: string;
   personality_prompt?: string;
-  knows_ids?: number[];
   is_active?: boolean;
 }
 
@@ -44,8 +49,12 @@ export interface AgentUpdate {
   monthly_logins?: number;
   personal_signature?: string;
   personality_prompt?: string;
-  knows_ids?: number[];
   is_active?: boolean;
+}
+
+export interface AgentRelationUpdate {
+  knows_ids: number[];
+  bidirectional?: boolean;
 }
 
 export interface AgentListResponse {

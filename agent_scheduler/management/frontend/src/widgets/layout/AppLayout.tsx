@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Cpu, Settings, FileText,
-  Menu, X, LogOut,
+  Menu, X, LogOut, UserCog,
 } from 'lucide-react';
-import { useLogout, useCurrentAdmin } from '@/features/auth';
+import { useLogout, useCurrentAdmin, ProfileDialog } from '@/features/auth';
 
 const navItems = [
   { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
@@ -16,6 +16,7 @@ const navItems = [
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const location = useLocation();
   const logout = useLogout();
   const { data: admin } = useCurrentAdmin();
@@ -70,18 +71,34 @@ export function AppLayout() {
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{admin?.username || '管理员'}</p>
               </div>
-              <button
-                onClick={logout}
-                className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
-                title="登出"
-              >
-                <LogOut size={16} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setProfileDialogOpen(true)}
+                  className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="账户资料"
+                >
+                  <UserCog size={16} />
+                </button>
+                <button
+                  onClick={logout}
+                  className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                  title="登出"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
             </div>
           </div>
         )}
         {!sidebarOpen && (
-          <div className="p-3 border-t border-border flex justify-center">
+          <div className="p-3 border-t border-border flex justify-center gap-1">
+            <button
+              onClick={() => setProfileDialogOpen(true)}
+              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="账户资料"
+            >
+              <UserCog size={16} />
+            </button>
             <button
               onClick={logout}
               className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
@@ -99,6 +116,12 @@ export function AppLayout() {
           <Outlet />
         </div>
       </main>
+
+      <ProfileDialog
+        open={profileDialogOpen}
+        onOpenChange={setProfileDialogOpen}
+        currentAdmin={admin}
+      />
     </div>
   );
 }

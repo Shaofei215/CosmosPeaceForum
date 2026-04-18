@@ -1,6 +1,6 @@
 import { apiClient } from '@/shared/api/client';
 import type {
-  AgentConfig, AgentCreate, AgentUpdate, AgentListResponse,
+  AgentConfig, AgentCreate, AgentUpdate, AgentListResponse, AgentRelationUpdate,
   ModelConfig, ModelConfigCreate, ModelConfigUpdate,
   SystemConfig, OperationLogListResponse, MessageResponse,
 } from '@/shared/types/api';
@@ -35,6 +35,9 @@ export const agentApi = {
     formData.append('file', file);
     return apiClient.upload<MessageResponse>(`/agents/${id}/avatar`, formData);
   },
+
+  updateRelation: (id: number, data: AgentRelationUpdate) =>
+    apiClient.put<AgentConfig>(`/agents/${id}/relation`, data),
 };
 
 export const modelApi = {

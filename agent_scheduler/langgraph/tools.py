@@ -20,14 +20,6 @@ def _get_api_base_url() -> str:
     return _url
 
 
-def _get_relation_mapping_service():
-    """
-    获取关系映射服务（延迟加载，避免循环导入）
-    """
-    from agent_scheduler.scheduler.relation_map import get_relation_mapping_service as _get_service
-    return _get_service()
-
-
 # ==================== 工具函数错误类型 ====================
 
 class ToolExecutionError(Exception):
@@ -185,7 +177,7 @@ def _get_follow_status_text(user_id: int, current_user_id: Optional[int]) -> str
         if follow_data.get("is_following"):
             return "互相关注" if follow_data.get("is_mutual") else "已关注"
         return "未关注"
-    except:
+    except (requests.exceptions.RequestException, ValueError, KeyError):
         return ""
 
 
@@ -1057,13 +1049,14 @@ def expand_post(
 
 @tool
 def expand_comments(
+    post_id: int,
     comment_id: int,
     reason: str = "",
     summary: str = "",
     reply_count: int = 5
 ) -> ToolResult:
     """
-    展开查看指定评论及其回复
+    展开查看评论及其回复
 
     获取指定评论的详细信息，以及该评论下的回复列表。
     适用于查看某条评论及其讨论氛围的场景。
@@ -1071,6 +1064,7 @@ def expand_comments(
     注意：此工具会自动从当前执行上下文获取认证信息（如有）。
 
     Args:
+        post_id: 评论所属帖子的 ID
         comment_id: 目标一级评论的 ID
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想查看这条评论及其回复"等。
@@ -1088,8 +1082,7 @@ def expand_comments(
         ToolExecutionError: 服务器内部错误
     """
     current_user_id = get_current_user_id()
-    comment_data = _get_comment(1, comment_id)
-    post_id = comment_data.get("post_id", 1)
+    comment_data = _get_comment(post_id, comment_id)
     post_data = _get_post(post_id)
     standardized_post = _standardize_post(post_data, current_user_id)
     standardized_comment = _standardize_comment(comment_data, current_user_id)

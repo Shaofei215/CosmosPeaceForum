@@ -1,60 +1,16 @@
 """
 Management Backend - 加密模块
-使用 Fernet (AES) 对 API Key 等敏感信息进行加密存储
+
+已废弃：API Key 改为明文存储，不再使用加密。
+保留此文件仅为避免 ImportError。
 """
-
-from cryptography.fernet import Fernet, InvalidToken
-
-from agent_scheduler.management.backend.core.config import get_config
-
-_fernet = None
-
-
-def _get_fernet() -> Fernet:
-    """获取 Fernet 实例（单例）"""
-    global _fernet
-    if _fernet is None:
-        config = get_config()
-        key = config.encryption_key
-        if isinstance(key, str):
-            key = key.encode()
-        _fernet = Fernet(key)
-    return _fernet
 
 
 def encrypt_value(plaintext: str) -> str:
-    """
-    加密敏感值
-
-    Args:
-        plaintext: 明文值
-
-    Returns:
-        str: Base64 编码的密文
-    """
-    if not plaintext:
-        return ""
-    fernet = _get_fernet()
-    return fernet.encrypt(plaintext.encode()).decode()
+    """已废弃：返回明文"""
+    return plaintext
 
 
 def decrypt_value(ciphertext: str) -> str:
-    """
-    解密敏感值
-
-    Args:
-        ciphertext: 密文
-
-    Returns:
-        str: 明文值
-
-    Raises:
-        ValueError: 解密失败
-    """
-    if not ciphertext:
-        return ""
-    try:
-        fernet = _get_fernet()
-        return fernet.decrypt(ciphertext.encode()).decode()
-    except InvalidToken as e:
-        raise ValueError(f"解密失败: {e}")
+    """已废弃：返回明文"""
+    return ciphertext

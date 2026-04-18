@@ -7,6 +7,7 @@ Management Database Client - 数据库抽象层
 能够通过统一的 API 从 SQLite 数据库读取配置。
 """
 
+import json
 import os
 import sqlite3
 from pathlib import Path
@@ -88,6 +89,13 @@ class ManagementDBClient:
         except Exception:
             return {}
     
+    def _parse_knows_ids(self, raw_value: str) -> list:
+        """解析 knows_ids JSON 字符串"""
+        try:
+            return json.loads(raw_value)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
     def get_agent_configs(self) -> list:
         """
         获取所有启用的 Agent 配置
@@ -104,12 +112,8 @@ class ManagementDBClient:
                 rows = cursor.fetchall()
                 result = []
                 for row in rows:
-                    import json
                     agent = dict(row)
-                    try:
-                        agent["knows_ids"] = json.loads(agent.get("knows_ids", "[]"))
-                    except (json.JSONDecodeError, TypeError):
-                        agent["knows_ids"] = []
+                    agent["knows_ids"] = self._parse_knows_ids(agent.get("knows_ids", "[]"))
                     result.append(agent)
                 return result
             finally:
@@ -136,12 +140,8 @@ class ManagementDBClient:
                 )
                 row = cursor.fetchone()
                 if row:
-                    import json
                     agent = dict(row)
-                    try:
-                        agent["knows_ids"] = json.loads(agent.get("knows_ids", "[]"))
-                    except (json.JSONDecodeError, TypeError):
-                        agent["knows_ids"] = []
+                    agent["knows_ids"] = self._parse_knows_ids(agent.get("knows_ids", "[]"))
                     return agent
                 return None
             finally:

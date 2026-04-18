@@ -28,6 +28,7 @@ from agent_scheduler.langgraph.config import AgentConfig as SessionAgentConfig
 from agent_scheduler.scheduler.context import (
     AgentContext,
     get_current_context,
+    set_current_context,
     clear_current_context,
 )
 from agent_scheduler.scheduler.time_system import get_time_system
@@ -48,9 +49,6 @@ def login_user(username: str, password: str) -> Optional[Dict]:
         Optional[Dict]: 用户信息，失败返回 None
     """
     try:
-        from agent_scheduler.app_platform.user.user_api import login_user as platform_login
-        return platform_login(username, password)
-    except ImportError:
         import requests
         config = get_scheduler_config()
         url = f"{config.api_base_url}/auth/ai-login"
@@ -61,8 +59,23 @@ def login_user(username: str, password: str) -> Optional[Dict]:
             timeout=10,
         )
         if response.status_code == 200:
-            return response.json()
+            result = response.json()
+            token = result.get('access_token') or result.get('token')
+            if token:
+                me_url = f"{config.api_base_url}/auth/me"
+                me_response = requests.get(
+                    me_url,
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10,
+                )
+                if me_response.status_code == 200:
+                    user_info = me_response.json()
+                    result['id'] = user_info.get('id')
+            return result
         logger.error(f"用户 {username} 登录失败: HTTP {response.status_code}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"用户 {username} 登录失败: {e}")
         return None
 
 
@@ -80,6 +93,7 @@ class AIUserScheduler(threading.Thread):
         self,
         user_id: int,
         username: str,
+        name: str,
         ai_config_id: int,
         monthly_logins: int,
         password: str,
@@ -92,6 +106,7 @@ class AIUserScheduler(threading.Thread):
         super().__init__(daemon=True, name=f"AIUser-{username}")
         self.user_id = user_id
         self.username = username
+        self.name = name
         self.ai_config_id = ai_config_id
         self.monthly_logins = monthly_logins
         self.password = password
@@ -150,8 +165,7 @@ class AIUserScheduler(threading.Thread):
             self.next_login_time = self._calculate_next_login_time()
 
             logger.info(
-                f"[{self.username}] 下次登录: {self.next_login_time.strftime('%Y-%m-%d %H:%M:%S')} "
-                f"({self.time_system.to_human_readable_duration(self.next_login_time - self.time_system.now())})"
+                f"[{self.username}] 下次登录: {self.next_login_time.strftime('%Y-%m-%d %H:%M:%S')}"
             )
 
             if not self._wait_until_login_time():
@@ -165,12 +179,12 @@ class AIUserScheduler(threading.Thread):
         interval_hours = random.expovariate(1.0 / avg_interval_hours)
         interval_hours = max(0.1, interval_hours)
 
-        return self.time_system.now() + timedelta(hours=interval_hours)
+        return self.time_system.get_scaled_time() + timedelta(hours=interval_hours)
 
     def _wait_until_login_time(self) -> bool:
         """休眠直到登录时间，返回 True 表示正常唤醒，False 表示被中断"""
         while not self._stop_event.is_set():
-            remaining = self.next_login_time - self.time_system.now()
+            remaining = self.next_login_time - self.time_system.get_scaled_time()
             if remaining.total_seconds() <= 0:
                 return True
 
@@ -195,8 +209,11 @@ class AIUserScheduler(threading.Thread):
             return
 
         user_id = user_info.get('id')
-        token = user_info.get('token')
-        logger.info(f"[{self.username}] 登录成功 (用户ID: {user_id})")
+        token = user_info.get('token') or user_info.get('access_token')
+        if user_id:
+            logger.info(f"[{self.username}] 登录成功 (用户ID: {user_id})")
+        else:
+            logger.info(f"[{self.username}] 登录成功")
 
         try:
             self.is_logged_in = True
@@ -205,11 +222,12 @@ class AIUserScheduler(threading.Thread):
                 token=token,
                 ai_config_id=self.ai_config_id,
             )
-            agent_ctx.set_thread_context()
+            set_current_context(agent_ctx)
 
             session_cfg = SessionAgentConfig(
                 user_id=user_id,
                 username=self.username,
+                name=self.name,
                 ai_config_id=self.ai_config_id,
                 personality_prompt=self.personality_prompt,
                 personal_signature=self.personal_signature,
@@ -220,8 +238,7 @@ class AIUserScheduler(threading.Thread):
             result = run_session(session_cfg, self.relation_map)
             logger.info(
                 f"[{self.username}] 会话完成: "
-                f"步骤={result.total_steps}, "
-                f"工具调用={result.total_tool_calls}, "
+                f"步骤={result.step_count}, "
                 f"退出原因={result.exit_reason}"
             )
         except Exception as e:
@@ -323,6 +340,35 @@ class AgentSchedulerManager:
         self._create_scheduler(agent_config)
         logger.info(f"[重启] Agent {agent_config['username']} (ID:{agent_id}) 已重启")
 
+    def restart_all(self):
+        """
+        重启所有 Agent 的调度线程
+
+        流程：
+        1. 停止所有现有调度线程
+        2. 清空 schedulers 字典
+        3. 从数据库重新加载所有启用的 Agent
+        4. 为每个 Agent 创建新的调度线程
+        """
+        logger.info("[重启] 停止所有旧调度线程...")
+        self._is_running = False
+        with self._thread_lock:
+            for scheduler in self.schedulers.values():
+                scheduler.stop(timeout=5)
+            self.schedulers.clear()
+
+        self._is_running = True
+        agents = get_db_client().get_agent_configs()
+        if not agents:
+            logger.warning("[重启] 数据库中未找到启用的 Agent")
+            return
+
+        logger.info(f"[重启] 从数据库加载了 {len(agents)} 个 Agent")
+        for agent_data in agents:
+            self._create_scheduler(agent_data)
+
+        logger.info(f"[重启] 已重启 {len(self.schedulers)} 个 Agent 调度线程")
+
     def start_agent(self, agent_id: int) -> bool:
         """
         启动单个 Agent 线程
@@ -403,6 +449,7 @@ class AgentSchedulerManager:
         config = get_scheduler_config()
 
         agent_id = agent_data.get('id')
+        name = agent_data.get('name', '')
         username = agent_data.get('username', '')
         monthly_logins = agent_data.get('monthly_logins', 30)
         password = config.ai_user_password
@@ -413,6 +460,7 @@ class AgentSchedulerManager:
         scheduler = AIUserScheduler(
             user_id=agent_id,
             username=username,
+            name=name,
             ai_config_id=agent_id,
             monthly_logins=monthly_logins,
             password=password,

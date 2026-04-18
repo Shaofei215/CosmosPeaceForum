@@ -44,22 +44,27 @@ def create_llm_invoker(
 
     if config.llm_provider.lower() == "anthropic":
         model_name = config.anthropic_model_name or config.model_name
+        if not model_name:
+            raise ValueError("Anthropic 模型名称未配置，请在 model_configs 中设置第一个活跃模型")
+        if not config.anthropic_api_key:
+            raise ValueError("Anthropic API Key 未配置，请在 model_configs 中添加一个 is_active=1 的 Anthropic 模型")
         temperature = config.temperature
-        api_key = config.anthropic_api_key or None
 
         if not use_anthropic:
             from langchain_anthropic import ChatAnthropic
 
-        llm = ChatAnthropic(model=model_name, temperature=temperature, api_key=api_key)
+        llm = ChatAnthropic(model=model_name, temperature=temperature, api_key=config.anthropic_api_key)
     else:
-        model_name = config.model_name
+        model_name = config.openai_model_name or config.model_name
+        if not model_name:
+            raise ValueError("OpenAI 模型名称未配置，请在 model_configs 中设置第一个活跃模型")
+        if not config.openai_api_key:
+            raise ValueError("OpenAI API Key 未配置，请在 model_configs 中添加一个 is_active=1 的 OpenAI 模型")
         temperature = config.temperature
-        api_key = config.openai_api_key or None
+        api_key = config.openai_api_key
         base_url = config.openai_base_url or None
 
-        llm_kwargs = {"model": model_name, "temperature": temperature}
-        if api_key:
-            llm_kwargs["api_key"] = api_key
+        llm_kwargs = {"model": model_name, "temperature": temperature, "api_key": api_key}
         if base_url:
             llm_kwargs["base_url"] = base_url
 
@@ -125,7 +130,7 @@ class SessionExecutor:
     executor = SessionExecutor(
         user_id=42,
         username="帕姆",
-        ai_config_id=0,
+        ai_config_id=1,
         personality_prompt="...",
         personal_signature="..."
     )
@@ -151,6 +156,7 @@ class SessionExecutor:
         personality_prompt: str,
         personal_signature: str,
         config: Optional[SessionConfig] = None,
+        name: Optional[str] = None,
     ):
         """
         初始化会话执行器
@@ -162,17 +168,20 @@ class SessionExecutor:
             personality_prompt: 角色性格描述
             personal_signature: 个性签名
             config: 会话配置，默认为 SessionConfig()
+            name: 昵称（显示用），默认为 username
         """
         self.session_id = str(uuid.uuid4())
         self.start_time = datetime.now()
         self.config = config or get_default_config()
         self.username = username
+        self.name = name or username
 
         print(f"[会话执行器] 初始化会话: 用户={username}, 会话ID={self.session_id[:8]}..., 最大步数={self.config.max_steps}")
 
         self.initial_state: SessionState = {
             "user_id": user_id,
             "username": username,
+            "name": self.name,
             "ai_config_id": ai_config_id,
             "personality_prompt": personality_prompt,
             "personal_signature": personal_signature,
@@ -180,9 +189,13 @@ class SessionExecutor:
             "max_steps": self.config.max_steps,
             "exit_reason": None,
             "action_history": [],
+            "current_location": "主页（信息流）",
+            "last_tool_result": None,
             "pending_tool": None,
+            "pending_tools": None,
             "last_error": None,
             "summary": None,
+            "recalled_memories": "",
         }
 
     def run(
@@ -308,11 +321,10 @@ class SessionExecutor:
         )
 
     def __repr__(self) -> str:
-        """返回执行器的字符串表示"""
         return (
             f"SessionExecutor("
             f"session_id={self.session_id[:8]}..., "
-            f"username={self.config}, "
+            f"username={self.username}, "
             f"max_steps={self.config.max_steps}"
             f")"
         )
@@ -322,27 +334,16 @@ class LLMRegistry:
     """
     LLM 调用器注册表
 
-    提供 LLM 调用器的缓存和热更新功能，支持两种缓存模式：
-    1. 基于 model_config_id 的缓存（数据库驱动，推荐）
-    2. 基于配置参数的缓存（兼容旧接口）
-
-    当模型配置变更时，可以通过 reload_llm_registry(model_config_id) 清除指定缓存，
-    下次创建 LLM 调用器时会自动从数据库读取最新配置。
+    提供 LLM 调用器的缓存和热更新功能。
+    所有 Agent 共用一个活跃模型，缓存基于 SessionConfig 的全部参数。
     """
-    _instance = None
     _cache = {}
-    _model_cache = {}
     _lock = threading.Lock()
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
 
     @classmethod
     def get_invoker(cls, config: SessionConfig, tools: Optional[List] = None) -> Callable:
         """
-        获取 LLM 调用器（带参数缓存，兼容旧接口）
+        获取 LLM 调用器（带参数缓存）
 
         Args:
             config: 会话配置
@@ -356,6 +357,7 @@ class LLMRegistry:
             config.openai_api_key,
             config.openai_base_url,
             config.openai_model_name,
+            config.model_name,
             config.anthropic_api_key,
             config.anthropic_model_name,
             config.temperature,
@@ -370,85 +372,17 @@ class LLMRegistry:
             return invoker
 
     @classmethod
-    def get_invoker_by_model_id(cls, model_config_id: int, tools: Optional[List] = None) -> Callable:
-        """
-        基于 model_config_id 获取 LLM 调用器（数据库驱动，推荐）
-
-        通过 config 模块从 management 数据库读取模型配置，创建 LLM 调用器并缓存。
-        缓存键为 model_config_id，便于热更新时精准清除。
-
-        Args:
-            model_config_id: 模型配置 ID（对应 model_configs 表的主键）
-            tools: 工具列表
-
-        Returns:
-            Callable: LLM 调用器
-
-        Raises:
-            ValueError: 模型配置不存在
-        """
-        from agent_scheduler.langgraph.config import get_model_config_from_db
-
-        with cls._lock:
-            if model_config_id in cls._model_cache:
-                return cls._model_cache[model_config_id]
-
-        session_config = get_model_config_from_db(model_config_id)
-
-        with cls._lock:
-            if model_config_id in cls._model_cache:
-                return cls._model_cache[model_config_id]
-
-            invoker = create_llm_invoker(session_config, tools=tools)
-            cls._model_cache[model_config_id] = invoker
-            return invoker
-
-    @classmethod
-    def reload(cls, model_config_id: int):
-        """
-        热更新：清除指定模型配置的缓存
-
-        Args:
-            model_config_id: 模型配置 ID
-        """
-        with cls._lock:
-            if model_config_id in cls._model_cache:
-                del cls._model_cache[model_config_id]
-                print(f"[LLMRegistry] 已清除模型配置缓存: id={model_config_id}")
-
-    @classmethod
     def clear_cache(cls):
         """清除所有缓存（热更新时调用）"""
         with cls._lock:
             cls._cache.clear()
-            cls._model_cache.clear()
-
-    @classmethod
-    def clear_model_cache(cls, model_config_id: Optional[int] = None):
-        """
-        清除模型配置缓存
-
-        Args:
-            model_config_id: 指定模型 ID，清除全部
-        """
-        with cls._lock:
-            if model_config_id is not None:
-                cls._model_cache.pop(model_config_id, None)
-            else:
-                cls._model_cache.clear()
 
 
-def reload_llm_registry(model_config_id: Optional[int] = None):
+def reload_llm_registry():
     """
     重载 LLM 注册表（热更新）
-    
-    Args:
-        model_config_id: 模型配置 ID，指定时仅清除该模型缓存，None 时清除全部
     """
-    if model_config_id is not None:
-        LLMRegistry.clear_model_cache(model_config_id)
-    else:
-        LLMRegistry.clear_cache()
+    LLMRegistry.clear_cache()
 
 
 def run_session(
@@ -484,6 +418,7 @@ def run_session(
     executor = SessionExecutor(
         user_id=agent_config.user_id,
         username=agent_config.username,
+        name=agent_config.name,
         ai_config_id=agent_config.ai_config_id,
         personality_prompt=agent_config.personality_prompt,
         personal_signature=agent_config.personal_signature,

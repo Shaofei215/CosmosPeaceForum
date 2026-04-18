@@ -30,6 +30,12 @@ class AdminUserResponse(BaseModel):
         from_attributes = True
 
 
+class UpdateProfileRequest(BaseModel):
+    username: Optional[str] = None
+    current_password: str
+    new_password: Optional[str] = None
+
+
 # ==================== Agent ====================
 
 class AgentCreate(BaseModel):
@@ -38,7 +44,6 @@ class AgentCreate(BaseModel):
     monthly_logins: int = 30
     personal_signature: str = ""
     personality_prompt: str = ""
-    knows_ids: List[int] = []
     is_active: bool = True
 
 
@@ -47,7 +52,6 @@ class AgentUpdate(BaseModel):
     monthly_logins: Optional[int] = None
     personal_signature: Optional[str] = None
     personality_prompt: Optional[str] = None
-    knows_ids: Optional[List[int]] = None
     is_active: Optional[bool] = None
 
 
@@ -71,6 +75,21 @@ class AgentResponse(BaseModel):
 class AgentListResponse(BaseModel):
     items: List[AgentResponse]
     total: int
+
+
+class AgentRelationUpdate(BaseModel):
+    knows_ids: List[int] = []
+    bidirectional: bool = False
+
+
+class AgentRelationResponse(BaseModel):
+    id: int
+    name: str
+    username: str
+    knows_ids: List[int]
+
+    class Config:
+        from_attributes = True
 
 
 # ==================== Model Config ====================
