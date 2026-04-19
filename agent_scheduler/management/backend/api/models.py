@@ -37,7 +37,9 @@ def create_model_config(
     """创建模型配置"""
     config = model_service.create_model_config(db, config_in)
 
-    # 记录操作日志
+    if config.is_active:
+        notify_scheduler_reload("model", config.id)
+
     create_log(db, current_admin.id, "create_model_config", "model", config.id)
 
     return model_service.model_config_to_response(config)
@@ -90,9 +92,12 @@ def delete_model_config(
     if not config:
         raise HTTPException(status_code=404, detail="模型配置不存在")
 
+    was_active = config.is_active
     model_service.delete_model_config(db, config_id)
 
-    # 记录操作日志
+    if was_active:
+        notify_scheduler_reload("model")
+
     create_log(db, current_admin.id, "delete_model_config", "model", config_id)
 
     return MessageResponse(message="模型配置已删除")

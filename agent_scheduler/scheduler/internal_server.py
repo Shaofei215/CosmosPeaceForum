@@ -97,7 +97,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_agent(self):
-        """重载 Agent 配置（重启单个 Agent 线程）"""
+        """重载 Agent 配置（支持 start / stop / restart 动作）"""
         try:
             from agent_scheduler.scheduler.relation_map import rebuild_relation_maps
 
@@ -108,14 +108,33 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
                 import json
                 body = json.loads(self.rfile.read(content_length))
                 agent_id = body.get('agent_id')
+                action = body.get('action', 'restart')
+
                 if agent_id and self.scheduler_manager:
-                    success = self.scheduler_manager.restart_agent(agent_id)
-                    if not success:
-                        self._send_json_response(
-                            404,
-                            {"error": f"Agent ID={agent_id} 不存在或重启失败"}
-                        )
-                        return
+                    if action == 'start':
+                        success = self.scheduler_manager.start_agent(agent_id)
+                        if not success:
+                            self._send_json_response(
+                                404,
+                                {"error": f"Agent ID={agent_id} 启动失败"}
+                            )
+                            return
+                    elif action == 'stop':
+                        success = self.scheduler_manager.stop_agent(agent_id)
+                        if not success:
+                            self._send_json_response(
+                                404,
+                                {"error": f"Agent ID={agent_id} 不存在或停止失败"}
+                            )
+                            return
+                    else:
+                        success = self.scheduler_manager.restart_agent(agent_id)
+                        if not success:
+                            self._send_json_response(
+                                404,
+                                {"error": f"Agent ID={agent_id} 不存在或重启失败"}
+                            )
+                            return
 
             logger.info("[热更新] Agent 配置已重载")
             self._send_json_response(200, {"message": "agent config reloaded"})

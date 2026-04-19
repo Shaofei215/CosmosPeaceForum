@@ -40,7 +40,6 @@ class SessionConfig:
 
         LLM 配置从 model_configs 表读取（取第一个 is_active=1 的模型），
         其他业务配置从 system_configs 表读取。
-        解密失败时 fallback 到 system_configs。
         """
         db = get_db_client()
 
@@ -49,26 +48,21 @@ class SessionConfig:
             return val if val else default
 
         model_config = db.get_active_model_configs()
-        if model_config:
-            active_model = model_config[0]
-            api_key = active_model["api_key"]
-            provider = active_model["provider"]
-            model_name = active_model["model_name"]
-            openai_api_key = api_key if provider == "openai" else ""
-            openai_base_url = active_model["base_url"] if provider == "openai" else ""
-            openai_model_name = model_name if provider == "openai" else ""
-            anthropic_api_key = api_key if provider == "anthropic" else ""
-            anthropic_model_name = model_name if provider == "anthropic" else ""
-            temperature = float(active_model["temperature"])
-        else:
-            provider = _get("LLM_PROVIDER", "openai")
-            openai_model_name = _get("OPENAI_MODEL_NAME", "")
-            anthropic_model_name = _get("ANTHROPIC_MODEL_NAME", "")
-            model_name = openai_model_name if provider == "openai" else anthropic_model_name
-            openai_api_key = _get("OPENAI_API_KEY", "")
-            openai_base_url = _get("OPENAI_BASE_URL", "")
-            anthropic_api_key = _get("ANTHROPIC_API_KEY", "")
-            temperature = float(_get("LLM_TEMPERATURE", "1.2"))
+        if not model_config:
+            raise RuntimeError(
+                "未找到启用的模型配置，请在模型配置页添加并启用一个模型"
+            )
+
+        active_model = model_config[0]
+        api_key = active_model["api_key"]
+        provider = active_model["provider"]
+        model_name = active_model["model_name"]
+        openai_api_key = api_key if provider == "openai" else ""
+        openai_base_url = active_model["base_url"] if provider == "openai" else ""
+        openai_model_name = model_name if provider == "openai" else ""
+        anthropic_api_key = api_key if provider == "anthropic" else ""
+        anthropic_model_name = model_name if provider == "anthropic" else ""
+        temperature = float(active_model["temperature"])
 
         return cls(
             max_steps=int(_get("LANGGRAPH_MAX_STEPS", "20")),

@@ -256,13 +256,14 @@ def _upload_user_avatar(api_base_url: str, username: str, password: str, avatar_
         return False
 
 
-def notify_scheduler_reload(reload_type: str, target_id: Optional[int] = None) -> bool:
+def notify_scheduler_reload(reload_type: str, target_id: Optional[int] = None, action: str = "restart") -> bool:
     """
     通知 scheduler 重载配置
 
     Args:
         reload_type: system / model / agent / all
         target_id: 目标 ID（model 或 agent 类型时需要）
+        action: restart / start / stop（仅 agent 类型时有效）
 
     Returns:
         bool: 通知是否成功
@@ -280,7 +281,7 @@ def notify_scheduler_reload(reload_type: str, target_id: Optional[int] = None) -
         payload = {"model_config_id": target_id} if target_id is not None else None
     elif reload_type == "agent":
         endpoint = "/internal/reload/agent"
-        payload = {"agent_id": target_id} if target_id is not None else None
+        payload = {"agent_id": target_id, "action": action} if target_id is not None else None
     else:
         return False
 

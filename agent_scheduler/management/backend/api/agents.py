@@ -147,6 +147,9 @@ def create_agent(
         agent_service.delete_agent(db, agent.id)
         raise HTTPException(status_code=502, detail=f"Agent 注册到 app_platform 失败: {error}")
 
+    if agent.is_active:
+        notify_scheduler_reload("agent", agent.id, action="start")
+
     create_log(db, current_admin.id, "create_agent", "agent", agent.id)
 
     return agent_service.agent_to_response(agent)
@@ -177,9 +180,16 @@ def update_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent 不存在")
 
+    old_is_active = agent.is_active
     updated = agent_service.update_agent(db, agent_id, agent_in)
 
-    notify_scheduler_reload("agent", agent_id)
+    if agent_in.is_active is not None and agent_in.is_active != old_is_active:
+        if agent_in.is_active:
+            notify_scheduler_reload("agent", agent_id, action="start")
+        else:
+            notify_scheduler_reload("agent", agent_id, action="stop")
+    else:
+        notify_scheduler_reload("agent", agent_id)
 
     create_log(db, current_admin.id, "update_agent", "agent", agent_id)
 
@@ -196,6 +206,8 @@ def delete_agent(
     agent = agent_service.get_agent(db, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent 不存在")
+
+    notify_scheduler_reload("agent", agent_id, action="stop")
 
     agent_service.delete_agent(db, agent_id)
 

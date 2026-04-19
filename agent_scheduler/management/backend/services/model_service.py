@@ -1,5 +1,6 @@
 """
 Management Backend - 模型配置服务
+全局只允许一个模型处于启用状态。
 """
 
 from datetime import datetime
@@ -9,6 +10,18 @@ from sqlmodel import Session, select
 
 from agent_scheduler.management.backend.models.model_config import ModelConfig
 from agent_scheduler.management.backend.schemas import ModelConfigCreate, ModelConfigUpdate
+
+
+def _disable_other_models(db: Session, exclude_id: int):
+    """将除指定 ID 外的所有模型设为禁用"""
+    stmt = select(ModelConfig).where(
+        ModelConfig.is_active == True,  # noqa: E712
+        ModelConfig.id != exclude_id,
+    )
+    for model in db.exec(stmt).all():
+        model.is_active = False
+        model.updated_at = datetime.utcnow()
+        db.add(model)
 
 
 def list_model_configs(db: Session) -> List[ModelConfig]:
@@ -23,7 +36,7 @@ def get_model_config(db: Session, config_id: int) -> Optional[ModelConfig]:
 
 
 def create_model_config(db: Session, config_in: ModelConfigCreate) -> ModelConfig:
-    """创建模型配置"""
+    """创建模型配置，若启用则禁用其他所有模型"""
     if not 0.0 <= config_in.temperature <= 2.0:
         raise ValueError("temperature 必须在 0.0 到 2.0 之间")
     if config_in.max_token < 1:
@@ -40,13 +53,18 @@ def create_model_config(db: Session, config_in: ModelConfigCreate) -> ModelConfi
         max_token=config_in.max_token,
     )
     db.add(db_config)
+    db.flush()
+
+    if config_in.is_active:
+        _disable_other_models(db, db_config.id)
+
     db.commit()
     db.refresh(db_config)
     return db_config
 
 
 def update_model_config(db: Session, config_id: int, config_in: ModelConfigUpdate) -> Optional[ModelConfig]:
-    """更新模型配置"""
+    """更新模型配置，若启用则禁用其他所有模型"""
     db_config = db.get(ModelConfig, config_id)
     if not db_config:
         return None
@@ -67,6 +85,10 @@ def update_model_config(db: Session, config_id: int, config_in: ModelConfigUpdat
         setattr(db_config, key, value)
 
     db.add(db_config)
+
+    if update_data.get("is_active") is True:
+        _disable_other_models(db, config_id)
+
     db.commit()
     db.refresh(db_config)
     return db_config
