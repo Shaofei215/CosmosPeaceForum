@@ -30,11 +30,16 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
 
     def _send_json_response(self, status_code: int, data: dict):
         """发送 JSON 响应"""
-        self.send_response(status_code)
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        import json
-        self.wfile.write(json.dumps(data).encode('utf-8'))
+        try:
+            self.send_response(status_code)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            import json
+            self.wfile.write(json.dumps(data).encode('utf-8'))
+        except (ConnectionAbortedError, BrokenPipeError, ConnectionResetError) as e:
+            logger.warning(f"[内部接口] 发送响应时连接断开: {e}")
+        except Exception as e:
+            logger.error(f"[内部接口] 发送响应失败: {e}")
 
     def do_GET(self):
         """处理 GET 请求"""
@@ -104,7 +109,13 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
                 body = json.loads(self.rfile.read(content_length))
                 agent_id = body.get('agent_id')
                 if agent_id and self.scheduler_manager:
-                    self.scheduler_manager.restart_agent(agent_id)
+                    success = self.scheduler_manager.restart_agent(agent_id)
+                    if not success:
+                        self._send_json_response(
+                            404,
+                            {"error": f"Agent ID={agent_id} 不存在或重启失败"}
+                        )
+                        return
 
             logger.info("[热更新] Agent 配置已重载")
             self._send_json_response(200, {"message": "agent config reloaded"})

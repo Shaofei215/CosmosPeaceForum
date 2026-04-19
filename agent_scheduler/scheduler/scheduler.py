@@ -311,34 +311,39 @@ class AgentSchedulerManager:
         self.schedulers.clear()
         logger.info("所有 Agent 调度线程已停止")
 
-    def restart_agent(self, agent_id: int):
+    def restart_agent(self, agent_id: int) -> bool:
         """
         重启指定 Agent 的调度线程
 
         流程：
-        1. 从 schedulers 字典中找到对应 scheduler
-        2. 调用 scheduler.stop()（等待最多 5 秒）
-        3. 从数据库重新加载 Agent 配置
+        1. 从数据库重新加载 Agent 配置
+        2. 从 schedulers 字典中找到对应 scheduler
+        3. 调用 scheduler.stop()（等待最多 5 秒）
         4. 创建新的 AIUserScheduler
         5. 替换 schedulers 字典中的旧实例
         6. 调用 scheduler.start() 启动新线程
 
         Args:
             agent_id: Agent ID
-        """
-        scheduler = self.schedulers.get(agent_id)
-        if scheduler:
-            logger.info(f"[重启] 停止 Agent {agent_id} 的旧调度线程...")
-            scheduler.stop(timeout=5)
 
+        Returns:
+            bool: 重启是否成功
+        """
         agent_config = get_db_client().get_agent_config(agent_id)
         if not agent_config:
             logger.error(f"[重启] 未找到 Agent ID={agent_id} 的配置")
-            return
+            return False
+
+        with self._thread_lock:
+            scheduler = self.schedulers.get(agent_id)
+            if scheduler:
+                logger.info(f"[重启] 停止 Agent {agent_id} 的旧调度线程...")
+                scheduler.stop(timeout=5)
 
         logger.info(f"[重启] 为 Agent {agent_config['username']} (ID:{agent_id}) 创建新调度线程...")
         self._create_scheduler(agent_config)
         logger.info(f"[重启] Agent {agent_config['username']} (ID:{agent_id}) 已重启")
+        return True
 
     def restart_all(self):
         """

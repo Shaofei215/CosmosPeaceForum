@@ -9,6 +9,8 @@ import time
 import zipfile
 import asyncio
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
@@ -30,6 +32,67 @@ from agent_scheduler.management.backend.services.registrar import (
 )
 
 router = APIRouter()
+
+
+def _find_avatar_in_zip(tmp_dir: str, avatar_filename: str) -> Optional[str]:
+    """在解压后的目录中查找头像文件"""
+    print(f"[查找头像] 目标文件名: {avatar_filename!r}")
+    print(f"[查找头像] 搜索目录: {tmp_dir}")
+    
+    all_files = []
+    for root, dirs, files in os.walk(tmp_dir):
+        for f in files:
+            all_files.append(os.path.join(root, f))
+            if f.lower() == avatar_filename.lower():
+                found = os.path.join(root, f)
+                print(f"[查找头像] 找到: {found}")
+                return found
+    
+    print(f"[查找头像] 未找到。目录下所有文件:")
+    for fp in all_files:
+        print(f"  - {fp}")
+    
+    return None
+
+
+def _extract_zip_with_encoding(zip_path: str, extract_dir: str) -> list[str]:
+    """解压 ZIP 文件，处理中文文件名编码问题（GBK/UTF-8）
+    
+    Returns:
+        解压后的文件名列表
+    """
+    import shutil
+    extracted_files = []
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        for info in zf.infolist():
+            # flag_bits 第 11 位表示是否使用 UTF-8 编码
+            is_utf8 = (info.flag_bits & 0x800) != 0
+            
+            if is_utf8:
+                filename = info.filename
+            else:
+                # 未使用 UTF-8 标记，需要用 GBK 解码
+                try:
+                    raw_bytes = info.filename.encode('latin-1')
+                    filename = raw_bytes.decode('gbk')
+                except (UnicodeDecodeError, UnicodeEncodeError):
+                    filename = info.filename
+            
+            target_path = os.path.join(extract_dir, filename)
+            
+            if info.is_dir():
+                os.makedirs(target_path, exist_ok=True)
+            else:
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                with zf.open(info) as src, open(target_path, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+                extracted_files.append(filename)
+    
+    print(f"[解压] 共解压 {len(extracted_files)} 个文件:")
+    for f in extracted_files:
+        print(f"  - {f}")
+    
+    return extracted_files
 
 
 def _get_avatar_dir() -> str:
@@ -179,8 +242,9 @@ async def import_agents(
     tmp_dir = None
     try:
         tmp_dir = tempfile.mkdtemp()
-        with zipfile.ZipFile(tmp_path, 'r') as zf:
-            zf.extractall(tmp_dir)
+        print(f"[解压] 临时目录: {tmp_dir}")
+        print(f"[解压] ZIP 路径: {tmp_path}")
+        _extract_zip_with_encoding(tmp_path, tmp_dir)
 
         json_path = None
         for root, dirs, files in os.walk(tmp_dir):
@@ -222,7 +286,15 @@ async def import_agents(
             )
             agent = agent_service.create_agent(db, agent_in)
 
-            avatar_path = find_avatar_file(avatar_dir, agent.name, agent.username)
+            avatar_filename = user_data.get('avatar')
+            avatar_path = None
+            if avatar_filename:
+                avatar_path = _find_avatar_in_zip(tmp_dir, avatar_filename)
+                if not avatar_path:
+                    print(f"[导入] 未找到 {username} 的头像文件: {avatar_filename}")
+            
+            if not avatar_path:
+                avatar_path = find_avatar_file(avatar_dir, agent.name, agent.username)
 
             success, platform_id, error = register_agent(
                 db=db,
@@ -272,41 +344,46 @@ async def import_agents_stream(
         tmp.write(content)
         tmp_path = tmp.name
 
-    tmp_dir = None
-    try:
-        tmp_dir = tempfile.mkdtemp()
-        with zipfile.ZipFile(tmp_path, 'r') as zf:
-            zf.extractall(tmp_dir)
+    tmp_dir = tempfile.mkdtemp()
+    _extract_zip_with_encoding(tmp_path, tmp_dir)
 
-        json_path = None
-        for root, dirs, files in os.walk(tmp_dir):
-            for f in files:
-                if f.endswith('.json') and 'ai_users_config' in f.lower():
-                    json_path = os.path.join(root, f)
-                    break
-            if json_path:
+    json_path = None
+    for root, dirs, files in os.walk(tmp_dir):
+        for f in files:
+            if f.endswith('.json') and 'ai_users_config' in f.lower():
+                json_path = os.path.join(root, f)
                 break
+        if json_path:
+            break
 
-        if not json_path:
-            raise HTTPException(status_code=400, detail="压缩包中未找到 ai_users_config.json")
+    if not json_path:
+        import shutil
+        os.remove(tmp_path)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="压缩包中未找到 ai_users_config.json")
 
-        with open(json_path, 'r', encoding='utf-8') as f:
-            config_data = json.load(f)
+    with open(json_path, 'r', encoding='utf-8') as f:
+        config_data = json.load(f)
 
-        ai_users = config_data.get('ai_users', [])
-        if not ai_users:
-            raise HTTPException(status_code=400, detail="JSON 中未找到 ai_users 配置")
+    ai_users = config_data.get('ai_users', [])
+    if not ai_users:
+        import shutil
+        os.remove(tmp_path)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="JSON 中未找到 ai_users 配置")
 
-        avatar_dir = os.path.join(tmp_dir, 'avatar')
-        if not os.path.exists(avatar_dir):
-            avatar_dir = _get_avatar_dir()
+    avatar_dir = os.path.join(tmp_dir, 'avatar')
+    if not os.path.exists(avatar_dir):
+        avatar_dir = _get_avatar_dir()
 
-        def event_stream():
-            total = len(ai_users)
-            success_count = 0
-            exists_count = 0
-            failed_count = 0
+    def event_stream():
+        import shutil as _shutil
+        total = len(ai_users)
+        success_count = 0
+        exists_count = 0
+        failed_count = 0
 
+        try:
             yield f"event: start\ndata: {json.dumps({'total': total}, ensure_ascii=False)}\n\n"
 
             for user_data in ai_users:
@@ -334,7 +411,15 @@ async def import_agents_stream(
                     )
                     agent = agent_service.create_agent(db, agent_in)
 
-                    avatar_path = find_avatar_file(avatar_dir, agent.name, agent.username)
+                    avatar_filename = user_data.get('avatar')
+                    avatar_path = None
+                    if avatar_filename:
+                        avatar_path = _find_avatar_in_zip(tmp_dir, avatar_filename)
+                        if not avatar_path:
+                            print(f"[导入] 未找到 {username} 的头像文件: {avatar_filename}")
+                    
+                    if not avatar_path:
+                        avatar_path = find_avatar_file(avatar_dir, agent.name, agent.username)
 
                     success, platform_id, error = register_agent(
                         db=db,
@@ -390,15 +475,13 @@ async def import_agents_stream(
                 'failed': failed_count,
             }
             yield f"event: done\ndata: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            if tmp_dir and os.path.exists(tmp_dir):
+                _shutil.rmtree(tmp_dir, ignore_errors=True)
 
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
-
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        if tmp_dir and os.path.exists(tmp_dir):
-            import shutil
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/{agent_id}/avatar", response_model=MessageResponse)
