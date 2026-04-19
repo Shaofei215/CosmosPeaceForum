@@ -1,6 +1,7 @@
 # 记忆服务核心层
 # 统一管理三写同步、混合检索、衰减与唤醒机制
 
+import logging
 from typing import List, Tuple, Optional
 from datetime import datetime
 
@@ -12,6 +13,8 @@ from agents.agents_scheduler.memory.bm25_index import BM25Index
 from agents.agents_scheduler.memory.embedding import EmbeddingModel, get_embedding_model
 from agents.agents_scheduler.memory.utils import calculate_time_description
 from agents.agents_scheduler.scheduler.time_system import get_time_system
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryService:
@@ -97,7 +100,7 @@ class MemoryService:
                 }
             )
         except Exception as e:
-            print(f"[记忆服务][warning]向量化失败: {e}")
+            logger.warning("向量化失败: %s", e)
 
         # 3. 写入 Tantivy BM25 索引
         try:
@@ -107,9 +110,9 @@ class MemoryService:
                 owner_id=owner_id
             )
         except Exception as e:
-            print(f"[记忆服务][warning]BM25索引失败: {e}")
+            logger.warning("BM25索引失败: %s", e)
 
-        print(f"[记忆服务] 记忆写入成功: id={chunk.id[:8]}..., owner_id={owner_id}")
+        logger.info("记忆写入成功: id=%s..., owner_id=%d", chunk.id[:8], owner_id)
         return chunk.id
 
     async def recall_memories(
@@ -154,7 +157,7 @@ class MemoryService:
                 n_results=self.config.recall_vector_results
             )
         except Exception as e:
-            print(f"[记忆服务][warning]向量检索失败: {e}")
+            logger.warning("向量检索失败: %s", e)
 
         # 2. BM25 检索 - 关键词匹配
         bm25_results = []
@@ -165,7 +168,7 @@ class MemoryService:
                 limit=self.config.recall_bm25_results
             )
         except Exception as e:
-            print(f"[记忆服务][warning]BM25检索失败: {e}")
+            logger.warning("BM25检索失败: %s", e)
 
         # 3. 并集去重
         all_ids = set()
@@ -208,11 +211,11 @@ class MemoryService:
                         metadata={"memory_coefficient": new_coef}
                     )
                 except Exception as e:
-                    print(f"[记忆服务][warning]更新向量元数据失败: {e}")
+                    logger.warning("更新向量元数据失败: %s", e)
 
             result.append((chunk, time_desc))
 
-        print(f"[记忆服务] 记忆召回成功: 查询='{context[:20]}...', 召回{len(result)}条")
+        logger.info("记忆召回成功: 查询='%s...', 召回%d条", context[:20], len(result))
         return result
 
     async def decay_memories(self, decay_rate: Optional[float] = None) -> List[str]:
@@ -255,10 +258,10 @@ class MemoryService:
                         metadata={"memory_coefficient": chunk.memory_coefficient}
                     )
                 except Exception as e:
-                    print(f"[记忆服务][warning]更新向量元数据失败: {e}")
+                    logger.warning("更新向量元数据失败: %s", e)
 
         if deleted_ids:
-            print(f"[记忆服务] 记忆衰减完成: 删除{len(deleted_ids)}条记忆")
+            logger.info("记忆衰减完成: 删除%d条记忆", len(deleted_ids))
         return deleted_ids
 
     async def delete_memory(self, memory_id: str) -> None:
@@ -275,15 +278,15 @@ class MemoryService:
         try:
             self.vector_store.delete_vector(memory_id)
         except Exception as e:
-            print(f"[记忆服务][warning]从向量存储删除失败: {e}")
+            logger.warning("从向量存储删除失败: %s", e)
 
         # 3. 从 Tantivy 删除
         try:
             self.bm25_index.delete_doc(memory_id)
         except Exception as e:
-            print(f"[记忆服务][warning]从BM25索引删除失败: {e}")
+            logger.warning("从BM25索引删除失败: %s", e)
 
-        print(f"[记忆服务] 记忆删除成功: id={memory_id[:8]}...")
+        logger.info("记忆删除成功: id=%s...", memory_id[:8])
 
     async def clear_user_memories(self, owner_id: int) -> int:
         """
@@ -307,16 +310,16 @@ class MemoryService:
             try:
                 self.vector_store.delete_vector(chunk.id)
             except Exception as e:
-                print(f"[记忆服务][warning]从向量存储删除失败: {e}")
+                logger.warning("从向量存储删除失败: %s", e)
 
         # 4. 从 Tantivy 清除（逐个删除）
         for chunk in user_memories:
             try:
                 self.bm25_index.delete_doc(chunk.id)
             except Exception as e:
-                print(f"[记忆服务][warning]从BM25索引删除失败: {e}")
+                logger.warning("从BM25索引删除失败: %s", e)
 
-        print(f"[记忆服务] 用户记忆清除完成: owner_id={owner_id}, 清除{count}条")
+        logger.info("用户记忆清除完成: owner_id=%d, 清除%d条", owner_id, count)
         return count
 
     def close(self):

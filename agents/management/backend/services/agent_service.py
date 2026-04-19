@@ -3,6 +3,7 @@ Management Backend - Agent 配置服务
 """
 
 import json
+import logging
 import os
 import tempfile
 import zipfile
@@ -13,6 +14,8 @@ from sqlmodel import Session, select
 
 from agents.management.backend.models.agent_config import AgentConfig
 from agents.management.backend.schemas import AgentCreate, AgentUpdate
+
+logger = logging.getLogger(__name__)
 
 
 def list_agents(db: Session, skip: int = 0, limit: int = 100) -> tuple[List[AgentConfig], int]:
@@ -171,7 +174,7 @@ def import_agents_from_zip(db: Session, zip_path: str) -> List[AgentConfig]:
             username = user_data.get('username', '')
             existing = get_agent_by_username(db, username)
             if existing:
-                print(f"[导入] 跳过已存在的用户: {username}")
+                logger.info("导入: 跳过已存在的用户: %s", username)
                 continue
 
             agent_in = AgentCreate(

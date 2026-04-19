@@ -3,6 +3,7 @@ Management Backend - FastAPI 应用主入口
 管理端后端服务，端口 8001
 """
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,18 +14,20 @@ from agents.management.backend.core.database import init_db
 from agents.management.backend.api import api_router
 from agents.management.backend.services.init_data import initialize_database
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时
     config = get_config()
-    print(f"\n{'=' * 50}")
-    print(f"Management Backend 启动中...")
-    print(f"{'=' * 50}")
-    print(f"[配置] 数据库路径: {config.get_db_path()}")
-    print(f"[配置] 服务器: {config.server_host}:{config.server_port}")
-    print(f"[配置] Scheduler 内部端口: {config.scheduler_internal_port}")
+    logger.info("=" * 50)
+    logger.info("Management Backend 启动中...")
+    logger.info("=" * 50)
+    logger.info("数据库路径: %s", config.get_db_path())
+    logger.info("服务器: %s:%d", config.server_host, config.server_port)
+    logger.info("Scheduler 内部端口: %d", config.scheduler_internal_port)
 
     # 初始化数据库
     init_db()
@@ -32,13 +35,13 @@ async def lifespan(app: FastAPI):
     # 初始化默认数据
     initialize_database()
 
-    print(f"\nManagement Backend 启动完成!")
-    print(f"{'=' * 50}\n")
+    logger.info("Management Backend 启动完成!")
+    logger.info("=" * 50)
 
     yield
 
     # 关闭时
-    print("\nManagement Backend 关闭中...")
+    logger.info("Management Backend 关闭中...")
 
 
 def create_app() -> FastAPI:

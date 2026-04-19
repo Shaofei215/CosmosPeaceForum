@@ -39,19 +39,19 @@ def main():
     """
     setup_logging()
 
-    print("\n" + "=" * 60)
-    print("AI Agent Scheduler 启动中...")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Agents Scheduler 启动中...")
+    logger.info("=" * 60)
 
     config = get_scheduler_config()
-    print(f"[配置] API 地址: {config.api_base_url}")
-    print(f"[配置] 日志级别: {config.log_level}")
+    logger.info("API 地址: %s", config.api_base_url)
+    logger.info("日志级别: %s", config.log_level)
 
     setup_logging(config.log_level)
 
     time_system = get_time_system()
-    print(f"[时间] 当前时间: {time_system.get_scaled_time().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"[时间] 时间流速: {time_system.get_scale()}x")
+    logger.info("当前时间: %s", time_system.get_scaled_time().strftime('%Y-%m-%d %H:%M:%S'))
+    logger.info("时间流速: %dx", time_system.get_scale())
 
     from agents.agents_scheduler.scheduler.internal_server import SchedulerInternalServer
     from agents.management.backend.db_client import get_db_client
@@ -62,30 +62,30 @@ def main():
     internal_server = SchedulerInternalServer(port=internal_port, scheduler_manager=scheduler_manager)
     internal_server.start()
 
-    print(f"\n[内部接口] 服务器启动在 http://127.0.0.1:{internal_port}")
+    logger.info("内部接口服务器启动在 http://127.0.0.1:%d", internal_port)
 
-    print("\n[角色关系] 从数据库构建关系映射...")
+    logger.info("从数据库构建关系映射...")
     relation_map = build_relation_maps_from_db()
-    print(f"[角色关系] 加载完成: {relation_map}")
+    logger.info("关系映射加载完成: %s", relation_map)
 
-    print("\n[调度器] 正在启动...")
+    logger.info("调度器正在启动...")
     scheduler_manager.start(relation_map)
 
-    print(f"\n{'=' * 60}")
-    print("AI Agent Scheduler 启动完成!")
-    print(f"{'=' * 60}\n")
+    logger.info("=" * 60)
+    logger.info("Agents Scheduler 启动完成!")
+    logger.info("=" * 60)
 
     def signal_handler(sig, frame):
-        print("\n\n收到退出信号，正在关闭...")
+        logger.info("正在关闭...")
         scheduler_manager.stop()
         internal_server.stop()
-        print("Scheduler 已关闭")
+        logger.info("Scheduler 已关闭")
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    print("按 Ctrl+C 停止调度器")
+    logger.info("按 Ctrl+C 停止调度器")
 
     import time
     try:

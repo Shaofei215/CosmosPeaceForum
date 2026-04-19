@@ -31,9 +31,9 @@ def setup_logging(log_level: str = "INFO"):
 
 def start_management_backend():
     """在独立线程中启动 Management Backend"""
-    print("\n" + "=" * 60)
-    print("Management Backend 启动中...")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Management Backend 启动中...")
+    logger.info("=" * 60)
     uvicorn.run(
         "agents.management.backend.main:app",
         host="0.0.0.0",
@@ -50,9 +50,9 @@ def main():
     """
     setup_logging()
 
-    print("\n" + "=" * 60)
-    print("AI Agents 启动中...")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info(" Agents 启动中...")
+    logger.info("=" * 60)
 
     mgmt_thread = threading.Thread(target=start_management_backend, daemon=True)
     mgmt_thread.start()

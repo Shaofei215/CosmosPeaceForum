@@ -3,6 +3,7 @@ Management Backend - Agent 管理路由
 """
 
 import json
+import logging
 import os
 import tempfile
 import time
@@ -31,13 +32,14 @@ from agents.management.backend.services.registrar import (
     notify_scheduler_reload,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 def _find_avatar_in_zip(tmp_dir: str, avatar_filename: str) -> Optional[str]:
     """在解压后的目录中查找头像文件"""
-    print(f"[查找头像] 目标文件名: {avatar_filename!r}")
-    print(f"[查找头像] 搜索目录: {tmp_dir}")
+    logger.debug("查找头像: 目标文件名=%r, 搜索目录=%s", avatar_filename, tmp_dir)
     
     all_files = []
     for root, dirs, files in os.walk(tmp_dir):
@@ -45,12 +47,10 @@ def _find_avatar_in_zip(tmp_dir: str, avatar_filename: str) -> Optional[str]:
             all_files.append(os.path.join(root, f))
             if f.lower() == avatar_filename.lower():
                 found = os.path.join(root, f)
-                print(f"[查找头像] 找到: {found}")
+                logger.debug("查找头像: 找到=%s", found)
                 return found
     
-    print(f"[查找头像] 未找到。目录下所有文件:")
-    for fp in all_files:
-        print(f"  - {fp}")
+    logger.debug("查找头像: 未找到, 目录下文件数=%d", len(all_files))
     
     return None
 
@@ -88,9 +88,7 @@ def _extract_zip_with_encoding(zip_path: str, extract_dir: str) -> list[str]:
                     shutil.copyfileobj(src, dst)
                 extracted_files.append(filename)
     
-    print(f"[解压] 共解压 {len(extracted_files)} 个文件:")
-    for f in extracted_files:
-        print(f"  - {f}")
+    logger.info("共解压 %d 个文件", len(extracted_files))
     
     return extracted_files
 
@@ -143,7 +141,7 @@ def create_agent(
         db.commit()
         db.refresh(agent)
     else:
-        print(f"[创建 Agent] 注册到 app_platform 失败: {error}，回滚数据库记录")
+        logger.error("创建 Agent: 注册到 app_platform 失败: %s，回滚数据库记录", error)
         agent_service.delete_agent(db, agent.id)
         raise HTTPException(status_code=502, detail=f"Agent 注册到 app_platform 失败: {error}")
 
@@ -254,8 +252,7 @@ async def import_agents(
     tmp_dir = None
     try:
         tmp_dir = tempfile.mkdtemp()
-        print(f"[解压] 临时目录: {tmp_dir}")
-        print(f"[解压] ZIP 路径: {tmp_path}")
+        logger.debug("解压: 临时目录=%s, ZIP路径=%s", tmp_dir, tmp_path)
         _extract_zip_with_encoding(tmp_path, tmp_dir)
 
         json_path = None
@@ -286,7 +283,7 @@ async def import_agents(
             username = user_data.get('username', '')
             existing = agent_service.get_agent_by_username(db, username)
             if existing:
-                print(f"[导入] 跳过已存在的用户: {username}")
+                logger.info("导入: 跳过已存在的用户: %s", username)
                 continue
 
             agent_in = AgentCreate(
@@ -303,7 +300,7 @@ async def import_agents(
             if avatar_filename:
                 avatar_path = _find_avatar_in_zip(tmp_dir, avatar_filename)
                 if not avatar_path:
-                    print(f"[导入] 未找到 {username} 的头像文件: {avatar_filename}")
+                    logger.warning("导入: 未找到 %s 的头像文件: %s", username, avatar_filename)
             
             if not avatar_path:
                 avatar_path = find_avatar_file(avatar_dir, agent.name, agent.username)
@@ -323,7 +320,7 @@ async def import_agents(
                 db.refresh(agent)
                 imported.append(agent)
             else:
-                print(f"[导入] 注册 {username} 失败: {error}，回滚数据库记录")
+                logger.error("导入: 注册 %s 失败: %s，回滚数据库记录", username, error)
                 agent_service.delete_agent(db, agent.id)
 
         notify_scheduler_reload("all")
@@ -428,7 +425,7 @@ async def import_agents_stream(
                     if avatar_filename:
                         avatar_path = _find_avatar_in_zip(tmp_dir, avatar_filename)
                         if not avatar_path:
-                            print(f"[导入] 未找到 {username} 的头像文件: {avatar_filename}")
+                            logger.warning("导入: 未找到 %s 的头像文件: %s", username, avatar_filename)
                     
                     if not avatar_path:
                         avatar_path = find_avatar_file(avatar_dir, agent.name, agent.username)

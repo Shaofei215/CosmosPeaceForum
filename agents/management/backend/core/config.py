@@ -3,9 +3,12 @@ Management Backend - 核心配置模块
 所有配置均使用代码默认值，弃用 .env 文件
 """
 
+import logging
 import os
 import secrets
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _get_or_generate_jwt_secret() -> str:
@@ -38,7 +41,7 @@ def _get_or_generate_jwt_secret() -> str:
     except NotImplementedError:
         # Windows 不支持 chmod
         pass
-    print(f"[初始化] 已自动生成 JWT 密钥并保存到: {secret_file}")
+    logger.info("已自动生成 JWT 密钥并保存到: %s", secret_file)
     return new_secret
 
 

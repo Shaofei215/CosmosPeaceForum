@@ -1,5 +1,6 @@
 # 会话执行器模块
 # 提供 LangGraph 会话的执行器，负责运行单个登录会话的完整生命周期
+import logging
 import threading
 import uuid
 from typing import Optional, Dict, Any, Callable, List
@@ -11,6 +12,8 @@ from agents.agents_scheduler.langgraph.state import SessionState, SessionSummary
 from agents.agents_scheduler.langgraph.config import SessionConfig, AgentConfig, get_default_config
 from agents.agents_scheduler.langgraph.session_graph import build_session_graph
 from langchain_core.messages import AIMessage
+
+logger = logging.getLogger(__name__)
 
 
 def create_llm_invoker(
@@ -176,7 +179,7 @@ class SessionExecutor:
         self.username = username
         self.name = name or username
 
-        print(f"[会话执行器] 初始化会话: 用户={username}, 会话ID={self.session_id[:8]}..., 最大步数={self.config.max_steps}")
+        logger.info("初始化会话: 用户=%s, 会话ID=%s..., 最大步数=%d", username, self.session_id[:8], self.config.max_steps)
 
         self.initial_state: SessionState = {
             "user_id": user_id,
@@ -216,16 +219,16 @@ class SessionExecutor:
         if thread_id is None:
             thread_id = f"session_{self.session_id}"
 
-        print(f"[会话执行器] 开始执行会话: 用户={self.username}, 会话ID={self.session_id[:8]}...")
+        logger.info("开始执行会话: 用户=%s, 会话ID=%s...", self.username, self.session_id[:8])
 
         try:
-            print(f"[会话执行器] 构建LangGraph图结构")
+            logger.info("构建LangGraph图结构")
             graph = build_session_graph(
                 config=self.config,
                 llm_invoker=llm_invoker
             )
 
-            print(f"[会话执行器] 开始执行图")
+            logger.info("开始执行图")
             final_state = graph.invoke(
                 self.initial_state,
                 config={"recursion_limit": 100}
@@ -234,10 +237,10 @@ class SessionExecutor:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
 
-            print(f"[会话执行器] 图执行完成: 步数={final_state.get('step_count', 0)}, 耗时={duration:.2f}秒")
+            logger.info("图执行完成: 步数=%d, 耗时=%.2f秒", final_state.get('step_count', 0), duration)
 
             summary = self._build_summary(final_state)
-            print(f"[会话执行器] 生成总结: 退出原因={summary.get('exit_reason', 'N/A')}")
+            logger.info("生成总结: 退出原因=%s", summary.get('exit_reason', 'N/A'))
 
             return ExecutionResult(
                 session_id=self.session_id,
@@ -253,7 +256,7 @@ class SessionExecutor:
         except Exception as e:
             self.end_time = datetime.now()
             error_msg = f"会话执行异常: {str(e)}"
-            print(f"[会话执行器] 会话执行异常: {error_msg}")
+            logger.error("会话执行异常: %s", error_msg)
             traceback.print_exc()
 
             return ExecutionResult(

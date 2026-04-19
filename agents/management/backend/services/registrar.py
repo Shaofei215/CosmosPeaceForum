@@ -23,6 +23,7 @@ registrar.service.register_agent()：
 management 后端更新数据库中的 app_platform_user_id
 """
 
+import logging
 import mimetypes
 import os
 import time
@@ -35,6 +36,8 @@ from agents.management.backend.core.config import (
     SCHEDULER_INTERNAL_PORT,
 )
 from agents.management.backend.services.system_service import get_config_value
+
+logger = logging.getLogger(__name__)
 
 
 def _get_admin_key(db) -> str:
@@ -128,14 +131,14 @@ def register_agent(
                 return False, None, "管理员密钥无效"
 
             else:
-                print(f"[注册] HTTP {response.status_code}: {response.text}")
+                logger.error("注册: HTTP %d: %s", response.status_code, response.text)
 
         except requests.exceptions.RequestException as e:
-            print(f"[注册] 请求异常 (尝试 {attempt + 1}/3): {e}")
+            logger.error("注册: 请求异常 (尝试 %d/3): %s", attempt + 1, e)
 
         if attempt < 2:
             wait_time = 2 ** attempt
-            print(f"[注册] 等待 {wait_time} 秒后重试...")
+            logger.info("注册: 等待 %d 秒后重试...", wait_time)
             time.sleep(wait_time)
 
     return False, None, "注册失败：达到最大重试次数"
@@ -294,7 +297,7 @@ def notify_scheduler_reload(reload_type: str, target_id: Optional[int] = None, a
         response = requests.post(url, data=body, headers=headers, timeout=10)
         return response.status_code == 200
     except requests.exceptions.RequestException as e:
-        print(f"[热更新] 通知 scheduler 失败: {e}")
+        logger.error("热更新: 通知 scheduler 失败: %s", e)
         return False
 
 

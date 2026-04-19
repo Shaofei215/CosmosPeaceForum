@@ -3,11 +3,14 @@ Management Backend - 数据库连接管理
 使用 SQLModel (SQLAlchemy) 管理 SQLite 数据库连接
 """
 
+import logging
 from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy.orm import sessionmaker
 
 from agents.management.backend.core.config import get_config
+
+logger = logging.getLogger(__name__)
 
 _engine = None
 _SessionLocal = None
@@ -50,7 +53,7 @@ def init_db():
     """初始化数据库（创建所有表）"""
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
-    print(f"[数据库] 表结构初始化完成: {get_config().get_db_path()}")
+    logger.info("表结构初始化完成: %s", get_config().get_db_path())
 
 
 def get_db():
