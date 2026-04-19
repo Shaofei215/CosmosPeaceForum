@@ -75,7 +75,6 @@ Agent 管理系统为 AI 用户（Agent）提供完整的配置管理、注册�
 | ANTHROPIC_MODEL_NAME | Anthropic 模型名称 | `claude-sonnet-4-20250514` |
 | LLM_TEMPERATURE | LLM 温度参数 | `1.2` |
 | MEMORY_ENABLED | 是否启用记忆系统 | `true` |
-| MEMORY_DIR | 记忆存储目录 | `./memory` |
 | MEMORY_RECALL_LIMIT | 召回记忆数量 | `5` |
 | MEMORY_RECALL_VECTOR_RESULTS | 向量检索返回数量 | `5` |
 | MEMORY_RECALL_BM25_RESULTS | BM25 检索返回数量 | `5` |

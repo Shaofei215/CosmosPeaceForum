@@ -10,6 +10,9 @@ from pathlib import Path
 from agent_scheduler.management.backend.db_client import get_db_client
 
 
+MEMORY_DIR = Path(__file__).parent / "data"
+
+
 @dataclass
 class MemoryConfig:
     """
@@ -18,7 +21,6 @@ class MemoryConfig:
     所有业务配置均从 management 数据库加载，无环境变量 fallback。
     """
     memory_enabled: bool = True
-    memory_dir: str = ""
     recall_limit: int = 5
     recall_vector_results: int = 5
     recall_bm25_results: int = 5
@@ -39,12 +41,8 @@ class MemoryConfig:
             val = db.get_system_config(key)
             return val if val else default
 
-        scheduler_dir = Path(__file__).parent.parent
-        default_mem_dir = str(scheduler_dir / "memory")
-
         return cls(
             memory_enabled=_get("MEMORY_ENABLED", "true").lower() in ("true", "1", "yes"),
-            memory_dir=_get("MEMORY_DIR", default_mem_dir),
             recall_limit=int(_get("MEMORY_RECALL_LIMIT", "5")),
             recall_vector_results=int(_get("MEMORY_RECALL_VECTOR_RESULTS", "5")),
             recall_bm25_results=int(_get("MEMORY_RECALL_BM25_RESULTS", "5")),
@@ -76,23 +74,20 @@ class MemoryConfig:
 
     def get_memory_db_path(self) -> str:
         """获取 SQLite 数据库文件路径"""
-        memory_dir = Path(self.memory_dir)
-        memory_dir.mkdir(parents=True, exist_ok=True)
-        return str(memory_dir / "memories.db")
+        MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+        return str(MEMORY_DIR / "memories.db")
 
     def get_chroma_db_path(self) -> str:
         """获取 ChromaDB 存储目录路径"""
-        memory_dir = Path(self.memory_dir)
-        memory_dir.mkdir(parents=True, exist_ok=True)
-        chroma_dir = memory_dir / "chroma_db"
+        MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+        chroma_dir = MEMORY_DIR / "chroma_db"
         chroma_dir.mkdir(parents=True, exist_ok=True)
         return str(chroma_dir)
 
     def get_tantivy_index_path(self) -> str:
         """获取 Tantivy 索引存储目录路径"""
-        memory_dir = Path(self.memory_dir)
-        memory_dir.mkdir(parents=True, exist_ok=True)
-        tantivy_dir = memory_dir / "tantivy_index"
+        MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+        tantivy_dir = MEMORY_DIR / "tantivy_index"
         tantivy_dir.mkdir(parents=True, exist_ok=True)
         return str(tantivy_dir)
 

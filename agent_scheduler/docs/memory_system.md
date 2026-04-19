@@ -610,7 +610,6 @@ schema = schema_builder.build()
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `memory_enabled` | 是否启用记忆系统 | true |
-| `memory_dir` | 记忆存储目录 | `agent_scheduler/memory/` |
 | `recall_limit` | 召回记忆数量 | 5 |
 | `recall_vector_results` | 向量检索返回数 | 5 |
 | `recall_bm25_results` | BM25 检索返回数 | 5 |
@@ -619,16 +618,13 @@ schema = schema_builder.build()
 | `decay_rate` | 衰减率（每日） | 0.01 |
 | `embedding_model` | 向量化模型相关配置 | Base URL, API Key等 |
 
-**注意**：`memory_dir` 默认值相对于 `agent_scheduler` 目录，而非当前工作目录。
+**注意**：记忆存储位置固定为 `agent_scheduler/memory/`。
 
 ### 8.2 环境变量配置示例
 
 ```bash
 # 是否启用记忆系统
 MEMORY_ENABLED=true
-
-# 记忆存储目录
-MEMORY_DIR=./agent_scheduler/memory
 
 # 召回记忆数量
 MEMORY_RECALL_LIMIT=5
