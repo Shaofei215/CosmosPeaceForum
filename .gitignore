@@ -206,18 +206,12 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# LLM Configuration (contains API keys)
-llm_config.json
-
 # Project specific files
 *.log
 
 # IDE settings
 .idea/
 .vscode/
-
-# Test files (do not upload to GitHub)
-test_*.py
 
 # Database files (SQLite and other)
 *.db
