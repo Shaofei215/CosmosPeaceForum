@@ -232,4 +232,4 @@ uploads/
 .gitignore
 
 # Memory system data (SQLite, ChromaDB, Tantivy)
-agent_scheduler/memory/data/
+agents/agents_scheduler/memory/data/

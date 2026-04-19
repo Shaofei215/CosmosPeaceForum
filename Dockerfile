@@ -1,10 +1,10 @@
 # Herta-Tree 统一 Dockerfile
-# 支持 app_platform 后端和 agent_scheduler 调度器
+# 支持 app_platform 后端和 agents 调度器
 #
 # 使用方法：
 # 1. 构建镜像：docker build -t herta-tree .
 # 2. 运行后端：docker run -p 8000:8000 herta-tree
-# 3. 运行调度器：docker run herta-tree python -m agent_scheduler
+# 3. 运行调度器：docker run herta-tree python -m agents
 
 # 基于 Python 3.11 精简版镜像（使用国内镜像加速）
 FROM m.daocloud.io/docker.io/library/python:3.11-slim
@@ -40,7 +40,7 @@ COPY . .
 RUN cp /app/app_platform/.env /app/.env || true
 
 # 设置入口脚本执行权限
-RUN chmod +x /app/agent_scheduler/entrypoint.sh /app/app_platform/entrypoint.sh
+RUN chmod +x /app/agents/entrypoint.sh /app/app_platform/entrypoint.sh
 
 # 暴露端口
 EXPOSE 8000
