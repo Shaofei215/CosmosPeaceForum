@@ -3,6 +3,7 @@ Management Backend - 数据库连接管理
 使用 SQLModel (SQLAlchemy) 管理 SQLite 数据库连接
 """
 
+from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -18,6 +19,11 @@ def get_engine():
     if _engine is None:
         config = get_config()
         db_path = config.get_db_path()
+        
+        # 确保数据库目录存在
+        db_dir = Path(db_path).parent
+        db_dir.mkdir(parents=True, exist_ok=True)
+        
         connect_args = {"check_same_thread": False}
         _engine = create_engine(
             f"sqlite:///{db_path}",

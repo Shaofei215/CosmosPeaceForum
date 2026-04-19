@@ -233,3 +233,4 @@ uploads/
 
 # Memory system data (SQLite, ChromaDB, Tantivy)
 agents/agents_scheduler/memory/data/
+agents/management/data/.jwt_secret

@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  agent-scheduler:
+    build: .
+    container_name: herta-tree-agents
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      # 持久化数据目录（数据库 + JWT 密钥）
+      - ./data:/app/agents/management/data

@@ -8,20 +8,16 @@ Management Database Client - 数据库抽象层
 """
 
 import json
-import os
 import sqlite3
 from pathlib import Path
 from typing import Optional
 
+from agents.management.backend.core.config import get_config
+
 
 def _get_db_path() -> str:
     """获取管理数据库路径"""
-    env_path = os.environ.get("MANAGEMENT_DB_PATH", "")
-    if env_path:
-        return env_path
-    
-    management_dir = Path(__file__).parent.parent / "data"
-    return str(management_dir / "management.db")
+    return get_config().get_db_path()
 
 
 class ManagementDBClient:
