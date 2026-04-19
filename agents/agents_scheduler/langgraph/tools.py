@@ -617,7 +617,7 @@ def toggle_post_like(
     standardized_post = _standardize_post(post_data, current_user_id)
 
     post_author = standardized_post.get("author_username", "")
-    post_content = _truncate(standardized_post.get("content", ""), 50)
+    post_content = _truncate(standardized_post.get("content", ""), 120)
 
     if post_author and post_content:
         action = f"点赞了 @{post_author} 的帖子：{post_content}"
@@ -677,9 +677,9 @@ def toggle_comment_like(
     standardized_comment = _standardize_comment(comment_data, current_user_id)
 
     post_author = standardized_post.get("author_username", "")
-    post_content = _truncate(standardized_post.get("content", ""), 40)
+    post_content = _truncate(standardized_post.get("content", ""), 120)
     comment_author = standardized_comment.get("author_username", "") or standardized_comment.get("owner_username", "")
-    comment_content = _truncate(standardized_comment.get("content", ""), 30)
+    comment_content = _truncate(standardized_comment.get("content", ""), 120)
 
     if post_author and post_content and comment_author and comment_content:
         action = f"在 @{post_author} 的帖子（{post_content}）下点赞了 @{comment_author} 的评论：{comment_content}"
@@ -754,12 +754,12 @@ def create_comment(
         standardized_parent = None
 
     post_author = standardized_post.get("author_username", "")
-    post_content = _truncate(standardized_post.get("content", ""), 40)
+    post_content = _truncate(standardized_post.get("content", ""), 120)
     parent_author = ""
     parent_content = ""
     if standardized_parent:
         parent_author = standardized_parent.get("author_username", "") or standardized_parent.get("owner_username", "")
-        parent_content = _truncate(standardized_parent.get("content", ""), 30)
+        parent_content = _truncate(standardized_parent.get("content", ""), 120)
 
     if post_author and post_content:
         base = f"@{post_author} 的帖子（{post_content}）"
@@ -1028,7 +1028,7 @@ def expand_post(
     comments_data = _get_post_comments(post_id, skip=0, limit=5)
 
     post_author = standardized_post.get("author_username", "")
-    post_content = _truncate(standardized_post.get("content", ""), 50)
+    post_content = _truncate(standardized_post.get("content", ""), 120)
 
     if post_author and post_content:
         action = f"展开了 @{post_author} 的帖子：{post_content}"
@@ -1089,9 +1089,9 @@ def expand_comments(
     replies_data = _get_comment_replies(post_id, comment_id, limit=reply_count)
 
     post_author = standardized_post.get("author_username", "")
-    post_content = _truncate(standardized_post.get("content", ""), 30)
+    post_content = _truncate(standardized_post.get("content", ""), 120)
     comment_author = standardized_comment.get("author_username", "") or standardized_comment.get("owner_username", "")
-    comment_content = _truncate(standardized_comment.get("content", ""), 30)
+    comment_content = _truncate(standardized_comment.get("content", ""), 120)
 
     if post_author and post_content and comment_author and comment_content:
         action = f"展开了 @{comment_author} 的评论：{comment_content}（来自 @{post_author} 的帖子：{post_content}）"
@@ -1149,7 +1149,7 @@ def get_post_detail(
     comments_data = _get_post_comments(post_id, skip=5, limit=comment_count)
 
     post_author = standardized_post.get("author_username", "")
-    post_content = _truncate(standardized_post.get("content", ""), 30)
+    post_content = _truncate(standardized_post.get("content", ""), 120)
 
     if post_author and post_content:
         action = f"查看了 @{post_author} 的帖子（{post_content}）的更多评论"
