@@ -69,10 +69,32 @@ class TestMemoryConfig:
 
     def test_from_db_defaults(self):
         with patch("agents.agents_scheduler.memory.config.get_db_client") as mock_db:
-            mock_db.return_value.get_system_config.return_value = ""
+            mock_client = MagicMock()
+            mock_client.get_system_config.return_value = ""
+            mock_client.get_active_embedding_config.return_value = None
+            mock_db.return_value = mock_client
             
             config = MemoryConfig.from_db()
             assert isinstance(config, MemoryConfig)
             assert config.memory_enabled is True
             assert config.recall_limit == 5
             assert config.embedding_dimension == 1536
+
+    def test_from_db_with_embedding_config(self):
+        with patch("agents.agents_scheduler.memory.config.get_db_client") as mock_db:
+            mock_client = MagicMock()
+            mock_client.get_system_config.return_value = ""
+            mock_client.get_active_embedding_config.return_value = {
+                "base_url": "https://test.api/v1",
+                "api_key": "test_key",
+                "model_name": "text-embedding-3-large",
+                "dimension": 3072,
+                "is_active": 1,
+            }
+            mock_db.return_value = mock_client
+            
+            config = MemoryConfig.from_db()
+            assert config.embedding_base_url == "https://test.api/v1"
+            assert config.embedding_api_key == "test_key"
+            assert config.embedding_model_name == "text-embedding-3-large"
+            assert config.embedding_dimension == 3072

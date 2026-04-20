@@ -41,6 +41,8 @@ class MemoryConfig:
             val = db.get_system_config(key)
             return val if val else default
 
+        embedding_config = db.get_active_embedding_config()
+
         return cls(
             memory_enabled=_get("MEMORY_ENABLED", "true").lower() in ("true", "1", "yes"),
             recall_limit=int(_get("MEMORY_RECALL_LIMIT", "5")),
@@ -49,10 +51,10 @@ class MemoryConfig:
             threshold=float(_get("MEMORY_THRESHOLD", "0.3")),
             boost_factor=float(_get("MEMORY_BOOST_FACTOR", "0.3")),
             decay_rate=float(_get("MEMORY_DECAY_RATE", "0.01")),
-            embedding_base_url=_get("EMBEDDING_BASE_URL", ""),
-            embedding_api_key=_get("EMBEDDING_API_KEY", ""),
-            embedding_model_name=_get("EMBEDDING_MODEL_NAME", "text-embedding-3-small"),
-            embedding_dimension=int(_get("EMBEDDING_DIMENSION", "1536")),
+            embedding_base_url=embedding_config.get("base_url", "") if embedding_config else "",
+            embedding_api_key=embedding_config.get("api_key", "") if embedding_config else "",
+            embedding_model_name=embedding_config.get("model_name", "text-embedding-3-small") if embedding_config else "text-embedding-3-small",
+            embedding_dimension=int(embedding_config.get("dimension", "1536")) if embedding_config else 1536,
         )
 
     def __post_init__(self):

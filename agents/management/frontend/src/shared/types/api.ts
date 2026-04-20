@@ -123,3 +123,30 @@ export interface OperationLogListResponse {
 export interface MessageResponse {
   message: string;
 }
+
+export interface EmbeddingConfig {
+  id: number;
+  base_url: string;
+  api_key: string;
+  model_name: string;
+  dimension: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmbeddingConfigCreate {
+  base_url?: string;
+  api_key?: string;
+  model_name?: string;
+  dimension?: number;
+  is_active?: boolean;
+}
+
+export interface EmbeddingConfigUpdate {
+  base_url?: string;
+  api_key?: string;
+  model_name?: string;
+  dimension?: number;
+  is_active?: boolean;
+}

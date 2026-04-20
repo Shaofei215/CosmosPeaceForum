@@ -8,13 +8,12 @@ import {
 } from '@/shared/components/ui';
 import { Settings, Edit, RefreshCw, Loader2, Eye, EyeOff } from 'lucide-react';
 
-const PASSWORD_KEYS = ['AI_USER_PASSWORD', 'EMBEDDING_API_KEY'];
+const PASSWORD_KEYS = ['AI_USER_PASSWORD'];
 
 const configGroupLabels: Record<string, string[]> = {
   '通用': ['ADMIN_KEY', 'AI_USER_PASSWORD', 'API_BASE_URL', 'LOG_LEVEL'],
   'LangGraph': ['LANGGRAPH_MAX_STEPS', 'LANGGRAPH_MAX_CONSECUTIVE_ERRORS', 'LANGGRAPH_TOOL_TIMEOUT', 'LANGGRAPH_ENVIRONMENT_CACHE_TTL'],
   '记忆': ['MEMORY_ENABLED', 'MEMORY_RECALL_LIMIT', 'MEMORY_RECALL_VECTOR_RESULTS', 'MEMORY_RECALL_BM25_RESULTS', 'MEMORY_THRESHOLD', 'MEMORY_BOOST_FACTOR', 'MEMORY_DECAY_RATE'],
-  'Embedding': ['EMBEDDING_BASE_URL', 'EMBEDDING_API_KEY', 'EMBEDDING_MODEL_NAME', 'EMBEDDING_DIMENSION'],
 };
 
 function getConfigGroup(key: string): string {

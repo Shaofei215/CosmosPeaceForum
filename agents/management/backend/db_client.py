@@ -188,6 +188,26 @@ class ManagementDBClient:
         except Exception:
             return None
 
+    def get_active_embedding_config(self) -> Optional[dict]:
+        """
+        获取启用的 Embedding 配置
+        
+        Returns:
+            Optional[dict]: Embedding 配置字典
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                cursor = conn.execute(
+                    "SELECT * FROM embedding_configs WHERE is_active = 1 LIMIT 1"
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+            finally:
+                conn.close()
+        except Exception:
+            return None
+
 
 _db_client = None
 

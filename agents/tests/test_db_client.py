@@ -46,6 +46,16 @@ def temp_db():
             is_active INTEGER DEFAULT 1
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS embedding_configs (
+            id INTEGER PRIMARY KEY,
+            base_url TEXT,
+            api_key TEXT,
+            model_name TEXT,
+            dimension INTEGER,
+            is_active INTEGER DEFAULT 0
+        )
+    """)
 
     cursor.execute("INSERT INTO system_configs (key, value) VALUES (?, ?)", ("TEST_KEY", "test_value"))
     cursor.execute(
@@ -55,6 +65,10 @@ def temp_db():
     cursor.execute(
         "INSERT INTO model_configs (id, provider, model_name, api_key, is_active, temperature) VALUES (?, ?, ?, ?, ?, ?)",
         (1, "openai", "gpt-4", "test_key", 1, 1.0)
+    )
+    cursor.execute(
+        "INSERT INTO embedding_configs (id, base_url, api_key, model_name, dimension, is_active) VALUES (?, ?, ?, ?, ?, ?)",
+        (1, "https://test.api/v1", "emb_key", "text-embedding-3-small", 1536, 1)
     )
 
     conn.commit()
@@ -118,6 +132,24 @@ class TestManagementDBClient:
     def test_get_model_config_not_found(self, temp_db):
         client = ManagementDBClient(db_path=temp_db)
         result = client.get_model_config(999)
+        assert result is None
+
+    def test_get_active_embedding_config(self, temp_db):
+        client = ManagementDBClient(db_path=temp_db)
+        result = client.get_active_embedding_config()
+        assert result is not None
+        assert result["base_url"] == "https://test.api/v1"
+        assert result["model_name"] == "text-embedding-3-small"
+        assert result["dimension"] == 1536
+
+    def test_get_active_embedding_config_not_found(self, temp_db):
+        conn = sqlite3.connect(temp_db)
+        conn.execute("DELETE FROM embedding_configs")
+        conn.commit()
+        conn.close()
+
+        client = ManagementDBClient(db_path=temp_db)
+        result = client.get_active_embedding_config()
         assert result is None
 
     def test_parse_knows_ids_invalid_json(self, temp_db):

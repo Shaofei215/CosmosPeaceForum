@@ -3,6 +3,7 @@ import type {
   AgentConfig, AgentCreate, AgentUpdate, AgentListResponse, AgentRelationUpdate,
   ModelConfig, ModelConfigCreate, ModelConfigUpdate,
   SystemConfig, OperationLogListResponse, MessageResponse,
+  EmbeddingConfig, EmbeddingConfigCreate, EmbeddingConfigUpdate,
 } from '@/shared/types/api';
 
 export const agentApi = {
@@ -55,6 +56,20 @@ export const modelApi = {
 
   remove: (id: number) =>
     apiClient.delete<MessageResponse>(`/models/${id}`),
+
+  toggle: (id: number) =>
+    apiClient.put<ModelConfig>(`/models/${id}/toggle`, {}),
+};
+
+export const embeddingApi = {
+  get: () =>
+    apiClient.get<EmbeddingConfig>('/embeddings/'),
+
+  create: (data: EmbeddingConfigCreate) =>
+    apiClient.post<EmbeddingConfig>('/embeddings/', data),
+
+  update: (data: EmbeddingConfigUpdate) =>
+    apiClient.put<EmbeddingConfig>('/embeddings/', data),
 };
 
 export const systemApi = {

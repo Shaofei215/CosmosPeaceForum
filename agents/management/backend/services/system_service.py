@@ -32,10 +32,6 @@ DEFAULT_SYSTEM_CONFIGS = [
     ("MEMORY_THRESHOLD", "0.3", "记忆系数最低阈值"),
     ("MEMORY_BOOST_FACTOR", "0.3", "唤醒时系数增量"),
     ("MEMORY_DECAY_RATE", "0.01", "衰减率（每日）"),
-    ("EMBEDDING_BASE_URL", "", "向量化模型 Base URL"),
-    ("EMBEDDING_API_KEY", "", "向量化模型 API Key"),
-    ("EMBEDDING_MODEL_NAME", "text-embedding-3-small", "向量化模型名称"),
-    ("EMBEDDING_DIMENSION", "1536", "向量维度"),
 ]
 
 
@@ -105,9 +101,5 @@ def get_config_value(db: Session, key: str, default: str = "") -> str:
         "MEMORY_THRESHOLD": "0.3",
         "MEMORY_BOOST_FACTOR": "0.3",
         "MEMORY_DECAY_RATE": "0.01",
-        "EMBEDDING_BASE_URL": "",
-        "EMBEDDING_API_KEY": "",
-        "EMBEDDING_MODEL_NAME": "text-embedding-3-small",
-        "EMBEDDING_DIMENSION": "1536",
     }
     return fallback_map.get(key, default)

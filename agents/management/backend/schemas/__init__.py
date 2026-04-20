@@ -132,6 +132,36 @@ class ModelConfigResponse(BaseModel):
         from_attributes = True
 
 
+class EmbeddingConfigCreate(BaseModel):
+    base_url: str = ""
+    api_key: str = ""
+    model_name: str = "text-embedding-3-small"
+    dimension: int = 1536
+    is_active: bool = False
+
+
+class EmbeddingConfigUpdate(BaseModel):
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model_name: Optional[str] = None
+    dimension: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class EmbeddingConfigResponse(BaseModel):
+    id: int
+    base_url: str
+    api_key: str
+    model_name: str
+    dimension: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ==================== System Config ====================
 
 class SystemConfigResponse(BaseModel):

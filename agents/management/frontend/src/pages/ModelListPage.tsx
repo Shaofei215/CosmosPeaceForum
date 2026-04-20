@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { modelApi } from '@/shared/api/modules';
-import type { ModelConfigCreate, ModelConfigUpdate } from '@/shared/types/api';
+import { modelApi, embeddingApi } from '@/shared/api/modules';
+import type { ModelConfigCreate, ModelConfigUpdate, EmbeddingConfigUpdate } from '@/shared/types/api';
 import {
   Button, Input, Textarea, Card, CardContent, CardHeader, CardTitle,
   Badge, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogFooter, DialogDescription,
+  DialogFooter, DialogDescription, Switch, Label, Separator,
 } from '@/shared/components/ui';
 import { Plus, Edit, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
@@ -18,6 +18,11 @@ export default function ModelListPage() {
   const { data: models, isLoading } = useQuery({
     queryKey: ['models'],
     queryFn: modelApi.list,
+  });
+
+  const { data: embeddingConfig } = useQuery({
+    queryKey: ['embedding'],
+    queryFn: embeddingApi.get,
   });
 
   const createMutation = useMutation({
@@ -44,6 +49,32 @@ export default function ModelListPage() {
       setDeleteId(null);
     },
   });
+
+  const toggleModelMutation = useMutation({
+    mutationFn: (id: number) => modelApi.toggle(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['models'] });
+    },
+  });
+
+  const updateEmbeddingMutation = useMutation({
+    mutationFn: (data: EmbeddingConfigUpdate) => embeddingApi.update(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['embedding'] });
+    },
+  });
+
+  const handleToggleModel = (id: number) => {
+    toggleModelMutation.mutate(id);
+  };
+
+  const handleToggleEmbedding = (checked: boolean) => {
+    updateEmbeddingMutation.mutate({ is_active: checked });
+  };
+
+  const handleSaveEmbedding = (data: EmbeddingConfigUpdate) => {
+    updateEmbeddingMutation.mutate(data);
+  };
 
   if (isLoading) {
     return (
@@ -86,7 +117,12 @@ export default function ModelListPage() {
                     温度: {model.temperature} | Max Token: {model.max_token}
                   </p>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={model.is_active}
+                    onCheckedChange={() => handleToggleModel(model.id)}
+                    disabled={toggleModelMutation.isPending}
+                  />
                   <Button variant="ghost" size="icon" onClick={() => setEditingModel(model.id)}>
                     <Edit size={16} />
                   </Button>
@@ -111,6 +147,34 @@ export default function ModelListPage() {
             </CardContent>
           </Card>
         )}
+      </div>
+
+      <Separator className="my-8" />
+
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            Embedding 配置
+            <Badge variant={embeddingConfig?.is_active ? 'default' : 'secondary'}>
+              {embeddingConfig?.is_active ? '启用' : '禁用'}
+            </Badge>
+          </h2>
+          <Switch
+            checked={embeddingConfig?.is_active ?? false}
+            onCheckedChange={handleToggleEmbedding}
+            disabled={updateEmbeddingMutation.isPending}
+          />
+        </div>
+
+        <Card>
+          <CardContent className="p-4">
+            <EmbeddingConfigForm
+              config={embeddingConfig}
+              onSave={handleSaveEmbedding}
+              isPending={updateEmbeddingMutation.isPending}
+            />
+          </CardContent>
+        </Card>
       </div>
 
       {/* Create Dialog */}
@@ -152,6 +216,126 @@ export default function ModelListPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+interface EmbeddingConfigFormProps {
+  config?: { base_url: string; api_key: string; model_name: string; dimension: number };
+  onSave: (data: EmbeddingConfigUpdate) => void;
+  isPending: boolean;
+}
+
+function EmbeddingConfigForm({ config, onSave, isPending }: EmbeddingConfigFormProps) {
+  const [baseUrl, setBaseUrl] = useState(config?.base_url ?? '');
+  const [apiKey, setApiKey] = useState('');
+  const [modelName, setModelName] = useState(config?.model_name ?? 'text-embedding-3-small');
+  const [dimension, setDimension] = useState(config?.dimension ?? 1536);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const data: EmbeddingConfigUpdate = {
+      base_url: baseUrl.trim(),
+      model_name: modelName.trim(),
+      dimension,
+    };
+    if (apiKey.trim()) {
+      data.api_key = apiKey.trim();
+    }
+    onSave(data);
+    setEditing(false);
+    setApiKey('');
+  };
+
+  if (!config && !editing) {
+    return (
+      <div className="py-8 text-center text-muted-foreground">
+        暂无 Embedding 配置
+      </div>
+    );
+  }
+
+  if (!editing) {
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-xs text-muted-foreground">Base URL</Label>
+            <p className="text-sm">{config?.base_url || '未配置'}</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">模型名称</Label>
+            <p className="text-sm">{config?.model_name || '未配置'}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-xs text-muted-foreground">API Key</Label>
+            <p className="text-sm">{config?.api_key ? '******' : '未配置'}</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">维度</Label>
+            <p className="text-sm">{config?.dimension ?? '未配置'}</p>
+          </div>
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button size="sm" onClick={() => setEditing(true)}>
+            <Edit size={14} className="mr-1" /> 编辑
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Base URL</Label>
+            <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1" />
+          </div>
+          <div className="space-y-2">
+            <Label>模型名称</Label>
+            <Input value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="text-embedding-3-small" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>API Key (留空则不修改)</Label>
+            <div className="relative">
+              <Input
+                type={showApiKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-..."
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+              >
+                {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>维度</Label>
+            <Input type="number" min="1" value={dimension} onChange={(e) => setDimension(Number(e.target.value))} />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => { setEditing(false); setApiKey(''); }}>
+            取消
+          </Button>
+          <Button type="submit" size="sm" disabled={isPending}>
+            {isPending ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
+            保存
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 }
 
@@ -266,11 +450,6 @@ function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDi
                 <Input type="number" min="1" value={maxToken} onChange={(e) => setMaxToken(Number(e.target.value))} />
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="mCreateIsActive" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4" />
-              <label htmlFor="mCreateIsActive" className="text-sm">启用此配置</label>
-            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
@@ -383,11 +562,6 @@ function EditModelDialog({ open, onOpenChange, onSubmit, isPending, model }: Edi
                 <label className="text-sm font-medium">Max Token</label>
                 <Input type="number" min="1" value={maxToken} onChange={(e) => setMaxToken(Number(e.target.value))} />
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="mEditIsActive" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4" />
-              <label htmlFor="mEditIsActive" className="text-sm">启用此配置</label>
             </div>
           </div>
           <DialogFooter>

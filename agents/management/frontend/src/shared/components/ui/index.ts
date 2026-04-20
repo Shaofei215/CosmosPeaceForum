@@ -6,3 +6,6 @@ export * from './card';
 export * from './skeleton';
 export * from './dialog';
 export * from './badge';
+export * from './switch';
+export * from './label';
+export * from './separator';

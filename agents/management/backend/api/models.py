@@ -101,3 +101,25 @@ def delete_model_config(
     create_log(db, current_admin.id, "delete_model_config", "model", config_id)
 
     return MessageResponse(message="模型配置已删除")
+
+
+@router.put("/{config_id}/toggle", response_model=ModelConfigResponse)
+def toggle_model_config(
+    config_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """切换模型启用/停用状态"""
+    config = model_service.get_model_config(db, config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="模型配置不存在")
+
+    from agents.management.backend.schemas import ModelConfigUpdate
+
+    update_data = ModelConfigUpdate(is_active=not config.is_active)
+    updated = model_service.update_model_config(db, config_id, update_data)
+
+    notify_scheduler_reload("model", config_id)
+    create_log(db, current_admin.id, "toggle_model_config", "model", config_id)
+
+    return model_service.model_config_to_response(updated)
