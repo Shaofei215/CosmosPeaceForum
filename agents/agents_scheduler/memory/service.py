@@ -11,7 +11,7 @@ from agents.agents_scheduler.memory.database import MemoryDB
 from agents.agents_scheduler.memory.vector_store import VectorStore
 from agents.agents_scheduler.memory.bm25_index import BM25Index
 from agents.agents_scheduler.memory.embedding import EmbeddingModel, get_embedding_model
-from agents.agents_scheduler.memory.utils import calculate_time_description
+from agents.agents_scheduler.memory.utils import calculate_time_description, calculate_time_description_from_date
 from agents.agents_scheduler.scheduler.time_system import get_time_system
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,8 @@ class MemoryService:
         self,
         content: str,
         owner_id: int,
-        memory_coefficient: float = 0.85
+        memory_coefficient: float = 0.85,
+        semantic_timestamp: float = 0.0,
     ) -> str:
         """
         写入记忆（三写同步）
@@ -73,6 +74,7 @@ class MemoryService:
             content: 记忆内容，第一人称叙事性描述
             owner_id: 所属用户 ID
             memory_coefficient: 记忆系数 [0.0, 1.0]，默认 0.85
+            semantic_timestamp: 语义时间戳，默认为 0 表示使用当前系统时间
 
         Returns:
             str: 记忆 ID
@@ -81,7 +83,8 @@ class MemoryService:
         chunk = MemoryChunk.create(
             owner_id=owner_id,
             content=content,
-            memory_coefficient=memory_coefficient
+            memory_coefficient=memory_coefficient,
+            semantic_timestamp=semantic_timestamp,
         )
 
         # 1. 写入 SQLite（主存储）
@@ -197,8 +200,11 @@ class MemoryService:
         # 6. 唤醒机制：召回时 boost 系数
         result = []
         for chunk in all_memories[:limit]:
-            # 计算时间描述（使用独立工具函数）
-            time_desc = calculate_time_description(chunk.timestamp, current_time)
+            # 计算时间描述（优先使用语义时间戳）
+            if chunk.semantic_timestamp > 0 and chunk.semantic_timestamp > 1000000:
+                time_desc = calculate_time_description_from_date(chunk.semantic_timestamp)
+            else:
+                time_desc = calculate_time_description(chunk.timestamp, current_time)
 
             # 唤醒：boost 系数
             new_coef = min(1.0, chunk.memory_coefficient + self.config.boost_factor)

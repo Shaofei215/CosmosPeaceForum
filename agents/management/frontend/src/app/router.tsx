@@ -9,6 +9,8 @@ import AgentCreatePage from '@/pages/AgentCreatePage';
 import AgentDetailPage from '@/pages/AgentDetailPage';
 import AgentEditPage from '@/pages/AgentEditPage';
 import ModelListPage from '@/pages/ModelListPage';
+import MemoryListPage from '@/pages/MemoryListPage';
+import MemoryDetailPage from '@/pages/MemoryDetailPage';
 import SystemConfigPage from '@/pages/SystemConfigPage';
 import LogPage from '@/pages/LogPage';
 
@@ -32,6 +34,8 @@ export const router = createBrowserRouter([
       { path: 'agents/:id', element: <AgentDetailPage /> },
       { path: 'agents/:id/edit', element: <AgentEditPage /> },
       { path: 'models', element: <ModelListPage /> },
+      { path: 'memories', element: <MemoryListPage /> },
+      { path: 'memories/:ownerId', element: <MemoryDetailPage /> },
       { path: 'system', element: <SystemConfigPage /> },
       { path: 'logs', element: <LogPage /> },
     ],

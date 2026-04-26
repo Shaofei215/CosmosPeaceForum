@@ -4,6 +4,8 @@ import type {
   ModelConfig, ModelConfigCreate, ModelConfigUpdate,
   SystemConfig, OperationLogListResponse, MessageResponse,
   EmbeddingConfig, EmbeddingConfigCreate, EmbeddingConfigUpdate,
+  ChunkModelConfig, ChunkModelConfigCreate, ChunkModelConfigUpdate,
+  MemoryChunk, MemoryListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
 } from '@/shared/types/api';
 
 export const agentApi = {
@@ -86,4 +88,44 @@ export const systemApi = {
 export const logApi = {
   list: (skip = 0, limit = 100) =>
     apiClient.get<OperationLogListResponse>(`/logs/?skip=${skip}&limit=${limit}`),
+};
+
+export const chunkModelApi = {
+  list: () =>
+    apiClient.get<ChunkModelConfig[]>('/chunk-models/'),
+
+  getOne: (id: number) =>
+    apiClient.get<ChunkModelConfig>(`/chunk-models/${id}`),
+
+  create: (data: ChunkModelConfigCreate) =>
+    apiClient.post<ChunkModelConfig>('/chunk-models/', data),
+
+  update: (id: number, data: ChunkModelConfigUpdate) =>
+    apiClient.put<ChunkModelConfig>(`/chunk-models/${id}`, data),
+
+  remove: (id: number) =>
+    apiClient.delete<MessageResponse>(`/chunk-models/${id}`),
+
+  toggle: (id: number) =>
+    apiClient.put<ChunkModelConfig>(`/chunk-models/${id}/toggle`, {}),
+};
+
+export const memoryApi = {
+  list: (skip = 0, limit = 100, owner_id?: number) => {
+    let url = `/memories/?skip=${skip}&limit=${limit}`;
+    if (owner_id !== undefined) url += `&owner_id=${owner_id}`;
+    return apiClient.get<MemoryListResponse>(url);
+  },
+
+  uploadSingle: (data: MemoryUploadRequest) =>
+    apiClient.post<MessageResponse>('/memories/upload', data),
+
+  uploadBatch: (data: MemoryBatchUploadRequest) =>
+    apiClient.post<MessageResponse>('/memories/upload-batch', data),
+
+  deleteMemory: (memoryId: string) =>
+    apiClient.delete<MessageResponse>(`/memories/${memoryId}`),
+
+  clearUserMemories: (ownerId: number) =>
+    apiClient.delete<MessageResponse>(`/memories/user/${ownerId}`),
 };

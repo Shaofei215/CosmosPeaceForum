@@ -150,3 +150,54 @@ export interface EmbeddingConfigUpdate {
   dimension?: number;
   is_active?: boolean;
 }
+
+export interface ChunkModelConfig {
+  id: number;
+  name: string;
+  provider: string;
+  base_url: string;
+  model_name: string;
+  temperature: number;
+  is_active: boolean;
+  max_token: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChunkModelConfigCreate {
+  name: string;
+  provider: string;
+  api_key: string;
+  base_url?: string;
+  model_name: string;
+  temperature?: number;
+  is_active?: boolean;
+  max_token?: number;
+}
+
+export interface ChunkModelConfigUpdate {
+  name?: string;
+  provider?: string;
+  api_key?: string;
+  base_url?: string;
+  model_name?: string;
+  temperature?: number;
+  is_active?: boolean;
+  max_token?: number;
+}
+
+export interface MemoryChunk {
+  id: string;
+  owner_id: number;
+  owner_username: string;
+  content: string;
+  semantic_timestamp: number;
+  system_timestamp: number;
+  memory_coefficient: number;
+  created_at: string;
+}
+
+export interface MemoryListResponse {
+  items: MemoryChunk[];
+  total: number;
+}

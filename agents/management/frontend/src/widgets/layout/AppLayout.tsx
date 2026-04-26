@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Cpu, Settings, FileText,
-  Menu, X, LogOut, UserCog,
+  Menu, X, LogOut, UserCog, Brain,
 } from 'lucide-react';
 import { useLogout, useCurrentAdmin, ProfileDialog } from '@/features/auth';
 
@@ -10,6 +10,7 @@ const navItems = [
   { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
   { path: '/agents', label: 'Agent 管理', icon: Users },
   { path: '/models', label: '模型配置', icon: Cpu },
+  { path: '/memories', label: '记忆管理', icon: Brain },
   { path: '/system', label: '系统配置', icon: Settings },
   { path: '/logs', label: '操作日志', icon: FileText },
 ];

@@ -19,7 +19,8 @@ class MemoryChunk:
         id: UUID，全局唯一标识符
         owner_id: 所属用户 ID（用于所有权隔离）
         content: 记忆内容（LLM 第一人称生成）
-        timestamp: 时间戳（从 time_system 获取缩放时间）
+        timestamp: 系统时间戳（从 time_system 获取缩放时间，用于衰减计算）
+        semantic_timestamp: 语义时间戳（记忆实际产生的时间，用于展示和上下文理解）
         memory_coefficient: 记忆系数 [0.0, 1.0]，越高记忆越重要越容易被想起
     """
     id: str
@@ -27,13 +28,15 @@ class MemoryChunk:
     content: str
     timestamp: float
     memory_coefficient: float
+    semantic_timestamp: float = 0.0
 
     @classmethod
     def create(
         cls,
         owner_id: int,
         content: str,
-        memory_coefficient: float = 0.85
+        memory_coefficient: float = 0.85,
+        semantic_timestamp: float = 0.0,
     ) -> "MemoryChunk":
         """
         创建新的记忆分块
@@ -44,17 +47,22 @@ class MemoryChunk:
             owner_id: 所属用户 ID
             content: 记忆内容，第一人称叙事性描述
             memory_coefficient: 记忆系数 [0.0, 1.0]，默认 0.85
+            semantic_timestamp: 语义时间戳，默认为 0 表示与 timestamp 相同
 
         Returns:
             MemoryChunk: 新创建的记忆分块
         """
         ts = get_time_system()
+        system_ts = ts.get_scaled_timestamp()
+        if semantic_timestamp == 0.0:
+            semantic_timestamp = system_ts
         return cls(
             id=str(uuid.uuid4()),
             owner_id=owner_id,
             content=content,
-            timestamp=ts.get_scaled_timestamp(),
-            memory_coefficient=memory_coefficient
+            timestamp=system_ts,
+            memory_coefficient=memory_coefficient,
+            semantic_timestamp=semantic_timestamp,
         )
 
     def to_dict(self) -> dict:
@@ -69,6 +77,7 @@ class MemoryChunk:
             "owner_id": self.owner_id,
             "content": self.content,
             "timestamp": self.timestamp,
+            "semantic_timestamp": self.semantic_timestamp,
             "memory_coefficient": self.memory_coefficient,
         }
 
@@ -89,6 +98,7 @@ class MemoryChunk:
             content=data["content"],
             timestamp=data["timestamp"],
             memory_coefficient=data["memory_coefficient"],
+            semantic_timestamp=data.get("semantic_timestamp", 0.0),
         )
 
     def __repr__(self) -> str:

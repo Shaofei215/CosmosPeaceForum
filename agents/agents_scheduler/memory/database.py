@@ -57,18 +57,25 @@ class MemoryDB:
                 owner_id INTEGER NOT NULL,
                 content TEXT NOT NULL,
                 timestamp REAL NOT NULL,
+                semantic_timestamp REAL NOT NULL DEFAULT 0,
                 memory_coefficient REAL NOT NULL
             )
         """)
 
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_owner_id 
+            CREATE INDEX IF NOT EXISTS idx_owner_id
             ON memories(owner_id)
         """)
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_memory_coefficient 
+            CREATE INDEX IF NOT EXISTS idx_memory_coefficient
             ON memories(memory_coefficient)
         """)
+
+        try:
+            cursor.execute("ALTER TABLE memories ADD COLUMN semantic_timestamp REAL NOT NULL DEFAULT 0")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
         self._conn.commit()
 

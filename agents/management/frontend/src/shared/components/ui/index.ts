@@ -9,3 +9,4 @@ export * from './badge';
 export * from './switch';
 export * from './label';
 export * from './separator';
+export * from './select';

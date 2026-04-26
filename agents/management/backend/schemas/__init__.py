@@ -162,6 +162,44 @@ class EmbeddingConfigResponse(BaseModel):
         from_attributes = True
 
 
+class ChunkModelConfigCreate(BaseModel):
+    name: str
+    provider: str
+    api_key: str
+    base_url: str = ""
+    model_name: str
+    temperature: float = 1.2
+    is_active: bool = True
+    max_token: int = 4096
+
+
+class ChunkModelConfigUpdate(BaseModel):
+    name: Optional[str] = None
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model_name: Optional[str] = None
+    temperature: Optional[float] = None
+    is_active: Optional[bool] = None
+    max_token: Optional[int] = None
+
+
+class ChunkModelConfigResponse(BaseModel):
+    id: int
+    name: str
+    provider: str
+    base_url: str
+    model_name: str
+    temperature: float
+    is_active: bool
+    max_token: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ==================== System Config ====================
 
 class SystemConfigResponse(BaseModel):
