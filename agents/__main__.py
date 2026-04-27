@@ -60,6 +60,7 @@ def main():
     time_module.sleep(2)
 
     scheduler_main()
+    
 
 
 if __name__ == "__main__":

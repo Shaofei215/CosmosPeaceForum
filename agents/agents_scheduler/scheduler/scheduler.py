@@ -8,7 +8,6 @@ AI Agent 调度模块
 4. 触发 LangGraph 会话
 5. 提供 Agent 线程的启停和重启功能
 
-不再包含：注册流程、配置管理（已迁移至 management）
 """
 
 import json
@@ -60,7 +59,7 @@ def login_user(username: str, password: str) -> Optional[Dict]:
         )
         if response.status_code == 200:
             result = response.json()
-            token = result.get('access_token') or result.get('token')
+            token = result.get('access_token')
             if token:
                 me_url = f"{config.api_base_url}/auth/me"
                 me_response = requests.get(
@@ -258,7 +257,6 @@ class AgentSchedulerManager:
     3. 提供线程的启停、重启功能
     4. 提供调度状态查询
 
-    不再负责：注册、配置管理
     """
 
     def __init__(self, time_system=None):

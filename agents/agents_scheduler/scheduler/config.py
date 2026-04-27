@@ -1,7 +1,7 @@
 """
 Scheduler 配置模块
 
-所有业务配置均通过 management 数据库抽象层加载（system_configs 表）
+所有业务配置均通过 management 数据库抽象层加载
 """
 
 from dataclasses import dataclass
@@ -14,7 +14,7 @@ class SchedulerConfig:
     """
     调度器配置类
 
-    所有业务配置均从 management 数据库加载，无环境变量 fallback。
+    所有业务配置均从 management 数据库加载
     """
     admin_key: str = ""
     ai_user_password: str = "ai123456"
@@ -50,7 +50,7 @@ def get_scheduler_config() -> SchedulerConfig:
 
 
 def reload_scheduler_config():
-    """重载调度器配置（热更新）"""
+    """重载调度器配置"""
     global _scheduler_config
     _scheduler_config = SchedulerConfig.from_db()
     return _scheduler_config
