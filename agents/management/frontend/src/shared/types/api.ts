@@ -201,3 +201,14 @@ export interface MemoryListResponse {
   items: MemoryChunk[];
   total: number;
 }
+
+export interface TerminalLog {
+  timestamp: string;
+  level: string;
+  message: string;
+}
+
+export interface TerminalLogListResponse {
+  items: TerminalLog[];
+  total: number;
+}

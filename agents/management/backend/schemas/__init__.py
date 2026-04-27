@@ -237,6 +237,19 @@ class OperationLogListResponse(BaseModel):
     total: int
 
 
+# ==================== Terminal Log ====================
+
+class TerminalLogResponse(BaseModel):
+    timestamp: str
+    level: str
+    message: str
+
+
+class TerminalLogListResponse(BaseModel):
+    items: List[TerminalLogResponse]
+    total: int
+
+
 # ==================== Generic Response ====================
 
 class MessageResponse(BaseModel):

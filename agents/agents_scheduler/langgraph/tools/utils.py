@@ -532,15 +532,12 @@ def get_social_tools(relation_map=None) -> List:
     return _social_tools
 
 
-def get_all_tools_for_summarize(relation_map=None) -> List:
+def get_all_tools_for_summarize() -> List:
     """
     获取总结节点使用的所有工具（仅包含 write_memory）
 
     此函数仅在 summarize_node 中调用，用于绑定 write_memory 工具。
     总结节点只允许 LLM 调用 write_memory，不应绑定其他社交工具。
-
-    Args:
-        relation_map: 关系映射服务（可选，当前未使用）
 
     Returns:
         List: 仅包含 write_memory 的工具列表

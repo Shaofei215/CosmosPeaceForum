@@ -27,6 +27,8 @@ def setup_logging(log_level: str = "INFO"):
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
     )
+    from agents.management.backend.services.terminal_log_service import terminal_log_capture
+    terminal_log_capture.start()
 
 
 def start_management_backend():
@@ -38,7 +40,8 @@ def start_management_backend():
         "agents.management.backend.main:app",
         host="0.0.0.0",
         port=8001,
-        log_level="info",
+        log_level="warning",
+        access_log=False,
     )
 
 

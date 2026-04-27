@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时
     config = get_config()
     logger.info("=" * 50)
     logger.info("Management Backend 启动中...")
@@ -29,10 +28,7 @@ async def lifespan(app: FastAPI):
     logger.info("服务器: %s:%d", config.server_host, config.server_port)
     logger.info("Scheduler 内部端口: %d", config.scheduler_internal_port)
 
-    # 初始化数据库
     init_db()
-
-    # 初始化默认数据
     initialize_database()
 
     logger.info("Management Backend 启动完成!")
@@ -40,7 +36,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # 关闭时
     logger.info("Management Backend 关闭中...")
 
 

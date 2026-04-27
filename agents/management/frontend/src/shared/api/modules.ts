@@ -6,6 +6,7 @@ import type {
   EmbeddingConfig, EmbeddingConfigCreate, EmbeddingConfigUpdate,
   ChunkModelConfig, ChunkModelConfigCreate, ChunkModelConfigUpdate,
   MemoryChunk, MemoryListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
+  TerminalLogListResponse,
 } from '@/shared/types/api';
 
 export const agentApi = {
@@ -128,4 +129,19 @@ export const memoryApi = {
 
   clearUserMemories: (ownerId: number) =>
     apiClient.delete<MessageResponse>(`/memories/user/${ownerId}`),
+};
+
+export const terminalLogApi = {
+  list: (skip = 0, limit = 200, level?: string, keyword?: string) => {
+    let url = `/terminal-logs/?skip=${skip}&limit=${limit}`;
+    if (level) url += `&level=${level}`;
+    if (keyword) url += `&keyword=${keyword}`;
+    return apiClient.get<TerminalLogListResponse>(url);
+  },
+
+  recent: (count = 50) =>
+    apiClient.get<{ items: TerminalLogListResponse['items']; total: number }>(`/terminal-logs/recent?count=${count}`),
+
+  clear: () =>
+    apiClient.post<MessageResponse>('/terminal-logs/clear'),
 };

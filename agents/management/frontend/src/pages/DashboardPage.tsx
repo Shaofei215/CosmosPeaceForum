@@ -1,7 +1,16 @@
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { agentApi, modelApi, systemApi } from '@/shared/api/modules';
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
-import { Users, Cpu, Settings, Activity } from 'lucide-react';
+import { agentApi, modelApi, systemApi, terminalLogApi } from '@/shared/api/modules';
+import { Card, CardContent, CardHeader, CardTitle, Button } from '@/shared/components/ui';
+import { Users, Cpu, Settings, Activity, Terminal, Trash2 } from 'lucide-react';
+import type { TerminalLog } from '@/shared/types/api';
+
+const levelColors: Record<string, string> = {
+  INFO: 'text-green-400',
+  WARNING: 'text-yellow-400',
+  ERROR: 'text-red-400',
+  DEBUG: 'text-blue-400',
+};
 
 export default function DashboardPage() {
   const { data: agents } = useQuery({
@@ -18,6 +27,33 @@ export default function DashboardPage() {
     queryKey: ['system', 'dashboard'],
     queryFn: systemApi.list,
   });
+
+  const { data: logsData, refetch } = useQuery({
+    queryKey: ['terminal-logs', 'dashboard'],
+    queryFn: () => terminalLogApi.recent(100),
+    refetchInterval: 2000,
+  });
+
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  useEffect(() => {
+    if (autoScroll && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logsData?.items, autoScroll]);
+
+  const handleScroll = () => {
+    if (!logContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+    setAutoScroll(isAtBottom);
+  };
+
+  const handleClearLogs = async () => {
+    await terminalLogApi.clear();
+    refetch();
+  };
 
   const activeAgents = agents?.items.filter((a) => a.is_active).length ?? 0;
   const activeModels = models?.filter((m) => m.is_active).length ?? 0;
@@ -54,6 +90,39 @@ export default function DashboardPage() {
       </div>
 
       <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Terminal size={18} className="text-muted-foreground" />
+            <CardTitle>终端日志</CardTitle>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleClearLogs}>
+            <Trash2 size={14} className="mr-1" />
+            清空
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div
+            ref={logContainerRef}
+            onScroll={handleScroll}
+            className="h-96 overflow-auto rounded-lg bg-zinc-950 p-4 font-mono text-sm"
+          >
+            {logsData?.items.map((log: TerminalLog, index: number) => (
+              <div key={index} className="flex gap-3 leading-6">
+                <span className="text-zinc-500 shrink-0">{log.timestamp}</span>
+                <span className={`shrink-0 w-16 ${levelColors[log.level] || 'text-zinc-400'}`}>
+                  [{log.level}]
+                </span>
+                <span className="text-zinc-300 break-all">{log.message}</span>
+              </div>
+            ))}
+            {(!logsData?.items || logsData.items.length === 0) && (
+              <div className="text-zinc-500 text-center py-12">暂无终端日志</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
         <CardHeader>
           <CardTitle>快捷操作</CardTitle>
         </CardHeader>
