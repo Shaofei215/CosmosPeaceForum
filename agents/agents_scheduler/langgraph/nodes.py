@@ -7,7 +7,7 @@ import traceback
 
 from langchain_core.messages import AIMessage
 
-from agents.agents_scheduler.langgraph.tools import get_social_tools, ToolExecutionError
+from agents.agents_scheduler.langgraph.tools import get_social_tools, get_all_tools_for_summarize, ToolExecutionError
 from agents.agents_scheduler.langgraph.state import SessionState, ExitReason, ActionRecord
 from agents.agents_scheduler.langgraph.prompts import (
     build_system_prompt,
@@ -580,8 +580,7 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
             logger.info("summarize_node | 用户=%s | LLM返回%d个工具调用", username, len(tool_calls))
 
             # 执行工具调用（主要是 write_memory）
-            from agents.agents_scheduler.langgraph.tools import get_social_tools
-            tools_map = {t.name: t for t in get_social_tools()}
+            tools_map = {t.name: t for t in get_all_tools_for_summarize()}
 
             for tc in tool_calls:
                 tool_name = tc.get("name", "").lower()

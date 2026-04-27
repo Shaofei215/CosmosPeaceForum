@@ -2,17 +2,17 @@
 Management Backend - 记忆管理路由
 """
 
-import re
-import json
 import logging
-import time
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 
-import httpx
 import jieba
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
+
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
 
 from agents.management.backend.core.database import get_db
 from agents.management.backend.api.deps import get_current_admin
@@ -77,6 +77,25 @@ def _auto_chunk_text(text: str, chunk_size: int = 512, overlap: int = 50) -> lis
     return chunks
 
 
+@tool
+def chunk_memories(memories: list[dict]) -> list[dict]:
+    """
+    将文本拆分为多个记忆片段
+
+    规则：
+    - 每条记忆以"我"为主语，第一人称描述
+    - 每条记忆上限 512 tokens
+    - 每个分块是独立的语义单元，包含完整的故事上下文和人物关系叙事
+
+    Args:
+        memories: 记忆列表，每个元素是 {"content": "记忆内容", "memory_coefficient": 0.85}
+
+    Returns:
+        list[dict]: 分块后的记忆列表
+    """
+    return memories
+
+
 async def _llm_smart_chunk(
     text: str,
     owner_id: int,
@@ -86,12 +105,7 @@ async def _llm_smart_chunk(
     db: Session,
 ) -> list[dict]:
     """
-    使用分块模型进行智能分块
-
-    参照 agents/agents_scheduler/langgraph/tools.py 中的 write_memory 工具逻辑：
-    - 每个分块以"我"为主语，第一人称描述
-    - 每个分块包含完整的上下文叙事与人际关系叙事
-    - 每个分块上限约300字
+    使用 LangChain Tool 调用进行智能分块
 
     Args:
         text: 原始文本
@@ -111,19 +125,14 @@ async def _llm_smart_chunk(
             detail="未配置或未启用分块模型，请先在模型配置页的分块模型配置中添加并启用"
         )
 
-    system_prompt = """你是一个记忆分块助手。请根据人物信息，将将提供的文本拆分为多个语义完整的符合角色设定的第一人称的记忆片段。
+    system_prompt = """你是一个记忆分块助手。请根据人物信息，将提供的文本拆分为多个语义完整的、符合角色设定的第一人称记忆片段。
 
 【分块规则】
-1. 每条记忆必须以"我"为主语，使用第一人称叙述，应当包含符合角色视角的叙事、表达、看法与情感
-2. 每条记忆上限约250字
-3. 每个分块应是一个独立的语义单元，包含完整的上下文和人物
+1. 每条记忆必须以"我"为主语，使用第一人称叙述，包含符合角色视角的叙事、表达、看法与情感
+2. 每条记忆上限 512 tokens
+3. 每个分块应是一个独立的语义单元，包含完整的上下文和人物关系叙事
 
-【输出格式】
-返回一个 JSON 数组，每个元素包含：
-- content: 记忆内容（字符串）
-- memory_coefficient: 记忆系数（0.0-1.0，根据重要性判断）
-
-只返回 JSON 数组，不要任何其他文字。"""
+请调用 chunk_memories 工具，一次性传入所有分块后的记忆列表。"""
 
     user_prompt = f"""【角色设定】
 {personality_prompt}
@@ -131,57 +140,53 @@ async def _llm_smart_chunk(
 【待分块文本】
 {text}
 
-请按照规则进行分块。"""
+请按照规则进行分块，并调用 chunk_memories 工具传入结果。"""
 
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            headers = {
-                "Authorization": f"Bearer {chunk_model_config.api_key}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": chunk_model_config.model_name,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": chunk_model_config.temperature,
-                "max_tokens": chunk_model_config.max_token,
-            }
-            base_url = chunk_model_config.base_url.rstrip('/')
-            resp = await client.post(
-                f"{base_url}/chat/completions",
-                json=payload,
-                headers=headers,
+        llm_kwargs = {
+            "model": chunk_model_config.model_name,
+            "temperature": chunk_model_config.temperature,
+            "max_tokens": chunk_model_config.max_token,
+            "api_key": chunk_model_config.api_key,
+        }
+        base_url = chunk_model_config.base_url.rstrip('/')
+        if base_url:
+            llm_kwargs["base_url"] = base_url
+
+        llm = ChatOpenAI(**llm_kwargs)
+        llm_with_tools = llm.bind_tools([chunk_memories])
+
+        response = llm_with_tools.invoke([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ])
+
+        if not response.tool_calls:
+            logger.error("LLM 未调用工具，返回内容: %s", response.content)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="LLM 未返回有效的工具调用结果"
             )
 
-            if resp.status_code != 200:
-                logger.error("LLM 分块请求失败: HTTP %d: %s", resp.status_code, resp.text)
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"LLM 分块请求失败: HTTP {resp.status_code}"
-                )
+        tool_call = response.tool_calls[0]
+        memories = tool_call["args"].get("memories", [])
 
-            result = resp.json()
-            content = result["choices"][0]["message"]["content"].strip()
+        if not memories:
+            logger.error("LLM 工具调用返回空记忆列表")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="LLM 未返回有效的分块结果"
+            )
 
-            # 提取 JSON（可能包含 markdown 代码块标记）
-            json_match = re.search(r'\[.*\]', content, re.DOTALL)
-            if json_match:
-                chunks = json.loads(json_match.group())
-                return chunks
-            else:
-                logger.error("LLM 返回格式异常: %s", content)
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="LLM 返回格式异常，无法解析"
-                )
+        return memories
 
-    except httpx.RequestError as e:
-        logger.error("LLM 分块网络错误: %s", e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("LLM 分块错误: %s", e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"LLM 分块网络错误: {str(e)}"
+            detail=f"LLM 分块失败: {str(e)}"
         )
 
 
@@ -295,7 +300,6 @@ async def upload_memory(
         raise HTTPException(status_code=400, detail="chunk_mode 必须为 auto 或 llm")
 
     # 写入记忆
-    import asyncio
     service, _ = _get_memory_service()
     memory_ids = []
 
@@ -330,7 +334,6 @@ def delete_memory(
     """删除单条记忆"""
     service, _ = _get_memory_service()
 
-    import asyncio
     asyncio.run(service.delete_memory(memory_id))
 
     create_log(db, current_admin.id, "delete_memory", "memory", None)
@@ -346,7 +349,6 @@ def clear_user_memories(
     """清除指定用户的所有记忆"""
     service, _ = _get_memory_service()
 
-    import asyncio
     count = asyncio.run(service.clear_user_memories(owner_id))
 
     create_log(db, current_admin.id, "clear_user_memories", "memory", owner_id)

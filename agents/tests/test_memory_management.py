@@ -5,6 +5,8 @@
 1. MemoryChunk 双时间戳机制 (semantic_timestamp + system timestamp)
 2. calculate_time_description_from_date 工具函数
 3. 自动分块 auto_chunk_text (512 tokens, 50 overlap)
+4. LLM 智能分块 chunk_memories 工具
+5. LLM 智能分块 _llm_smart_chunk 函数 (LangChain Tool 调用)
 """
 
 import pytest
@@ -296,3 +298,399 @@ class TestMemoryUploadValidation:
         }
         assert payload["personality_prompt"] is not None
         # 应通过
+
+
+# ==================== LLM Smart Chunk: chunk_memories Tool ====================
+
+class TestChunkMemoriesTool:
+    """测试 chunk_memories LangChain 工具"""
+
+    def test_chunk_memories_returns_input_as_is(self):
+        """chunk_memories 工具应原样返回输入的 memories 列表"""
+        from agents.management.backend.api.memories import chunk_memories
+
+        memories = [
+            {"content": "我今天学到了新知识", "memory_coefficient": 0.8},
+            {"content": "我和朋友聊了天", "memory_coefficient": 0.6},
+        ]
+        result = chunk_memories.invoke({"memories": memories})
+        assert result == memories
+
+    def test_chunk_memories_empty_list(self):
+        """chunk_memories 工具应支持空列表"""
+        from agents.management.backend.api.memories import chunk_memories
+
+        result = chunk_memories.invoke({"memories": []})
+        assert result == []
+
+    def test_chunk_memories_single_memory(self):
+        """chunk_memories 工具应支持单条记忆"""
+        from agents.management.backend.api.memories import chunk_memories
+
+        memories = [{"content": "单独一条记忆", "memory_coefficient": 0.9}]
+        result = chunk_memories.invoke({"memories": memories})
+        assert len(result) == 1
+        assert result[0]["content"] == "单独一条记忆"
+        assert result[0]["memory_coefficient"] == 0.9
+
+
+# ==================== LLM Smart Chunk: _llm_smart_chunk ====================
+
+def _create_mock_chunk_config():
+    """创建模拟的分块模型配置"""
+    config = MagicMock()
+    config.model_name = "gpt-4"
+    config.temperature = 0.7
+    config.max_token = 4096
+    config.api_key = "test-api-key"
+    config.base_url = "https://api.openai.com/v1"
+    return config
+
+
+def _create_mock_llm_response(memories):
+    """创建模拟的 LLM 工具调用响应"""
+    mock_response = MagicMock()
+    mock_response.content = ""
+    mock_response.tool_calls = [
+        {
+            "name": "chunk_memories",
+            "args": {"memories": memories},
+            "id": "call_test_123",
+        }
+    ]
+    return mock_response
+
+
+class TestLlmSmartChunk:
+    """测试 _llm_smart_chunk 函数 (LangChain Tool 调用)"""
+
+    def test_successful_chunking_single_memory(self):
+        """成功调用 LLM 分块，返回单条记忆"""
+        import asyncio
+        from agents.management.backend.api.memories import _llm_smart_chunk
+        from fastapi import HTTPException
+
+        mock_config = _create_mock_chunk_config()
+        mock_memories = [
+            {"content": "我今天学到了新知识", "memory_coefficient": 0.8}
+        ]
+        mock_response = _create_mock_llm_response(mock_memories)
+
+        async def run_test():
+            with patch("agents.management.backend.api.memories.get_active_chunk_model_config") as mock_get_config, \
+                 patch("agents.management.backend.api.memories.ChatOpenAI") as mock_chat_openai:
+                mock_get_config.return_value = mock_config
+                mock_llm = MagicMock()
+                mock_llm_with_tools = MagicMock()
+                mock_llm.bind_tools.return_value = mock_llm_with_tools
+                mock_llm_with_tools.invoke.return_value = mock_response
+                mock_chat_openai.return_value = mock_llm
+
+                mock_db = MagicMock()
+
+                return await _llm_smart_chunk(
+                    text="今天学到了新知识",
+                    owner_id=1,
+                    personality_prompt="我是一个学生",
+                    semantic_timestamp=1000.0,
+                    memory_coefficient=0.85,
+                    db=mock_db,
+                )
+
+        result = asyncio.run(run_test())
+
+        assert len(result) == 1
+        assert result[0]["content"] == "我今天学到了新知识"
+        assert result[0]["memory_coefficient"] == 0.8
+
+    def test_successful_chunking_multiple_memories(self):
+        """成功调用 LLM 分块，返回多条记忆"""
+        import asyncio
+        from agents.management.backend.api.memories import _llm_smart_chunk
+
+        mock_config = _create_mock_chunk_config()
+        mock_memories = [
+            {"content": "我今天学到了新知识", "memory_coefficient": 0.8},
+            {"content": "我和朋友讨论了问题", "memory_coefficient": 0.7},
+            {"content": "我决定明天继续学习", "memory_coefficient": 0.9},
+        ]
+        mock_response = _create_mock_llm_response(mock_memories)
+
+        async def run_test():
+            with patch("agents.management.backend.api.memories.get_active_chunk_model_config") as mock_get_config, \
+                 patch("agents.management.backend.api.memories.ChatOpenAI") as mock_chat_openai:
+                mock_get_config.return_value = mock_config
+                mock_llm = MagicMock()
+                mock_llm_with_tools = MagicMock()
+                mock_llm.bind_tools.return_value = mock_llm_with_tools
+                mock_llm_with_tools.invoke.return_value = mock_response
+                mock_chat_openai.return_value = mock_llm
+
+                mock_db = MagicMock()
+
+                return await _llm_smart_chunk(
+                    text="今天学到了新知识，和朋友讨论了问题，决定明天继续学习",
+                    owner_id=1,
+                    personality_prompt="我是一个学生",
+                    semantic_timestamp=1000.0,
+                    memory_coefficient=0.85,
+                    db=mock_db,
+                )
+
+        result = asyncio.run(run_test())
+
+        assert len(result) == 3
+        assert result[0]["content"] == "我今天学到了新知识"
+        assert result[1]["content"] == "我和朋友讨论了问题"
+        assert result[2]["content"] == "我决定明天继续学习"
+
+    def test_raises_when_no_config(self):
+        """未配置分块模型时应抛出 HTTPException"""
+        import asyncio
+        from agents.management.backend.api.memories import _llm_smart_chunk
+        from fastapi import HTTPException, status
+
+        async def run_test():
+            with patch("agents.management.backend.api.memories.get_active_chunk_model_config") as mock_get_config:
+                mock_get_config.return_value = None
+                mock_db = MagicMock()
+
+                return await _llm_smart_chunk(
+                    text="test",
+                    owner_id=1,
+                    personality_prompt="test",
+                    semantic_timestamp=1000.0,
+                    memory_coefficient=0.85,
+                    db=mock_db,
+                )
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(run_test())
+
+        assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_raises_when_no_tool_calls(self):
+        """LLM 未调用工具时应抛出 HTTPException"""
+        import asyncio
+        from agents.management.backend.api.memories import _llm_smart_chunk
+        from fastapi import HTTPException, status
+
+        mock_config = _create_mock_chunk_config()
+        mock_response = MagicMock()
+        mock_response.content = "一些文本响应"
+        mock_response.tool_calls = []
+
+        async def run_test():
+            with patch("agents.management.backend.api.memories.get_active_chunk_model_config") as mock_get_config, \
+                 patch("agents.management.backend.api.memories.ChatOpenAI") as mock_chat_openai:
+                mock_get_config.return_value = mock_config
+                mock_llm = MagicMock()
+                mock_llm_with_tools = MagicMock()
+                mock_llm.bind_tools.return_value = mock_llm_with_tools
+                mock_llm_with_tools.invoke.return_value = mock_response
+                mock_chat_openai.return_value = mock_llm
+
+                mock_db = MagicMock()
+
+                return await _llm_smart_chunk(
+                    text="test",
+                    owner_id=1,
+                    personality_prompt="test",
+                    semantic_timestamp=1000.0,
+                    memory_coefficient=0.85,
+                    db=mock_db,
+                )
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(run_test())
+
+        assert exc_info.value.status_code == status.HTTP_502_BAD_GATEWAY
+
+    def test_raises_when_empty_memories(self):
+        """LLM 工具调用返回空记忆列表时应抛出 HTTPException"""
+        import asyncio
+        from agents.management.backend.api.memories import _llm_smart_chunk
+        from fastapi import HTTPException, status
+
+        mock_config = _create_mock_chunk_config()
+        mock_response = _create_mock_llm_response([])
+
+        async def run_test():
+            with patch("agents.management.backend.api.memories.get_active_chunk_model_config") as mock_get_config, \
+                 patch("agents.management.backend.api.memories.ChatOpenAI") as mock_chat_openai:
+                mock_get_config.return_value = mock_config
+                mock_llm = MagicMock()
+                mock_llm_with_tools = MagicMock()
+                mock_llm.bind_tools.return_value = mock_llm_with_tools
+                mock_llm_with_tools.invoke.return_value = mock_response
+                mock_chat_openai.return_value = mock_llm
+
+                mock_db = MagicMock()
+
+                return await _llm_smart_chunk(
+                    text="test",
+                    owner_id=1,
+                    personality_prompt="test",
+                    semantic_timestamp=1000.0,
+                    memory_coefficient=0.85,
+                    db=mock_db,
+                )
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(run_test())
+
+        assert exc_info.value.status_code == status.HTTP_502_BAD_GATEWAY
+
+    def test_llm_invoked_with_correct_prompts(self):
+        """验证 LLM 调用时传入了正确的提示词"""
+        import asyncio
+        from agents.management.backend.api.memories import _llm_smart_chunk
+
+        mock_config = _create_mock_chunk_config()
+        mock_memories = [{"content": "test", "memory_coefficient": 0.8}]
+        mock_response = _create_mock_llm_response(mock_memories)
+
+        async def run_test():
+            with patch("agents.management.backend.api.memories.get_active_chunk_model_config") as mock_get_config, \
+                 patch("agents.management.backend.api.memories.ChatOpenAI") as mock_chat_openai:
+                mock_get_config.return_value = mock_config
+                mock_llm = MagicMock()
+                mock_llm_with_tools = MagicMock()
+                mock_llm.bind_tools.return_value = mock_llm_with_tools
+                mock_llm_with_tools.invoke.return_value = mock_response
+                mock_chat_openai.return_value = mock_llm
+
+                mock_db = MagicMock()
+
+                await _llm_smart_chunk(
+                    text="待分块文本",
+                    owner_id=1,
+                    personality_prompt="角色个性提示",
+                    semantic_timestamp=1000.0,
+                    memory_coefficient=0.85,
+                    db=mock_db,
+                )
+
+                mock_llm_with_tools.invoke.assert_called_once()
+                call_args = mock_llm_with_tools.invoke.call_args[0][0]
+                assert len(call_args) == 2
+                assert call_args[0]["role"] == "system"
+                assert call_args[1]["role"] == "user"
+                assert "角色个性提示" in call_args[1]["content"]
+                assert "待分块文本" in call_args[1]["content"]
+                assert "512 tokens" in call_args[0]["content"]
+
+        asyncio.run(run_test())
+
+    def test_chatopenai_called_with_correct_kwargs(self):
+        """验证 ChatOpenAI 使用了正确的配置参数"""
+        import asyncio
+        from agents.management.backend.api.memories import _llm_smart_chunk
+
+        mock_config = _create_mock_chunk_config()
+        mock_config.base_url = "https://custom-api.com/v1"
+        mock_memories = [{"content": "test", "memory_coefficient": 0.8}]
+        mock_response = _create_mock_llm_response(mock_memories)
+
+        async def run_test():
+            with patch("agents.management.backend.api.memories.get_active_chunk_model_config") as mock_get_config, \
+                 patch("agents.management.backend.api.memories.ChatOpenAI") as mock_chat_openai:
+                mock_get_config.return_value = mock_config
+                mock_llm = MagicMock()
+                mock_llm_with_tools = MagicMock()
+                mock_llm.bind_tools.return_value = mock_llm_with_tools
+                mock_llm_with_tools.invoke.return_value = mock_response
+                mock_chat_openai.return_value = mock_llm
+
+                mock_db = MagicMock()
+
+                await _llm_smart_chunk(
+                    text="test",
+                    owner_id=1,
+                    personality_prompt="test",
+                    semantic_timestamp=1000.0,
+                    memory_coefficient=0.85,
+                    db=mock_db,
+                )
+
+                mock_chat_openai.assert_called_once()
+                call_kwargs = mock_chat_openai.call_args[1]
+                assert call_kwargs["model"] == "gpt-4"
+                assert call_kwargs["temperature"] == 0.7
+                assert call_kwargs["max_tokens"] == 4096
+                assert call_kwargs["api_key"] == "test-api-key"
+                assert call_kwargs["base_url"] == "https://custom-api.com/v1"
+
+        asyncio.run(run_test())
+
+    def test_empty_base_url_handled(self):
+        """空 base_url 应正确处理"""
+        import asyncio
+        from agents.management.backend.api.memories import _llm_smart_chunk
+
+        mock_config = _create_mock_chunk_config()
+        mock_config.base_url = ""
+        mock_memories = [{"content": "test", "memory_coefficient": 0.8}]
+        mock_response = _create_mock_llm_response(mock_memories)
+
+        async def run_test():
+            with patch("agents.management.backend.api.memories.get_active_chunk_model_config") as mock_get_config, \
+                 patch("agents.management.backend.api.memories.ChatOpenAI") as mock_chat_openai:
+                mock_get_config.return_value = mock_config
+                mock_llm = MagicMock()
+                mock_llm_with_tools = MagicMock()
+                mock_llm.bind_tools.return_value = mock_llm_with_tools
+                mock_llm_with_tools.invoke.return_value = mock_response
+                mock_chat_openai.return_value = mock_llm
+
+                mock_db = MagicMock()
+
+                await _llm_smart_chunk(
+                    text="test",
+                    owner_id=1,
+                    personality_prompt="test",
+                    semantic_timestamp=1000.0,
+                    memory_coefficient=0.85,
+                    db=mock_db,
+                )
+
+                mock_chat_openai.assert_called_once()
+                call_kwargs = mock_chat_openai.call_args[1]
+                assert "base_url" not in call_kwargs
+
+        asyncio.run(run_test())
+
+    def test_llm_exception_propagated_as_http_exception(self):
+        """LLM 调用异常应转换为 HTTPException"""
+        import asyncio
+        from agents.management.backend.api.memories import _llm_smart_chunk
+        from fastapi import HTTPException
+
+        mock_config = _create_mock_chunk_config()
+
+        async def run_test():
+            with patch("agents.management.backend.api.memories.get_active_chunk_model_config") as mock_get_config, \
+                 patch("agents.management.backend.api.memories.ChatOpenAI") as mock_chat_openai:
+                mock_get_config.return_value = mock_config
+                mock_llm = MagicMock()
+                mock_llm_with_tools = MagicMock()
+                mock_llm.bind_tools.return_value = mock_llm_with_tools
+                mock_llm_with_tools.invoke.side_effect = Exception("Connection error")
+                mock_chat_openai.return_value = mock_llm
+
+                mock_db = MagicMock()
+
+                return await _llm_smart_chunk(
+                    text="test",
+                    owner_id=1,
+                    personality_prompt="test",
+                    semantic_timestamp=1000.0,
+                    memory_coefficient=0.85,
+                    db=mock_db,
+                )
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(run_test())
+
+        assert exc_info.value.status_code == 502
+        assert "Connection error" in exc_info.value.detail
