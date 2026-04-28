@@ -50,19 +50,17 @@ def stream_terminal_logs(
     """SSE 流式推送终端日志"""
 
     async def event_stream():
-        last_count = len(terminal_log_capture.get_recent_logs(0))
+        current_logs = terminal_log_capture.get_recent_logs(0)
+        last_count = len(current_logs)
 
         yield f"event: init\ndata: {json.dumps({'message': 'Terminal log stream started'}, ensure_ascii=False)}\n\n"
 
         while True:
-            logs = terminal_log_capture.get_recent_logs(10)
-            current_count = len(terminal_log_capture.get_recent_logs(0))
-
-            if current_count > last_count:
-                new_logs = terminal_log_capture.get_recent_logs(current_count - last_count)
-                for log in new_logs:
+            current_logs = terminal_log_capture.get_recent_logs(0)
+            if len(current_logs) > last_count:
+                for log in current_logs[last_count:]:
                     yield f"event: log\ndata: {json.dumps(log, ensure_ascii=False)}\n\n"
-                last_count = current_count
+                last_count = len(current_logs)
 
             await asyncio.sleep(1)
 

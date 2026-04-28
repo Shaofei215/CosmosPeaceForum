@@ -140,7 +140,7 @@ export const terminalLogApi = {
   },
 
   recent: (count = 50) =>
-    apiClient.get<{ items: TerminalLogListResponse['items']; total: number }>(`/terminal-logs/recent?count=${count}`),
+    apiClient.get<{ items: TerminalLog[]; total: number }>(`/terminal-logs/recent?count=${count}`),
 
   clear: () =>
     apiClient.post<MessageResponse>('/terminal-logs/clear'),
