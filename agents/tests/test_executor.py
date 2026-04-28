@@ -7,6 +7,7 @@ from agents.agents_scheduler.langgraph.executor import (
     SessionExecutor,
     LLMRegistry,
     reload_llm_registry,
+    create_llm_invoker,
 )
 from agents.agents_scheduler.langgraph.state import SessionState, ExitReason, SessionSummary
 from agents.agents_scheduler.langgraph.config import SessionConfig
@@ -169,6 +170,56 @@ class TestSessionExecutor:
                 result = executor.run(llm_invoker=MagicMock())
                 assert result.success is True
                 assert result.error_message is None
+
+    def test_executor_run_with_summarize_llm_invoker(self):
+        """测试 executor.run 能正确传递 summarize_llm_invoker"""
+        with patch("agents.agents_scheduler.langgraph.executor.get_default_config") as mock_config:
+            mock_config.return_value = SessionConfig()
+            executor = SessionExecutor(
+                user_id=1,
+                username="test_user",
+                ai_config_id=1,
+                personality_prompt="prompt",
+                personal_signature="sig",
+            )
+
+            mock_graph = MagicMock()
+            mock_graph.invoke.return_value = {
+                "user_id": 1,
+                "username": "test_user",
+                "name": "Test",
+                "ai_config_id": 1,
+                "personality_prompt": "prompt",
+                "personal_signature": "sig",
+                "step_count": 5,
+                "max_steps": 10,
+                "exit_reason": ExitReason.USER_CHOICE,
+                "action_history": [],
+                "current_location": "主页（信息流）",
+                "last_tool_result": None,
+                "pending_tool": None,
+                "pending_tools": None,
+                "last_error": None,
+                "summary": "Test summary",
+                "recalled_memories": "",
+            }
+
+            mock_llm_invoker = MagicMock()
+            mock_summarize_llm_invoker = MagicMock()
+
+            with patch("agents.agents_scheduler.langgraph.executor.build_session_graph", return_value=mock_graph) as mock_build:
+                result = executor.run(
+                    llm_invoker=mock_llm_invoker,
+                    summarize_llm_invoker=mock_summarize_llm_invoker
+                )
+
+                # 验证 build_session_graph 接收了两个 invoker
+                mock_build.assert_called_once()
+                call_kwargs = mock_build.call_args[1]
+                assert "summarize_llm_invoker" in call_kwargs
+                assert call_kwargs["summarize_llm_invoker"] is mock_summarize_llm_invoker
+
+                assert result.success is True
 
     def test_executor_run_failure(self):
         with patch("agents.agents_scheduler.langgraph.executor.get_default_config") as mock_config:

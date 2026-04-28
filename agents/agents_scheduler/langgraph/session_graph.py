@@ -46,7 +46,8 @@ def _default_llm_invoker(system_prompt: str, user_prompt: str) -> AIMessage:
 
 def build_session_graph(
     config: Optional[SessionConfig] = None,
-    llm_invoker: Optional[callable] = None
+    llm_invoker: Optional[callable] = None,
+    summarize_llm_invoker: Optional[callable] = None
 ) -> StateGraph:
     """
     构建完整的会话图
@@ -81,11 +82,14 @@ def build_session_graph(
     - LLM 决策基于工作记忆（action_history），而非每次重新获取环境信息
     - 工具的返回值作为上下文，通过 last_tool_result 传递给 LLM
     - 记忆召回在每次决策前执行，让 LLM 能想起相关的长期记忆
+    - 总结节点使用独立的 LLM 调用器，只绑定 write_memory 工具
 
     Args:
         config: 会话配置，如果为 None 则使用默认配置
         llm_invoker: LLM 调用函数，签名为 (system_prompt: str, user_prompt: str) -> AIMessage
                      如果为 None，则使用默认的 _default_llm_invoker
+        summarize_llm_invoker: 总结节点的 LLM 调用函数，只绑定 write_memory 工具
+                              如果为 None，则使用 llm_invoker
 
     Returns:
         StateGraph: 编译后的图结构
@@ -102,6 +106,12 @@ def build_session_graph(
     else:
         logger.info("LLM调用器就绪")
 
+    if summarize_llm_invoker is None:
+        summarize_llm_invoker = llm_invoker
+        logger.info("总结节点使用默认 LLM 调用器")
+    else:
+        logger.info("总结节点 LLM 调用器就绪")
+
     # 创建图
     graph = StateGraph(SessionState)
 
@@ -110,7 +120,7 @@ def build_session_graph(
     graph.add_node("recall_memory", recall_memory_node)
     graph.add_node("llm_decision", lambda state: llm_decision_node(state, llm_invoker))
     graph.add_node("tool_execution", tool_execution_node)
-    graph.add_node("summarize", lambda state: summarize_node(state, llm_invoker))
+    graph.add_node("summarize", lambda state: summarize_node(state, summarize_llm_invoker))
     graph.add_node("end", end_node)
     logger.info("节点注册完成: start, recall_memory, llm_decision, tool_execution, summarize, end")
 

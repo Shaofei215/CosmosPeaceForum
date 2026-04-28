@@ -204,7 +204,8 @@ class SessionExecutor:
     def run(
         self,
         llm_invoker: Callable[[str, str], AIMessage],
-        thread_id: Optional[str] = None
+        thread_id: Optional[str] = None,
+        summarize_llm_invoker: Optional[Callable[[str, str], AIMessage]] = None
     ) -> ExecutionResult:
         """
         执行完整会话
@@ -212,6 +213,7 @@ class SessionExecutor:
         Args:
             llm_invoker: LLM 调用函数，签名为 (system_prompt: str, user_prompt: str) -> AIMessage
             thread_id: 线程 ID，用于检查点保存
+            summarize_llm_invoker: 总结节点的 LLM 调用函数，只绑定 write_memory 工具
 
         Returns:
             ExecutionResult: 包含执行结果的 ExecutionResult 对象
@@ -225,7 +227,8 @@ class SessionExecutor:
             logger.info("构建LangGraph图结构")
             graph = build_session_graph(
                 config=self.config,
-                llm_invoker=llm_invoker
+                llm_invoker=llm_invoker,
+                summarize_llm_invoker=summarize_llm_invoker
             )
 
             logger.info("开始执行图")
@@ -398,10 +401,11 @@ def run_session(
 
     封装会话执行的完整流程：
     1. 加载配置（如未提供）
-    2. 获取工具列表
-    3. 创建 LLM 调用器
-    4. 创建执行器
-    5. 执行会话
+    2. 获取社交工具列表
+    3. 创建 LLM 调用器（绑定社交工具）
+    4. 创建总结节点专用的 LLM 调用器（只绑定 write_memory）
+    5. 创建执行器
+    6. 执行会话
 
     Args:
         agent_config: Agent 配置
@@ -415,8 +419,13 @@ def run_session(
         config = get_default_config()
 
     from agents.agents_scheduler.langgraph.tools import get_social_tools
-    tools = get_social_tools(relation_map=relation_map)
-    llm_invoker = LLMRegistry.get_invoker(config, tools=tools)
+    from agents.agents_scheduler.langgraph.tools.utils import get_all_tools_for_summarize
+
+    social_tools = get_social_tools(relation_map=relation_map)
+    llm_invoker = LLMRegistry.get_invoker(config, tools=social_tools)
+
+    summarize_tools = get_all_tools_for_summarize()
+    summarize_llm_invoker = create_llm_invoker(config, tools=summarize_tools)
 
     executor = SessionExecutor(
         user_id=agent_config.user_id,
@@ -428,4 +437,4 @@ def run_session(
         config=config,
     )
 
-    return executor.run(llm_invoker)
+    return executor.run(llm_invoker, summarize_llm_invoker=summarize_llm_invoker)

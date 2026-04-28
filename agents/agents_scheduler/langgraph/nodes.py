@@ -166,7 +166,8 @@ def recall_memory_node(state: SessionState) -> SessionState:
     记忆召回节点
 
     在 LLM 决策之前执行，从长期记忆库检索相关记忆并注入 Prompt。
-    使用 asyncio.run() 调用异步记忆服务，适配 LangGraph 同步调用。
+    使用即将发送给 LLM 的完整提示词（system_prompt + user_prompt）作为查询语句，
+    确保记忆查询基于完整的上下文信息。
 
     Args:
         state: 当前状态
@@ -185,10 +186,52 @@ def recall_memory_node(state: SessionState) -> SessionState:
     if not owner_id:
         return state
 
-    # 构建当前上下文（用于检索）
-    # 留空，由 llm_decision_node 在构建决策 prompt 时填充
-    state["recalled_memories"] = ""
-    logger.info("recall_memory_node | 用户=%s | 上下文已准备好", state.get('username', '未知'))
+    username = state.get("username", "未知")
+    logger.info("recall_memory_node | 用户=%s | 开始记忆召回", username)
+
+    try:
+        from agents.agents_scheduler.scheduler.time_system import get_time_system
+        ts = get_time_system()
+        current_time = ts.get_scaled_timestamp()
+
+        # 构建完整的提示词作为查询语句
+        system_prompt = build_system_prompt(
+            username=state["username"],
+            name=state.get("name", state["username"]),
+            personality_prompt=state["personality_prompt"],
+            personal_signature=state["personal_signature"]
+        )
+
+        user_prompt = build_decision_prompt(state)
+
+        # 合并 system_prompt 和 user_prompt 作为查询语句
+        query_context = f"{system_prompt}\n\n{user_prompt}"
+
+        from agents.agents_scheduler.memory.service import get_memory_service
+        service = get_memory_service()
+        recalled = asyncio.run(service.recall_memories(
+            owner_id=owner_id,
+            context=query_context,
+            current_time=current_time,
+            limit=config.recall_limit
+        ))
+
+        # 构建记忆注入文本
+        if recalled:
+            memory_lines = ["\n\n## 相关记忆"]
+            for chunk, time_desc in recalled:
+                memory_lines.append(f"[记忆片段 - {time_desc}]")
+                memory_lines.append(chunk.content)
+                memory_lines.append("---")
+            state["recalled_memories"] = "\n".join(memory_lines)
+            logger.info("recall_memory_node | 用户=%s | 召回%d条相关记忆", username, len(recalled))
+        else:
+            state["recalled_memories"] = ""
+            logger.info("recall_memory_node | 用户=%s | 无相关记忆召回", username)
+
+    except Exception as e:
+        logger.warning("recall_memory_node | 记忆召回异常: %s", e)
+        state["recalled_memories"] = ""
 
     return state
 
@@ -214,64 +257,10 @@ def llm_decision_node(
     current_location = state.get("current_location", "未知")
     logger.info("llm_decision_node | 用户=%s | 步骤=%d | 位置=%s | 正在请求LLM决策", username, step_count, current_location)
 
-    # 检索相关记忆（使用完整上下文作为查询，与 build_decision_prompt 一致）
-    # 查询上下文包括：current_location + last_tool_result + action_history
-    import asyncio
-    config = get_memory_config()
-    if config.memory_enabled:
-        owner_id = state.get("user_id")
-        if owner_id:
-            try:
-                from agents.agents_scheduler.scheduler.time_system import get_time_system
-                ts = get_time_system()
-                current_time = ts.get_scaled_timestamp()
-
-                # 构建查询上下文（与 build_decision_prompt 保持一致）
-                context_parts = [current_location]
-
-                # 添加 last_tool_result
-                last_result = state.get("last_tool_result")
-                if last_result and isinstance(last_result, dict):
-                    action = last_result.get("action", "")
-                    if action:
-                        context_parts.append(action)
-
-                # 添加 action_history（工作记忆）的关键信息
-                action_history = state.get("action_history", [])
-                if action_history:
-                    for record in action_history[-3:]:  # 取最近 3 条
-                        summary = record.get("summary", "")
-                        action = record.get("action", "")
-                        if summary:
-                            context_parts.append(f"我{action}了：{summary[:30]}")
-                        elif action:
-                            context_parts.append(f"我{action}了")
-
-                query_context = "；".join(context_parts)
-
-                from agents.agents_scheduler.memory.service import get_memory_service
-                service = get_memory_service()
-                recalled = asyncio.run(service.recall_memories(
-                    owner_id=owner_id,
-                    context=query_context,
-                    current_time=current_time,
-                    limit=config.recall_limit
-                ))
-
-                # 构建记忆注入文本
-                if recalled:
-                    memory_lines = ["\n\n## 相关记忆"]
-                    for chunk, time_desc in recalled:
-                        memory_lines.append(f"[记忆片段 - {time_desc}]")
-                        memory_lines.append(chunk.content)
-                        memory_lines.append("---")
-                    state["recalled_memories"] = "\n".join(memory_lines)
-                    logger.info("llm_decision_node | 召回%d条相关记忆", len(recalled))
-                else:
-                    state["recalled_memories"] = ""
-            except Exception as e:
-                logger.warning("llm_decision_node | 记忆召回异常: %s", e)
-                state["recalled_memories"] = ""
+    # recalled_memories 已由 recall_memory_node 填充，直接使用
+    recalled_memories = state.get("recalled_memories", "")
+    if recalled_memories:
+        logger.info("llm_decision_node | 使用已召回的记忆")
 
     system_prompt = build_system_prompt(
         username=state["username"],
