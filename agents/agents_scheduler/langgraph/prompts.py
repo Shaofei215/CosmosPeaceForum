@@ -141,6 +141,29 @@ def _format_tool_result(result: Any) -> str:
     elif isinstance(result, str):
         return result
     elif isinstance(result, dict):
+        if "comment" in result and "post" in result:
+            comment = result.get("comment", {})
+            post = result.get("post", {})
+            replies = result.get("replies", [])
+            total = result.get("total", 0)
+
+            lines = []
+            lines.append("【评论详情】")
+            lines.extend(_format_comment_fields(comment, indent=""))
+
+            lines.append("\n【原帖子】")
+            lines.extend(_format_post_fields(post, indent=""))
+
+            if replies:
+                lines.append(f"\n【回复】(共{total}条，显示{len(replies)}条):")
+                for r in replies:
+                    lines.append("  - 回复")
+                    lines.extend(_format_comment_fields(r, indent="    "))
+            else:
+                lines.append(f"\n【回复】(共{total}条，暂无回复)")
+
+            return "\n".join(lines)
+
         if "post" in result:
             post = result.get("post", {})
             comments = result.get("comments", [])
@@ -148,22 +171,28 @@ def _format_tool_result(result: Any) -> str:
 
             lines = []
             lines.append("【帖子详情】")
-            lines.append(f"ID: {post.get('id', '?')}")
-            lines.append(f"作者: @{post.get('author_username', '?')}")
-            lines.append(f"作者签名: {post.get('author_bio', '')}")
-            lines.append(f"内容: {post.get('content', '')}")
-            lines.append(f"点赞: {post.get('like_count', 0)} | 评论数: {post.get('comment_count', 0)} | 已点赞: {post.get('is_liked', False)}")
-            lines.append(f"发布时间: {post.get('created_at', '')}")
-            if post.get("follow_status"):
-                lines.append(f"关注状态: {post.get('follow_status', '')}")
+            lines.extend(_format_post_fields(post, indent=""))
+
+            parent_comment = result.get("parent_comment")
+            if parent_comment:
+                lines.append("\n【父评论】")
+                lines.extend(_format_comment_fields(parent_comment, indent=""))
+
+            new_comment = result.get("new_comment")
+            if new_comment:
+                lines.append("\n【新评论】")
+                if isinstance(new_comment, dict) and (
+                    "author_id" in new_comment or "parent_id" in new_comment or "reply_count" in new_comment
+                ):
+                    lines.extend(_format_comment_fields(new_comment, indent=""))
+                else:
+                    lines.append(f"content / 评论内容: {new_comment.get('content', new_comment) if isinstance(new_comment, dict) else new_comment}")
 
             if comments:
                 lines.append(f"\n【评论】(共{total}条，显示{len(comments)}条):")
                 for c in comments:
-                    author_id = c.get("author_id", c.get("owner_id", "?"))
-                    created = c.get('created_at', '')[:19] if c.get('created_at') else ''
-                    lines.append(f"  [评论ID:{c.get('id', '?')}] @{c.get('author_username', '?')} (作者ID:{author_id}) [{created}]: {c.get('content', '')}")
-                    lines.append(f"    点赞:{c.get('like_count', 0)} | 回复:{c.get('reply_count', 0)} | 已点赞:{c.get('is_liked', False)}")
+                    lines.append("  - 评论")
+                    lines.extend(_format_comment_fields(c, indent="    "))
             else:
                 lines.append(f"\n【评论】(共{total}条，暂无评论)")
 
@@ -177,39 +206,10 @@ def _format_tool_result(result: Any) -> str:
             lines = ["【信息列表】"]
             for item in items[:5]:
                 if isinstance(item, dict):
-                    author_id = item.get("author_id", "?")
-                    lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', '?')} (作者ID:{author_id}): {item.get('content', '')[:50]}...")
-                    lines.append(f"  点赞:{item.get('like_count', 0)} | 评论:{item.get('comment_count', 0)} | 已点赞:{item.get('is_liked', False)}")
-                    if item.get("follow_status"):
-                        lines.append(f"  关注状态:{item.get('follow_status', '')}")
+                    lines.append("- 帖子")
+                    lines.extend(_format_post_fields(item, indent="  "))
                 else:
                     lines.append(str(item))
-            return "\n".join(lines)
-
-        elif "comment" in result and "post" in result:
-            comment = result.get("comment", {})
-            post = result.get("post", {})
-            replies = result.get("replies", [])
-            total = result.get("total", 0)
-
-            lines = []
-            lines.append("【评论详情】")
-            comment_author_id = comment.get("author_id", comment.get("owner_id", "?"))
-            comment_created = comment.get('created_at', '')[:19] if comment.get('created_at') else ''
-            lines.append(f"[评论ID:{comment.get('id', '?')}] @{comment.get('author_username', '?')} (作者ID:{comment_author_id}) [{comment_created}]: {comment.get('content', '')}")
-            lines.append(f"  点赞:{comment.get('like_count', 0)} | 回复:{comment.get('reply_count', 0)} | 已点赞:{comment.get('is_liked', False)}")
-
-            lines.append(f"\n【原帖子】ID:{post.get('id', '?')} @{post.get('author_username', '?')}: {post.get('content', '')[:50]}...")
-
-            if replies:
-                lines.append(f"\n【回复】(共{total}条，显示{len(replies)}条):")
-                for r in replies:
-                    reply_author_id = r.get("author_id", r.get("owner_id", "?"))
-                    reply_created = r.get('created_at', '')[:19] if r.get('created_at') else ''
-                    lines.append(f"  [ID:{r.get('id', '?')}] @{r.get('author_username', '?')} (作者ID:{reply_author_id}) [{reply_created}]: {r.get('content', '')}")
-            else:
-                lines.append(f"\n【回复】(共{total}条，暂无回复)")
-
             return "\n".join(lines)
 
         elif "user_id" in result or "username" in result:
@@ -229,7 +229,8 @@ def _format_tool_result(result: Any) -> str:
                 if posts:
                     lines.append("\n【最新帖子】:")
                     for p in posts:
-                        lines.append(f"  [ID:{p.get('id', '?')}] {p.get('content', '')[:50]}...")
+                        lines.append("  - 帖子")
+                        lines.extend(_format_post_fields(p, indent="    "))
             return "\n".join(lines)
 
         return str(result)[:500]
@@ -240,16 +241,48 @@ def _format_tool_result(result: Any) -> str:
         lines = []
         for item in result[:5]:
             if isinstance(item, dict):
-                author_id = item.get("author_id", item.get("owner_id", "?"))
-                created = item.get('created_at', '')[:19] if item.get('created_at') else ''
-                lines.append(f"[ID:{item.get('id', '?')}] @{item.get('author_username', '?')} (作者ID:{author_id}) [{created}]: {item.get('content', '')[:50]}...")
-                if "like_count" in item:
-                    lines.append(f"  点赞:{item.get('like_count', 0)} | 回复:{item.get('reply_count', 0)} | 已点赞:{item.get('is_liked', False)}")
+                if "comment_count" in item or "follow_status" in item:
+                    lines.append("- 帖子")
+                    lines.extend(_format_post_fields(item, indent="  "))
+                else:
+                    lines.append("- 评论")
+                    lines.extend(_format_comment_fields(item, indent="  "))
             else:
                 lines.append(str(item)[:50])
         return "\n".join(lines)
     else:
         return str(result)[:500]
+
+
+def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
+    """格式化标准化帖子字段，确保 LLM 能读取完整结构。"""
+    return [
+        f"{indent}id / 帖子ID: {post.get('id', '?')}",
+        f"{indent}author_id / 作者ID: {post.get('author_id', '?')}",
+        f"{indent}author_username / 作者用户名: @{post.get('author_username', '?')}",
+        f"{indent}author_bio / 作者签名: {post.get('author_bio', '')}",
+        f"{indent}content / 帖子内容: {post.get('content', '')}",
+        f"{indent}created_at / 创建时间: {post.get('created_at', '')}",
+        f"{indent}like_count / 点赞数: {post.get('like_count', 0)}",
+        f"{indent}comment_count / 评论数: {post.get('comment_count', 0)}",
+        f"{indent}is_liked / 当前用户是否已点赞: {post.get('is_liked', False)}",
+        f"{indent}follow_status / 当前用户对作者的关注状态: {post.get('follow_status', '')}",
+    ]
+
+
+def _format_comment_fields(comment: Dict[str, Any], indent: str = "") -> List[str]:
+    """格式化标准化评论字段，确保 LLM 能读取完整结构。"""
+    return [
+        f"{indent}id / 评论ID: {comment.get('id', '?')}",
+        f"{indent}author_id / 评论者ID: {comment.get('author_id', comment.get('owner_id', '?'))}",
+        f"{indent}author_username / 评论者用户名: @{comment.get('author_username', '?')}",
+        f"{indent}content / 评论内容: {comment.get('content', '')}",
+        f"{indent}created_at / 创建时间: {comment.get('created_at', '')}",
+        f"{indent}parent_id / 父评论ID: {comment.get('parent_id', '')}",
+        f"{indent}like_count / 点赞数: {comment.get('like_count', 0)}",
+        f"{indent}reply_count / 回复数: {comment.get('reply_count', 0)}",
+        f"{indent}is_liked / 当前用户是否已点赞: {comment.get('is_liked', False)}",
+    ]
 
 
 def build_summarize_system_prompt(
