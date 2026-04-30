@@ -202,6 +202,39 @@ export interface MemoryListResponse {
   total: number;
 }
 
+export interface MemoryOwnerSummary {
+  owner_id: number;
+  owner_username: string;
+  agent_id: number | null;
+  agent_name: string | null;
+  memory_count: number;
+  latest_system_timestamp: number;
+  latest_semantic_timestamp: number;
+  has_agent_config: boolean;
+}
+
+export interface MemoryOwnerListResponse {
+  items: MemoryOwnerSummary[];
+  total: number;
+}
+
+export interface MemoryUploadRequest {
+  owner_id: number;
+  content: string;
+  chunk_mode: 'auto' | 'llm';
+  semantic_time?: string;
+  memory_coefficient?: number;
+  personality_prompt?: string;
+}
+
+export interface MemoryBatchUploadRequest {
+  owner_ids: number[];
+  content: string;
+  chunk_mode: 'auto' | 'llm';
+  semantic_time?: string;
+  memory_coefficient?: number;
+}
+
 export interface TerminalLog {
   timestamp: string;
   level: string;

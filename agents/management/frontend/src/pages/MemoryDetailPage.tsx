@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { memoryApi, agentApi } from '@/shared/api/modules';
+import type { MemoryUploadRequest } from '@/shared/types/api';
 import {
   Button, Input, Textarea, Card, CardContent,
   Badge, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -39,6 +40,7 @@ export default function MemoryDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['memories', ownerId] });
       queryClient.invalidateQueries({ queryKey: ['memories-all'] });
+      queryClient.invalidateQueries({ queryKey: ['memory-owners'] });
       setDeleteId(null);
     },
   });
@@ -48,6 +50,7 @@ export default function MemoryDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['memories', ownerId] });
       queryClient.invalidateQueries({ queryKey: ['memories-all'] });
+      queryClient.invalidateQueries({ queryKey: ['memory-owners'] });
     },
   });
 
@@ -65,7 +68,7 @@ export default function MemoryDetailPage() {
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">
-            {agent?.name ?? '角色'}的记忆
+            {agent?.name ?? `User-${ownerIdNum}`}的记忆
           </h1>
           <p className="text-sm text-muted-foreground">
             共 {memories?.total ?? 0} 条记忆
@@ -213,11 +216,18 @@ function UploadDialog({
   const [personalityPrompt, setPersonalityPrompt] = useState('');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (open && agent?.personality_prompt) {
+      setPersonalityPrompt(agent.personality_prompt);
+    }
+  }, [agent?.personality_prompt, open]);
+
   const uploadMutation = useMutation({
-    mutationFn: (data: any) => memoryApi.uploadSingle(data),
+    mutationFn: (data: MemoryUploadRequest) => memoryApi.uploadSingle(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['memories', ownerId.toString()] });
       queryClient.invalidateQueries({ queryKey: ['memories-all'] });
+      queryClient.invalidateQueries({ queryKey: ['memory-owners'] });
       onOpenChange(false);
       setContent('');
       setSemanticTime('');
@@ -225,6 +235,17 @@ function UploadDialog({
       setChunkMode('auto');
       setPersonalityPrompt('');
       setError('');
+    },
+    onError: (err: unknown) => {
+      if (err instanceof Error) {
+        setError(err.message);
+        return;
+      }
+      if (typeof err === 'object' && err !== null && 'message' in err) {
+        setError(String((err as { message?: unknown }).message ?? '上传失败'));
+        return;
+      }
+      setError('上传失败');
     },
   });
 
@@ -239,19 +260,18 @@ function UploadDialog({
       return;
     }
 
-    const payload: Record<string, unknown> = {
+    const payload: MemoryUploadRequest = {
       owner_id: ownerId,
       content: content.trim(),
       chunk_mode: chunkMode,
+      memory_coefficient: coefficient,
     };
 
     if (chunkMode === 'auto') {
       payload.semantic_time = semanticTime;
-      payload.memory_coefficient = coefficient;
     } else {
       payload.personality_prompt = personalityPrompt.trim();
       if (semanticTime) payload.semantic_time = semanticTime;
-      payload.memory_coefficient = coefficient;
     }
 
     uploadMutation.mutate(payload);

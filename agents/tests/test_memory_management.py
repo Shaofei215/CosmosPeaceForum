@@ -13,6 +13,8 @@ import pytest
 import time
 from unittest.mock import patch, MagicMock
 import sys
+import shutil
+from pathlib import Path
 
 # ==================== MemoryChunk Dual Timestamp ====================
 
@@ -99,6 +101,40 @@ class TestMemoryChunkDualTimestamp:
         )
         assert chunk.semantic_timestamp == 0.0
         assert chunk.timestamp > 0
+
+    @pytest.mark.asyncio
+    async def test_memory_db_persists_semantic_timestamp(self):
+        """写入数据库后应保留 semantic_timestamp，管理端展示依赖该字段。"""
+        from agents.agents_scheduler.memory.database import MemoryDB
+
+        test_dir = Path("agents/tests/.tmp_memory_db_semantic").resolve()
+        if test_dir.exists():
+            shutil.rmtree(test_dir)
+        test_dir.mkdir(parents=True)
+
+        class TestConfig:
+            def get_memory_db_path(self):
+                return str(test_dir / "memories.db")
+
+        db = MemoryDB(TestConfig())
+        chunk = MemoryChunk(
+            id="semantic-test-id",
+            owner_id=999001,
+            content="用于测试语义时间持久化的记忆",
+            timestamp=1000.0,
+            memory_coefficient=0.85,
+            semantic_timestamp=1672531200.0,
+        )
+
+        try:
+            await db.add_memory(chunk)
+            retrieved = await db.get_memory(chunk.id)
+        finally:
+            db.close()
+            shutil.rmtree(test_dir)
+
+        assert retrieved is not None
+        assert retrieved.semantic_timestamp == 1672531200.0
 
 
 # ==================== Time Description From Date ====================
@@ -402,6 +438,50 @@ class TestLlmSmartChunk:
         assert len(result) == 1
         assert result[0]["content"] == "我今天学到了新知识"
         assert result[0]["memory_coefficient"] == 0.8
+
+    def test_extracts_raw_tool_calls_from_chat_message(self):
+        """兼容 ChatMessage.additional_kwargs 中的 OpenAI 原始 tool_calls。"""
+        import json
+        from langchain_core.messages import ChatMessage
+        from agents.management.backend.api.memories import _extract_chunked_memories
+
+        mock_memories = [
+            {"content": "我被原始 tool_calls 成功解析", "memory_coefficient": 0.82}
+        ]
+        response = ChatMessage(
+            role="assistant",
+            content="",
+            additional_kwargs={
+                "tool_calls": [
+                    {
+                        "id": "call_raw",
+                        "type": "function",
+                        "function": {
+                            "name": "chunk_memories",
+                            "arguments": json.dumps({"memories": mock_memories}, ensure_ascii=False),
+                        },
+                    }
+                ]
+            },
+        )
+
+        result = _extract_chunked_memories(response)
+
+        assert result == mock_memories
+
+    def test_extracts_json_content_fallback(self):
+        """工具调用不可用时，兼容模型直接返回 JSON。"""
+        from langchain_core.messages import ChatMessage
+        from agents.management.backend.api.memories import _extract_chunked_memories
+
+        response = ChatMessage(
+            role="assistant",
+            content='```json\n{"memories":[{"content":"我来自 JSON fallback","memory_coefficient":0.77}]}\n```',
+        )
+
+        result = _extract_chunked_memories(response)
+
+        assert result == [{"content": "我来自 JSON fallback", "memory_coefficient": 0.77}]
 
     def test_successful_chunking_multiple_memories(self):
         """成功调用 LLM 分块，返回多条记忆"""

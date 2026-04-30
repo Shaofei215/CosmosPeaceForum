@@ -5,8 +5,8 @@ import type {
   SystemConfig, OperationLogListResponse, MessageResponse,
   EmbeddingConfig, EmbeddingConfigCreate, EmbeddingConfigUpdate,
   ChunkModelConfig, ChunkModelConfigCreate, ChunkModelConfigUpdate,
-  MemoryChunk, MemoryListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
-  TerminalLogListResponse,
+  MemoryChunk, MemoryListResponse, MemoryOwnerListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
+  TerminalLog, TerminalLogListResponse,
 } from '@/shared/types/api';
 
 export const agentApi = {
@@ -118,8 +118,11 @@ export const memoryApi = {
     return apiClient.get<MemoryListResponse>(url);
   },
 
+  listOwners: () =>
+    apiClient.get<MemoryOwnerListResponse>('/memories/owners'),
+
   uploadSingle: (data: MemoryUploadRequest) =>
-    apiClient.post<MessageResponse>('/memories/upload', data),
+    apiClient.post<MessageResponse>('/memories/upload', data, { timeout: 300000 }),
 
   uploadBatch: (data: MemoryBatchUploadRequest) =>
     apiClient.post<MessageResponse>('/memories/upload-batch', data),

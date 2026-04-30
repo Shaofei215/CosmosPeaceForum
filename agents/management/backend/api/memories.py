@@ -4,8 +4,10 @@ Management Backend - 记忆管理路由
 
 import logging
 import asyncio
+import json
+import re
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import jieba
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -96,6 +98,89 @@ def chunk_memories(memories: list[dict]) -> list[dict]:
     return memories
 
 
+def _coerce_memories_payload(payload: Any) -> list[dict]:
+    """从工具参数或 JSON 响应中提取 memories 列表。"""
+    if isinstance(payload, dict):
+        memories = payload.get("memories", [])
+    elif isinstance(payload, list):
+        memories = payload
+    else:
+        return []
+
+    return [item for item in memories if isinstance(item, dict)]
+
+
+def _load_json_payload(raw: Any) -> Any:
+    if isinstance(raw, (dict, list)):
+        return raw
+    if not isinstance(raw, str):
+        return None
+
+    text = raw.strip()
+    if not text:
+        return None
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        try:
+            return json.loads(fenced.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    obj = re.search(r"(\{.*\})", text, re.DOTALL)
+    if obj:
+        try:
+            return json.loads(obj.group(1))
+        except json.JSONDecodeError:
+            return None
+
+    return None
+
+
+def _extract_chunked_memories(response: Any) -> list[dict]:
+    """
+    兼容不同 LangChain/OpenAI-compatible 返回形态。
+
+    优先使用 LangChain 标准 tool_calls，其次使用 additional_kwargs 里的 OpenAI
+    原始 tool_calls，最后兼容模型直接返回 JSON 的场景。
+    """
+    tool_calls = getattr(response, "tool_calls", None) or []
+
+    additional_kwargs = getattr(response, "additional_kwargs", None) or {}
+    if not tool_calls and isinstance(additional_kwargs, dict):
+        tool_calls = additional_kwargs.get("tool_calls", []) or []
+
+    for call in tool_calls:
+        args = None
+        if isinstance(call, dict):
+            args = call.get("args")
+            if args is None:
+                function = call.get("function") or {}
+                args = _load_json_payload(function.get("arguments"))
+        else:
+            args = getattr(call, "args", None)
+            if args is None:
+                function = getattr(call, "function", None)
+                args = _load_json_payload(getattr(function, "arguments", None))
+
+        memories = _coerce_memories_payload(args)
+        if memories:
+            return memories
+
+    content = getattr(response, "content", "")
+    if isinstance(content, list):
+        content = "\n".join(
+            part.get("text", "") if isinstance(part, dict) else str(part)
+            for part in content
+        )
+    return _coerce_memories_payload(_load_json_payload(content))
+
+
 async def _llm_smart_chunk(
     text: str,
     owner_id: int,
@@ -132,7 +217,8 @@ async def _llm_smart_chunk(
 2. 每条记忆上限 512 tokens
 3. 每个分块应是一个独立的语义单元，包含完整的上下文和人物关系叙事
 
-请调用 chunk_memories 工具，一次性传入所有分块后的记忆列表。"""
+请调用 chunk_memories 工具，一次性传入所有分块后的记忆列表。
+如果当前模型或服务不支持工具调用，请只返回 JSON：{"memories":[{"content":"...","memory_coefficient":0.85}]}。"""
 
     user_prompt = f"""【角色设定】
 {personality_prompt}
@@ -140,7 +226,7 @@ async def _llm_smart_chunk(
 【待分块文本】
 {text}
 
-请按照规则进行分块，并调用 chunk_memories 工具传入结果。"""
+请按照规则进行分块，并调用 chunk_memories 工具传入结果；如果无法调用工具，请只返回 JSON。"""
 
     try:
         llm_kwargs = {
@@ -156,26 +242,24 @@ async def _llm_smart_chunk(
         llm = ChatOpenAI(**llm_kwargs)
         llm_with_tools = llm.bind_tools([chunk_memories])
 
-        response = llm_with_tools.invoke([
+        messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
-        ])
+        ]
+        response = await asyncio.to_thread(llm_with_tools.invoke, messages)
 
-        if not response.tool_calls:
-            logger.error("LLM 未调用工具，返回内容: %s", response.content)
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="LLM 未返回有效的工具调用结果"
-            )
-
-        tool_call = response.tool_calls[0]
-        memories = tool_call["args"].get("memories", [])
+        memories = _extract_chunked_memories(response)
 
         if not memories:
-            logger.error("LLM 工具调用返回空记忆列表")
+            logger.error(
+                "LLM 未返回有效分块。response_type=%s content=%s additional_kwargs=%s",
+                type(response).__name__,
+                getattr(response, "content", ""),
+                getattr(response, "additional_kwargs", {}),
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="LLM 未返回有效的分块结果"
+                detail="LLM 未返回有效的工具调用或 JSON 分块结果"
             )
 
         return memories
@@ -227,6 +311,49 @@ def list_memories(
         })
 
     return {"items": items, "total": total}
+
+
+@router.get("/owners", response_model=dict)
+def list_memory_owners(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """获取记忆库中的 owner 汇总，直接以 memory DB 为数据源。"""
+    _, memory_db = _get_memory_service()
+    all_memories = memory_db._get_all_memories_sync()
+
+    agent_stmt = select(AgentConfig)
+    agents = db.exec(agent_stmt).all()
+    agent_map = {a.app_platform_user_id: a for a in agents if a.app_platform_user_id}
+
+    grouped = {}
+    for chunk in all_memories:
+        stat = grouped.setdefault(chunk.owner_id, {
+            "owner_id": chunk.owner_id,
+            "owner_username": f"User-{chunk.owner_id}",
+            "agent_id": None,
+            "agent_name": None,
+            "memory_count": 0,
+            "latest_system_timestamp": 0,
+            "latest_semantic_timestamp": 0,
+            "has_agent_config": False,
+        })
+        agent = agent_map.get(chunk.owner_id)
+        if agent:
+            stat["owner_username"] = agent.name or agent.username or f"User-{chunk.owner_id}"
+            stat["agent_id"] = agent.id
+            stat["agent_name"] = agent.name
+            stat["has_agent_config"] = True
+        stat["memory_count"] += 1
+        stat["latest_system_timestamp"] = max(stat["latest_system_timestamp"], chunk.timestamp)
+        stat["latest_semantic_timestamp"] = max(stat["latest_semantic_timestamp"], chunk.semantic_timestamp)
+
+    items = sorted(
+        grouped.values(),
+        key=lambda item: item["latest_system_timestamp"],
+        reverse=True,
+    )
+    return {"items": items, "total": len(items)}
 
 
 @router.post("/upload", response_model=dict)

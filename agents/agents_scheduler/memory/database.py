@@ -98,14 +98,15 @@ class MemoryDB:
         cursor = self._conn.cursor()
         cursor.execute(
             """
-            INSERT INTO memories (id, owner_id, content, timestamp, memory_coefficient)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO memories (id, owner_id, content, timestamp, semantic_timestamp, memory_coefficient)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 chunk.id,
                 chunk.owner_id,
                 chunk.content,
                 chunk.timestamp,
+                chunk.semantic_timestamp,
                 chunk.memory_coefficient,
             )
         )
@@ -157,12 +158,13 @@ class MemoryDB:
         cursor.execute(
             """
             UPDATE memories 
-            SET content = ?, timestamp = ?, memory_coefficient = ?
+            SET content = ?, timestamp = ?, semantic_timestamp = ?, memory_coefficient = ?
             WHERE id = ?
             """,
             (
                 chunk.content,
                 chunk.timestamp,
+                chunk.semantic_timestamp,
                 chunk.memory_coefficient,
                 chunk.id,
             )
