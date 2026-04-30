@@ -469,8 +469,8 @@ class TestLlmSmartChunk:
 
         assert result == mock_memories
 
-    def test_extracts_json_content_fallback(self):
-        """工具调用不可用时，兼容模型直接返回 JSON。"""
+    def test_rejects_json_content_without_tool_call(self):
+        """工具调用不可用时，即使返回 JSON 文本也不应视为有效结果。"""
         from langchain_core.messages import ChatMessage
         from agents.management.backend.api.memories import _extract_chunked_memories
 
@@ -481,7 +481,7 @@ class TestLlmSmartChunk:
 
         result = _extract_chunked_memories(response)
 
-        assert result == [{"content": "我来自 JSON fallback", "memory_coefficient": 0.77}]
+        assert result == []
 
     def test_successful_chunking_multiple_memories(self):
         """成功调用 LLM 分块，返回多条记忆"""

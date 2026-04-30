@@ -5,7 +5,6 @@ Management Backend - 记忆管理路由
 import logging
 import asyncio
 import json
-import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -123,31 +122,15 @@ def _load_json_payload(raw: Any) -> Any:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        pass
-
-    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
-    if fenced:
-        try:
-            return json.loads(fenced.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    obj = re.search(r"(\{.*\})", text, re.DOTALL)
-    if obj:
-        try:
-            return json.loads(obj.group(1))
-        except json.JSONDecodeError:
-            return None
-
-    return None
+        return None
 
 
 def _extract_chunked_memories(response: Any) -> list[dict]:
     """
     兼容不同 LangChain/OpenAI-compatible 返回形态。
 
-    优先使用 LangChain 标准 tool_calls，其次使用 additional_kwargs 里的 OpenAI
-    原始 tool_calls，最后兼容模型直接返回 JSON 的场景。
+    仅接受 LangChain 标准 tool_calls 或 additional_kwargs 里的 OpenAI
+    原始 tool_calls。普通文本/JSON 响应不视为有效分块结果。
     """
     tool_calls = getattr(response, "tool_calls", None) or []
 
@@ -172,13 +155,7 @@ def _extract_chunked_memories(response: Any) -> list[dict]:
         if memories:
             return memories
 
-    content = getattr(response, "content", "")
-    if isinstance(content, list):
-        content = "\n".join(
-            part.get("text", "") if isinstance(part, dict) else str(part)
-            for part in content
-        )
-    return _coerce_memories_payload(_load_json_payload(content))
+    return []
 
 
 async def _llm_smart_chunk(
@@ -217,8 +194,7 @@ async def _llm_smart_chunk(
 2. 每条记忆上限 512 tokens
 3. 每个分块应是一个独立的语义单元，包含完整的上下文和人物关系叙事
 
-请调用 chunk_memories 工具，一次性传入所有分块后的记忆列表。
-如果当前模型或服务不支持工具调用，请只返回 JSON：{"memories":[{"content":"...","memory_coefficient":0.85}]}。"""
+请调用 chunk_memories 工具，一次性传入所有分块后的记忆列表。"""
 
     user_prompt = f"""【角色设定】
 {personality_prompt}
@@ -226,7 +202,7 @@ async def _llm_smart_chunk(
 【待分块文本】
 {text}
 
-请按照规则进行分块，并调用 chunk_memories 工具传入结果；如果无法调用工具，请只返回 JSON。"""
+请按照规则进行分块，并调用 chunk_memories 工具传入结果。"""
 
     try:
         llm_kwargs = {
@@ -259,7 +235,7 @@ async def _llm_smart_chunk(
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="LLM 未返回有效的工具调用或 JSON 分块结果"
+                detail="LLM 未返回有效的工具调用分块结果"
             )
 
         return memories
