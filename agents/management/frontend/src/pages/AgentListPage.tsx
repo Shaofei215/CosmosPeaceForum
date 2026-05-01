@@ -8,7 +8,7 @@ import {
   DialogFooter, DialogDescription, Skeleton,
 } from '@/shared/components/ui';
 import {
-  Plus, Search, Eye, Edit, Trash2, RefreshCw, Upload, Loader2,
+  Plus, Search, Eye, Edit, Trash2, Upload, Loader2, Play, Square,
 } from 'lucide-react';
 import { ImportDialog } from '@/features/agents/components/ImportDialog';
 import { formatDate } from '@/shared/lib/format';
@@ -19,7 +19,11 @@ export default function AgentListPage() {
   const [search, setSearch] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [deleteAgentId, setDeleteAgentId] = useState<number | null>(null);
-  const [restartingId, setRestartingId] = useState<number | null>(null);
+  const [stoppingId, setStoppingId] = useState<number | null>(null);
+  const [startingId, setStartingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showBatchDelete, setShowBatchDelete] = useState(false);
+  const [batchProcessing, setBatchProcessing] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['agents'],
@@ -34,11 +38,19 @@ export default function AgentListPage() {
     },
   });
 
-  const restartMutation = useMutation({
-    mutationFn: (id: number) => agentApi.restart(id),
+  const stopMutation = useMutation({
+    mutationFn: (id: number) => agentApi.stop(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] });
-      setRestartingId(null);
+      setStoppingId(null);
+    },
+  });
+
+  const startMutation = useMutation({
+    mutationFn: (id: number) => agentApi.start(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      setStartingId(null);
     },
   });
 
@@ -47,13 +59,76 @@ export default function AgentListPage() {
            a.username.toLowerCase().includes(search.toLowerCase())
   ) ?? [];
 
-  const handleRestart = (id: number) => {
-    setRestartingId(id);
-    restartMutation.mutate(id);
+  const isAllSelected = filtered.length > 0 && selectedIds.size === filtered.length;
+  const isSomeSelected = selectedIds.size > 0 && selectedIds.size < filtered.length;
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(a => a.id)));
+    }
+  };
+
+  const toggleSelectOne = (id: number) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleStop = (id: number) => {
+    setStoppingId(id);
+    stopMutation.mutate(id);
+  };
+
+  const handleStart = (id: number) => {
+    setStartingId(id);
+    startMutation.mutate(id);
   };
 
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id);
+  };
+
+  const handleBatchStart = () => {
+    if (selectedIds.size === 0) return;
+    setBatchProcessing(true);
+    agentApi.batchStart(Array.from(selectedIds)).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      setSelectedIds(new Set());
+      setBatchProcessing(false);
+    }).catch(() => {
+      setBatchProcessing(false);
+    });
+  };
+
+  const handleBatchStop = () => {
+    if (selectedIds.size === 0) return;
+    setBatchProcessing(true);
+    agentApi.batchStop(Array.from(selectedIds)).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      setSelectedIds(new Set());
+      setBatchProcessing(false);
+    }).catch(() => {
+      setBatchProcessing(false);
+    });
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedIds.size === 0) return;
+    setBatchProcessing(true);
+    agentApi.batchDelete(Array.from(selectedIds)).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      setSelectedIds(new Set());
+      setShowBatchDelete(false);
+      setBatchProcessing(false);
+    }).catch(() => {
+      setBatchProcessing(false);
+    });
   };
 
   return (
@@ -69,6 +144,44 @@ export default function AgentListPage() {
           </Button>
         </div>
       </div>
+
+      {selectedIds.size > 0 && (
+        <Card className="mb-4 border-primary/20 bg-primary/5">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm">已选择 {selectedIds.size} 个 Agent</span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleBatchStart}
+                  disabled={batchProcessing}
+                >
+                  {batchProcessing ? <Loader2 size={14} className="animate-spin mr-1" /> : <Play size={14} className="mr-1" />}
+                  批量启动
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBatchStop}
+                  disabled={batchProcessing}
+                >
+                  {batchProcessing ? <Loader2 size={14} className="animate-spin mr-1" /> : <Square size={14} className="mr-1" />}
+                  批量停止
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setShowBatchDelete(true)}
+                  disabled={batchProcessing}
+                >
+                  <Trash2 size={14} className="mr-1" />
+                  批量删除
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search */}
       <Card className="mb-6">
@@ -99,6 +212,17 @@ export default function AgentListPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground w-12">
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        ref={el => {
+                          if (el) el.indeterminate = isSomeSelected;
+                        }}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                    </th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Agent</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">用户名</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">状态</th>
@@ -111,6 +235,14 @@ export default function AgentListPage() {
                 <tbody>
                   {filtered.map((agent) => (
                     <tr key={agent.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(agent.id)}
+                          onChange={() => toggleSelectOne(agent.id)}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Avatar src={null} alt={agent.name} size="sm" />
@@ -146,19 +278,37 @@ export default function AgentListPage() {
                           >
                             <Edit size={16} />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRestart(agent.id)}
-                            disabled={restartingId === agent.id}
-                            title="重启"
-                          >
-                            {restartingId === agent.id ? (
-                              <Loader2 size={16} className="animate-spin" />
-                            ) : (
-                              <RefreshCw size={16} />
-                            )}
-                          </Button>
+                          {agent.is_active ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleStop(agent.id)}
+                              disabled={stoppingId === agent.id}
+                              title="停止"
+                              className="text-orange-600 hover:text-orange-600"
+                            >
+                              {stoppingId === agent.id ? (
+                                <Loader2 size={16} className="animate-spin" />
+                              ) : (
+                                <Square size={16} />
+                              )}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleStart(agent.id)}
+                              disabled={startingId === agent.id}
+                              title="启动"
+                              className="text-green-600 hover:text-green-600"
+                            >
+                              {startingId === agent.id ? (
+                                <Loader2 size={16} className="animate-spin" />
+                              ) : (
+                                <Play size={16} />
+                              )}
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -201,6 +351,28 @@ export default function AgentListPage() {
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? '删除中...' : '删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch delete confirm dialog */}
+      <Dialog open={showBatchDelete} onOpenChange={() => setShowBatchDelete(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认批量删除</DialogTitle>
+            <DialogDescription>
+              确定要删除选中的 {selectedIds.size} 个 Agent 吗？此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBatchDelete(false)}>取消</Button>
+            <Button
+              variant="destructive"
+              onClick={handleBatchDelete}
+              disabled={batchProcessing}
+            >
+              {batchProcessing ? '删除中...' : '删除'}
             </Button>
           </DialogFooter>
         </DialogContent>

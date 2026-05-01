@@ -234,6 +234,110 @@ def restart_agent(
     return MessageResponse(message="Agent 重启请求已发送")
 
 
+@router.post("/{agent_id}/start", response_model=MessageResponse)
+def start_agent(
+    agent_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """启动单个 Agent"""
+    agent = agent_service.get_agent(db, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
+
+    agent_service.update_agent(db, agent_id, AgentUpdate(is_active=True))
+    notify_scheduler_reload("agent", agent_id, action="start")
+
+    create_log(db, current_admin.id, "start_agent", "agent", agent_id)
+
+    return MessageResponse(message="Agent 启动请求已发送")
+
+
+@router.post("/{agent_id}/stop", response_model=MessageResponse)
+def stop_agent(
+    agent_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """停止单个 Agent"""
+    agent = agent_service.get_agent(db, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
+
+    agent_service.update_agent(db, agent_id, AgentUpdate(is_active=False))
+    notify_scheduler_reload("agent", agent_id, action="stop")
+
+    create_log(db, current_admin.id, "stop_agent", "agent", agent_id)
+
+    return MessageResponse(message="Agent 停止请求已发送")
+
+
+@router.post("/batch-start", response_model=MessageResponse)
+def batch_start_agents(
+    agent_ids: list[int],
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """批量启动 Agent"""
+    started = 0
+    for agent_id in agent_ids:
+        agent = agent_service.get_agent(db, agent_id)
+        if not agent:
+            continue
+
+        agent_service.update_agent(db, agent_id, AgentUpdate(is_active=True))
+        notify_scheduler_reload("agent", agent_id, action="start")
+        started += 1
+
+    create_log(db, current_admin.id, "batch_start_agents", "agent", details=json.dumps({"count": started}))
+
+    return MessageResponse(message=f"已批量启动 {started} 个 Agent")
+
+
+@router.post("/batch-stop", response_model=MessageResponse)
+def batch_stop_agents(
+    agent_ids: list[int],
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """批量停止 Agent"""
+    stopped = 0
+    for agent_id in agent_ids:
+        agent = agent_service.get_agent(db, agent_id)
+        if not agent:
+            continue
+
+        agent_service.update_agent(db, agent_id, AgentUpdate(is_active=False))
+        notify_scheduler_reload("agent", agent_id, action="stop")
+        stopped += 1
+
+    create_log(db, current_admin.id, "batch_stop_agents", "agent", details=json.dumps({"count": stopped}))
+
+    return MessageResponse(message=f"已批量停止 {stopped} 个 Agent")
+
+
+@router.post("/batch-delete", response_model=MessageResponse)
+def batch_delete_agents(
+    agent_ids: list[int],
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """批量删除 Agent"""
+    deleted = 0
+    for agent_id in agent_ids:
+        agent = agent_service.get_agent(db, agent_id)
+        if not agent:
+            continue
+
+        notify_scheduler_reload("agent", agent_id, action="stop")
+        agent_service.delete_agent(db, agent_id)
+        deleted += 1
+
+    create_log(db, current_admin.id, "batch_delete_agents", "agent", details=json.dumps({"count": deleted}))
+
+    return MessageResponse(message=f"已批量删除 {deleted} 个 Agent")
+
+
 @router.post("/import", response_model=AgentListResponse)
 async def import_agents(
     file: UploadFile = File(...),
