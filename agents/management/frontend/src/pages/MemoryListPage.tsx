@@ -138,6 +138,7 @@ function BatchUploadDialog({
   const [chunkMode, setChunkMode] = useState<'auto' | 'llm' | 'none'>('auto');
   const [memoryType, setMemoryType] = useState<'normal' | 'static'>('normal');
   const [staticCoefficient, setStaticCoefficient] = useState(0.7);
+  const [enableRagOnChunking, setEnableRagOnChunking] = useState(true);
   const [error, setError] = useState('');
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -166,6 +167,7 @@ function BatchUploadDialog({
     setChunkMode('auto');
     setMemoryType('normal');
     setStaticCoefficient(0.7);
+    setEnableRagOnChunking(true);
     setError('');
     setUploadResults([]);
     setProgress(null);
@@ -221,6 +223,7 @@ function BatchUploadDialog({
         }
         payload.personality_prompt = agent.personality_prompt.trim();
         if (semanticTime) payload.semantic_time = semanticTime;
+        payload.enable_rag_on_chunking = enableRagOnChunking;
       }
 
       try {
@@ -382,7 +385,7 @@ function BatchUploadDialog({
                   disabled={uploading}
                 />
                 <p className="text-xs text-muted-foreground">
-                  选择记忆实际产生的时间，用于理解时序关系和衰减计算
+                  选择记忆实际产生的时间，用于理解时序关系
                 </p>
               </div>
             )}
@@ -396,10 +399,13 @@ function BatchUploadDialog({
                   onChange={(e) => setSemanticTime(e.target.value)}
                   disabled={uploading}
                 />
+                <p className="text-xs text-muted-foreground">
+                  选择记忆实际产生的时间，用于理解时序关系
+                </p>
               </div>
             )}
 
-            {memoryType === 'normal' && (
+            {memoryType === 'normal' && chunkMode !== 'llm' && (
               <div className="space-y-2">
                 <label className="text-sm font-medium">记忆系数 (0.0 - 1.0)</label>
                 <input
@@ -420,7 +426,22 @@ function BatchUploadDialog({
 
             {memoryType === 'static' && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">记忆系数 (0.0 - 1.0，恒定不变)</label>
+                <label className="text-sm font-medium">记忆发生时间（可选）</label>
+                <Input
+                  type="datetime-local"
+                  value={semanticTime}
+                  onChange={(e) => setSemanticTime(e.target.value)}
+                  disabled={uploading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  选择记忆实际产生的时间，用于理解时序关系
+                </p>
+              </div>
+            )}
+
+            {memoryType === 'static' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">记忆系数 (0.0 - 1.0)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -431,13 +452,26 @@ function BatchUploadDialog({
                   disabled={uploading}
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 />
+                <p className="text-xs text-muted-foreground">
+                  记忆系数设定后将保持恒定不变
+                </p>
               </div>
             )}
 
             {chunkMode === 'llm' && (
-              <div className="p-3 text-xs text-muted-foreground bg-muted rounded-md">
-                <p>LLM 智能分块会逐个角色处理，长文本可能需要较长时间。</p>
-                <p className="mt-1">未配置个性提示词的角色将被跳过并显示为失败。</p>
+              <div className="flex items-center gap-2 p-3 border rounded-md">
+                <input
+                  type="checkbox"
+                  checked={enableRagOnChunking}
+                  onChange={(e) => setEnableRagOnChunking(e.target.checked)}
+                  className="accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium">LLM 分块时启用 RAG</p>
+                  <p className="text-xs text-muted-foreground">
+                    分块前召回已有静态记忆作为参考
+                  </p>
+                </div>
               </div>
             )}
           </div>

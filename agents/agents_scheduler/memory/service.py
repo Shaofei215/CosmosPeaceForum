@@ -228,6 +228,173 @@ class MemoryService:
         logger.info("记忆召回成功: 查询='%s...', 召回%d条", context[:20], len(result))
         return result
 
+    async def recall_memories_with_time_filter(
+        self,
+        owner_id: int,
+        context: str,
+        max_semantic_timestamp: float,
+        limit: Optional[int] = None
+    ) -> List[Tuple[MemoryChunk, str]]:
+        """
+        混合检索召回记忆（带时间过滤，用于 LLM 分块场景）
+
+        与 recall_static_memories 的区别：
+        1. 召回所有类型的记忆（normal + static），不仅限于 static
+        2. 过滤掉 semantic_timestamp 大于 max_semantic_timestamp 的记忆
+        3. 不触发 boost 唤醒机制，不改变记忆系数
+
+        Args:
+            owner_id: 所属用户 ID
+            context: 查询上下文（用于检索）
+            max_semantic_timestamp: 最大语义时间戳，仅召回此时间之前的记忆
+            limit: 召回数量限制（可选，默认使用配置值）
+
+        Returns:
+            List[Tuple[MemoryChunk, str]]: 记忆分块和时间描述列表
+        """
+        if not self.config.memory_enabled:
+            return []
+
+        limit = limit or self.config.recall_limit
+        ts = get_time_system()
+        current_time = ts.get_scaled_timestamp()
+
+        # 1. 向量检索 - 语义相似
+        vector_results = []
+        try:
+            query_embedding = await self.embedding_model.get_embedding(context)
+            vector_results = self.vector_store.query(
+                query_embedding=query_embedding,
+                owner_id=owner_id,
+                n_results=self.config.recall_vector_results
+            )
+        except Exception as e:
+            logger.warning("向量检索失败: %s", e)
+
+        # 2. BM25 检索 - 关键词匹配
+        bm25_results = []
+        try:
+            bm25_results = self.bm25_index.search(
+                query=context,
+                owner_id=owner_id,
+                limit=self.config.recall_bm25_results
+            )
+        except Exception as e:
+            logger.warning("BM25检索失败: %s", e)
+
+        # 3. 并集去重
+        all_ids = set()
+        for r in vector_results:
+            all_ids.add(r["id"])
+        for r in bm25_results:
+            all_ids.add(r["id"])
+
+        # 4. 获取实际数据，过滤出时间符合条件的记忆 + 系数过滤
+        all_memories = []
+        for memory_id in all_ids:
+            chunk = await self.db.get_memory(memory_id)
+            if (chunk
+                    and chunk.semantic_timestamp <= max_semantic_timestamp
+                    and chunk.memory_coefficient >= self.config.threshold):
+                all_memories.append(chunk)
+
+        # 5. 按系数降序排序
+        all_memories.sort(key=lambda x: x.memory_coefficient, reverse=True)
+
+        # 6. 生成结果（不触发 boost）
+        result = []
+        for chunk in all_memories[:limit]:
+            if chunk.semantic_timestamp > 0 and chunk.semantic_timestamp > 1000000:
+                time_desc = calculate_time_description_from_date(chunk.semantic_timestamp)
+            else:
+                time_desc = calculate_time_description(chunk.timestamp, current_time)
+            result.append((chunk, time_desc))
+
+        logger.info("时间过滤记忆召回成功: 查询='%s...', 召回%d条", context[:20], len(result))
+        return result
+
+    async def recall_static_memories(
+        self,
+        owner_id: int,
+        context: str,
+        limit: Optional[int] = None
+    ) -> List[Tuple[MemoryChunk, str]]:
+        """
+        混合检索召回静态记忆（用于 LLM 分块场景）
+
+        与 recall_memories 的区别：
+        1. 只召回 memory_type="static" 的记忆
+        2. 不触发 boost 唤醒机制，不改变记忆系数
+
+        Args:
+            owner_id: 所属用户 ID
+            context: 查询上下文（用于检索）
+            limit: 召回数量限制（可选，默认使用配置值）
+
+        Returns:
+            List[Tuple[MemoryChunk, str]]: 记忆分块和时间描述列表
+        """
+        if not self.config.memory_enabled:
+            return []
+
+        limit = limit or self.config.recall_limit
+        ts = get_time_system()
+        current_time = ts.get_scaled_timestamp()
+
+        # 1. 向量检索 - 语义相似
+        vector_results = []
+        try:
+            query_embedding = await self.embedding_model.get_embedding(context)
+            vector_results = self.vector_store.query(
+                query_embedding=query_embedding,
+                owner_id=owner_id,
+                n_results=self.config.recall_vector_results
+            )
+        except Exception as e:
+            logger.warning("向量检索失败: %s", e)
+
+        # 2. BM25 检索 - 关键词匹配
+        bm25_results = []
+        try:
+            bm25_results = self.bm25_index.search(
+                query=context,
+                owner_id=owner_id,
+                limit=self.config.recall_bm25_results
+            )
+        except Exception as e:
+            logger.warning("BM25检索失败: %s", e)
+
+        # 3. 并集去重
+        all_ids = set()
+        for r in vector_results:
+            all_ids.add(r["id"])
+        for r in bm25_results:
+            all_ids.add(r["id"])
+
+        # 4. 获取实际数据，过滤出静态记忆 + 系数过滤
+        all_memories = []
+        for memory_id in all_ids:
+            chunk = await self.db.get_memory(memory_id)
+            if (chunk
+                    and chunk.memory_type == "static"
+                    and chunk.memory_coefficient >= self.config.threshold):
+                all_memories.append(chunk)
+
+        # 5. 按系数降序排序
+        all_memories.sort(key=lambda x: x.memory_coefficient, reverse=True)
+
+        # 6. 生成结果（静态记忆不触发 boost）
+        result = []
+        for chunk in all_memories[:limit]:
+            if chunk.semantic_timestamp > 0 and chunk.semantic_timestamp > 1000000:
+                time_desc = calculate_time_description_from_date(chunk.semantic_timestamp)
+            else:
+                time_desc = calculate_time_description(chunk.timestamp, current_time)
+            result.append((chunk, time_desc))
+
+        logger.info("静态记忆召回成功: 查询='%s...', 召回%d条", context[:20], len(result))
+        return result
+
     async def decay_memories(self, decay_rate: Optional[float] = None) -> List[str]:
         """
         记忆衰减
