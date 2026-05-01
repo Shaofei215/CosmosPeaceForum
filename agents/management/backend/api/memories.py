@@ -163,7 +163,6 @@ async def _llm_smart_chunk(
     owner_id: int,
     personality_prompt: str,
     semantic_timestamp: float,
-    memory_coefficient: float,
     db: Session,
     enable_rag_on_chunking: bool = True,
 ) -> list[dict]:
@@ -175,7 +174,6 @@ async def _llm_smart_chunk(
         owner_id: 记忆所有者 ID
         personality_prompt: 角色个性提示词
         semantic_timestamp: 语义时间戳
-        memory_coefficient: 默认记忆系数
         db: 数据库会话
         enable_rag_on_chunking: 是否在分块时启用 RAG 召回静态记忆
 
@@ -377,8 +375,8 @@ async def upload_memory(
     {
         "owner_id": 1,
         "content": "长文本...",
-        "semantic_time": "2023-01-15T10:30:00",     // 普通记忆必填，静态记忆可选
-        "memory_coefficient": 0.85,                // 自动分块/不分块模式需要
+        "semantic_time": "2023-01-15T10:30:00",     // 动态记忆必填，静态记忆可选
+        "memory_coefficient": 0.85,                // 自动分块/不分块模式需要，LLM分块不需要（由LLM自动分配）
         "chunk_mode": "auto" | "llm" | "none",     // none 表示不分块直接存入
         "memory_type": "normal" | "static",        // 静态记忆不参与衰减与唤醒
         "personality_prompt": "...",               // 仅 LLM 分块模式需要
@@ -432,19 +430,17 @@ async def upload_memory(
         chunks = _auto_chunk_text(content)
         chunk_data_list = [{"content": c, "memory_coefficient": float(memory_coefficient)} for c in chunks]
 
-    # LLM 智能分块模式：必须提供 personality_prompt
+    # LLM 智能分块模式：必须提供 personality_prompt，记忆系数由 LLM 自动分配
     elif chunk_mode == "llm":
         personality_prompt = request.get("personality_prompt", "").strip()
         if not personality_prompt:
             raise HTTPException(status_code=400, detail="LLM 分块模式必须提供 personality_prompt")
-        memory_coefficient = request.get("memory_coefficient", 0.85)
 
         chunk_data_list = await _llm_smart_chunk(
             text=content,
             owner_id=owner_id,
             personality_prompt=personality_prompt,
             semantic_timestamp=semantic_timestamp,
-            memory_coefficient=memory_coefficient,
             db=db,
             enable_rag_on_chunking=enable_rag_on_chunking,
         )
