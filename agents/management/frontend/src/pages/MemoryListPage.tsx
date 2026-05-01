@@ -45,6 +45,26 @@ export default function MemoryListPage() {
   });
 
   const configuredAgents = agents?.items.filter((a) => a.app_platform_user_id) ?? [];
+  
+  // 将记忆数据转换为以 owner_id 为 key 的映射表，方便查找
+  const memoryOwnerMap = new Map(
+    (memoryOwners?.items ?? []).map((owner) => [owner.owner_id, owner])
+  );
+
+  // 构建完整的 Agent 列表，包含记忆信息（即使没有记忆也会显示）
+  const agentsWithMemoryInfo = configuredAgents.map((agent) => {
+    const ownerId = agent.app_platform_user_id!;
+    const memoryInfo = memoryOwnerMap.get(ownerId);
+    return {
+      agent,
+      ownerId,
+      memoryCount: memoryInfo?.memory_count ?? 0,
+      latestSystemTimestamp: memoryInfo?.latest_system_timestamp ?? 0,
+      latestSemanticTimestamp: memoryInfo?.latest_semantic_timestamp ?? 0,
+      hasMemory: !!memoryInfo,
+    };
+  });
+
   const totalMemories = memoryOwners?.items.reduce((sum, owner) => sum + owner.memory_count, 0) ?? 0;
 
   if (agentsLoading || ownersLoading) {
@@ -66,7 +86,7 @@ export default function MemoryListPage() {
         <div>
           <h1 className="text-2xl font-bold">记忆管理</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            当前记忆库共有 {memoryOwners?.total ?? 0} 个 owner，{totalMemories} 条记忆
+            当前共有 {configuredAgents.length} 个角色，{memoryOwners?.total ?? 0} 个角色有记忆，{totalMemories} 条记忆
           </p>
         </div>
         <Button onClick={() => setBatchDialogOpen(true)}>
@@ -75,39 +95,40 @@ export default function MemoryListPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {memoryOwners?.items.map((owner) => (
+        {agentsWithMemoryInfo.map(({ agent, ownerId, memoryCount, latestSystemTimestamp, latestSemanticTimestamp, hasMemory }) => (
           <Card
-            key={owner.owner_id}
+            key={ownerId}
             className="cursor-pointer hover:border-primary transition-colors"
-            onClick={() => navigate(`/memories/${owner.owner_id}`)}
+            onClick={() => navigate(`/memories/${ownerId}`)}
           >
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-lg truncate">{owner.owner_username}</h3>
+                  <h3 className="font-semibold text-lg truncate">{agent.name || `User-${ownerId}`}</h3>
                   <div className="flex items-center gap-2 mt-2">
                     <Brain size={14} className="text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">{owner.memory_count} 条记忆</span>
+                    <span className="text-sm text-muted-foreground">{memoryCount} 条记忆</span>
                   </div>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                    <Clock size={12} />
-                    <span>最近: {formatTimestamp(owner.latest_semantic_timestamp || owner.latest_system_timestamp)}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">owner_id: {owner.owner_id}</p>
+                  {hasMemory ? (
+                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                      <Clock size={12} />
+                      <span>最近: {formatTimestamp(latestSemanticTimestamp || latestSystemTimestamp)}</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">暂无记忆，点击添加</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">owner_id: {ownerId}</p>
                 </div>
-                <Badge variant={owner.has_agent_config ? 'outline' : 'secondary'}>
-                  {owner.has_agent_config ? 'Agent' : '无配置'}
-                </Badge>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {memoryOwners?.items.length === 0 && (
+      {agentsWithMemoryInfo.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            记忆库暂无记录，可通过批量上传或进入指定 owner 页面添加
+            暂无已配置的角色，请先在 Agent 管理页创建角色
           </CardContent>
         </Card>
       )}
