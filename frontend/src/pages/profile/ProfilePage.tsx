@@ -10,7 +10,7 @@ import { useToggleFollow, useFollowStatus } from '@/features/follow';
 import { useAuthStore, useLogout } from '@/features/auth';
 import { PostCard } from '@/widgets/post-card';
 import { Avatar, Skeleton, Button } from '@/shared/components/ui';
-import { LogOut, UserPlus } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 /**
  * 用户资料页面组件
@@ -93,10 +93,10 @@ export default function ProfilePage() {
   const isCurrentUser = currentUser?.id === user.id;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* 用户资料卡片 */}
-      <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-6">
-        <div className="flex items-start gap-4">
+      <div className="rounded-lg bg-white shadow-sm p-5">
+        <div className="flex items-center gap-4">
           <Avatar
             src={user.avatar_url}
             alt={user.username}
@@ -111,7 +111,7 @@ export default function ProfilePage() {
                   size="sm"
                   onClick={handleFollow}
                   disabled={toggleFollow.isPending}
-                  className="gap-1"
+                  className="px-4"
                 >
                   {toggleFollow.isPending ? (
                     <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -120,10 +120,7 @@ export default function ProfilePage() {
                   ) : followStatus?.is_following ? (
                     "已关注"
                   ) : (
-                    <>
-                      <UserPlus className="h-4 w-4" />
-                      关注
-                    </>
+                    "关注"
                   )}
                 </Button>
               )}
@@ -163,37 +160,41 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* 用户帖子列表 */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">
+      {/* 用户帖子列表 - 包含在大容器中 */}
+      <div className="rounded-lg bg-white shadow-sm p-0">
+        <h2 className="text-lg font-semibold px-3 pt-3">
           {isCurrentUser ? '我的帖子' : `${user.username} 的帖子`}
         </h2>
 
         {isFeedLoading ? (
-          <>
+          <div className="divide-y divide-border/50">
             <PostCardSkeleton />
             <PostCardSkeleton />
-          </>
+          </div>
         ) : posts.length > 0 ? (
-          posts.map((post) => <PostCard key={post.id} post={post} />)
+          <div className="divide-y divide-border/50">
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
         ) : (
-          <div className="text-center py-12 text-muted-foreground">
+          <div className="text-center py-10 text-muted-foreground">
             暂无帖子
           </div>
         )}
-      </div>
 
-      {/* 加载更多 */}
-      <div ref={loadMoreRef} className="py-4 text-center">
-        {isFetchingNextPage && (
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-            加载中...
-          </div>
-        )}
-        {!hasNextPage && posts.length > 0 && (
-          <span className="text-muted-foreground text-sm">没有更多内容了</span>
-        )}
+        {/* 加载更多 */}
+        <div ref={loadMoreRef} className="py-3 text-center border-t border-border/50">
+          {isFetchingNextPage && (
+            <div className="flex items-center justify-center gap-2 text-muted-foreground">
+              <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+              加载中...
+            </div>
+          )}
+          {!hasNextPage && posts.length > 0 && (
+            <span className="text-muted-foreground text-sm">没有更多内容了</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -204,9 +205,9 @@ export default function ProfilePage() {
  */
 function ProfileSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-6">
-        <div className="flex items-start gap-4">
+    <div className="space-y-4">
+      <div className="rounded-lg bg-white shadow-sm p-5">
+        <div className="flex items-center gap-4">
           <Skeleton className="h-16 w-16 rounded-full" />
           <div className="flex-1 space-y-3">
             <Skeleton className="h-8 w-32" />

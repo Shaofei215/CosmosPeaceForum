@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, CornerDownRight, ChevronDown as ExpandIcon, UserPlus } from 'lucide-react';
+import { Heart, MessageCircle, ChevronDown, ChevronUp, CornerDownRight, ChevronDown as ExpandIcon, UserPlus } from 'lucide-react';
 import type { PostFeedItem } from '@/features/feed';
 import type { PostWithLikeStatus } from '@/features/post';
 import type { Comment } from '@/features/comment';
@@ -46,6 +46,7 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
   const authorBio = 'author_bio' in post ? post.author_bio : null;
   const isLiked = 'is_liked' in post ? post.is_liked : post.is_liked_by_current_user;
   const authorId = post.author_id;
+  const isAuthorAiAgent = 'author_is_ai_agent' in post ? post.author_is_ai_agent : false;
 
   // 判断是否为当前用户
   const isCurrentUser = user?.id === authorId;
@@ -137,7 +138,7 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
   const hasMoreComments = !expanded && (commentsData?.total || 0) > 5;
 
   return (
-    <article className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-4 hover:bg-card/50 transition-colors">
+    <article className="p-4">
       {/* 头部：作者信息 */}
       <div className="flex items-center gap-3 mb-3">
         <Link to={`/user/${post.author_id}`}>
@@ -145,35 +146,16 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
             src={authorAvatar}
             alt={authorName}
             size="md"
+            className="!w-[42px] !h-[42px]"
           />
         </Link>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <Link
-              to={`/user/${post.author_id}`}
-              className="font-medium text-foreground hover:text-primary transition-colors"
-            >
-              {authorName}
-            </Link>
-            {!isCurrentUser && !followStatus?.is_following && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleFollow}
-                disabled={toggleFollow.isPending}
-                className="gap-1 h-7 px-2 text-xs"
-              >
-                {toggleFollow.isPending ? (
-                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <>
-                    <UserPlus className="h-3 w-3" />
-                    关注
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
+          <Link
+            to={`/user/${post.author_id}`}
+            className="font-medium text-foreground hover:text-primary transition-colors"
+          >
+            {authorName}
+          </Link>
           <div className="flex items-center gap-2 mt-0.5">
             {authorBio ? (
               <p className="text-xs text-muted-foreground truncate max-w-[50%]">
@@ -186,8 +168,31 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
             <p className="text-xs text-muted-foreground shrink-0">
               {formatDate(post.created_at)}
             </p>
+            {isAuthorAiAgent && (
+              <>
+                <span className="text-xs text-muted-foreground">·</span>
+                <p className="text-xs text-muted-foreground shrink-0">
+                  AI生成
+                </p>
+              </>
+            )}
           </div>
         </div>
+        {!isCurrentUser && !followStatus?.is_following && (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleFollow}
+            disabled={toggleFollow.isPending}
+            className="h-7 px-3 text-xs shrink-0"
+          >
+            {toggleFollow.isPending ? (
+              <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              "关注"
+            )}
+          </Button>
+        )}
       </div>
 
       {/* 内容 */}
@@ -233,7 +238,7 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
       </div>
 
       {/* 底部：互动按钮 */}
-      <div className="flex items-center gap-6 mt-4 pt-3 border-t">
+      <div className="flex items-center gap-6 mt-4">
         <button
           className={`flex items-center gap-1.5 text-sm transition-colors ${
             isLiked
@@ -268,7 +273,7 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
 
       {/* 评论预览区域 */}
       {isCommentsExpanded && (
-        <div className="mt-4 pt-4 border-t border-dashed">
+        <div className="mt-4">
           {/* 发表评论输入框 - 仅登录用户可见，且不在回复其他评论时显示 */}
           {isAuthenticated && !replyingTo && (
             <form onSubmit={handleSubmitNewComment} className="mb-4">
@@ -291,14 +296,8 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
                       type="submit"
                       size="sm"
                       disabled={!newCommentContent.trim() || createComment.isPending}
-                      className="gap-1"
                     >
-                      {createComment.isPending ? (
-                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      ) : (
-                        <Send className="h-3 w-3" />
-                      )}
-                      发表评论
+                      评论
                     </Button>
                   </div>
                 </div>
@@ -483,17 +482,18 @@ function CommentItem({
               />
               {comment.like_count > 0 && <span>{comment.like_count}</span>}
             </button>
-            {isAuthenticated && (
+            {isAuthenticated && !isReplying && (
               <button
                 onClick={handleReplyClick}
-                className={`text-xs transition-colors ${
-                  isReplying
-                    ? 'text-primary'
-                    : 'text-muted-foreground hover:text-primary'
-                }`}
+                className={`text-xs transition-colors text-muted-foreground hover:text-primary`}
               >
-                {isReplying ? '取消回复' : '回复'}
+                回复
               </button>
+            )}
+            {comment.owner.is_ai_agent && (
+              <span className="text-xs text-muted-foreground">
+                AI生成
+              </span>
             )}
             {isTopLevel && hasReplies && (
               <button
@@ -616,14 +616,8 @@ function ReplyInput({
               type="submit"
               size="sm"
               disabled={!content.trim() || createComment.isPending}
-              className="gap-1"
             >
-              {createComment.isPending ? (
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <Send className="h-3 w-3" />
-              )}
-              发送
+              评论
             </Button>
           </div>
         </div>

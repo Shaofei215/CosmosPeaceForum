@@ -31,7 +31,7 @@
   --radius: 0.5rem;
 
   /* 浅色主题 - 默认 */
-  --background: 0 0% 100%;
+  --background: 220 14% 96%;
   --foreground: 222.2 84% 4.9%;
   --card: 0 0% 100%;
   --card-foreground: 222.2 84% 4.9%;
@@ -98,91 +98,18 @@ html {
   -webkit-text-size-adjust: 100%;
   -moz-tab-size: 4;
   tab-size: 4;
-  scroll-behavior: smooth;
 }
 
 body {
   font-family: var(--font-family-base);
   font-feature-settings: 'rlig' 1, 'calt' 1;
-  background-color: hsl(var(--background) / 0.7);
+  background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   position: relative;
   overflow-x: hidden;
-}
-
-/* ============================================
-   背景渐变色块 - 双蓝色渐变
-   ============================================ */
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    /* 左上角 - 深蓝紫色 */
-    radial-gradient(ellipse 100% 100% at 0% 0%, hsl(230 70% 55% / 0.55) 0%, transparent 45%),
-    /* 右上角 - 蓝色 */
-    radial-gradient(ellipse 100% 100% at 100% 0%, hsl(210 75% 60% / 0.5) 0%, transparent 45%),
-    /* 左下角 - 蓝色 */
-    radial-gradient(ellipse 100% 100% at 0% 100%, hsl(220 70% 62% / 0.5) 0%, transparent 45%),
-    /* 右下角 - 浅蓝色 */
-    radial-gradient(ellipse 100% 100% at 100% 100%, hsl(200 80% 65% / 0.55) 0%, transparent 45%),
-    /* 中心区域 - 柔和填充 */
-    radial-gradient(ellipse 70% 70% at 50% 50%, hsl(215 65% 65% / 0.25) 0%, transparent 50%),
-    /* 左上偏中 - 填充 */
-    radial-gradient(ellipse 90% 80% at 25% 25%, hsl(225 70% 58% / 0.35) 0%, transparent 45%),
-    /* 右上偏中 - 填充 */
-    radial-gradient(ellipse 90% 80% at 75% 25%, hsl(205 70% 62% / 0.35) 0%, transparent 45%),
-    /* 左下偏中 - 填充 */
-    radial-gradient(ellipse 90% 80% at 25% 75%, hsl(220 68% 60% / 0.35) 0%, transparent 45%),
-    /* 右下偏中 - 填充 */
-    radial-gradient(ellipse 90% 80% at 75% 75%, hsl(200 75% 63% / 0.35) 0%, transparent 45%),
-    /* 上中 - 填充 */
-    radial-gradient(ellipse 80% 60% at 50% 15%, hsl(215 70% 60% / 0.3) 0%, transparent 40%),
-    /* 下中 - 填充 */
-    radial-gradient(ellipse 80% 60% at 50% 85%, hsl(215 70% 60% / 0.3) 0%, transparent 40%),
-    /* 左中 - 填充 */
-    radial-gradient(ellipse 60% 80% at 15% 50%, hsl(225 68% 58% / 0.3) 0%, transparent 40%),
-    /* 右中 - 填充 */
-    radial-gradient(ellipse 60% 80% at 85% 50%, hsl(205 68% 62% / 0.3) 0%, transparent 40%);
-}
-
-/* 深色主题下的背景色块 */
-.dark body::before {
-  background:
-    /* 左上角 - 深蓝紫色 */
-    radial-gradient(ellipse 100% 100% at 0% 0%, hsl(230 70% 45% / 0.65) 0%, transparent 45%),
-    /* 右上角 - 蓝色 */
-    radial-gradient(ellipse 100% 100% at 100% 0%, hsl(210 75% 50% / 0.6) 0%, transparent 45%),
-    /* 左下角 - 蓝色 */
-    radial-gradient(ellipse 100% 100% at 0% 100%, hsl(220 70% 52% / 0.6) 0%, transparent 45%),
-    /* 右下角 - 浅蓝色 */
-    radial-gradient(ellipse 100% 100% at 100% 100%, hsl(200 80% 55% / 0.65) 0%, transparent 45%),
-    /* 中心区域 - 柔和填充 */
-    radial-gradient(ellipse 70% 70% at 50% 50%, hsl(215 65% 55% / 0.3) 0%, transparent 50%),
-    /* 左上偏中 - 填充 */
-    radial-gradient(ellipse 90% 80% at 25% 25%, hsl(225 70% 48% / 0.45) 0%, transparent 45%),
-    /* 右上偏中 - 填充 */
-    radial-gradient(ellipse 90% 80% at 75% 25%, hsl(205 70% 52% / 0.45) 0%, transparent 45%),
-    /* 左下偏中 - 填充 */
-    radial-gradient(ellipse 90% 80% at 25% 75%, hsl(220 68% 50% / 0.45) 0%, transparent 45%),
-    /* 右下偏中 - 填充 */
-    radial-gradient(ellipse 90% 80% at 75% 75%, hsl(200 75% 53% / 0.45) 0%, transparent 45%),
-    /* 上中 - 填充 */
-    radial-gradient(ellipse 80% 60% at 50% 15%, hsl(215 70% 50% / 0.4) 0%, transparent 40%),
-    /* 下中 - 填充 */
-    radial-gradient(ellipse 80% 60% at 50% 85%, hsl(215 70% 50% / 0.4) 0%, transparent 40%),
-    /* 左中 - 填充 */
-    radial-gradient(ellipse 60% 80% at 15% 50%, hsl(225 68% 48% / 0.4) 0%, transparent 40%),
-    /* 右中 - 填充 */
-    radial-gradient(ellipse 60% 80% at 85% 50%, hsl(205 68% 52% / 0.4) 0%, transparent 40%);
 }
 
 /* ============================================

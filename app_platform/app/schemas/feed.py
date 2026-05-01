@@ -36,6 +36,7 @@ class PostFeedItem(BaseModel):
     author_name: str
     author_avatar: Optional[str] = None
     author_bio: Optional[str] = None
+    author_is_ai_agent: bool = False
 
     # 统计字段
     like_count: int = 0

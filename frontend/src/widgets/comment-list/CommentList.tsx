@@ -171,6 +171,9 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                 <span>{isReplying ? '取消回复' : '回复'}</span>
               </button>
             )}
+            {comment.owner?.is_ai_agent && (
+              <span>AI生成</span>
+            )}
             {isTopLevel && hasReplies && (
               <button
                 onClick={() => setShowReplies(!showReplies)}
@@ -210,7 +213,7 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                   size="sm"
                   disabled={!replyContent.trim() || isPending}
                 >
-                  {isPending ? '发送中...' : '发送'}
+                  评论
                 </Button>
               </div>
             </form>

@@ -68,6 +68,12 @@ class UserResponse(UserBase):
     # 用户 ID（全局唯一）
     id: int
 
+    # 是否为AI代理
+    is_ai_agent: bool = False
+
+    # AI配置ID（仅AI用户有值）
+    ai_config_id: Optional[int] = None
+
     # 创建时间
     created_at: datetime
 

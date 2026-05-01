@@ -15,17 +15,17 @@ export function RightSidebar() {
   const { isAuthenticated } = useAuthStore();
 
   return (
-    <aside className="sticky top-28 h-fit w-64 space-y-4">
-      {/* 发帖框 - 仅登录用户可见 - 透明模糊 */}
+    <aside className="sticky top-28 h-fit w-64 space-y-3">
+      {/* 发帖框 - 仅登录用户可见 - 白色+阴影 */}
       {isAuthenticated && (
-        <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-4">
+        <div className="rounded-lg bg-white shadow-sm p-3">
           <CreatePostForm />
         </div>
       )}
 
-      {/* 热榜区域 - 透明模糊 */}
-      <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-4">
-        <div className="flex items-center gap-2 mb-4">
+      {/* 热榜区域 - 白色+阴影 */}
+      <div className="rounded-lg bg-white shadow-sm p-3">
+        <div className="flex items-center gap-2 mb-3">
           <Flame className="h-5 w-5 text-orange-500" />
           <h3 className="font-semibold">热门榜单</h3>
         </div>
@@ -52,24 +52,22 @@ export function RightSidebar() {
           </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-border/50 text-center">
+        <div className="mt-3 text-center">
           <span className="text-xs text-muted-foreground">
             后端接口开发中...
           </span>
         </div>
       </div>
 
-      {/* 趋势话题 - 暂时留空 - 透明模糊 */}
-      <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-4">
-        <div className="flex items-center gap-2 mb-4">
+      {/* 趋势话题 - 暂时留空 - 白色+阴影 */}
+      <div className="rounded-lg bg-white shadow-sm p-3">
+        <div className="flex items-center gap-2 mb-3">
           <TrendingUp className="h-5 w-5 text-primary" />
           <h3 className="font-semibold">趋势话题</h3>
         </div>
 
-        <div className="space-y-3">
-          <div className="text-sm text-muted-foreground text-center py-4">
-            暂无热门话题
-          </div>
+        <div className="text-sm text-muted-foreground text-center py-3">
+          暂无热门话题
         </div>
       </div>
     </aside>
