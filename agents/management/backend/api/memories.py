@@ -284,6 +284,7 @@ def list_memories(
             "semantic_timestamp": chunk.semantic_timestamp,
             "system_timestamp": chunk.timestamp,
             "memory_coefficient": chunk.memory_coefficient,
+            "memory_type": chunk.memory_type,
         })
 
     return {"items": items, "total": total}
@@ -339,22 +340,24 @@ async def upload_memory(
     current_admin: AdminUser = Depends(get_current_admin),
 ):
     """
-    上传记忆（单角色，支持自动分块与 LLM 智能分块）
+    上传记忆（单角色，支持自动分块、LLM 智能分块与不分块）
 
     请求体:
     {
         "owner_id": 1,
         "content": "长文本...",
-        "semantic_time": "2023-01-15T10:30:00",
-        "memory_coefficient": 0.85,        // 仅自动分块模式需要
-        "chunk_mode": "auto" | "llm",
-        "personality_prompt": "..."         // 仅 LLM 分块模式需要
+        "semantic_time": "2023-01-15T10:30:00",     // 普通记忆必填，静态记忆可选
+        "memory_coefficient": 0.85,                // 自动分块/不分块模式需要
+        "chunk_mode": "auto" | "llm" | "none",     // none 表示不分块直接存入
+        "memory_type": "normal" | "static",        // 静态记忆不参与衰减与唤醒
+        "personality_prompt": "..."                // 仅 LLM 分块模式需要
     }
     """
     owner_id = request.get("owner_id")
     content = request.get("content", "").strip()
     semantic_time = request.get("semantic_time", "")
     chunk_mode = request.get("chunk_mode", "auto")
+    memory_type = request.get("memory_type", "normal")
 
     if not owner_id:
         raise HTTPException(status_code=400, detail="owner_id 不能为空")
@@ -373,13 +376,25 @@ async def upload_memory(
     except ValueError:
         raise HTTPException(status_code=400, detail="无效的时间格式，请使用 ISO 格式 (e.g. 2023-01-15T10:30:00)")
 
-    # 自动分块模式：必须提供 memory_coefficient 和 semantic_time
-    if chunk_mode == "auto":
+    # 不分块模式：直接存入
+    if chunk_mode == "none":
+        memory_coefficient = request.get("memory_coefficient")
+        if memory_coefficient is None:
+            raise HTTPException(status_code=400, detail="不分块模式必须提供 memory_coefficient")
+
+        # 静态记忆的时间戳可选，普通记忆必须提供
+        if memory_type == "normal" and not semantic_time:
+            raise HTTPException(status_code=400, detail="普通记忆必须提供 semantic_time（记忆产生时间）")
+
+        chunk_data_list = [{"content": content, "memory_coefficient": float(memory_coefficient)}]
+
+    # 自动分块模式：必须提供 memory_coefficient 和 semantic_time（普通记忆）
+    elif chunk_mode == "auto":
         memory_coefficient = request.get("memory_coefficient")
         if memory_coefficient is None:
             raise HTTPException(status_code=400, detail="自动分块模式必须提供 memory_coefficient")
-        if not semantic_time:
-            raise HTTPException(status_code=400, detail="自动分块模式必须提供 semantic_time（记忆产生时间）")
+        if memory_type == "normal" and not semantic_time:
+            raise HTTPException(status_code=400, detail="普通记忆必须提供 semantic_time（记忆产生时间）")
 
         chunks = _auto_chunk_text(content)
         chunk_data_list = [{"content": c, "memory_coefficient": float(memory_coefficient)} for c in chunks]
@@ -400,7 +415,7 @@ async def upload_memory(
             db=db,
         )
     else:
-        raise HTTPException(status_code=400, detail="chunk_mode 必须为 auto 或 llm")
+        raise HTTPException(status_code=400, detail="chunk_mode 必须为 auto、llm 或 none")
 
     # 写入记忆
     service, _ = _get_memory_service()
@@ -417,13 +432,17 @@ async def upload_memory(
             owner_id=owner_id,
             memory_coefficient=float(chunk_coef),
             semantic_timestamp=semantic_timestamp,
+            memory_type=memory_type,
         )
         memory_ids.append(memory_id)
 
     create_log(db, current_admin.id, "upload_memory", "memory", owner_id)
 
+    chunk_mode_text = {"auto": "自动分块", "llm": "LLM 智能分块", "none": "不分块"}.get(chunk_mode, chunk_mode)
+    memory_type_text = {"normal": "普通记忆", "static": "静态记忆"}.get(memory_type, memory_type)
+
     return {
-        "message": f"成功上传 {len(memory_ids)} 条记忆分块",
+        "message": f"成功上传 {len(memory_ids)} 条记忆（{chunk_mode_text}，{memory_type_text}）",
         "memory_ids": memory_ids,
     }
 

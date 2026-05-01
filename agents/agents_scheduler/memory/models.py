@@ -3,7 +3,7 @@
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Literal
 
 from agents.agents_scheduler.scheduler.time_system import get_time_system
 
@@ -22,6 +22,7 @@ class MemoryChunk:
         timestamp: 系统时间戳（从 time_system 获取缩放时间，用于衰减计算）
         semantic_timestamp: 语义时间戳（记忆实际产生的时间，用于展示和上下文理解）
         memory_coefficient: 记忆系数 [0.0, 1.0]，越高记忆越重要越容易被想起
+        memory_type: 记忆类型，"normal" 为普通记忆（参与衰减与唤醒），"static" 为静态记忆（不参与衰减与唤醒，系数恒定）
     """
     id: str
     owner_id: int
@@ -29,6 +30,7 @@ class MemoryChunk:
     timestamp: float
     memory_coefficient: float
     semantic_timestamp: float = 0.0
+    memory_type: Literal["normal", "static"] = "normal"
 
     @classmethod
     def create(
@@ -37,6 +39,7 @@ class MemoryChunk:
         content: str,
         memory_coefficient: float = 0.85,
         semantic_timestamp: float = 0.0,
+        memory_type: Literal["normal", "static"] = "normal",
     ) -> "MemoryChunk":
         """
         创建新的记忆分块
@@ -48,6 +51,7 @@ class MemoryChunk:
             content: 记忆内容，第一人称叙事性描述
             memory_coefficient: 记忆系数 [0.0, 1.0]，默认 0.85
             semantic_timestamp: 语义时间戳，默认为 0 表示与 timestamp 相同
+            memory_type: 记忆类型，"normal" 为普通记忆，"static" 为静态记忆
 
         Returns:
             MemoryChunk: 新创建的记忆分块
@@ -63,6 +67,7 @@ class MemoryChunk:
             timestamp=system_ts,
             memory_coefficient=memory_coefficient,
             semantic_timestamp=semantic_timestamp,
+            memory_type=memory_type,
         )
 
     def to_dict(self) -> dict:
@@ -79,6 +84,7 @@ class MemoryChunk:
             "timestamp": self.timestamp,
             "semantic_timestamp": self.semantic_timestamp,
             "memory_coefficient": self.memory_coefficient,
+            "memory_type": self.memory_type,
         }
 
     @classmethod
@@ -99,6 +105,7 @@ class MemoryChunk:
             timestamp=data["timestamp"],
             memory_coefficient=data["memory_coefficient"],
             semantic_timestamp=data.get("semantic_timestamp", 0.0),
+            memory_type=data.get("memory_type", "normal"),
         )
 
     def __repr__(self) -> str:

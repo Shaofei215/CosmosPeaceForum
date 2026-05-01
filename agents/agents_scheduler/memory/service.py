@@ -64,6 +64,7 @@ class MemoryService:
         owner_id: int,
         memory_coefficient: float = 0.85,
         semantic_timestamp: float = 0.0,
+        memory_type: str = "normal",
     ) -> str:
         """
         写入记忆（三写同步）
@@ -75,6 +76,7 @@ class MemoryService:
             owner_id: 所属用户 ID
             memory_coefficient: 记忆系数 [0.0, 1.0]，默认 0.85
             semantic_timestamp: 语义时间戳，默认为 0 表示使用当前系统时间
+            memory_type: 记忆类型，"normal" 为普通记忆，"static" 为静态记忆
 
         Returns:
             str: 记忆 ID
@@ -85,6 +87,7 @@ class MemoryService:
             content=content,
             memory_coefficient=memory_coefficient,
             semantic_timestamp=semantic_timestamp,
+            memory_type=memory_type,
         )
 
         # 1. 写入 SQLite（主存储）
@@ -197,7 +200,7 @@ class MemoryService:
         # 5. 按系数降序排序
         all_memories.sort(key=lambda x: x.memory_coefficient, reverse=True)
 
-        # 6. 唤醒机制：召回时 boost 系数
+        # 6. 唤醒机制：召回时 boost 系数（静态记忆不参与唤醒）
         result = []
         for chunk in all_memories[:limit]:
             # 计算时间描述（优先使用语义时间戳）
@@ -206,18 +209,19 @@ class MemoryService:
             else:
                 time_desc = calculate_time_description(chunk.timestamp, current_time)
 
-            # 唤醒：boost 系数
-            new_coef = min(1.0, chunk.memory_coefficient + self.config.boost_factor)
-            if new_coef != chunk.memory_coefficient:
-                chunk.memory_coefficient = new_coef
-                await self.db.update_memory(chunk)
-                try:
-                    self.vector_store.update_vector(
-                        chunk.id,
-                        metadata={"memory_coefficient": new_coef}
-                    )
-                except Exception as e:
-                    logger.warning("更新向量元数据失败: %s", e)
+            # 唤醒：boost 系数（仅对普通记忆）
+            if chunk.memory_type == "normal":
+                new_coef = min(1.0, chunk.memory_coefficient + self.config.boost_factor)
+                if new_coef != chunk.memory_coefficient:
+                    chunk.memory_coefficient = new_coef
+                    await self.db.update_memory(chunk)
+                    try:
+                        self.vector_store.update_vector(
+                            chunk.id,
+                            metadata={"memory_coefficient": new_coef}
+                        )
+                    except Exception as e:
+                        logger.warning("更新向量元数据失败: %s", e)
 
             result.append((chunk, time_desc))
 
@@ -246,6 +250,10 @@ class MemoryService:
 
         deleted_ids = []
         for chunk in all_memories:
+            # 静态记忆不参与衰减，系数恒定不变
+            if chunk.memory_type == "static":
+                continue
+
             time_delta = current_time - chunk.timestamp
             # 衰减量与时间差成正比（按天计算）
             decay_amount = decay_rate * (time_delta / 86400)

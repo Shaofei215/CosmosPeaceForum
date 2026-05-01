@@ -8,7 +8,7 @@ import {
   Badge, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription,
 } from '@/shared/components/ui';
-import { Upload, Loader2, Brain, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Upload, Loader2, Brain, CheckCircle, AlertCircle, Clock, Archive } from 'lucide-react';
 
 type UploadResult = {
   ownerId: number;
@@ -135,7 +135,9 @@ function BatchUploadDialog({
   const [content, setContent] = useState('');
   const [semanticTime, setSemanticTime] = useState('');
   const [coefficient, setCoefficient] = useState(0.85);
-  const [chunkMode, setChunkMode] = useState<'auto' | 'llm'>('auto');
+  const [chunkMode, setChunkMode] = useState<'auto' | 'llm' | 'none'>('auto');
+  const [memoryType, setMemoryType] = useState<'normal' | 'static'>('normal');
+  const [staticCoefficient, setStaticCoefficient] = useState(0.95);
   const [error, setError] = useState('');
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -162,6 +164,8 @@ function BatchUploadDialog({
     setSemanticTime('');
     setCoefficient(0.85);
     setChunkMode('auto');
+    setMemoryType('normal');
+    setStaticCoefficient(0.95);
     setError('');
     setUploadResults([]);
     setProgress(null);
@@ -174,7 +178,8 @@ function BatchUploadDialog({
 
     if (selectedOwnerIds.length === 0) { setError('请至少选择一个角色'); return; }
     if (!content.trim()) { setError('请输入记忆内容'); return; }
-    if (chunkMode === 'auto' && !semanticTime) { setError('自动分块必须选择记忆发生时间'); return; }
+    if (chunkMode === 'auto' && memoryType === 'normal' && !semanticTime) { setError('普通记忆的自动分块模式必须选择记忆发生时间'); return; }
+    if (chunkMode === 'none' && memoryType === 'normal' && !semanticTime) { setError('普通记忆的不分块模式必须选择记忆发生时间'); return; }
     if (chunkMode === 'llm' && !agents.some((a) => selectedOwnerIds.includes(a.app_platform_user_id!) && a.personality_prompt?.trim())) {
       setError('LLM 分块模式下，至少一个被选角色需要配置个性提示词');
       return;
@@ -196,11 +201,18 @@ function BatchUploadDialog({
         owner_id: ownerId,
         content: content.trim(),
         chunk_mode: chunkMode,
-        memory_coefficient: coefficient,
+        memory_type: memoryType,
+        memory_coefficient: memoryType === 'static' ? staticCoefficient : coefficient,
       };
 
       if (chunkMode === 'auto') {
-        payload.semantic_time = semanticTime;
+        if (memoryType === 'normal') {
+          payload.semantic_time = semanticTime;
+        }
+      } else if (chunkMode === 'none') {
+        if (memoryType === 'normal') {
+          payload.semantic_time = semanticTime;
+        }
       } else {
         if (!agent?.personality_prompt?.trim()) {
           results.push({ ownerId, name: agentName, success: false, message: '未配置个性提示词' });
@@ -337,45 +349,108 @@ function BatchUploadDialog({
               <label className="text-sm font-medium">分块模式</label>
               <select
                 value={chunkMode}
-                onChange={(e) => setChunkMode(e.target.value as 'auto' | 'llm')}
+                onChange={(e) => setChunkMode(e.target.value as 'auto' | 'llm' | 'none')}
                 disabled={uploading}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
                 <option value="auto">自动分块（512 tokens, 50 重叠）</option>
                 <option value="llm">LLM 智能分块（使用角色个性提示词）</option>
+                <option value="none">不分块（直接存入原始文本）</option>
               </select>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                记忆发生时间 {chunkMode === 'auto' ? '*' : '（可选）'}
-              </label>
-              <Input
-                type="datetime-local"
-                value={semanticTime}
-                onChange={(e) => setSemanticTime(e.target.value)}
-                disabled={uploading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">记忆系数 (0.0 - 1.0)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                max="1"
-                value={coefficient}
-                onChange={(e) => setCoefficient(Number(e.target.value))}
+              <label className="text-sm font-medium">记忆类型</label>
+              <select
+                value={memoryType}
+                onChange={(e) => setMemoryType(e.target.value as 'normal' | 'static')}
                 disabled={uploading}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              />
+              >
+                <option value="normal">普通记忆（参与衰减与唤醒）</option>
+                <option value="static">静态记忆（不参与衰减与唤醒，适合世界观、角色设定等）</option>
+              </select>
             </div>
+
+            {memoryType === 'normal' && chunkMode !== 'llm' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">记忆发生时间 *</label>
+                <Input
+                  type="datetime-local"
+                  value={semanticTime}
+                  onChange={(e) => setSemanticTime(e.target.value)}
+                  disabled={uploading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  选择记忆实际产生的时间，用于理解时序关系和衰减计算
+                </p>
+              </div>
+            )}
+
+            {memoryType === 'normal' && chunkMode === 'llm' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">记忆发生时间（可选）</label>
+                <Input
+                  type="datetime-local"
+                  value={semanticTime}
+                  onChange={(e) => setSemanticTime(e.target.value)}
+                  disabled={uploading}
+                />
+              </div>
+            )}
+
+            {memoryType === 'normal' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">记忆系数 (0.0 - 1.0)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="1"
+                  value={coefficient}
+                  onChange={(e) => setCoefficient(Number(e.target.value))}
+                  disabled={uploading}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  初始记忆系数，后续会随时间衰减或被唤醒提升
+                </p>
+              </div>
+            )}
+
+            {memoryType === 'static' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  <Archive size={14} className="inline mr-1" />
+                  静态记忆系数 (0.0 - 1.0，恒定不变)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="1"
+                  value={staticCoefficient}
+                  onChange={(e) => setStaticCoefficient(Number(e.target.value))}
+                  disabled={uploading}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  静态记忆不参与衰减与唤醒，此系数将永久保持不变
+                </p>
+              </div>
+            )}
 
             {chunkMode === 'llm' && (
               <div className="p-3 text-xs text-muted-foreground bg-muted rounded-md">
                 <p>LLM 智能分块会逐个角色处理，长文本可能需要较长时间。</p>
                 <p className="mt-1">未配置个性提示词的角色将被跳过并显示为失败。</p>
+              </div>
+            )}
+
+            {memoryType === 'static' && (
+              <div className="p-3 text-xs text-amber-700 bg-amber-50 rounded-md border border-amber-200">
+                <p>静态记忆将不参与衰减与唤醒机制，记忆系数恒定不变。</p>
+                <p className="mt-1">适合存储世界观、人物角色设定等需要永久保留的记忆。</p>
               </div>
             )}
           </div>

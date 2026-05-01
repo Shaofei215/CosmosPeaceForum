@@ -8,7 +8,7 @@ import {
   Badge, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription,
 } from '@/shared/components/ui';
-import { ArrowLeft, Upload, Trash2, Loader2, Clock } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Loader2, Clock, Archive } from 'lucide-react';
 
 export default function MemoryDetailPage() {
   const { ownerId } = useParams<{ ownerId: string }>();
@@ -106,9 +106,20 @@ export default function MemoryDetailPage() {
                         <Badge variant="secondary">
                           系数: {mem.memory_coefficient.toFixed(2)}
                         </Badge>
+                        {mem.memory_type === 'static' && (
+                          <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                            <Archive size={12} className="mr-1" />
+                            静态记忆
+                          </Badge>
+                        )}
+                        {mem.memory_type !== 'static' && (
+                          <Badge variant="outline">
+                            普通记忆
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm mt-2 whitespace-pre-wrap">{mem.content}</p>
-                      {mem.semantic_timestamp > 0 && (
+                      {mem.semantic_timestamp > 0 && mem.semantic_timestamp > 1000000 && (
                         <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                           <Clock size={12} />
                           产生于: {formatTimestamp(mem.semantic_timestamp)}
@@ -212,7 +223,9 @@ function UploadDialog({
   const [content, setContent] = useState('');
   const [semanticTime, setSemanticTime] = useState('');
   const [coefficient, setCoefficient] = useState(0.85);
-  const [chunkMode, setChunkMode] = useState<'auto' | 'llm'>('auto');
+  const [chunkMode, setChunkMode] = useState<'auto' | 'llm' | 'none'>('auto');
+  const [memoryType, setMemoryType] = useState<'normal' | 'static'>('normal');
+  const [staticCoefficient, setStaticCoefficient] = useState(0.95);
   const [personalityPrompt, setPersonalityPrompt] = useState('');
   const [error, setError] = useState('');
 
@@ -233,6 +246,8 @@ function UploadDialog({
       setSemanticTime('');
       setCoefficient(0.85);
       setChunkMode('auto');
+      setMemoryType('normal');
+      setStaticCoefficient(0.95);
       setPersonalityPrompt('');
       setError('');
     },
@@ -254,7 +269,8 @@ function UploadDialog({
     setError('');
 
     if (!content.trim()) { setError('请输入记忆内容'); return; }
-    if (chunkMode === 'auto' && !semanticTime) { setError('自动分块必须选择记忆发生时间'); return; }
+    if (chunkMode === 'auto' && memoryType === 'normal' && !semanticTime) { setError('普通记忆的自动分块模式必须选择记忆发生时间'); return; }
+    if (chunkMode === 'none' && memoryType === 'normal' && !semanticTime) { setError('普通记忆的不分块模式必须选择记忆发生时间'); return; }
     if (chunkMode === 'llm' && !personalityPrompt.trim()) {
       setError('LLM 分块必须填写角色个性提示词');
       return;
@@ -264,11 +280,18 @@ function UploadDialog({
       owner_id: ownerId,
       content: content.trim(),
       chunk_mode: chunkMode,
-      memory_coefficient: coefficient,
+      memory_type: memoryType,
+      memory_coefficient: memoryType === 'static' ? staticCoefficient : coefficient,
     };
 
     if (chunkMode === 'auto') {
-      payload.semantic_time = semanticTime;
+      if (memoryType === 'normal') {
+        payload.semantic_time = semanticTime;
+      }
+    } else if (chunkMode === 'none') {
+      if (memoryType === 'normal') {
+        payload.semantic_time = semanticTime;
+      }
     } else {
       payload.personality_prompt = personalityPrompt.trim();
       if (semanticTime) payload.semantic_time = semanticTime;
@@ -303,15 +326,28 @@ function UploadDialog({
               <label className="text-sm font-medium">分块模式</label>
               <select
                 value={chunkMode}
-                onChange={(e) => setChunkMode(e.target.value as 'auto' | 'llm')}
+                onChange={(e) => setChunkMode(e.target.value as 'auto' | 'llm' | 'none')}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
                 <option value="auto">自动分块（512 tokens, 50 重叠）</option>
                 <option value="llm">LLM 智能分块</option>
+                <option value="none">不分块（直接存入原始文本）</option>
               </select>
             </div>
 
-            {chunkMode === 'auto' && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">记忆类型</label>
+              <select
+                value={memoryType}
+                onChange={(e) => setMemoryType(e.target.value as 'normal' | 'static')}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <option value="normal">普通记忆（参与衰减与唤醒）</option>
+                <option value="static">静态记忆（不参与衰减与唤醒，适合世界观、角色设定等）</option>
+              </select>
+            </div>
+
+            {memoryType === 'normal' && chunkMode !== 'llm' && (
               <>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">记忆发生时间 *</label>
@@ -321,7 +357,7 @@ function UploadDialog({
                     onChange={(e) => setSemanticTime(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    选择记忆实际产生的时间，用于理解时序关系
+                    选择记忆实际产生的时间，用于理解时序关系和衰减计算
                   </p>
                 </div>
 
@@ -336,11 +372,14 @@ function UploadDialog({
                     onChange={(e) => setCoefficient(Number(e.target.value))}
                     className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    初始记忆系数，后续会随时间衰减或被唤醒提升
+                  </p>
                 </div>
               </>
             )}
 
-            {chunkMode === 'llm' && (
+            {memoryType === 'normal' && chunkMode === 'llm' && (
               <>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">记忆发生时间（可选）</label>
@@ -374,6 +413,54 @@ function UploadDialog({
                   />
                 </div>
               </>
+            )}
+
+            {memoryType === 'static' && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    <Archive size={14} className="inline mr-1" />
+                    静态记忆系数 (0.0 - 1.0，恒定不变)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    value={staticCoefficient}
+                    onChange={(e) => setStaticCoefficient(Number(e.target.value))}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    静态记忆不参与衰减与唤醒，此系数将永久保持不变
+                  </p>
+                </div>
+
+                {chunkMode === 'llm' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">角色个性提示词 *</label>
+                    <Textarea
+                      value={personalityPrompt}
+                      onChange={(e) => setPersonalityPrompt(e.target.value)}
+                      placeholder="用于引导 LLM 进行第一人称、上下文完整的分块..."
+                      className="min-h-20"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            {chunkMode === 'llm' && (
+              <div className="p-3 text-xs text-muted-foreground bg-muted rounded-md">
+                <p>LLM 智能分块需要较长时间处理。</p>
+              </div>
+            )}
+
+            {memoryType === 'static' && (
+              <div className="p-3 text-xs text-amber-700 bg-amber-50 rounded-md border border-amber-200">
+                <p>静态记忆将不参与衰减与唤醒机制，记忆系数恒定不变。</p>
+                <p className="mt-1">适合存储世界观、人物角色设定等需要永久保留的记忆。</p>
+              </div>
             )}
           </div>
           <DialogFooter>

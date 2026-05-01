@@ -194,6 +194,7 @@ export interface MemoryChunk {
   semantic_timestamp: number;
   system_timestamp: number;
   memory_coefficient: number;
+  memory_type: 'normal' | 'static';
   created_at: string;
 }
 
@@ -221,7 +222,8 @@ export interface MemoryOwnerListResponse {
 export interface MemoryUploadRequest {
   owner_id: number;
   content: string;
-  chunk_mode: 'auto' | 'llm';
+  chunk_mode: 'auto' | 'llm' | 'none';
+  memory_type?: 'normal' | 'static';
   semantic_time?: string;
   memory_coefficient?: number;
   personality_prompt?: string;
@@ -230,7 +232,8 @@ export interface MemoryUploadRequest {
 export interface MemoryBatchUploadRequest {
   owner_ids: number[];
   content: string;
-  chunk_mode: 'auto' | 'llm';
+  chunk_mode: 'auto' | 'llm' | 'none';
+  memory_type?: 'normal' | 'static';
   semantic_time?: string;
   memory_coefficient?: number;
 }

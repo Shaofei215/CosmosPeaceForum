@@ -58,7 +58,8 @@ class MemoryDB:
                 content TEXT NOT NULL,
                 timestamp REAL NOT NULL,
                 semantic_timestamp REAL NOT NULL DEFAULT 0,
-                memory_coefficient REAL NOT NULL
+                memory_coefficient REAL NOT NULL,
+                memory_type TEXT NOT NULL DEFAULT 'normal'
             )
         """)
 
@@ -73,6 +74,12 @@ class MemoryDB:
 
         try:
             cursor.execute("ALTER TABLE memories ADD COLUMN semantic_timestamp REAL NOT NULL DEFAULT 0")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE memories ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'normal'")
             self._conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -98,8 +105,8 @@ class MemoryDB:
         cursor = self._conn.cursor()
         cursor.execute(
             """
-            INSERT INTO memories (id, owner_id, content, timestamp, semantic_timestamp, memory_coefficient)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO memories (id, owner_id, content, timestamp, semantic_timestamp, memory_coefficient, memory_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chunk.id,
@@ -108,6 +115,7 @@ class MemoryDB:
                 chunk.timestamp,
                 chunk.semantic_timestamp,
                 chunk.memory_coefficient,
+                chunk.memory_type,
             )
         )
         self._conn.commit()
