@@ -42,7 +42,7 @@ export function TopBar() {
   };
 
   return (
-    <div className="sticky top-6 z-40 rounded-[2rem] bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-4 mb-4">
+    <div className="sticky top-6 z-40 rounded-[2rem] bg-white shadow-sm p-4 mb-5">
       <div className="flex items-center gap-4">
         {/* 搜索框 */}
         <div className="relative flex-1">

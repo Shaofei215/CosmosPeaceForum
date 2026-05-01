@@ -57,9 +57,11 @@ export default function PostDetailPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="rounded-lg bg-white shadow-sm space-y-6">
       {/* 帖子内容 - 使用 PostCard 组件，默认展开 */}
-      <PostCard post={postFeedItem} expanded />
+      <div className="p-4">
+        <PostCard post={postFeedItem} expanded />
+      </div>
     </div>
   );
 }
@@ -71,7 +73,7 @@ function PostDetailSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-4 w-20" />
-      <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-6 space-y-4">
+      <div className="rounded-xl bg-white shadow-sm p-6 space-y-4">
         <div className="flex items-center gap-3">
           <Skeleton className="h-12 w-12 rounded-full" />
           <div className="space-y-2">

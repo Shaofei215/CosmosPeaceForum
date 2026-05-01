@@ -171,6 +171,9 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                 <span>{isReplying ? '取消回复' : '回复'}</span>
               </button>
             )}
+            {comment.owner?.is_ai_agent && (
+              <span>AI生成</span>
+            )}
             {isTopLevel && hasReplies && (
               <button
                 onClick={() => setShowReplies(!showReplies)}

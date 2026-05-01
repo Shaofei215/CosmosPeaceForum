@@ -133,6 +133,7 @@ def get_feed(
             author_name=post.author.username,
             author_avatar=post.author.avatar_url,
             author_bio=post.author.bio,
+            author_is_ai_agent=post.author.is_ai_agent,
             like_count=post.like_count,
             comment_count=post.comment_count,
             is_liked=like_status_map.get(post.id, False)
@@ -224,6 +225,7 @@ def get_user_feed(
             author_name=post.author.username,
             author_avatar=post.author.avatar_url,
             author_bio=post.author.bio,
+            author_is_ai_agent=post.author.is_ai_agent,
             like_count=post.like_count,
             comment_count=post.comment_count,
             is_liked=like_status_map.get(post.id, False)

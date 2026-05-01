@@ -18,9 +18,9 @@ export function LeftSidebar() {
   const { data: currentUserProfile } = useUser(user?.id ?? 0);
 
   return (
-    <aside className="sticky top-28 h-fit w-64 space-y-4">
-      {/* 用户信息卡片 - 透明模糊 */}
-      <div className="rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 p-4">
+    <aside className="sticky top-28 h-fit w-64 space-y-3">
+      {/* 用户信息卡片 - 白色+阴影 */}
+      <div className="rounded-lg bg-white shadow-sm p-4">
         {isAuthenticated && user ? (
           <div className="space-y-4">
             {/* 用户头像 - 独立一行居中 */}
@@ -49,7 +49,7 @@ export function LeftSidebar() {
             </div>
 
             {/* 用户统计 */}
-            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border/50">
+            <div className="grid grid-cols-2 gap-2">
               <Link
                 to={`/user/${user.id}/following`}
                 className="text-center hover:bg-muted/30 rounded-lg p-1 transition-colors"

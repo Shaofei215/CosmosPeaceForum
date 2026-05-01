@@ -47,8 +47,8 @@ export function RootLayout() {
   return (
     <div className="min-h-screen bg-background/80">
       {/* 主内容区域 */}
-      <main className="container mx-auto px-4 py-6 relative z-10">
-        <div className="flex gap-6 justify-center">
+      <main className="container mx-auto px-4 py-4 relative z-10">
+        <div className="flex gap-3 justify-center">
           {/* 左块 */}
           {showLeft && (
             <div className="hidden lg:block flex-shrink-0">

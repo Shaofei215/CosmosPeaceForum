@@ -48,27 +48,29 @@ export default function FeedPage() {
   const posts = data?.pages.flatMap((page) => page.data) || [];
 
   return (
-    <div className="space-y-4">
+    <div className="rounded-lg bg-white shadow-sm p-0">
       {/* 帖子列表 */}
       {isLoading ? (
         // 加载骨架屏
-        <>
+        <div className="divide-y divide-border/50">
           <PostCardSkeleton />
           <PostCardSkeleton />
           <PostCardSkeleton />
-        </>
+        </div>
       ) : posts.length > 0 ? (
-        posts.map((post) => (
-          <PostCard key={post.id} post={post} />
-        ))
+        <div className="divide-y divide-border/50">
+          {posts.map((post) => (
+            <PostCard key={post.id} post={post} />
+          ))}
+        </div>
       ) : (
-        <div className="text-center py-12 text-muted-foreground rounded-xl border bg-card p-8">
+        <div className="text-center py-10 text-muted-foreground">
           暂无帖子，快来发布第一条吧！
         </div>
       )}
 
       {/* 加载更多 */}
-      <div ref={loadMoreRef} className="py-4 text-center">
+      <div ref={loadMoreRef} className="py-3 text-center border-t border-border/50">
         {isFetchingNextPage && (
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />

@@ -54,26 +54,28 @@ export default function FollowersListPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold">粉丝</h2>
+    <div className="rounded-lg bg-white shadow-sm p-0">
+      <h2 className="text-lg font-semibold px-3 pt-3">粉丝</h2>
 
       {isLoading ? (
-        <>
+        <div className="divide-y divide-border/50">
           <UserItemSkeleton />
           <UserItemSkeleton />
           <UserItemSkeleton />
-        </>
+        </div>
       ) : followersList.length > 0 ? (
-        followersList.map((item) => (
-          <UserItem key={item.id} user={item} />
-        ))
+        <div className="divide-y divide-border/50">
+          {followersList.map((item) => (
+            <UserItem key={item.id} user={item} />
+          ))}
+        </div>
       ) : (
-        <div className="text-center py-12 text-muted-foreground rounded-xl border bg-card p-8">
+        <div className="text-center py-10 text-muted-foreground">
           暂无粉丝
         </div>
       )}
 
-      <div ref={loadMoreRef} className="py-4 text-center">
+      <div ref={loadMoreRef} className="py-3 text-center border-t border-border/50">
         {isFetchingNextPage && (
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
@@ -96,11 +98,11 @@ function UserItem({ user }: UserItemProps) {
   return (
     <Link
       to={`/user/${user.id}`}
-      className="flex items-center gap-3 p-3 rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 hover:bg-card/50 transition-colors"
+      className="flex items-center gap-3 px-3 py-2"
     >
       <Avatar src={user.avatar_url} alt={user.username} size="md" />
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-foreground hover:text-primary transition-colors">
+        <div className="font-medium text-foreground truncate">
           {user.username}
         </div>
         {user.bio && (
@@ -115,7 +117,7 @@ function UserItem({ user }: UserItemProps) {
 
 function UserItemSkeleton() {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-xl border bg-card p-4">
+    <div className="flex items-center gap-3 px-3 py-2">
       <Skeleton className="h-10 w-10 rounded-full" />
       <div className="flex-1 space-y-2">
         <Skeleton className="h-4 w-24" />
