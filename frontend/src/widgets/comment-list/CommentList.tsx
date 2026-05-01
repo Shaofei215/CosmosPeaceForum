@@ -213,7 +213,7 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                   size="sm"
                   disabled={!replyContent.trim() || isPending}
                 >
-                  {isPending ? '发送中...' : '发送'}
+                  评论
                 </Button>
               </div>
             </form>

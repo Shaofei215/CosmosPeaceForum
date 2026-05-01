@@ -42,7 +42,7 @@ export function CreatePostForm() {
         className="border-0 shadow-none bg-muted/30 focus-visible:ring-0 resize-none"
       />
       <div className="flex justify-end mt-3">
-        <Button type="submit" disabled={!content.trim() || isPending} size="sm">
+        <Button type="submit" disabled={!content.trim() || isPending} size="sm" className="px-4">
           {isPending ? '发布中...' : '发布'}
         </Button>
       </div>

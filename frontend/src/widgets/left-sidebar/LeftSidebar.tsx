@@ -73,7 +73,7 @@ export function LeftSidebar() {
             {/* 消息按钮 */}
             <Button
               variant="default"
-              className="w-full gap-2"
+              className="w-full gap-2 rounded-md"
               size="sm"
             >
               <MessageCircle className="h-4 w-4" />

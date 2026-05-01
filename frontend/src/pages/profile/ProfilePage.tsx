@@ -10,7 +10,7 @@ import { useToggleFollow, useFollowStatus } from '@/features/follow';
 import { useAuthStore, useLogout } from '@/features/auth';
 import { PostCard } from '@/widgets/post-card';
 import { Avatar, Skeleton, Button } from '@/shared/components/ui';
-import { LogOut, UserPlus } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 /**
  * 用户资料页面组件
@@ -111,7 +111,7 @@ export default function ProfilePage() {
                   size="sm"
                   onClick={handleFollow}
                   disabled={toggleFollow.isPending}
-                  className="gap-1"
+                  className="px-4"
                 >
                   {toggleFollow.isPending ? (
                     <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -120,10 +120,7 @@ export default function ProfilePage() {
                   ) : followStatus?.is_following ? (
                     "已关注"
                   ) : (
-                    <>
-                      <UserPlus className="h-4 w-4" />
-                      关注
-                    </>
+                    "关注"
                   )}
                 </Button>
               )}

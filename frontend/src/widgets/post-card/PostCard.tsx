@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, CornerDownRight, ChevronDown as ExpandIcon, UserPlus } from 'lucide-react';
+import { Heart, MessageCircle, ChevronDown, ChevronUp, CornerDownRight, ChevronDown as ExpandIcon, UserPlus } from 'lucide-react';
 import type { PostFeedItem } from '@/features/feed';
 import type { PostWithLikeStatus } from '@/features/post';
 import type { Comment } from '@/features/comment';
@@ -184,15 +184,12 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
             size="sm"
             onClick={handleFollow}
             disabled={toggleFollow.isPending}
-            className="gap-1 h-7 px-2 text-xs shrink-0"
+            className="h-7 px-3 text-xs shrink-0"
           >
             {toggleFollow.isPending ? (
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : (
-              <>
-                <UserPlus className="h-3 w-3" />
-                关注
-              </>
+              "关注"
             )}
           </Button>
         )}
@@ -299,14 +296,8 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
                       type="submit"
                       size="sm"
                       disabled={!newCommentContent.trim() || createComment.isPending}
-                      className="gap-1"
                     >
-                      {createComment.isPending ? (
-                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      ) : (
-                        <Send className="h-3 w-3" />
-                      )}
-                      发表评论
+                      评论
                     </Button>
                   </div>
                 </div>
@@ -491,16 +482,12 @@ function CommentItem({
               />
               {comment.like_count > 0 && <span>{comment.like_count}</span>}
             </button>
-            {isAuthenticated && (
+            {isAuthenticated && !isReplying && (
               <button
                 onClick={handleReplyClick}
-                className={`text-xs transition-colors ${
-                  isReplying
-                    ? 'text-primary'
-                    : 'text-muted-foreground hover:text-primary'
-                }`}
+                className={`text-xs transition-colors text-muted-foreground hover:text-primary`}
               >
-                {isReplying ? '取消回复' : '回复'}
+                回复
               </button>
             )}
             {comment.owner.is_ai_agent && (
@@ -629,14 +616,8 @@ function ReplyInput({
               type="submit"
               size="sm"
               disabled={!content.trim() || createComment.isPending}
-              className="gap-1"
             >
-              {createComment.isPending ? (
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <Send className="h-3 w-3" />
-              )}
-              发送
+              评论
             </Button>
           </div>
         </div>
