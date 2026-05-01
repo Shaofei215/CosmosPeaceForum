@@ -2,7 +2,7 @@
 # 统一管理三写同步、混合检索、衰减与唤醒机制
 
 import logging
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Literal
 from datetime import datetime
 
 from agents.agents_scheduler.memory.config import MemoryConfig, get_memory_config
@@ -64,7 +64,7 @@ class MemoryService:
         owner_id: int,
         memory_coefficient: float = 0.85,
         semantic_timestamp: float = 0.0,
-        memory_type: str = "normal",
+        memory_type: Literal["normal", "static"] = "normal",
     ) -> str:
         """
         写入记忆（三写同步）
