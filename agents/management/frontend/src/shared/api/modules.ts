@@ -28,6 +28,21 @@ export const agentApi = {
   restart: (id: number) =>
     apiClient.post<MessageResponse>(`/agents/${id}/restart`),
 
+  start: (id: number) =>
+    apiClient.post<MessageResponse>(`/agents/${id}/start`),
+
+  stop: (id: number) =>
+    apiClient.post<MessageResponse>(`/agents/${id}/stop`),
+
+  batchStart: (ids: number[]) =>
+    apiClient.post<MessageResponse>('/agents/batch-start', ids),
+
+  batchStop: (ids: number[]) =>
+    apiClient.post<MessageResponse>('/agents/batch-stop', ids),
+
+  batchDelete: (ids: number[]) =>
+    apiClient.post<MessageResponse>('/agents/batch-delete', ids),
+
   importAgents: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
