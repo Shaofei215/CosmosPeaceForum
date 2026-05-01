@@ -114,8 +114,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative z-10">
-      <Card className="w-full max-w-md rounded-xl bg-card/40 backdrop-blur-md supports-[backdrop-filter]:bg-card/30 border-0 shadow-none">
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">注册</CardTitle>
           <p className="text-sm text-muted-foreground text-center mt-2">
