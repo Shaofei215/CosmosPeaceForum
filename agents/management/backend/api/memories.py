@@ -175,7 +175,7 @@ async def _llm_smart_chunk(
         personality_prompt: 角色个性提示词
         semantic_timestamp: 语义时间戳
         db: 数据库会话
-        enable_rag_on_chunking: 是否在分块时启用 RAG 召回静态记忆
+        enable_rag_on_chunking: 是否在分块时启用 RAG 召回记忆
 
     Returns:
         list[dict]: 分块列表 [{"content": "...", "memory_coefficient": 0.85}, ...]
@@ -213,9 +213,10 @@ async def _llm_smart_chunk(
     if enable_rag_on_chunking:
         try:
             service, _ = _get_memory_service()
-            recalled = await service.recall_static_memories(
+            recalled = await service.recall_memories_with_time_filter(
                 owner_id=owner_id,
                 context=text[:500],
+                max_semantic_timestamp=semantic_timestamp,
                 limit=10,
             )
             if recalled:
@@ -224,7 +225,7 @@ async def _llm_smart_chunk(
                     static_lines.append(f"- [{chunk.memory_coefficient:.2f}] {chunk.content}")
                 static_memories_context = "\n\n【已有的相关记忆】\n" + "\n".join(static_lines) + "\n\n请参考以上已有记忆进行分块，系数越高表示该记忆越重要，避免生成重复内容。"
         except Exception as e:
-            logger.warning("召回静态记忆失败，继续不带 RAG 的分块: %s", e)
+            logger.warning("召回记忆失败，继续不带 RAG 的分块: %s", e)
 
     user_prompt = f"""【角色设定】
 {personality_prompt}
