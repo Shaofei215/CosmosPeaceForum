@@ -227,6 +227,7 @@ export interface MemoryUploadRequest {
   semantic_time?: string;
   memory_coefficient?: number;
   personality_prompt?: string;
+  enable_rag_on_chunking?: boolean;
 }
 
 export interface MemoryBatchUploadRequest {
@@ -236,6 +237,7 @@ export interface MemoryBatchUploadRequest {
   memory_type?: 'normal' | 'static';
   semantic_time?: string;
   memory_coefficient?: number;
+  enable_rag_on_chunking?: boolean;
 }
 
 export interface TerminalLog {

@@ -219,6 +219,7 @@ function UploadDialog({
   const [memoryType, setMemoryType] = useState<'normal' | 'static'>('normal');
   const [staticCoefficient, setStaticCoefficient] = useState(0.7);
   const [personalityPrompt, setPersonalityPrompt] = useState('');
+  const [enableRagOnChunking, setEnableRagOnChunking] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -241,6 +242,7 @@ function UploadDialog({
       setMemoryType('normal');
       setStaticCoefficient(0.7);
       setPersonalityPrompt('');
+      setEnableRagOnChunking(true);
       setError('');
     },
     onError: (err: unknown) => {
@@ -287,6 +289,7 @@ function UploadDialog({
     } else {
       payload.personality_prompt = personalityPrompt.trim();
       if (semanticTime) payload.semantic_time = semanticTime;
+      payload.enable_rag_on_chunking = enableRagOnChunking;
     }
 
     uploadMutation.mutate(payload);
@@ -439,8 +442,19 @@ function UploadDialog({
             )}
 
             {chunkMode === 'llm' && (
-              <div className="p-3 text-xs text-muted-foreground bg-muted rounded-md">
-                <p>LLM 智能分块需要较长时间处理。</p>
+              <div className="flex items-center gap-2 p-3 border rounded-md">
+                <input
+                  type="checkbox"
+                  checked={enableRagOnChunking}
+                  onChange={(e) => setEnableRagOnChunking(e.target.checked)}
+                  className="accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium">LLM 分块时启用 RAG</p>
+                  <p className="text-xs text-muted-foreground">
+                    分块前召回已有静态记忆作为参考
+                  </p>
+                </div>
               </div>
             )}
           </div>

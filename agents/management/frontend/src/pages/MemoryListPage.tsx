@@ -138,6 +138,7 @@ function BatchUploadDialog({
   const [chunkMode, setChunkMode] = useState<'auto' | 'llm' | 'none'>('auto');
   const [memoryType, setMemoryType] = useState<'normal' | 'static'>('normal');
   const [staticCoefficient, setStaticCoefficient] = useState(0.7);
+  const [enableRagOnChunking, setEnableRagOnChunking] = useState(true);
   const [error, setError] = useState('');
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -166,6 +167,7 @@ function BatchUploadDialog({
     setChunkMode('auto');
     setMemoryType('normal');
     setStaticCoefficient(0.7);
+    setEnableRagOnChunking(true);
     setError('');
     setUploadResults([]);
     setProgress(null);
@@ -221,6 +223,7 @@ function BatchUploadDialog({
         }
         payload.personality_prompt = agent.personality_prompt.trim();
         if (semanticTime) payload.semantic_time = semanticTime;
+        payload.enable_rag_on_chunking = enableRagOnChunking;
       }
 
       try {
@@ -435,9 +438,19 @@ function BatchUploadDialog({
             )}
 
             {chunkMode === 'llm' && (
-              <div className="p-3 text-xs text-muted-foreground bg-muted rounded-md">
-                <p>LLM 智能分块会逐个角色处理，长文本可能需要较长时间。</p>
-                <p className="mt-1">未配置个性提示词的角色将被跳过并显示为失败。</p>
+              <div className="flex items-center gap-2 p-3 border rounded-md">
+                <input
+                  type="checkbox"
+                  checked={enableRagOnChunking}
+                  onChange={(e) => setEnableRagOnChunking(e.target.checked)}
+                  className="accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium">LLM 分块时启用 RAG</p>
+                  <p className="text-xs text-muted-foreground">
+                    分块前召回已有静态记忆作为参考
+                  </p>
+                </div>
               </div>
             )}
           </div>

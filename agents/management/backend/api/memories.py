@@ -165,6 +165,7 @@ async def _llm_smart_chunk(
     semantic_timestamp: float,
     memory_coefficient: float,
     db: Session,
+    enable_rag_on_chunking: bool = True,
 ) -> list[dict]:
     """
     使用 LangChain Tool 调用进行智能分块
@@ -176,6 +177,7 @@ async def _llm_smart_chunk(
         semantic_timestamp: 语义时间戳
         memory_coefficient: 默认记忆系数
         db: 数据库会话
+        enable_rag_on_chunking: 是否在分块时启用 RAG 召回静态记忆
 
     Returns:
         list[dict]: 分块列表 [{"content": "...", "memory_coefficient": 0.85}, ...]
@@ -190,18 +192,47 @@ async def _llm_smart_chunk(
     system_prompt = """你是一个记忆分块助手。请根据人物信息，将提供的文本拆分为多个语义完整的、符合角色设定的第一人称记忆片段。
 
 【分块规则】
-1. 每条记忆必须以"我"为主语，使用第一人称叙述，包含符合角色视角的叙事、表达、看法与情感
-2. 每条记忆上限 512 tokens
-3. 每个分块应是一个独立的语义单元，包含完整的上下文和人物关系叙事
+1. 每条记忆以"我"为主语，第一人称描述
+2. 内容应包含：你看到了什么、你做了什么、你的感受或想法
+3. 单条记忆长度 512 tokens 内
+4. **核心规则：每条记忆可以聚焦事件的不同阶段/方面，但必须简要交代整个事件的起因和结果作为上下文，确保每条记忆独立可读。**
+   - 举例：文档描述了一次完整旅行（出发→游玩A→游玩B→返回）
+     - 分块1：详细描写游玩A的体验，但开头简述"我去了某地旅行，在游玩A时……，这次旅行让我难忘"
+     - 分块2：详细描写游玩B的体验，但开头简述"我去了某地旅行，在游玩B时……，这次旅行让我难忘"
+   - **绝不允许**：分块只写"我到了某地"（只有起因无结果）或"我回家了"（只有结果无起因）
+5. 每条记忆中的人物与关系应指代明确
+6. 为每条记忆设置差异化的记忆系数（memory_coefficient），范围 0.0-1.0：
+   - 0.9-1.0：极其重要的经历，如重大情感波动、关键人际关系建立、改变认知的发现、重要事务
+   - 0.7-0.9：重要经历，如深度互动的内容、引发强烈共鸣的信息、有意义的行为
+   - 0.5-0.7：一般记忆，一般经历
+   - 0.3-0.5：边缘记忆，不感兴趣的内容
+   - 0.0-0.3：几乎不重要的信息，不建议写入
+   - 请根据记忆的重要性、情感强度、人际关系关联度等因素综合评估，合理分配系数
 
 请调用 chunk_memories 工具，一次性传入所有分块后的记忆列表。"""
+
+    static_memories_context = ""
+    if enable_rag_on_chunking:
+        try:
+            service, _ = _get_memory_service()
+            recalled = await service.recall_static_memories(
+                owner_id=owner_id,
+                context=text[:500],
+                limit=10,
+            )
+            if recalled:
+                static_lines = []
+                for chunk, _ in recalled:
+                    static_lines.append(f"- [{chunk.memory_coefficient:.2f}] {chunk.content}")
+                static_memories_context = "\n\n【已有的相关记忆】\n" + "\n".join(static_lines) + "\n\n请参考以上已有记忆进行分块，系数越高表示该记忆越重要，避免生成重复内容。"
+        except Exception as e:
+            logger.warning("召回静态记忆失败，继续不带 RAG 的分块: %s", e)
 
     user_prompt = f"""【角色设定】
 {personality_prompt}
 
 【待分块文本】
-{text}
-
+{text}{static_memories_context}
 请按照规则进行分块，并调用 chunk_memories 工具传入结果。"""
 
     try:
@@ -350,7 +381,8 @@ async def upload_memory(
         "memory_coefficient": 0.85,                // 自动分块/不分块模式需要
         "chunk_mode": "auto" | "llm" | "none",     // none 表示不分块直接存入
         "memory_type": "normal" | "static",        // 静态记忆不参与衰减与唤醒
-        "personality_prompt": "..."                // 仅 LLM 分块模式需要
+        "personality_prompt": "...",               // 仅 LLM 分块模式需要
+        "enable_rag_on_chunking": true             // 仅 LLM 分块模式，是否在分块时召回静态记忆（默认 true）
     }
     """
     owner_id = request.get("owner_id")
@@ -358,6 +390,7 @@ async def upload_memory(
     semantic_time = request.get("semantic_time", "")
     chunk_mode = request.get("chunk_mode", "auto")
     memory_type = request.get("memory_type", "normal")
+    enable_rag_on_chunking = request.get("enable_rag_on_chunking", True)
 
     if not owner_id:
         raise HTTPException(status_code=400, detail="owner_id 不能为空")
@@ -413,6 +446,7 @@ async def upload_memory(
             semantic_timestamp=semantic_timestamp,
             memory_coefficient=memory_coefficient,
             db=db,
+            enable_rag_on_chunking=enable_rag_on_chunking,
         )
     else:
         raise HTTPException(status_code=400, detail="chunk_mode 必须为 auto、llm 或 none")
