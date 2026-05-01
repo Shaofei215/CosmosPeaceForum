@@ -1,5 +1,5 @@
 # Herta-Tree Docker Compose 配置文件
-# 统一支持 app_platform 后端、agent_scheduler 调度器和前端
+# 统一支持 app_platform 后端、agents 调度器和前端
 #
 # 使用方法：
 # 1. 启动所有服务：docker-compose up -d

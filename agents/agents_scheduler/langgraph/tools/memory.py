@@ -1,0 +1,76 @@
+# 记忆工具函数
+# 包含与记忆操作相关的工具
+# 注意：write_memory 工具应该仅在总结节点中绑定给 LLM，而不是随其他工具一起绑定
+
+import asyncio
+from typing import List, Dict, Any
+
+from langchain_core.tools import tool
+
+from agents.agents_scheduler.scheduler.context import get_current_user_id
+from agents.agents_scheduler.memory.service import get_memory_service
+from agents.agents_scheduler.memory.config import get_memory_config
+from agents.agents_scheduler.langgraph.tools.types import ToolResult
+
+
+@tool
+def write_memory(memories: List[Dict[str, Any]]) -> ToolResult:
+    """
+    将记忆写入长期记忆库
+
+    【重要！】注意！如果提示词中未提及调用此工具，此工具严禁被调用！
+
+    使用场景：
+    - 总结节点中，LLM 根据会话操作历史，将重要经历写入长期记忆
+    - LLM 需将内容拆分为 n 个语义完整的记忆片段，一次性传入
+
+    注意：
+    - 每条记忆应以"我"为主语，第一人称描述
+    - 每次调用可写入多条记忆，每条记忆分块上限512 tokens，每个分块都必须有完整的上下文叙事、指代明确的人物信息。
+    - memories 是一个列表，每个元素是一个字典，包含 content 和 memory_coefficient
+
+    Args:
+        memories: 记忆列表，每个元素为字典，包含以下字段：
+            - content (str): 记忆内容，第一人称叙事性描述（必填）
+            - memory_coefficient (float): 记忆系数 [0.0, 1.0]，越高表明记忆越重要
+
+    Returns:
+        ToolResult: 包含操作结果和记忆 ID 列表
+    """
+    owner_id = get_current_user_id()
+    config = get_memory_config()
+
+    if not config.memory_enabled:
+        return ToolResult(
+            action="记忆系统未启用，无法写入",
+            data={"memory_ids": []}
+        )
+
+    try:
+        service = get_memory_service()
+
+        memory_ids = []
+        for mem in memories:
+            content = mem.get("content", "")
+            coefficient = mem.get("memory_coefficient", 0.85)
+
+            if not content:
+                continue
+
+            memory_id = asyncio.run(service.write_memory(
+                content=content,
+                owner_id=owner_id,
+                memory_coefficient=coefficient,
+                semantic_timestamp=0.0
+            ))
+            memory_ids.append(memory_id)
+
+        return ToolResult(
+            action=f"将{len(memory_ids)}条记忆写入长期记忆库",
+            data={"memory_ids": memory_ids}
+        )
+    except Exception as e:
+        return ToolResult(
+            action=f"记忆写入失败: {str(e)}",
+            data={"memory_ids": []}
+        )
