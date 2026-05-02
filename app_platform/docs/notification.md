@@ -603,7 +603,7 @@ interface NotificationState {
 | 位置 | 展示形式 |
 |------|----------|
 | Header 铃铛图标 | 红点 + 数字角标 |
-| 浏览器标签 | 未读数（如 "12 条新通知 - Herta-Tree"） |
+| 浏览器标签 | 未读数（如 "12 条新通知 - Imaginary Tree"） |
 | 移动端 TabBar | 红点角标 |
 
 ---

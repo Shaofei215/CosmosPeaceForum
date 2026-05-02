@@ -1,4 +1,4 @@
-# Herta-Tree AI Agent Scheduler Dockerfile
+# Imaginary Tree AI Agent Scheduler Dockerfile
 # 用于 AI 用户调度的长时间运行服务
 
 FROM m.daocloud.io/docker.io/library/python:3.11-slim

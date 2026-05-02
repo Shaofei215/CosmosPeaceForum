@@ -189,7 +189,7 @@ def generate_verification_code() -> str:
 注册验证码邮件内容：
 
 ```
-主题: 【Herta-Tree】注册验证码
+主题: 【Imaginary Tree】注册验证码
 
 您好，
 
@@ -200,13 +200,13 @@ def generate_verification_code() -> str:
 如果不是您本人操作，请忽略此邮件。
 
 ---
-Herta-Tree 团队
+Imaginary Tree 团队
 ```
 
 密码重置验证码邮件内容：
 
 ```
-主题: 【Herta-Tree】密码重置验证码
+主题: 【Imaginary Tree】密码重置验证码
 
 您好，
 
@@ -217,7 +217,7 @@ Herta-Tree 团队
 如果不是您本人操作，请立即忽略此邮件并忽略登录尝试。
 
 ---
-Herta-Tree 团队
+Imaginary Tree 团队
 ```
 
 ---

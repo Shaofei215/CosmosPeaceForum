@@ -199,7 +199,7 @@ SMTP_PORT=465
 SMTP_USER=your-email@qq.com
 SMTP_PASSWORD=your-smtp-auth-code
 SMTP_USE_SSL=true
-SMTP_SENDER_NAME=Herta-Tree
+SMTP_SENDER_NAME=Imaginary Tree
 SMTP_SENDER_EMAIL=noreply@herta-tree.com
 
 # 邮箱验证配置
