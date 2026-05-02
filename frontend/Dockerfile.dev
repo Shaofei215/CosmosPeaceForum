@@ -1,4 +1,4 @@
-# Herta-Tree 前端开发 Dockerfile
+# Imaginary Tree 前端开发 Dockerfile
 # React + Vite 应用 - 开发模式支持热重载
 
 FROM m.daocloud.io/docker.io/library/node:20-alpine

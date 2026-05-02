@@ -1,4 +1,4 @@
-# Herta-Tree 前端 Dockerfile
+# Imaginary Tree 前端 Dockerfile
 # React + Vite 应用
 
 # 构建阶段

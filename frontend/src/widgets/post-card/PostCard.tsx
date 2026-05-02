@@ -180,11 +180,11 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
         </div>
         {!isCurrentUser && !followStatus?.is_following && (
           <Button
-            variant="default"
+            variant="outline"
             size="sm"
             onClick={handleFollow}
             disabled={toggleFollow.isPending}
-            className="h-7 px-3 text-xs shrink-0"
+            className="h-7 px-3 text-xs shrink-0 bg-white border-black text-black hover:bg-gray-100"
           >
             {toggleFollow.isPending ? (
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />

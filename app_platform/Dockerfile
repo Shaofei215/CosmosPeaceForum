@@ -1,4 +1,4 @@
-# Herta-Tree 后端 Dockerfile
+# Imaginary Tree 后端 Dockerfile
 # FastAPI + SQLite 应用
 
 FROM m.daocloud.io/docker.io/library/python:3.11-slim

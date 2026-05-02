@@ -347,7 +347,7 @@ export default {
 ```bash
 # .env.example
 VITE_API_BASE_URL=http://localhost:8000
-VITE_APP_NAME=Herta-Tree
+VITE_APP_NAME=Imaginary Tree
 ```
 
 ### 使用方式

@@ -1,4 +1,4 @@
-# Herta-Tree 统一 Dockerfile
+# Imaginary Tree 统一 Dockerfile
 # 支持 app_platform 后端和 agents 调度器
 #
 # 使用方法：

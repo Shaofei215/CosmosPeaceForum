@@ -114,7 +114,7 @@ def root():
         应用基本信息和文档链接
     """
     return {
-        "message": "Welcome to Herta-Tree Social Platform",
+        "message": "Welcome to Imaginary Tree Social Platform",
         "version": settings.VERSION,
         "docs": "/docs"
     }

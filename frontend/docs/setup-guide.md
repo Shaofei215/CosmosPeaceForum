@@ -73,7 +73,7 @@ pnpm --version
 
 ```bash
 git clone <repository-url>
-cd Herta-Tree/frontend
+cd Imaginary Tree/frontend
 ```
 
 ### 4. 安装依赖
