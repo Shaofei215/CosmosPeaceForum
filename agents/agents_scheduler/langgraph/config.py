@@ -23,8 +23,6 @@ class SessionConfig:
     tool_timeout: int = 30
     temperature: float = 1.2
     model_name: str = ""
-    enable_environment_cache: bool = True
-    environment_cache_ttl: int = 180
     enable_checkpointer: bool = True
     llm_provider: str = "openai"
     openai_api_key: str = ""
@@ -70,8 +68,6 @@ class SessionConfig:
             tool_timeout=int(_get("LANGGRAPH_TOOL_TIMEOUT", "30")),
             temperature=temperature,
             model_name=model_name,
-            enable_environment_cache=_get("LANGGRAPH_ENVIRONMENT_CACHE_ENABLED", "true").lower() in ("true", "1", "yes"),
-            environment_cache_ttl=int(_get("LANGGRAPH_ENVIRONMENT_CACHE_TTL", "180")),
             enable_checkpointer=_get("LANGGRAPH_CHECKPOINTER_ENABLED", "true").lower() in ("true", "1", "yes"),
             llm_provider=provider,
             openai_api_key=openai_api_key,
@@ -91,8 +87,6 @@ class SessionConfig:
             raise ValueError("tool_timeout 必须大于 0")
         if not 0.0 <= self.temperature <= 2.0:
             raise ValueError("temperature 必须在 0.0 到 2.0 之间")
-        if self.environment_cache_ttl <= 0:
-            raise ValueError("environment_cache_ttl 必须大于 0")
 
 
 @dataclass

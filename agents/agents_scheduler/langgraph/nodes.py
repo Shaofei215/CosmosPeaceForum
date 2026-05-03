@@ -523,9 +523,8 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
     """
     总结节点
 
-    在登出后，根据 action_history（工作记忆）生成会话总结。
-    只做节点流程控制，提示词工程全部在 prompts.py 中完成。
-    LLM 可能会调用 write_memory 工具写入记忆，需要执行这些工具调用。
+    在登出后，根据 action_history（工作记忆）生成会话总结，
+    并调用 write_memory 工具将重要经历写入长期记忆库。
 
     Args:
         state: 当前状态
@@ -535,19 +534,14 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
         SessionState: 更新后的状态，包含 summary
     """
     username = state.get("username", "未知")
-    action_count = len(state.get("action_history", []))
-    logger.info("summarize_node | 用户=%s | 开始生成总结 | 操作数=%d", username, action_count)
 
     if not state.get("action_history"):
-        summary = f"用户 {state.get('username', '未知')} 的本次会话未执行任何操作。"
-        logger.info("summarize_node | 用户=%s | 无操作记录 | 总结=%s", username, summary)
         return {
             **state,
-            "summary": summary,
+            "summary": f"用户 {state.get('username', '未知')} 的本次会话未执行任何操作。",
         }
 
     try:
-        # 使用共用的系统提示词（与决策节点一致的角色设定）
         system_prompt = build_summarize_system_prompt(
             username=state["username"],
             name=state.get("name", state["username"]),
@@ -555,23 +549,14 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
             personal_signature=state["personal_signature"]
         )
 
-        # 用户提示词包含操作历史和记忆写入指令
         user_prompt = build_summarize_prompt(state)
 
         response = llm_invoker(system_prompt, user_prompt)
 
-        # 检查 LLM 是否返回了工具调用
-        tool_calls = []
-        summary = ""
-
         if hasattr(response, 'tool_calls') and response.tool_calls:
-            tool_calls = response.tool_calls
-            logger.info("summarize_node | 用户=%s | LLM返回%d个工具调用", username, len(tool_calls))
-
-            # 执行工具调用（主要是 write_memory）
             tools_map = {t.name: t for t in get_all_tools_for_summarize()}
 
-            for tc in tool_calls:
+            for tc in response.tool_calls:
                 tool_name = tc.get("name", "").lower()
                 tool_args = tc.get("args", {})
 
@@ -579,21 +564,11 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
                     try:
                         tool_func = tools_map[tool_name]
                         result = tool_func.invoke(tool_args)
-                        logger.info("summarize_node | 工具执行: %s | 结果: %s", tool_name, result.action if hasattr(result, 'action') else str(result))
+                        logger.info("summarize_node | 用户=%s | %s", username, result.action if hasattr(result, 'action') else str(result))
                     except Exception as e:
                         logger.error("summarize_node | 工具执行失败: %s | 错误: %s", tool_name, e)
 
-        # 提取总结内容
-        if hasattr(response, 'content'):
-            summary = response.content
-        else:
-            summary = str(response)
-
-        # 如果总结内容为空或只包含工具调用，生成默认总结
-        if not summary or len(summary.strip()) < 10:
-            summary = f"用户 {username} 执行了 {action_count} 个操作，并写入了相关记忆。"
-
-        logger.info("summarize_node | 用户=%s | LLM总结生成成功 | 长度=%d字符", username, len(summary))
+        summary = response.content if hasattr(response, 'content') else str(response)
 
         return {
             **state,
@@ -601,11 +576,10 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
         }
 
     except Exception as e:
-        summary = f"用户 {state.get('username', '未知')} 执行了 {len(state.get('action_history', []))} 个操作。"
-        logger.error("summarize_node | 用户=%s | 总结生成异常 | 使用默认总结: %s", username, summary)
+        logger.warning("summarize_node | 用户=%s | 异常: %s", username, e)
         return {
             **state,
-            "summary": summary,
+            "summary": f"用户 {state.get('username', '未知')} 执行了 {len(state.get('action_history', []))} 个操作。",
         }
 
 
