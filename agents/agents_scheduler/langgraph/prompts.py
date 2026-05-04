@@ -26,7 +26,7 @@ def build_system_prompt(
     """
     prompt = f"""你是{name}，一个「星际和平论坛」用户，正在使用「星际和平论坛」，用户名 {username}。
 
-## 角色背景
+## 角色性格
 {personality_prompt}
 
 ## 个人签名
