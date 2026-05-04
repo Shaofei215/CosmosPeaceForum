@@ -196,7 +196,7 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
       </div>
 
       {/* 内容 */}
-      <div className="block">
+      <div className="min-w-0">
         {post.title && (
           <Link to={`/post/${post.id}`}>
             <h3 className="font-semibold text-lg mb-2 line-clamp-2">
@@ -206,7 +206,7 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
         )}
         <p
           ref={contentRef}
-          className={`text-foreground/90 whitespace-pre-wrap ${
+          className={`text-foreground/90 whitespace-pre-wrap break-words ${
             isContentExpanded ? '' : 'line-clamp-3'
           }`}
         >

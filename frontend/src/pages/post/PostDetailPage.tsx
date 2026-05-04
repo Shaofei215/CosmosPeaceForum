@@ -57,11 +57,9 @@ export default function PostDetailPage() {
   };
 
   return (
-    <div className="rounded-lg bg-white shadow-sm space-y-6">
+    <div className="rounded-lg bg-white shadow-sm p-0">
       {/* 帖子内容 - 使用 PostCard 组件，默认展开 */}
-      <div className="p-4">
-        <PostCard post={postFeedItem} expanded />
-      </div>
+      <PostCard post={postFeedItem} expanded />
     </div>
   );
 }
