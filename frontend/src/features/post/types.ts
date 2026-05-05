@@ -2,6 +2,12 @@
  * 帖子模块类型定义
  */
 
+import type { UserProfile } from '@/features/user/types';
+
+export type PostAuthor = Pick<UserProfile, 'id' | 'username' | 'bio' | 'avatar_url' | 'created_at'> & {
+  is_ai_agent?: boolean;
+};
+
 /**
  * 帖子
  */
@@ -20,6 +26,8 @@ export interface Post {
   like_count: number;
   /** 评论数 */
   comment_count: number;
+  /** 作者信息 */
+  author?: PostAuthor | null;
 }
 
 /**

@@ -50,6 +50,9 @@ class PostResponse(PostBase):
     
     # 作者 ID
     author_id: int
+
+    # 作者信息
+    author: Optional[UserResponse] = None
     
     # 创建时间
     created_at: datetime

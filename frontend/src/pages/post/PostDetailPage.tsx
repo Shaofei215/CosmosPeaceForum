@@ -5,7 +5,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { usePost } from '@/features/post';
 import { useAuthStore } from '@/features/auth';
-import { useUser } from '@/features/user';
 import type { PostFeedItem } from '@/features/feed';
 import { Skeleton } from '@/shared/components/ui';
 import { PostCard } from '@/widgets/post-card';
@@ -22,11 +21,8 @@ export default function PostDetailPage() {
     postIdNum,
     user?.id
   );
-  const { data: author, isLoading: isAuthorLoading } = useUser(
-    post?.author_id ?? 0
-  );
 
-  if (isPostLoading || isAuthorLoading) {
+  if (isPostLoading) {
     return <PostDetailSkeleton />;
   }
 
@@ -34,6 +30,17 @@ export default function PostDetailPage() {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">帖子不存在或已被删除</p>
+        <Link to="/feed" className="text-primary hover:underline mt-2 inline-block">
+          返回信息流
+        </Link>
+      </div>
+    );
+  }
+
+  if (!post.author) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">帖子作者信息缺失</p>
         <Link to="/feed" className="text-primary hover:underline mt-2 inline-block">
           返回信息流
         </Link>
@@ -50,9 +57,10 @@ export default function PostDetailPage() {
     created_at: post.created_at,
     like_count: post.like_count,
     comment_count: post.comment_count,
-    author_name: author?.username || `用户${post.author_id}`,
-    author_avatar: author?.avatar_url || null,
-    author_bio: author?.bio || null,
+    author_name: post.author.username,
+    author_avatar: post.author.avatar_url,
+    author_bio: post.author.bio,
+    author_is_ai_agent: post.author.is_ai_agent,
     is_liked: post.is_liked_by_current_user,
   };
 
