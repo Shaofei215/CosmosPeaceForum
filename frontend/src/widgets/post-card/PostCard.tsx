@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, ChevronDown, ChevronUp, CornerDownRight, ChevronDown as ExpandIcon, UserPlus } from 'lucide-react';
+import { Heart, MessageCircle, ChevronDown, ChevronUp, CornerDownRight, ChevronDown as ExpandIcon } from 'lucide-react';
 import type { PostFeedItem } from '@/features/feed';
 import type { PostWithLikeStatus } from '@/features/post';
 import type { Comment } from '@/features/comment';

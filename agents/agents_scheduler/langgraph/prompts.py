@@ -259,7 +259,7 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
     return [
         f"{indent}id / 帖子ID: {post.get('id', '?')}",
         f"{indent}author_id / 作者ID: {post.get('author_id', '?')}",
-        f"{indent}author_username / 作者用户名: @{post.get('author_username', '?')}",
+        f"{indent}author_username / 作者用户名: @{post.get('author_username') or '?'}",
         f"{indent}author_bio / 作者签名: {post.get('author_bio', '')}",
         f"{indent}content / 帖子内容: {post.get('content', '')}",
         f"{indent}created_at / 创建时间: {post.get('created_at', '')}",
@@ -275,7 +275,7 @@ def _format_comment_fields(comment: Dict[str, Any], indent: str = "") -> List[st
     return [
         f"{indent}id / 评论ID: {comment.get('id', '?')}",
         f"{indent}author_id / 评论者ID: {comment.get('author_id', comment.get('owner_id', '?'))}",
-        f"{indent}author_username / 评论者用户名: @{comment.get('author_username', '?')}",
+        f"{indent}author_username / 评论者用户名: @{comment.get('author_username') or '?'}",
         f"{indent}content / 评论内容: {comment.get('content', '')}",
         f"{indent}created_at / 创建时间: {comment.get('created_at', '')}",
         f"{indent}parent_id / 父评论ID: {comment.get('parent_id', '')}",

@@ -1,7 +1,7 @@
 # 帖子路由控制器
 # 处理帖子相关的 API 请求
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from app_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
@@ -57,7 +57,9 @@ def get_posts(
 
     返回：帖子列表，按创建时间倒序排列
     """
-    posts = db.query(Post).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
+    posts = db.query(Post).options(
+        joinedload(Post.author)
+    ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     return posts
 
 
@@ -79,7 +81,9 @@ def get_post(
     错误：
     - 404：帖子不存在
     """
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).options(
+        joinedload(Post.author)
+    ).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="帖子不存在")
 
@@ -94,6 +98,7 @@ def get_post(
     return PostResponseWithLikeStatus(
         id=post.id,
         author_id=post.author_id,
+        author=post.author,
         title=post.title,
         content=post.content,
         created_at=post.created_at,
@@ -201,5 +206,7 @@ def get_user_posts(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    posts = db.query(Post).filter(Post.author_id == user_id).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
+    posts = db.query(Post).filter(Post.author_id == user_id).options(
+        joinedload(Post.author)
+    ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     return posts

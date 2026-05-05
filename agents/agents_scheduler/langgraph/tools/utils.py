@@ -222,7 +222,7 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
         "created_at": post_data.get("created_at", ""),
         "like_count": post_data.get("like_count", 0),
         "comment_count": post_data.get("comment_count", 0),
-        "is_liked": post_data.get("is_liked", False),
+        "is_liked": post_data.get("is_liked", post_data.get("is_liked_by_current_user", False)),
         "follow_status": _get_follow_status_text(author_id, current_user_id)
     }
 
