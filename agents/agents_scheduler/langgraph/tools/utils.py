@@ -295,6 +295,40 @@ def _standardize_comments_list(
     return [_standardize_comment(comment, current_user_id) for comment in comments_data]
 
 
+def _standardize_notification(
+    notification_data: Dict[str, Any],
+    current_user_id: Optional[int] = None
+) -> Dict[str, Any]:
+    """标准化消息数据，统一展示来源用户、类型和关联内容。"""
+    sender = notification_data.get("sender") or {}
+    sender_id = sender.get("id") or notification_data.get("sender_id")
+    raw_username = sender.get("username", "")
+    raw_content = notification_data.get("source_content") or ""
+
+    return {
+        "id": notification_data.get("id"),
+        "type": notification_data.get("type"),
+        "sender_id": sender_id,
+        "sender_username": _expand_username_by_relation(raw_username, sender_id, current_user_id),
+        "sender_bio": sender.get("bio", ""),
+        "sender_follow_status": _get_follow_status_text(sender_id, current_user_id),
+        "resource_type": notification_data.get("resource_type"),
+        "resource_id": notification_data.get("resource_id"),
+        "post_id": notification_data.get("post_id"),
+        "comment_id": notification_data.get("comment_id"),
+        "source_content": _expand_content_mentions_by_relation(raw_content, current_user_id),
+        "is_read": notification_data.get("is_read", False),
+        "created_at": notification_data.get("created_at", ""),
+    }
+
+
+def _standardize_notifications_list(
+    notifications_data: List[Dict[str, Any]],
+    current_user_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    return [_standardize_notification(item, current_user_id) for item in notifications_data]
+
+
 def _standardize_posts_list(
     posts_data: List[Dict[str, Any]],
     current_user_id: Optional[int] = None
@@ -469,6 +503,39 @@ def _get_global_feed(page: int = 1, page_size: int = 5) -> Dict[str, Any]:
     )
 
 
+def _get_notification_summary() -> Dict[str, Any]:
+    """获取关注、粉丝、未读消息数量；失败时返回空计数，避免阻断 prompt 构建。"""
+    if not get_current_token():
+        return {"following_count": 0, "followers_count": 0, "unread_count": 0}
+
+    try:
+        return _make_request(
+            method="GET",
+            endpoint="/notifications/summary",
+            reason="内部调用：获取关注、粉丝与消息数量"
+        )
+    except ToolExecutionError:
+        return {"following_count": 0, "followers_count": 0, "unread_count": 0}
+
+
+def _get_notifications(skip: int = 0, limit: int = 10) -> Dict[str, Any]:
+    """查看消息列表。后端会在该请求成功后清零未读消息提醒。"""
+    return _make_request(
+        method="GET",
+        endpoint="/notifications",
+        params={"skip": skip, "limit": limit},
+        reason="内部调用：查看消息"
+    )
+
+
+def _get_notification(notification_id: int) -> Dict[str, Any]:
+    return _make_request(
+        method="GET",
+        endpoint=f"/notifications/{notification_id}",
+        reason="内部调用：查看单条消息"
+    )
+
+
 # ==================== 工具注册函数 ====================
 
 _social_tools = None
@@ -495,6 +562,8 @@ def get_social_tools(relation_map=None) -> List:
     if _social_tools is None:
         from agents.agents_scheduler.langgraph.tools.social import (
             get_profile,
+            view_notifications,
+            view_notification_origin,
             toggle_post_like,
             toggle_comment_like,
             create_comment,
@@ -514,6 +583,8 @@ def get_social_tools(relation_map=None) -> List:
 
         _social_tools = [
             get_profile,
+            view_notifications,
+            view_notification_origin,
             toggle_post_like,
             toggle_comment_like,
             create_comment,

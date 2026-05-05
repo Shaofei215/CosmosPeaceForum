@@ -18,6 +18,7 @@ import PostDetailPage from '@/pages/post/PostDetailPage';
 import ProfilePage from '@/pages/profile/ProfilePage';
 import FollowingListPage from '@/pages/profile/FollowingListPage';
 import FollowersListPage from '@/pages/profile/FollowersListPage';
+import NotificationsPage from '@/pages/notification/NotificationsPage';
 
 /**
  * 应用路由配置
@@ -48,7 +49,7 @@ export const router = createBrowserRouter([
       {
         element: <AuthGuard />,
         children: [
-          // 这里可以添加需要登录才能访问的页面
+          { path: 'notifications', element: <NotificationsPage /> },
         ],
       },
     ],

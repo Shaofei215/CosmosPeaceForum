@@ -1,0 +1,264 @@
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Bell, Heart, MessageCircle, UserPlus } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
+import { formatDate } from '@/shared/lib/utils';
+import { NotificationItem, useNotifications } from '@/features/notification';
+import { useAuthStore } from '@/features/auth';
+import { useCommentLikeStatus, useCreateComment, useToggleCommentLike } from '@/features/comment';
+import { useFollowStatus, useToggleFollow } from '@/features/follow';
+
+export default function NotificationsPage() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useNotifications({ limit: 50 });
+
+  useEffect(() => {
+    if (data) {
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'summary'] });
+    }
+  }, [data, queryClient]);
+
+  if (isLoading) {
+    return <NotificationSkeleton />;
+  }
+
+  const items = data?.items ?? [];
+
+  return (
+    <div className="rounded-lg bg-white shadow-sm p-0">
+      <h2 className="text-lg font-semibold px-3 pt-3">消息</h2>
+
+      {items.length === 0 ? (
+        <div className="py-10 text-center text-muted-foreground">
+          <Bell className="h-10 w-10 mx-auto mb-3" />
+          <p>暂无消息</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-border/50">
+          {items.map(item => (
+            <NotificationRow key={item.id} notification={item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NotificationRow({ notification }: { notification: NotificationItem }) {
+  const navigate = useNavigate();
+  const typeInfo = getTypeInfo(notification.type);
+  const Icon = typeInfo.icon;
+  const sender = notification.sender;
+  const targetPath = getTargetPath(notification);
+
+  const handleOpen = () => {
+    navigate(targetPath);
+  };
+
+  return (
+    <div className="p-4 hover:bg-muted/30 transition-colors">
+      <div className="flex gap-3">
+        <Link to={sender ? `/user/${sender.id}` : '#'} onClick={e => e.stopPropagation()}>
+          <Avatar src={sender?.avatar_url} alt={sender?.username ?? '用户'} size="md" />
+        </Link>
+
+        <div className="min-w-0 flex-1">
+          <button type="button" onClick={handleOpen} className="block w-full text-left">
+            <div className="flex items-start gap-2 text-sm">
+              <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${typeInfo.color}`} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium truncate">{sender?.username ?? '有人'}</span>
+                  <span className="text-muted-foreground shrink-0">{typeInfo.label}</span>
+                  <span className="ml-auto text-xs text-muted-foreground shrink-0">
+                    {formatDate(notification.created_at)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {notification.source_content && (
+              <p className="mt-2 text-sm text-foreground/85 line-clamp-2 whitespace-pre-wrap break-words">
+                {notification.source_content}
+              </p>
+            )}
+          </button>
+
+          <NotificationActions notification={notification} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotificationActions({ notification }: { notification: NotificationItem }) {
+  if (notification.type === 'follow' && notification.sender) {
+    return <FollowBackButton userId={notification.sender.id} />;
+  }
+
+  if (
+    (notification.type === 'comment' ||
+      notification.type === 'comment_reply' ||
+      notification.type === 'comment_like') &&
+    notification.post_id &&
+    notification.comment_id
+  ) {
+    return <CommentActionBar postId={notification.post_id} commentId={notification.comment_id} />;
+  }
+
+  return null;
+}
+
+function CommentActionBar({ postId, commentId }: { postId: number; commentId: number }) {
+  const { user } = useAuthStore();
+  const { data: likeStatus } = useCommentLikeStatus(postId, commentId, !!user);
+  const likeMutation = useToggleCommentLike(postId, user?.id);
+  const createComment = useCreateComment(postId);
+  const [isReplying, setIsReplying] = useState(false);
+  const [content, setContent] = useState('');
+  const isLiked = likeStatus?.is_liked ?? false;
+
+  const submitReply = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!content.trim()) return;
+
+    createComment.mutate(
+      { content: content.trim(), parent_id: commentId },
+      {
+        onSuccess: () => {
+          setContent('');
+          setIsReplying(false);
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          className={`h-7 px-2 rounded-md gap-1 ${
+            isLiked ? 'text-red-500 hover:text-red-500' : 'text-muted-foreground hover:text-red-500'
+          }`}
+          onClick={() => likeMutation.mutate({ commentId })}
+          disabled={!user || likeMutation.isPending}
+        >
+          <Heart className={`h-3.5 w-3.5 ${isLiked ? 'fill-current' : ''}`} />
+          点赞
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={`h-7 px-2 rounded-md gap-1 ${
+            isReplying
+              ? 'text-primary hover:text-primary'
+              : 'text-muted-foreground hover:text-primary'
+          }`}
+          onClick={() => setIsReplying(value => !value)}
+          disabled={!user}
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          回复
+        </Button>
+      </div>
+
+      {isReplying && (
+        <form onSubmit={submitReply} className="space-y-2">
+          <Textarea
+            value={content}
+            onChange={event => setContent(event.target.value)}
+            rows={2}
+            placeholder="写下你的回复..."
+            className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIsReplying(false)}>
+              取消
+            </Button>
+            <Button type="submit" size="sm" disabled={!content.trim() || createComment.isPending}>
+              回复
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function FollowBackButton({ userId }: { userId: number }) {
+  const { user } = useAuthStore();
+  const { data: status } = useFollowStatus(userId);
+  const toggleFollow = useToggleFollow();
+
+  if (!user || user.id === userId || status?.is_following) {
+    return null;
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="mt-2 h-7 px-2 rounded-md gap-1 text-muted-foreground hover:text-primary"
+      onClick={() => toggleFollow.mutate(userId)}
+      disabled={toggleFollow.isPending}
+    >
+      <UserPlus className="h-3.5 w-3.5" />
+      回关
+    </Button>
+  );
+}
+
+function getTargetPath(notification: NotificationItem): string {
+  if (notification.type === 'follow' && notification.sender) {
+    return `/user/${notification.sender.id}`;
+  }
+  if (notification.post_id && notification.comment_id) {
+    return `/post/${notification.post_id}?commentId=${notification.comment_id}`;
+  }
+  if (notification.post_id) {
+    return `/post/${notification.post_id}`;
+  }
+  if (notification.sender) {
+    return `/user/${notification.sender.id}`;
+  }
+  return '/feed';
+}
+
+function getTypeInfo(type: string) {
+  const map = {
+    post_like: { label: '赞了你的帖子', icon: Heart, color: 'text-primary' },
+    comment_like: { label: '赞了你的评论', icon: Heart, color: 'text-primary' },
+    comment: { label: '评论了你的帖子', icon: MessageCircle, color: 'text-primary' },
+    comment_reply: { label: '回复了你', icon: MessageCircle, color: 'text-primary' },
+    follow: { label: '关注了你', icon: UserPlus, color: 'text-emerald-600' },
+  };
+
+  return (
+    map[type as keyof typeof map] ?? {
+      label: '给你发来一条消息',
+      icon: Bell,
+      color: 'text-muted-foreground',
+    }
+  );
+}
+
+function NotificationSkeleton() {
+  return (
+    <div className="rounded-lg bg-white shadow-sm p-0">
+      <Skeleton className="ml-3 mt-3 h-6 w-20" />
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="flex gap-3 p-4 border-b border-border/50 last:border-b-0">
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-4 w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

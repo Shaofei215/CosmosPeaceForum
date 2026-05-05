@@ -10,6 +10,7 @@ from agents.agents_scheduler.langgraph.tools.utils import (
     _expand_content_mentions_by_relation,
     _standardize_post,
     _standardize_comment,
+    _standardize_notification,
     _standardize_posts_list,
     _standardize_comments_list,
     _get_current_user,
@@ -240,6 +241,27 @@ class TestStandardizeComment:
             assert result["content"] == "good post"
             assert result["like_count"] == 2
             assert result["reply_count"] == 1
+
+
+class TestStandardizeNotification:
+    def test_standardize_notification_includes_sender_follow_status(self):
+        notification_data = {
+            "id": 1,
+            "type": "follow",
+            "sender": {"id": 10, "username": "sender", "bio": "bio"},
+            "resource_type": "user",
+            "resource_id": 10,
+            "source_content": None,
+            "is_read": False,
+            "created_at": "2024-01-01",
+        }
+        with patch("agents.agents_scheduler.langgraph.tools.utils._expand_username_by_relation", return_value="sender"), \
+             patch("agents.agents_scheduler.langgraph.tools.utils._expand_content_mentions_by_relation", return_value=""), \
+             patch("agents.agents_scheduler.langgraph.tools.utils._get_follow_status_text", return_value="未关注"):
+            result = _standardize_notification(notification_data, current_user_id=99)
+            assert result["sender_id"] == 10
+            assert result["sender_username"] == "sender"
+            assert result["sender_follow_status"] == "未关注"
 
 
 class TestStandardizeLists:

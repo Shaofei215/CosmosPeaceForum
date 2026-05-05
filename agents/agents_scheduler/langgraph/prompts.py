@@ -3,6 +3,20 @@
 from typing import Dict, Any, List
 
 
+def _build_attention_header() -> str:
+    try:
+        from agents.agents_scheduler.langgraph.tools.utils import _get_notification_summary
+        summary = _get_notification_summary()
+    except Exception:
+        summary = {"following_count": 0, "followers_count": 0, "unread_count": 0}
+
+    return (
+        f"关注：{summary.get('following_count', 0)} "
+        f"粉丝：{summary.get('followers_count', 0)} "
+        f"消息：{summary.get('unread_count', 0)}"
+    )
+
+
 def build_system_prompt(
     username: str,
     name: str,
@@ -25,6 +39,9 @@ def build_system_prompt(
         str: 格式化后的系统提示词
     """
     prompt = f"""你是{name}，一个「星际和平论坛」用户，正在使用「星际和平论坛」，用户名 {username}。
+
+## 角色背景
+你以 @{username} 的身份在论坛中浏览、互动和表达观点。
 
 ## 角色性格
 {personality_prompt}
@@ -70,6 +87,7 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
     Returns:
         str: 格式化的决策 prompt
     """
+    attention_header = _build_attention_header()
     current_step = state.get("step_count", 0)
     max_steps = state.get("max_steps", 10)
     remaining_steps = max_steps - current_step
@@ -113,7 +131,9 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
     recalled_memories = state.get("recalled_memories", "")
     recalled_memory_text = recalled_memories if recalled_memories else ""
 
-    prompt = f"""## 当前状态
+    prompt = f"""{attention_header}
+
+## 当前状态
 - 📍 位置：{current_location}
 - 本次会话已执行: {current_step} 步
 {last_result_text}
@@ -141,6 +161,35 @@ def _format_tool_result(result: Any) -> str:
     elif isinstance(result, str):
         return result
     elif isinstance(result, dict):
+        if "notifications" in result:
+            notifications = result.get("notifications", [])
+            total = result.get("total", 0)
+            lines = [f"【消息列表】共{total}条，显示{len(notifications)}条："]
+            if not notifications:
+                lines.append("暂无消息")
+            for item in notifications:
+                lines.append("  - 消息")
+                lines.extend(_format_notification_fields(item, indent="    "))
+            return "\n".join(lines)
+
+        if "notification" in result:
+            notification = result.get("notification", {})
+            lines = ["【消息原内容】"]
+            lines.extend(_format_notification_fields(notification, indent=""))
+            if result.get("post"):
+                lines.append("\n【原帖子】")
+                lines.extend(_format_post_fields(result["post"], indent=""))
+            if result.get("comment"):
+                lines.append("\n【原评论】")
+                lines.extend(_format_comment_fields(result["comment"], indent=""))
+            if result.get("user"):
+                user = result["user"]
+                lines.append("\n【来源用户】")
+                lines.append(f"ID: {user.get('id', user.get('user_id', '?'))}")
+                lines.append(f"用户名: @{user.get('username', '?')}")
+                lines.append(f"签名: {user.get('bio', '')}")
+            return "\n".join(lines)
+
         if "comment" in result and "post" in result:
             comment = result.get("comment", {})
             post = result.get("post", {})
@@ -282,6 +331,21 @@ def _format_comment_fields(comment: Dict[str, Any], indent: str = "") -> List[st
         f"{indent}like_count / 点赞数: {comment.get('like_count', 0)}",
         f"{indent}reply_count / 回复数: {comment.get('reply_count', 0)}",
         f"{indent}is_liked / 当前用户是否已点赞: {comment.get('is_liked', False)}",
+    ]
+
+
+def _format_notification_fields(notification: Dict[str, Any], indent: str = "") -> List[str]:
+    return [
+        f"{indent}notification_id / 查看原内容参数: {notification.get('id', '?')}",
+        f"{indent}type / 消息类型: {notification.get('type', '')}",
+        f"{indent}sender_id / 来源用户ID: {notification.get('sender_id', '?')}",
+        f"{indent}sender_username / 来源用户名: @{notification.get('sender_username') or '?'}",
+        f"{indent}sender_follow_status / 当前用户对来源用户的关注状态: {notification.get('sender_follow_status', '')}",
+        f"{indent}resource_type / 原内容类型: {notification.get('resource_type', '')}",
+        f"{indent}post_id / 帖子ID: {notification.get('post_id', '')}",
+        f"{indent}comment_id / 评论ID: {notification.get('comment_id', '')}",
+        f"{indent}source_content / 被互动内容: {notification.get('source_content', '')}",
+        f"{indent}created_at / 创建时间: {notification.get('created_at', '')}",
     ]
 
 

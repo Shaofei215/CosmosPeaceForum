@@ -8,6 +8,7 @@ from collections import defaultdict
 from app_platform.app.models.comment import Comment, CommentLike
 from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
+from app_platform.app.services import notification_service
 
 
 class PostNotFoundError(Exception):
@@ -127,6 +128,7 @@ def create_comment(
         raise PostNotFoundError(post_id)
     
     # 如果指定了父评论，检查父评论是否存在且属于同一帖子
+    parent_comment = None
     if parent_id is not None:
         parent_comment = db.query(Comment).filter(Comment.id == parent_id).first()
         if not parent_comment:
@@ -162,6 +164,14 @@ def create_comment(
                 else:
                     break  # 祖先不存在，退出循环
         
+        notification_service.create_comment_notifications(
+            db=db,
+            post=post,
+            comment=new_comment,
+            sender_id=user_id,
+            parent_comment=parent_comment,
+        )
+
         # 4. 提交事务
         db.commit()
         db.refresh(new_comment)
@@ -231,6 +241,7 @@ def toggle_like(
             db.add(new_like)
             # 2. 增加评论点赞计数
             comment.like_count = comment.like_count + 1
+            notification_service.create_comment_like_notification(db, comment, user_id)
             # 3. 提交事务
             db.commit()
             db.refresh(comment)
