@@ -200,9 +200,9 @@ function FollowBackButton({ userId }: { userId: number }) {
 
   return (
     <Button
-      variant="outline"
+      variant="ghost"
       size="sm"
-      className="mt-2 h-7 px-3 rounded-md gap-1 bg-white border-black text-black hover:bg-gray-100"
+      className="mt-2 h-7 px-2 rounded-md gap-1 text-muted-foreground hover:text-primary"
       onClick={() => toggleFollow.mutate(userId)}
       disabled={toggleFollow.isPending}
     >
