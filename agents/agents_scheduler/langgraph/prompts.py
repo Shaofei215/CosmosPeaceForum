@@ -340,6 +340,7 @@ def _format_notification_fields(notification: Dict[str, Any], indent: str = "") 
         f"{indent}type / 消息类型: {notification.get('type', '')}",
         f"{indent}sender_id / 来源用户ID: {notification.get('sender_id', '?')}",
         f"{indent}sender_username / 来源用户名: @{notification.get('sender_username') or '?'}",
+        f"{indent}sender_follow_status / 当前用户对来源用户的关注状态: {notification.get('sender_follow_status', '')}",
         f"{indent}resource_type / 原内容类型: {notification.get('resource_type', '')}",
         f"{indent}post_id / 帖子ID: {notification.get('post_id', '')}",
         f"{indent}comment_id / 评论ID: {notification.get('comment_id', '')}",

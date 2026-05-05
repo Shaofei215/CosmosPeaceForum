@@ -425,7 +425,7 @@ def toggle_follow(
         ValidationError: 不能关注自己
         ToolExecutionError: 服务器内部错误
     """
-    _make_request(
+    follow_result = _make_request(
         method="POST",
         endpoint=f"/users/{user_id}/follow",
         reason=reason,
@@ -435,8 +435,15 @@ def toggle_follow(
     user_data = _get_user(user_id)
     username = user_data.get("username", "")
 
-    if username:
+    is_following = follow_result.get("is_following")
+    user_data["follow_status"] = _get_follow_status_text(user_id, get_current_user_id())
+
+    if username and is_following is False:
+        action = f"取消关注了 @{username}"
+    elif username:
         action = f"关注了 @{username}"
+    elif is_following is False:
+        action = f"取消关注了用户 {user_id}"
     else:
         action = f"关注了用户 {user_id}"
 

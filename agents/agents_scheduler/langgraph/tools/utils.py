@@ -311,6 +311,7 @@ def _standardize_notification(
         "sender_id": sender_id,
         "sender_username": _expand_username_by_relation(raw_username, sender_id, current_user_id),
         "sender_bio": sender.get("bio", ""),
+        "sender_follow_status": _get_follow_status_text(sender_id, current_user_id),
         "resource_type": notification_data.get("resource_type"),
         "resource_id": notification_data.get("resource_id"),
         "post_id": notification_data.get("post_id"),
