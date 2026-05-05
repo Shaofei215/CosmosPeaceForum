@@ -27,10 +27,7 @@ export function LeftSidebar() {
         {isAuthenticated && user ? (
           <div className="space-y-4">
             {/* 用户头像 - 独立一行居中 */}
-            <Link
-              to={`/user/${user.id}`}
-              className="flex justify-center group"
-            >
+            <Link to={`/user/${user.id}`} className="flex justify-center group">
               <Avatar
                 src={user.avatar_url}
                 alt={user.username}
@@ -41,13 +38,9 @@ export function LeftSidebar() {
 
             {/* 用户名称 - 独立一行居中 */}
             <div className="block text-center">
-              <p className="font-semibold text-foreground truncate">
-                {user.username}
-              </p>
+              <p className="font-semibold text-foreground truncate">{user.username}</p>
               {user.bio && (
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 px-2">
-                  {user.bio}
-                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 px-2">{user.bio}</p>
               )}
             </div>
 
@@ -76,15 +69,15 @@ export function LeftSidebar() {
             {/* 消息按钮 */}
             <Button
               asChild
-              variant="default"
-              className="relative w-full gap-2 rounded-md"
+              variant="outline"
+              className="w-full gap-2 rounded-md border-black bg-white text-black hover:bg-white hover:text-black"
               size="sm"
             >
               <Link to="/notifications">
                 <MessageCircle className="h-4 w-4" />
                 消息
                 {unreadCount > 0 && (
-                  <span className="absolute -right-1 -top-1 min-w-5 h-5 rounded-full bg-red-500 px-1.5 text-[11px] leading-5 text-white">
+                  <span className="text-xs font-semibold">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
@@ -99,9 +92,7 @@ export function LeftSidebar() {
               </div>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground mb-3">
-                登录以查看个人信息
-              </p>
+              <p className="text-sm text-muted-foreground mb-3">登录以查看个人信息</p>
               <Link to="/login">
                 <Button size="sm" className="w-full">
                   登录
