@@ -9,7 +9,9 @@ from agents.agents_scheduler.scheduler.context import get_current_user_id
 from agents.agents_scheduler.langgraph.tools.types import ToolResult, UnauthorizedError, NotFoundError, ValidationError, ToolExecutionError
 from agents.agents_scheduler.langgraph.tools.utils import (
     _make_request, _get_user, _get_post, _get_comment, _get_user_posts, _get_follow_status_text,
-    _standardize_post, _standardize_posts_list, _standardize_comment, _truncate
+    _get_notifications, _get_notification,
+    _standardize_post, _standardize_posts_list, _standardize_comment,
+    _standardize_notification, _standardize_notifications_list, _truncate
 )
 
 
@@ -64,6 +66,121 @@ def get_profile(
     action = f"查看了自己的个人资料（@{username}）" if username else "查看了自己的个人资料"
 
     return ToolResult(action=action, data=data)
+
+
+@tool
+def view_notifications(
+    reason: str = "用户想查看自己的消息",
+    summary: str = "",
+    count: int = 5
+) -> ToolResult:
+    """
+    查看当前账号收到的消息列表，你可以直接在返回的内容中执行toggle_post_like、create_comment等工具进行回应。
+
+    Args:
+        reason: 调用该工具的原因，用于记录操作动机与上下文，75 字以内。
+                例如："我看到有未读消息，想看看是谁互动了我"。
+        summary: 对当前视野的第一人称总结，200 字以内，用于记录工作记忆。
+                例如："我注意到自己有新消息，准备打开消息页查看"。
+        count: 数量。希望查看的消息条数，必须是正整数；工具最多返回 20 条，超过 20 会自动按 20 处理。
+               建议按需要选择较小数量，例如 3、5、10，避免一次读入过多消息。
+
+    Returns:
+        ToolResult:
+            - action: 自然语言操作记录，例如 "查看了消息列表，共看到 5 条消息"
+            - data.notifications: 消息列表。每条消息包含 type、sender_id、sender_username、resource_type、
+              post_id、comment_id、source_content、created_at 等字段。
+            - data.total: 当前账号全部消息总数
+            - data.unread_count: 本次查看后服务端返回的未读数量，通常为 0
+
+    """
+    current_user_id = get_current_user_id()
+    safe_count = max(1, min(int(count), 20))
+    data = _get_notifications(skip=0, limit=safe_count)
+    notifications = _standardize_notifications_list(data.get("items", []), current_user_id)
+
+    return ToolResult(
+        action=f"查看了消息列表，共看到 {len(notifications)} 条消息",
+        data={
+            "notifications": notifications,
+            "total": data.get("total", 0),
+            "unread_count": data.get("unread_count", 0),
+        }
+    )
+
+
+@tool
+def view_notification_origin(
+    notification_id: int,
+    reason: str = "用户想查看消息原内容",
+    summary: str = ""
+) -> ToolResult:
+    """
+    查看消息对应的原内容，复用现有查看帖子、评论和用户资料能力。
+
+    使用场景：
+    - 在 view_notifications 返回的消息列表中看到某条互动后，想进一步查看完整上下文。
+    - 对评论类消息，想看原评论及其所属帖子后再决定是否点赞或回复。
+    - 对点赞帖子类消息，想看被点赞的帖子完整内容。
+    - 对关注类消息，想看来源用户主页再决定是否回关。
+
+    Args:
+        notification_id: 消息 ID。必须来自 view_notifications 返回的 notification_id 字段，不要编造。
+                         该 ID 能精确定位消息当时绑定的帖子、评论或来源用户。
+        reason: 调用该工具的原因，用于记录操作动机与上下文，75 字以内。
+        summary: 对当前视野的第一人称总结，200 字以内，用于记录工作记忆。
+
+    Returns:
+        ToolResult:
+            - 若消息关联评论，返回 notification、post 和 comment，表示评论原内容及所属帖子。
+            - 若消息关联帖子，返回 notification 和 post，表示帖子原内容。
+            - 若消息来自关注，返回 notification 和 user，表示来源用户资料与其近期帖子。
+
+    后续可用操作：
+        返回评论原内容后，可使用 data.comment 中的 id/post_id 点赞或回复。
+        返回关注来源用户后，可使用 data.user.id 调用 toggle_follow 回关。
+    """
+    current_user_id = get_current_user_id()
+    notification_data = _get_notification(notification_id)
+    notification = _standardize_notification(notification_data, current_user_id)
+
+    post_id = notification.get("post_id")
+    comment_id = notification.get("comment_id")
+    sender_id = notification.get("sender_id")
+
+    result = {"notification": notification}
+
+    if post_id:
+        post_data = _get_post(post_id)
+        result["post"] = _standardize_post(post_data, current_user_id)
+
+    if post_id and comment_id:
+        comment_data = _get_comment(post_id, comment_id)
+        result["comment"] = _standardize_comment(comment_data, current_user_id)
+        comment_author = result["comment"].get("author_username", "")
+        comment_content = _truncate(result["comment"].get("content", ""), 120)
+        action = f"查看了 @{comment_author} 的原评论内容：{comment_content}"
+        return ToolResult(action=action, data=result)
+
+    if post_id:
+        post_author = result["post"].get("author_username", "")
+        post_content = _truncate(result["post"].get("content", ""), 120)
+        action = f"查看了 @{post_author} 的原帖子内容：{post_content}"
+        return ToolResult(action=action, data=result)
+
+    if sender_id:
+        user_data = _get_user(sender_id)
+        username = user_data.get("username", sender_id)
+        user_data["follow_status"] = _get_follow_status_text(sender_id, current_user_id)
+        posts_data = _get_user_posts(sender_id, page=1, page_size=3)
+        user_data["recent_posts"] = _standardize_posts_list(
+            posts_data.get("data", []),
+            current_user_id
+        )
+        result["user"] = user_data
+        return ToolResult(action=f"查看了来源用户 @{username} 的主页", data=result)
+
+    raise ValidationError("这条消息没有可查看的原内容")
 
 
 @tool
@@ -240,7 +357,7 @@ def create_comment(
 
     parent_comment_data = None
     if parent_id is not None:
-        parent_comment_data = _get_post(post_id, parent_id)
+        parent_comment_data = _get_comment(post_id, parent_id)
         standardized_parent = _standardize_comment(parent_comment_data, current_user_id)
     else:
         standardized_parent = None

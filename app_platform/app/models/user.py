@@ -105,3 +105,10 @@ class User(Base):
         back_populates="following",
         cascade="all, delete-orphan"
     )
+
+    notifications = relationship(
+        "Notification",
+        foreign_keys="Notification.recipient_id",
+        back_populates="recipient",
+        cascade="all, delete-orphan"
+    )

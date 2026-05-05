@@ -7,6 +7,7 @@ from app_platform.app.models.like import Like
 from app_platform.app.models.comment import Comment, CommentLike
 from app_platform.app.models.follow import Follow
 from app_platform.app.models.email_verification import EmailVerificationCode
+from app_platform.app.models.notification import Notification
 
 __all__ = [
     "User",
@@ -16,4 +17,5 @@ __all__ = [
     "CommentLike",
     "Follow",
     "EmailVerificationCode",
+    "Notification",
 ]

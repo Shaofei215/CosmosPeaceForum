@@ -2,7 +2,7 @@
  * 帖子详情页面
  */
 
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { usePost } from '@/features/post';
 import { useAuthStore } from '@/features/auth';
 import type { PostFeedItem } from '@/features/feed';
@@ -14,8 +14,10 @@ import { PostCard } from '@/widgets/post-card';
  */
 export default function PostDetailPage() {
   const { postId } = useParams<{ postId: string }>();
+  const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
   const postIdNum = Number(postId);
+  const focusedCommentId = Number(searchParams.get('commentId') || 0) || undefined;
 
   const { data: post, isLoading: isPostLoading } = usePost(
     postIdNum,
@@ -67,7 +69,7 @@ export default function PostDetailPage() {
   return (
     <div className="rounded-lg bg-white shadow-sm p-0">
       {/* 帖子内容 - 使用 PostCard 组件，默认展开 */}
-      <PostCard post={postFeedItem} expanded />
+      <PostCard post={postFeedItem} expanded focusedCommentId={focusedCommentId} />
     </div>
   );
 }

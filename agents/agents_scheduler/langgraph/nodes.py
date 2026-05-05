@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 TOOL_TO_LOCATION = {
+    "view_notifications": "消息页",
+    "view_notification_origin": "帖子详情页",
     "get_global_feed": "主页（信息流）",
     "expand_post": "帖子详情页",
     "expand_comments": "评论页",
@@ -42,6 +44,8 @@ TOOL_TO_LOCATION = {
 }
 
 TOOLS_WITH_RETURN_VALUE = {
+    "view_notifications",
+    "view_notification_origin",
     "get_profile",
     "get_user_profile",
     "get_global_feed",
@@ -569,6 +573,8 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
                         logger.error("summarize_node | 工具执行失败: %s | 错误: %s", tool_name, e)
 
         summary = response.content if hasattr(response, 'content') else str(response)
+        if not summary:
+            summary = f"用户 {state.get('username', '未知')} 执行了 {len(state.get('action_history', []))} 个操作。"
 
         return {
             **state,

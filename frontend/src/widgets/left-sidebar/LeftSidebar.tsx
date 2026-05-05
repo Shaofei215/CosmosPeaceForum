@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { MessageCircle, User } from 'lucide-react';
 import { useAuthStore } from '@/features/auth';
 import { useUser } from '@/features/user';
+import { useNotificationUnreadCount } from '@/features/notification';
 import { Avatar, Button } from '@/shared/components/ui';
 
 /**
@@ -16,6 +17,8 @@ import { Avatar, Button } from '@/shared/components/ui';
 export function LeftSidebar() {
   const { user, isAuthenticated } = useAuthStore();
   const { data: currentUserProfile } = useUser(user?.id ?? 0);
+  const { data: unreadData } = useNotificationUnreadCount(isAuthenticated);
+  const unreadCount = unreadData?.unread_count ?? 0;
 
   return (
     <aside className="sticky top-28 h-fit w-64 space-y-3">
@@ -72,12 +75,20 @@ export function LeftSidebar() {
 
             {/* 消息按钮 */}
             <Button
+              asChild
               variant="default"
-              className="w-full gap-2 rounded-md"
+              className="relative w-full gap-2 rounded-md"
               size="sm"
             >
-              <MessageCircle className="h-4 w-4" />
-              消息
+              <Link to="/notifications">
+                <MessageCircle className="h-4 w-4" />
+                消息
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-5 h-5 rounded-full bg-red-500 px-1.5 text-[11px] leading-5 text-white">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </Link>
             </Button>
           </div>
         ) : (

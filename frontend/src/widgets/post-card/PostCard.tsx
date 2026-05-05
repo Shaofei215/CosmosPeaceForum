@@ -23,12 +23,13 @@ import { useAuthStore } from '@/features/auth';
 interface PostCardProps {
   post: PostFeedItem | PostWithLikeStatus;
   expanded?: boolean;
+  focusedCommentId?: number;
 }
 
 /**
  * 帖子卡片组件
  */
-export function PostCard({ post, expanded = false }: PostCardProps) {
+export function PostCard({ post, expanded = false, focusedCommentId }: PostCardProps) {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const toggleLike = useToggleLike();
@@ -326,6 +327,7 @@ export function PostCard({ post, expanded = false }: PostCardProps) {
                   onReplySuccess={handleReplySuccess}
                   depth={0}
                   parentOwner={null}
+                  focusedCommentId={focusedCommentId}
                 />
               ))}
 
@@ -379,6 +381,7 @@ interface CommentItemProps {
   onReplySuccess: () => void;
   depth: number;
   parentOwner: { id: number; username: string } | null;
+  focusedCommentId?: number;
 }
 
 /**
@@ -397,10 +400,29 @@ function CommentItem({
   onReplySuccess,
   depth,
   parentOwner,
+  focusedCommentId,
 }: CommentItemProps) {
-  const [showReplies, setShowReplies] = useState(depth === 0 ? false : true);
+  const shouldShowFocusedReply = focusedCommentId ? containsComment(comment, focusedCommentId) : false;
+  const [showReplies, setShowReplies] = useState(depth === 0 ? shouldShowFocusedReply : true);
   const toggleCommentLike = useToggleCommentLike(postId, currentUserId);
   const isReplying = replyingTo?.id === comment.id;
+  const itemRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (focusedCommentId && shouldShowFocusedReply) {
+      setShowReplies(true);
+    }
+  }, [focusedCommentId, shouldShowFocusedReply]);
+
+  useEffect(() => {
+    if (focusedCommentId === comment.id && itemRef.current) {
+      itemRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      itemRef.current.classList.add('ring-1', 'ring-primary/40', 'bg-primary/5');
+      window.setTimeout(() => {
+        itemRef.current?.classList.remove('ring-1', 'ring-primary/40', 'bg-primary/5');
+      }, 2400);
+    }
+  }, [focusedCommentId, comment.id]);
 
   const handleLike = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -425,7 +447,11 @@ function CommentItem({
   return (
     <div className={`${isTopLevel ? 'space-y-3' : ''}`}>
       {/* 评论内容 */}
-      <div className={`flex gap-2 ${!isTopLevel ? 'mt-3' : ''}`}>
+      <div
+        id={`comment-${comment.id}`}
+        ref={itemRef}
+        className={`flex gap-2 rounded-md transition-colors ${!isTopLevel ? 'mt-3' : ''}`}
+      >
         <Avatar
           src={comment.owner.avatar_url}
           alt={comment.owner.username}
@@ -540,12 +566,21 @@ function CommentItem({
               onReplySuccess={onReplySuccess}
               depth={depth + 1}
               parentOwner={{ id: comment.owner_id, username: comment.owner.username }}
+              focusedCommentId={focusedCommentId}
             />
           ))}
         </div>
       )}
     </div>
   );
+}
+
+function containsComment(comment: Comment, commentId: number): boolean {
+  if (comment.id === commentId) {
+    return true;
+  }
+
+  return Boolean(comment.children?.some((child) => containsComment(child, commentId)));
 }
 
 /**

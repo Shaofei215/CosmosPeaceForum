@@ -7,6 +7,7 @@ from typing import Tuple, List, Dict, Optional
 
 from app_platform.app.models.follow import Follow
 from app_platform.app.models.user import User
+from app_platform.app.services import notification_service
 
 
 class SelfFollowError(Exception):
@@ -122,6 +123,7 @@ def toggle_follow(
             # 关注操作：关注者的关注数 +1，被关注者的粉丝数 +1
             follower.following_count += 1
             following.followers_count += 1
+            notification_service.create_follow_notification(db, follower_id, following_id)
         else:
             # 取消关注操作：关注者的关注数 -1，被关注者的粉丝数 -1
             # 使用 max 确保不会减到负数
