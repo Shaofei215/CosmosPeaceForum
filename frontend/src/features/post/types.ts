@@ -34,7 +34,13 @@ export interface Post {
   repost_source_id?: number | null;
   repost_root_post_id?: number | null;
   repost_chain?: string | null;
+  repost_chain_authors?: RepostChainAuthor[];
   repost_origin?: RepostOriginPost | null;
+}
+
+export interface RepostChainAuthor {
+  user_id: number;
+  username: string;
 }
 
 export interface RepostOriginPost {

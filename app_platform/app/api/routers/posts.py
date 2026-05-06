@@ -89,7 +89,7 @@ def get_posts(
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     for post in posts:
-        repost_service.attach_repost_origin(post)
+        repost_service.attach_repost_metadata(db, post)
     return posts
 
 
@@ -140,6 +140,7 @@ def get_post(
         repost_source_id=post.repost_source_id,
         repost_root_post_id=post.repost_root_post_id,
         repost_chain=post.repost_chain,
+        repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
         repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         is_liked_by_current_user=is_liked
     )
@@ -248,5 +249,5 @@ def get_user_posts(
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     for post in posts:
-        repost_service.attach_repost_origin(post)
+        repost_service.attach_repost_metadata(db, post)
     return posts

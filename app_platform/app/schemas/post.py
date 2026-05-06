@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -33,6 +33,11 @@ class RepostOriginPost(BaseModel):
         from_attributes = True
 
 
+class RepostChainAuthor(BaseModel):
+    user_id: int
+    username: str
+
+
 class PostUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=200)
     content: Optional[str] = Field(None, min_length=1)
@@ -50,6 +55,7 @@ class PostResponse(PostBase):
     repost_source_id: Optional[int] = None
     repost_root_post_id: Optional[int] = None
     repost_chain: Optional[str] = None
+    repost_chain_authors: List[RepostChainAuthor] = Field(default_factory=list)
     repost_origin: Optional[RepostOriginPost] = None
 
     class Config:

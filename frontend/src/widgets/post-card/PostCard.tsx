@@ -175,7 +175,10 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             isContentExpanded ? '' : 'line-clamp-3'
           }`}
         >
-          {post.content}
+          <LinkedMentions
+            text={post.content}
+            authors={post.repost_chain_authors || []}
+          />
         </p>
         {post.repost_origin && <RepostOriginBlock origin={post.repost_origin} />}
         {isContentTruncated && (
@@ -360,16 +363,64 @@ function RepostOriginBlock({
   const authorName = origin.author?.username || `用户${origin.author_id}`;
 
   return (
-    <Link
-      to={`/post/${origin.id}`}
-      className="mt-3 block rounded-md border border-border/70 bg-muted/30 p-3 transition-colors hover:bg-muted/50"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="text-xs font-medium text-foreground/70">@{authorName}</div>
-      <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-sm text-foreground/75">
+    <div className="mt-3 rounded-md border border-border/70 bg-muted/30 p-3 transition-colors hover:bg-muted/50">
+      <Link
+        to={`/user/${origin.author_id}`}
+        className="text-xs font-medium text-foreground/70 hover:text-primary"
+        onClick={(event) => event.stopPropagation()}
+      >
+        @{authorName}
+      </Link>
+      <Link
+        to={`/post/${origin.id}`}
+        className="mt-1 block line-clamp-3 whitespace-pre-wrap break-words text-sm text-foreground/75 hover:text-foreground"
+        onClick={(event) => event.stopPropagation()}
+      >
         {origin.content}
-      </p>
-    </Link>
+      </Link>
+    </div>
+  );
+}
+
+function LinkedMentions({
+  text,
+  authors,
+}: {
+  text: string;
+  authors: { user_id: number; username: string }[];
+}) {
+  if (!authors.length) {
+    return <>{text}</>;
+  }
+
+  const authorByName = new Map(authors.map((author) => [author.username, author]));
+  const parts = text.split(/(@[^:\s/]+)/g);
+
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (!part.startsWith('@')) {
+          return <span key={`${part}-${index}`}>{part}</span>;
+        }
+
+        const username = part.slice(1);
+        const author = authorByName.get(username);
+        if (!author) {
+          return <span key={`${part}-${index}`}>{part}</span>;
+        }
+
+        return (
+          <Link
+            key={`${part}-${index}`}
+            to={`/user/${author.user_id}`}
+            className="font-medium text-primary hover:text-primary/80"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {part}
+          </Link>
+        );
+      })}
+    </>
   );
 }
 

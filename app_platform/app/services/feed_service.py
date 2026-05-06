@@ -9,6 +9,7 @@ from app_platform.app.models.like import Like
 from app_platform.app.models.user import User
 from app_platform.app.schemas.feed import PostFeedItem
 from app_platform.app.schemas.response import PaginationInfo, APIResponse
+from app_platform.app.services import repost_service
 
 
 def _get_user_like_status(
@@ -143,6 +144,7 @@ def get_feed(
             repost_source_id=post.repost_source_id,
             repost_root_post_id=post.repost_root_post_id,
             repost_chain=post.repost_chain,
+            repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
             repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         )
         feed_items.append(feed_item)
@@ -242,6 +244,7 @@ def get_user_feed(
             repost_source_id=post.repost_source_id,
             repost_root_post_id=post.repost_root_post_id,
             repost_chain=post.repost_chain,
+            repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
             repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         )
         feed_items.append(feed_item)

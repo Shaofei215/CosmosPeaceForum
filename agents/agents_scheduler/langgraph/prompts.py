@@ -317,19 +317,14 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
         f"{indent}is_liked / 当前用户是否已点赞: {post.get('is_liked', False)}",
         f"{indent}follow_status / 当前用户对作者的关注状态: {post.get('follow_status', '')}",
     ]
-    if post.get("repost_root_post_id"):
+    origin = post.get("repost_origin") or {}
+    if origin:
         lines.extend([
-            f"{indent}repost_source_type / 转发来源类型: {post.get('repost_source_type', '')}",
-            f"{indent}repost_source_id / 转发来源ID: {post.get('repost_source_id', '')}",
-            f"{indent}repost_chain / 转发链正文: {post.get('repost_chain') or post.get('content', '')}",
+            f"{indent}repost_origin_id / 引用原帖ID: {origin.get('id', '?')}",
+            f"{indent}repost_origin_author_id / 引用原帖作者ID: {origin.get('author_id', '?')}",
+            f"{indent}repost_origin_author / 引用原帖作者: @{origin.get('author_username') or '?'}",
+            f"{indent}repost_origin_content / 引用原帖内容: {origin.get('content', '')}",
         ])
-        origin = post.get("repost_origin") or {}
-        if origin:
-            lines.extend([
-                f"{indent}repost_origin_id / 最底层原帖ID: {origin.get('id', '?')}",
-                f"{indent}repost_origin_author / 最底层原帖作者: @{origin.get('author_username') or '?'}",
-                f"{indent}repost_origin_content / 最底层原帖内容: {origin.get('content', '')}",
-            ])
     return lines
 
 

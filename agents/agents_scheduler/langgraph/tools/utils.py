@@ -229,6 +229,7 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
         "repost_source_id": post_data.get("repost_source_id"),
         "repost_root_post_id": post_data.get("repost_root_post_id"),
         "repost_chain": post_data.get("repost_chain"),
+        "repost_chain_authors": post_data.get("repost_chain_authors", []),
     }
 
     repost_origin = post_data.get("repost_origin")

@@ -1,9 +1,11 @@
+import re
 from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session, joinedload
 
 from app_platform.app.models.comment import Comment
 from app_platform.app.models.post import Post
+from app_platform.app.models.user import User
 from app_platform.app.services import notification_service
 
 
@@ -76,12 +78,33 @@ def create_repost(
         db.refresh(repost)
 
     repost.repost_origin = root_post
+    repost.repost_chain_authors = build_repost_chain_authors(db, repost.content)
     return repost
+
+
+def attach_repost_metadata(db: Session, post: Post) -> Post:
+    post.repost_origin = post.repost_root_post if post.repost_root_post_id else None
+    post.repost_chain_authors = build_repost_chain_authors(db, post.content)
+    return post
 
 
 def attach_repost_origin(post: Post) -> Post:
     post.repost_origin = post.repost_root_post if post.repost_root_post_id else None
     return post
+
+
+def build_repost_chain_authors(db: Session, content: str) -> list[dict[str, object]]:
+    usernames = list(dict.fromkeys(re.findall(r"@([^:\s/]+)", content or "")))
+    if not usernames:
+        return []
+
+    users = db.query(User).filter(User.username.in_(usernames)).all()
+    user_by_name = {user.username: user for user in users}
+    return [
+        {"user_id": user_by_name[username].id, "username": username}
+        for username in usernames
+        if username in user_by_name
+    ]
 
 
 def _build_post_repost(
