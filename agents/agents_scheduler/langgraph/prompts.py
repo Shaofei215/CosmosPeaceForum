@@ -305,7 +305,7 @@ def _format_tool_result(result: Any) -> str:
 
 def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
     """格式化标准化帖子字段，确保 LLM 能读取完整结构。"""
-    return [
+    lines = [
         f"{indent}id / 帖子ID: {post.get('id', '?')}",
         f"{indent}author_id / 作者ID: {post.get('author_id', '?')}",
         f"{indent}author_username / 作者用户名: @{post.get('author_username') or '?'}",
@@ -317,6 +317,20 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
         f"{indent}is_liked / 当前用户是否已点赞: {post.get('is_liked', False)}",
         f"{indent}follow_status / 当前用户对作者的关注状态: {post.get('follow_status', '')}",
     ]
+    if post.get("repost_root_post_id"):
+        lines.extend([
+            f"{indent}repost_source_type / 转发来源类型: {post.get('repost_source_type', '')}",
+            f"{indent}repost_source_id / 转发来源ID: {post.get('repost_source_id', '')}",
+            f"{indent}repost_chain / 转发链正文: {post.get('repost_chain') or post.get('content', '')}",
+        ])
+        origin = post.get("repost_origin") or {}
+        if origin:
+            lines.extend([
+                f"{indent}repost_origin_id / 最底层原帖ID: {origin.get('id', '?')}",
+                f"{indent}repost_origin_author / 最底层原帖作者: @{origin.get('author_username') or '?'}",
+                f"{indent}repost_origin_content / 最底层原帖内容: {origin.get('content', '')}",
+            ])
+    return lines
 
 
 def _format_comment_fields(comment: Dict[str, Any], indent: str = "") -> List[str]:

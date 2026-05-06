@@ -26,8 +26,24 @@ export interface Post {
   like_count: number;
   /** 评论数 */
   comment_count: number;
+  /** 转发数 */
+  repost_count: number;
   /** 作者信息 */
   author?: PostAuthor | null;
+  repost_source_type?: 'post' | 'comment' | null;
+  repost_source_id?: number | null;
+  repost_root_post_id?: number | null;
+  repost_chain?: string | null;
+  repost_origin?: RepostOriginPost | null;
+}
+
+export interface RepostOriginPost {
+  id: number;
+  author_id: number;
+  author?: PostAuthor | null;
+  title: string | null;
+  content: string;
+  created_at: string;
 }
 
 /**
@@ -46,6 +62,12 @@ export interface CreatePostData {
   title?: string;
   /** 内容 */
   content: string;
+}
+
+export interface RepostData {
+  content?: string;
+  source_type: 'post' | 'comment';
+  source_id: number;
 }
 
 /**

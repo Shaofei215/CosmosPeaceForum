@@ -494,6 +494,54 @@ def create_post(
 
 
 @tool
+def repost(
+    source_type: str,
+    source_id: int,
+    content: Optional[str] = None,
+    reason: str = "想要转发内容",
+    summary: str = ""
+) -> ToolResult:
+    """
+    转发帖子或评论，source_type 必须是 "post" 或 "comment"。
+
+    直接转发时 content 可以为空；如果填写 content，它会作为新帖子的开头。
+    当转发评论或回复时，平台会把评论链拼成新帖子的正文，并在帖子引用块中指向最底层原始帖子。
+    """
+    current_user_id = get_current_user_id()
+    source_type = source_type.lower()
+    if source_type not in {"post", "comment"}:
+        raise ValidationError('source_type 必须是 "post" 或 "comment"')
+
+    payload = {
+        "source_type": source_type,
+        "source_id": source_id,
+    }
+    if content is not None:
+        payload["content"] = content
+
+    created_post = _make_request(
+        method="POST",
+        endpoint="/posts/repost",
+        json_data=payload,
+        reason=reason,
+        summary=summary,
+    )
+    standardized_post = _standardize_post(created_post, current_user_id)
+
+    origin = standardized_post.get("repost_origin") or {}
+    origin_author = origin.get("author_username", "")
+    origin_content = _truncate(origin.get("content", ""), 80)
+    repost_content = _truncate(standardized_post.get("content", ""), 120)
+
+    if origin_author and origin_content:
+        action = f"转发了 @{origin_author} 的原帖：{origin_content}；转发正文：{repost_content}"
+    else:
+        action = f"转发了{source_type} {source_id}：{repost_content}"
+
+    return ToolResult(action=action, data={"post": standardized_post})
+
+
+@tool
 def logout(
     reason: str = "用户想要结束本次会话",
     summary: str = ""

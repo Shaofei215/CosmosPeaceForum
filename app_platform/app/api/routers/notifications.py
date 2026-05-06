@@ -123,6 +123,14 @@ def _serialize_post(post):
         "created_at": post.created_at,
         "like_count": post.like_count,
         "comment_count": post.comment_count,
+        "repost_count": getattr(post, "repost_count", 0),
+        "repost_source_type": getattr(post, "repost_source_type", None),
+        "repost_source_id": getattr(post, "repost_source_id", None),
+        "repost_root_post_id": getattr(post, "repost_root_post_id", None),
+        "repost_chain": getattr(post, "repost_chain", None),
+        "repost_origin": _serialize_post(post.repost_root_post)
+        if getattr(post, "repost_root_post_id", None) and getattr(post, "repost_root_post", None)
+        else None,
     }
 
 

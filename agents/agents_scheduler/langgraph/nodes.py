@@ -38,6 +38,7 @@ TOOL_TO_LOCATION = {
     "toggle_comment_like": None,
     "toggle_follow": None,
     "create_comment": None,
+    "repost": None,
     "create_post": None,
     "get_profile": "主页（信息流）",
     "logout": None,
@@ -61,6 +62,7 @@ TOOL_NO_RETURN_VALUE = {
     "toggle_comment_like",
     "toggle_follow",
     "create_comment",
+    "repost",
     "create_post",
     "logout",  
 }

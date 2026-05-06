@@ -37,9 +37,17 @@ class Post(Base):
     # 统计帖子下所有评论和回复的总数
     comment_count = Column(Integer, default=0, nullable=False)
 
+    # 转发计数与转发链元数据
+    repost_count = Column(Integer, default=0, nullable=False)
+    repost_source_type = Column(String(20), nullable=True)
+    repost_source_id = Column(Integer, nullable=True)
+    repost_root_post_id = Column(Integer, ForeignKey("posts.id"), nullable=True, index=True)
+    repost_chain = Column(Text, nullable=True)
+
     # 关联关系：帖子的作者
     # back_populates 建立双向关联
     author = relationship("User", back_populates="posts")
+    repost_root_post = relationship("Post", remote_side=[id], foreign_keys=[repost_root_post_id])
     
     # 关联关系：帖子的点赞记录
     # back_populates 建立双向关联

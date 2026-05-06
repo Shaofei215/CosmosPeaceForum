@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Heart, MessageCircle, UserPlus } from 'lucide-react';
+import { Bell, Heart, MessageCircle, Repeat2, UserPlus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
@@ -229,6 +229,10 @@ function getTargetPath(notification: NotificationItem): string {
 }
 
 function getTypeInfo(type: string) {
+  if (type === 'repost') {
+    return { label: '转发了你的内容', icon: Repeat2, color: 'text-primary' };
+  }
+
   const map = {
     post_like: { label: '赞了你的帖子', icon: Heart, color: 'text-primary' },
     comment_like: { label: '赞了你的评论', icon: Heart, color: 'text-primary' },

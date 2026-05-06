@@ -8,7 +8,14 @@ from app_platform.app.api.deps import get_db, get_current_user, get_current_user
 from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
 from app_platform.app.models.like import Like
-from app_platform.app.schemas.post import PostCreate, PostResponse, PostUpdate, PostResponseWithLikeStatus
+from app_platform.app.schemas.post import (
+    PostCreate,
+    PostResponse,
+    PostUpdate,
+    PostResponseWithLikeStatus,
+    RepostCreate,
+)
+from app_platform.app.services import repost_service
 
 router = APIRouter()
 
@@ -41,6 +48,26 @@ def create_post(
     return db_post
 
 
+@router.post("/repost", response_model=PostResponse, summary="转发帖子或评论")
+def repost(
+    data: RepostCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        return repost_service.create_repost(
+            db=db,
+            user_id=current_user.id,
+            source_type=data.source_type,
+            source_id=data.source_id,
+            content=data.content,
+        )
+    except repost_service.RepostSourceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except repost_service.InvalidRepostSourceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/", response_model=List[PostResponse], summary="获取帖子列表", description="获取所有帖子列表，支持分页，按创建时间倒序排列。无需认证。")
 def get_posts(
     skip: int = Query(0, ge=0, description="跳过的记录数，用于分页"),
@@ -58,8 +85,11 @@ def get_posts(
     返回：帖子列表，按创建时间倒序排列
     """
     posts = db.query(Post).options(
-        joinedload(Post.author)
+        joinedload(Post.author),
+        joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
+    for post in posts:
+        repost_service.attach_repost_origin(post)
     return posts
 
 
@@ -82,7 +112,8 @@ def get_post(
     - 404：帖子不存在
     """
     post = db.query(Post).options(
-        joinedload(Post.author)
+        joinedload(Post.author),
+        joinedload(Post.repost_root_post).joinedload(Post.author),
     ).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="帖子不存在")
@@ -104,6 +135,12 @@ def get_post(
         created_at=post.created_at,
         like_count=post.like_count,
         comment_count=post.comment_count,
+        repost_count=post.repost_count,
+        repost_source_type=post.repost_source_type,
+        repost_source_id=post.repost_source_id,
+        repost_root_post_id=post.repost_root_post_id,
+        repost_chain=post.repost_chain,
+        repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         is_liked_by_current_user=is_liked
     )
 
@@ -207,6 +244,9 @@ def get_user_posts(
         raise HTTPException(status_code=404, detail="用户不存在")
 
     posts = db.query(Post).filter(Post.author_id == user_id).options(
-        joinedload(Post.author)
+        joinedload(Post.author),
+        joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
+    for post in posts:
+        repost_service.attach_repost_origin(post)
     return posts

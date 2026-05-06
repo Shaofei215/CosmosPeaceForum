@@ -223,8 +223,33 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
         "like_count": post_data.get("like_count", 0),
         "comment_count": post_data.get("comment_count", 0),
         "is_liked": post_data.get("is_liked", post_data.get("is_liked_by_current_user", False)),
-        "follow_status": _get_follow_status_text(author_id, current_user_id)
+        "follow_status": _get_follow_status_text(author_id, current_user_id),
+        "repost_count": post_data.get("repost_count", 0),
+        "repost_source_type": post_data.get("repost_source_type"),
+        "repost_source_id": post_data.get("repost_source_id"),
+        "repost_root_post_id": post_data.get("repost_root_post_id"),
+        "repost_chain": post_data.get("repost_chain"),
     }
+
+    repost_origin = post_data.get("repost_origin")
+    if repost_origin:
+        origin_author_id = repost_origin.get("author_id")
+        origin_author = repost_origin.get("author") or {}
+        origin_username = origin_author.get("username", "")
+        standardized["repost_origin"] = {
+            "id": repost_origin.get("id"),
+            "author_id": origin_author_id,
+            "author_username": _expand_username_by_relation(
+                origin_username,
+                origin_author_id,
+                current_user_id,
+            ),
+            "content": _expand_content_mentions_by_relation(
+                repost_origin.get("content", ""),
+                current_user_id,
+            ),
+            "created_at": repost_origin.get("created_at", ""),
+        }
 
     return standardized
 
@@ -567,6 +592,7 @@ def get_social_tools(relation_map=None) -> List:
             toggle_post_like,
             toggle_comment_like,
             create_comment,
+            repost,
             toggle_follow,
             create_post,
             logout,
@@ -588,6 +614,7 @@ def get_social_tools(relation_map=None) -> List:
             toggle_post_like,
             toggle_comment_like,
             create_comment,
+            repost,
             toggle_follow,
             create_post,
             logout,
