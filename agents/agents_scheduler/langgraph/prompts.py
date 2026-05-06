@@ -314,6 +314,7 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
         f"{indent}created_at / 创建时间: {post.get('created_at', '')}",
         f"{indent}like_count / 点赞数: {post.get('like_count', 0)}",
         f"{indent}comment_count / 评论数: {post.get('comment_count', 0)}",
+        f"{indent}repost_count / 回复数: {post.get('repost_count', 0)}",
         f"{indent}is_liked / 当前用户是否已点赞: {post.get('is_liked', False)}",
         f"{indent}follow_status / 当前用户对作者的关注状态: {post.get('follow_status', '')}",
     ]
