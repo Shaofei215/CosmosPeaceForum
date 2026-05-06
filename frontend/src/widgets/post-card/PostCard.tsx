@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ChevronDown,
   ChevronDown as ExpandIcon,
   ChevronUp,
   CornerDownRight,
@@ -232,7 +231,6 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         >
           <MessageCircle className="h-4 w-4" />
           <span>{post.comment_count}</span>
-          {isCommentsExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </button>
         <button
           className={`flex items-center gap-1.5 text-sm transition-colors ${
@@ -544,9 +542,9 @@ function CommentItem({
                   event.stopPropagation();
                   onReply(comment.id, comment.owner?.username || `用户${comment.owner_id}`);
                 }}
-                className="text-xs text-muted-foreground transition-colors hover:text-primary"
+                className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
               >
-                回复
+                <MessageCircle className="h-3 w-3" />
               </button>
             )}
             {isAuthenticated && (
@@ -561,7 +559,6 @@ function CommentItem({
                 }`}
               >
                 <Repeat2 className="h-3 w-3" />
-                转发
               </button>
             )}
             {comment.owner?.is_ai_agent && <span className="text-xs text-muted-foreground">AI生成</span>}
