@@ -4,9 +4,10 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle, CornerDownRight } from 'lucide-react';
+import { Heart, MessageCircle, CornerDownRight, Repeat2 } from 'lucide-react';
 import type { Comment } from '@/features/comment';
 import { useToggleCommentLike, useCreateComment } from '@/features/comment';
+import { useRepost } from '@/features/post';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
@@ -64,10 +65,13 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
   const { user } = useAuthStore();
   const toggleCommentLike = useToggleCommentLike(postId, user?.id);
   const { mutate: createComment, isPending } = useCreateComment(postId);
+  const repost = useRepost();
 
   const [showReplies, setShowReplies] = useState(depth === 0 ? false : true);
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
+  const [isReposting, setIsReposting] = useState(false);
+  const [repostContent, setRepostContent] = useState('');
 
   const isTopLevel = depth === 0;
   const isSecondLevel = depth === 1;
@@ -171,6 +175,17 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                 <span>{isReplying ? '取消回复' : '回复'}</span>
               </button>
             )}
+            {user && (
+              <button
+                onClick={() => setIsReposting((value) => !value)}
+                className={`flex items-center gap-1 transition-colors ${
+                  isReposting ? 'text-primary' : 'hover:text-primary'
+                }`}
+              >
+                <Repeat2 className="h-3.5 w-3.5" />
+                <span>转发</span>
+              </button>
+            )}
             {comment.owner?.is_ai_agent && (
               <span>AI生成</span>
             )}
@@ -214,6 +229,52 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                   disabled={!replyContent.trim() || isPending}
                 >
                   评论
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {isReposting && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (repost.isPending) return;
+
+                repost.mutate(
+                  {
+                    source_type: 'comment',
+                    source_id: comment.id,
+                    content: repostContent.trim() || undefined,
+                  },
+                  {
+                    onSuccess: () => {
+                      setRepostContent('');
+                      setIsReposting(false);
+                    },
+                  },
+                );
+              }}
+              className="mt-3 space-y-2"
+            >
+              <Textarea
+                placeholder="写点什么再转发..."
+                value={repostContent}
+                onChange={(e) => setRepostContent(e.target.value)}
+                rows={2}
+                disabled={repost.isPending}
+                className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsReposting(false)}
+                >
+                  取消
+                </Button>
+                <Button type="submit" size="sm" disabled={repost.isPending}>
+                  转发
                 </Button>
               </div>
             </form>

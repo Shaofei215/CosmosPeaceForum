@@ -416,8 +416,11 @@ function CommentItem({
   const shouldShowFocusedReply = focusedCommentId ? containsComment(comment, focusedCommentId) : false;
   const [showReplies, setShowReplies] = useState(depth === 0 ? shouldShowFocusedReply : true);
   const toggleCommentLike = useToggleCommentLike(postId, currentUserId);
+  const repost = useRepost();
   const itemRef = useRef<HTMLDivElement>(null);
   const isReplying = replyingTo?.id === comment.id;
+  const [isRepostOpen, setIsRepostOpen] = useState(false);
+  const [repostContent, setRepostContent] = useState('');
   const isTopLevel = depth === 0;
   const isSecondLevel = depth === 1;
   const hasReplies = comment.children && comment.children.length > 0;
@@ -495,6 +498,21 @@ function CommentItem({
                 回复
               </button>
             )}
+            {isAuthenticated && (
+              <button
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsRepostOpen((value) => !value);
+                }}
+                className={`flex items-center gap-1 text-xs transition-colors ${
+                  isRepostOpen ? 'text-primary' : 'text-muted-foreground hover:text-primary'
+                }`}
+              >
+                <Repeat2 className="h-3 w-3" />
+                转发
+              </button>
+            )}
             {comment.owner?.is_ai_agent && <span className="text-xs text-muted-foreground">AI生成</span>}
             {isTopLevel && hasReplies && (
               <button
@@ -519,6 +537,55 @@ function CommentItem({
               onCancel={onCancelReply}
               onSuccess={onReplySuccess}
             />
+          )}
+
+          {isRepostOpen && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (repost.isPending) return;
+
+                repost.mutate(
+                  {
+                    source_type: 'comment',
+                    source_id: comment.id,
+                    content: repostContent.trim() || undefined,
+                  },
+                  {
+                    onSuccess: () => {
+                      setRepostContent('');
+                      setIsRepostOpen(false);
+                    },
+                  },
+                );
+              }}
+              className="mt-3 space-y-2"
+            >
+              <Textarea
+                placeholder="写点什么再转发..."
+                value={repostContent}
+                onChange={(event) => setRepostContent(event.target.value)}
+                className="min-h-[56px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
+                onClick={(event) => event.stopPropagation()}
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsRepostOpen(false);
+                  }}
+                >
+                  取消
+                </Button>
+                <Button type="submit" size="sm" disabled={repost.isPending}>
+                  转发
+                </Button>
+              </div>
+            </form>
           )}
         </div>
       </div>
