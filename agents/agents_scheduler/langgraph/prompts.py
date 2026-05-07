@@ -326,6 +326,8 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
             f"{indent}repost_origin_author / 引用原帖作者: @{origin.get('author_username') or '?'}",
             f"{indent}repost_origin_content / 引用原帖内容: {origin.get('content', '')}",
         ])
+    elif post.get("repost_origin_missing"):
+        lines.append(f"{indent}repost_origin_content / 引用原帖内容: 原内容不存在")
     return lines
 
 

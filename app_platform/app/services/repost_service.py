@@ -84,13 +84,27 @@ def create_repost(
 
 def attach_repost_metadata(db: Session, post: Post) -> Post:
     post.repost_origin = post.repost_root_post if post.repost_root_post_id else None
+    post.repost_origin_missing = _is_repost_origin_missing(post)
     post.repost_chain_authors = build_repost_chain_authors(db, post.content)
     return post
 
 
 def attach_repost_origin(post: Post) -> Post:
     post.repost_origin = post.repost_root_post if post.repost_root_post_id else None
+    post.repost_origin_missing = _is_repost_origin_missing(post)
     return post
+
+
+def is_repost_origin_missing(post: Post) -> bool:
+    return _is_repost_origin_missing(post)
+
+
+def _is_repost_origin_missing(post: Post) -> bool:
+    if not post.repost_source_type:
+        return False
+    if post.repost_root_post_id is None:
+        return True
+    return post.repost_root_post is None
 
 
 def build_repost_chain_authors(db: Session, content: str) -> list[dict[str, object]]:

@@ -57,6 +57,7 @@ class PostResponse(PostBase):
     repost_chain: Optional[str] = None
     repost_chain_authors: List[RepostChainAuthor] = Field(default_factory=list)
     repost_origin: Optional[RepostOriginPost] = None
+    repost_origin_missing: bool = False
 
     class Config:
         from_attributes = True

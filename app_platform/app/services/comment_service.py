@@ -475,6 +475,21 @@ def get_comment_by_id(
     return comment
 
 
+def _get_descendant_comment_ids(comment_id: int, db: Session) -> List[int]:
+    descendant_ids: List[int] = []
+    pending_ids = [comment_id]
+
+    while pending_ids:
+        child_ids = [
+            row[0]
+            for row in db.query(Comment.id).filter(Comment.parent_id.in_(pending_ids)).all()
+        ]
+        descendant_ids.extend(child_ids)
+        pending_ids = child_ids
+
+    return descendant_ids
+
+
 def delete_comment(
     comment_id: int,
     user_id: int,
@@ -546,3 +561,51 @@ def delete_comment(
     except Exception as e:
         db.rollback()
         raise e
+
+
+def delete_comment_precise(
+    comment_id: int,
+    user_id: int,
+    db: Session
+) -> bool:
+    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    if not comment:
+        raise CommentNotFoundError(comment_id)
+
+    if comment.owner_id != user_id:
+        raise PermissionError(f"User (ID: {user_id}) cannot delete comment (ID: {comment_id})")
+
+    try:
+        post_id = comment.post_id
+        parent_id = comment.parent_id
+
+        if parent_id is None:
+            count_to_subtract = 1 + len(_get_descendant_comment_ids(comment_id, db))
+        else:
+            count_to_subtract = 1
+            db.query(Comment).filter(Comment.parent_id == comment_id).update(
+                {Comment.parent_id: parent_id},
+                synchronize_session=False
+            )
+            db.flush()
+
+        db.delete(comment)
+
+        post = db.query(Post).filter(Post.id == post_id).first()
+        if post:
+            post.comment_count = max(0, post.comment_count - count_to_subtract)
+
+        if parent_id is not None:
+            current_id = parent_id
+            while current_id is not None:
+                ancestor = db.query(Comment).filter(Comment.id == current_id).first()
+                if not ancestor:
+                    break
+                ancestor.reply_count = max(0, ancestor.reply_count - count_to_subtract)
+                current_id = ancestor.parent_id
+
+        db.commit()
+        return True
+    except Exception:
+        db.rollback()
+        raise

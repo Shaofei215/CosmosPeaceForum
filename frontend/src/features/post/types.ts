@@ -36,6 +36,7 @@ export interface Post {
   repost_chain?: string | null;
   repost_chain_authors?: RepostChainAuthor[];
   repost_origin?: RepostOriginPost | null;
+  repost_origin_missing?: boolean;
 }
 
 export interface RepostChainAuthor {

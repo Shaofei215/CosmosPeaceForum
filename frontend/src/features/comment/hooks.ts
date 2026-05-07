@@ -59,6 +59,7 @@ export const useDeleteComment = (postId: number) => {
       queryClient.invalidateQueries({ queryKey: ['post', postId] });
       // 刷新信息流
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 };

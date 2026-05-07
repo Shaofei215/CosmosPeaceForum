@@ -142,6 +142,7 @@ def get_post(
         repost_chain=post.repost_chain,
         repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
         repost_origin=post.repost_root_post if post.repost_root_post_id else None,
+        repost_origin_missing=repost_service.is_repost_origin_missing(post),
         is_liked_by_current_user=is_liked
     )
 
@@ -214,6 +215,10 @@ def delete_post(
     if post.author_id != current_user.id:
         raise HTTPException(status_code=403, detail="无权删除此帖子")
 
+    db.query(Post).filter(Post.repost_root_post_id == post_id).update(
+        {Post.repost_root_post_id: None},
+        synchronize_session=False
+    )
     db.delete(post)
     db.commit()
     return {"message": "帖子删除成功"}

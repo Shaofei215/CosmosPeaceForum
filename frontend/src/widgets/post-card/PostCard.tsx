@@ -6,13 +6,20 @@ import {
   CornerDownRight,
   Heart,
   MessageCircle,
+  MoreHorizontal,
   Repeat2,
+  Trash2,
 } from 'lucide-react';
 import type { PostFeedItem } from '@/features/feed';
 import type { PostWithLikeStatus } from '@/features/post';
-import { useRepost } from '@/features/post';
+import { useDeletePost, useRepost } from '@/features/post';
 import type { Comment } from '@/features/comment';
-import { useComments, useCreateComment, useToggleCommentLike } from '@/features/comment';
+import {
+  useComments,
+  useCreateComment,
+  useDeleteComment,
+  useToggleCommentLike,
+} from '@/features/comment';
 import { useToggleLike } from '@/features/like';
 import { useFollowStatus, useToggleFollow } from '@/features/follow';
 import { useAuthStore } from '@/features/auth';
@@ -32,6 +39,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const toggleFollow = useToggleFollow();
   const createComment = useCreateComment(post.id);
   const repost = useRepost();
+  const deletePost = useDeletePost();
 
   const [isCommentsExpanded, setIsCommentsExpanded] = useState(expanded);
   const [isContentExpanded, setIsContentExpanded] = useState(expanded);
@@ -40,6 +48,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const [commentShouldRepost, setCommentShouldRepost] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: number; username: string } | null>(null);
   const [isRepostOpen, setIsRepostOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [repostContent, setRepostContent] = useState('');
   const contentRef = useRef<HTMLParagraphElement>(null);
 
@@ -111,6 +120,21 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
     );
   };
 
+  const handleDeletePost = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isCurrentUser || deletePost.isPending) return;
+
+    deletePost.mutate(post.id, {
+      onSuccess: () => {
+        setIsMoreOpen(false);
+        if (expanded) {
+          navigate('/');
+        }
+      },
+    });
+  };
+
   return (
     <article className="p-4">
       <div className="mb-3 flex items-center gap-3">
@@ -180,6 +204,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           />
         </p>
         {post.repost_origin && <RepostOriginBlock origin={post.repost_origin} />}
+        {!post.repost_origin && post.repost_origin_missing && <MissingRepostOriginBlock />}
         {isContentTruncated && (
           <button
             onClick={(event) => {
@@ -246,6 +271,38 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           <Repeat2 className="h-4 w-4" />
           <span>{post.repost_count || 0}</span>
         </button>
+        <div className="relative ml-auto">
+          <button
+            className={`flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${
+              isMoreOpen ? 'bg-muted text-foreground' : ''
+            }`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setIsMoreOpen((value) => !value);
+            }}
+            aria-label="更多操作"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {isMoreOpen && (
+            <div
+              className="absolute bottom-8 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {isCurrentUser && (
+                <button
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10"
+                  onClick={handleDeletePost}
+                  disabled={deletePost.isPending}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  删除
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {isRepostOpen && isAuthenticated && (
@@ -380,6 +437,14 @@ function RepostOriginBlock({
   );
 }
 
+function MissingRepostOriginBlock() {
+  return (
+    <div className="mt-3 rounded-md border border-dashed border-border/80 bg-muted/20 p-3 text-sm text-muted-foreground">
+      原内容不存在
+    </div>
+  );
+}
+
 function LinkedMentions({
   text,
   authors,
@@ -465,14 +530,27 @@ function CommentItem({
   const shouldShowFocusedReply = focusedCommentId ? containsComment(comment, focusedCommentId) : false;
   const [showReplies, setShowReplies] = useState(depth === 0 ? shouldShowFocusedReply : true);
   const toggleCommentLike = useToggleCommentLike(postId, currentUserId);
+  const deleteComment = useDeleteComment(postId);
   const repost = useRepost();
   const itemRef = useRef<HTMLDivElement>(null);
   const isReplying = replyingTo?.id === comment.id;
   const [isRepostOpen, setIsRepostOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [repostContent, setRepostContent] = useState('');
   const isTopLevel = depth === 0;
   const isSecondLevel = depth === 1;
+  const isCurrentUserComment = currentUserId === comment.owner_id;
   const hasReplies = comment.children && comment.children.length > 0;
+
+  const handleDeleteComment = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isCurrentUserComment || deleteComment.isPending) return;
+
+    deleteComment.mutate(comment.id, {
+      onSuccess: () => setIsMoreOpen(false),
+    });
+  };
 
   useEffect(() => {
     if (focusedCommentId && shouldShowFocusedReply) {
@@ -562,6 +640,38 @@ function CommentItem({
               </button>
             )}
             {comment.owner?.is_ai_agent && <span className="text-xs text-muted-foreground">AI生成</span>}
+            <div className="relative order-2 ml-auto">
+              <button
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${
+                  isMoreOpen ? 'bg-muted text-foreground' : ''
+                }`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsMoreOpen((value) => !value);
+                }}
+                aria-label="更多操作"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+              {isMoreOpen && (
+                <div
+                  className="absolute bottom-7 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {isCurrentUserComment && (
+                    <button
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10"
+                      onClick={handleDeleteComment}
+                      disabled={deleteComment.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      删除
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             {isTopLevel && hasReplies && (
               <button
                 onClick={(event) => {
@@ -569,7 +679,7 @@ function CommentItem({
                   event.stopPropagation();
                   setShowReplies(!showReplies);
                 }}
-                className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+                className="order-1 flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
               >
                 <CornerDownRight className="h-3 w-3" />
                 {showReplies ? '收起回复' : `查看 ${comment.reply_count} 条回复`}

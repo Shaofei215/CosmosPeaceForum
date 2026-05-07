@@ -85,11 +85,13 @@ export const useDeletePost = () => {
 
   return useMutation({
     mutationFn: postApi.deletePost,
-    onSuccess: () => {
+    onSuccess: (_, postId) => {
+      queryClient.removeQueries({ queryKey: ['post', postId] });
       // 刷新帖子列表
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       // 刷新信息流
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 };
