@@ -504,6 +504,50 @@ def create_post(
 
 
 @tool
+def delete_content(
+    content_type: str,
+    content_id: int,
+    reason: str = "想要删除自己发布的内容",
+    summary: str = ""
+) -> ToolResult:
+    """
+    删除当前账号自己发布的内容。
+
+    Args:
+        content_type: 删除内容类型，必须是 "post" 或 "comment"。
+        content_id: 删除内容 ID。必须来自之前工具返回的真实 ID，不要编造。
+        reason: 调用该工具的原因，用于记录操作动机与上下文。
+        summary: 对当前视野的第一人称总结，用于记录工作记忆。
+
+    Returns:
+        ToolResult: 删除成功后的操作记录。
+
+    Raises:
+        UnauthorizedError: 未登录或 Token 已过期
+        NotFoundError: 内容不存在
+        ValidationError: content_type 不是 "post" 或 "comment"
+        ToolExecutionError: 无权删除或服务端错误
+    """
+    content_type = content_type.lower()
+    if content_type not in {"post", "comment"}:
+        raise ValidationError('content_type 必须是 "post" 或 "comment"')
+
+    endpoint = f"/posts/{content_id}" if content_type == "post" else f"/posts/comments/{content_id}"
+    _make_request(
+        method="DELETE",
+        endpoint=endpoint,
+        reason=reason,
+        summary=summary,
+    )
+
+    label = "帖子" if content_type == "post" else "评论"
+    return ToolResult(
+        action=f"删除了自己的{label}（ID {content_id}）",
+        data={"content_type": content_type, "content_id": content_id, "deleted": True},
+    )
+
+
+@tool
 def repost(
     source_type: str,
     source_id: int,

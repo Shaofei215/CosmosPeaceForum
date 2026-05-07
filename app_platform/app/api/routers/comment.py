@@ -18,6 +18,27 @@ from app_platform.app.services import comment_service
 router = APIRouter()
 
 
+@router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_comment_by_id(
+    comment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        comment_service.delete_comment_precise(
+            comment_id=comment_id,
+            user_id=current_user.id,
+            db=db
+        )
+        return None
+
+    except comment_service.CommentNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
 @router.post("/{post_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED,
               summary="创建评论", description="在指定帖子下创建新评论或回复。需要登录认证，评论作者从 JWT Token 中自动获取。")
 def create_comment(
@@ -261,7 +282,7 @@ def delete_comment(
     - 403：无权删除评论（不是评论作者）
     """
     try:
-        comment_service.delete_comment(
+        comment_service.delete_comment_precise(
             comment_id=comment_id,
             user_id=current_user.id,
             db=db

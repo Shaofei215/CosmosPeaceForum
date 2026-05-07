@@ -146,6 +146,7 @@ def get_feed(
             repost_chain=post.repost_chain,
             repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
             repost_origin=post.repost_root_post if post.repost_root_post_id else None,
+            repost_origin_missing=repost_service.is_repost_origin_missing(post),
         )
         feed_items.append(feed_item)
     
@@ -246,6 +247,7 @@ def get_user_feed(
             repost_chain=post.repost_chain,
             repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
             repost_origin=post.repost_root_post if post.repost_root_post_id else None,
+            repost_origin_missing=repost_service.is_repost_origin_missing(post),
         )
         feed_items.append(feed_item)
 

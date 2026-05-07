@@ -287,6 +287,7 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
         "repost_root_post_id": post_data.get("repost_root_post_id"),
         "repost_chain": formatted_repost_chain or raw_repost_chain,
         "repost_chain_authors": repost_chain_authors,
+        "repost_origin_missing": post_data.get("repost_origin_missing", False),
     }
 
     repost_origin = post_data.get("repost_origin")
@@ -658,6 +659,7 @@ def get_social_tools(relation_map=None) -> List:
             repost,
             toggle_follow,
             create_post,
+            delete_content,
             logout,
             get_user_profile,
         )
@@ -680,6 +682,7 @@ def get_social_tools(relation_map=None) -> List:
             repost,
             toggle_follow,
             create_post,
+            delete_content,
             logout,
             get_user_profile,
             get_global_feed,
