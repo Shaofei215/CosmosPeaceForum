@@ -10,7 +10,8 @@ from agents.agents_scheduler.langgraph.tools.types import ToolResult, NotFoundEr
 from agents.agents_scheduler.langgraph.tools.utils import (
     _make_request, _get_post, _get_comment, _get_post_comments, _get_comment_replies,
     _get_global_feed, _get_user_posts,
-    _standardize_post, _standardize_posts_list, _standardize_comments_list, _truncate
+    _standardize_post, _standardize_posts_list, _standardize_comment,
+    _standardize_comments_list, _truncate
 )
 
 

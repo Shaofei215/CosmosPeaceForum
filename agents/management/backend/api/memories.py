@@ -164,6 +164,7 @@ async def _llm_smart_chunk(
     personality_prompt: str,
     semantic_timestamp: float,
     db: Session,
+    memory_coefficient: Optional[float] = None,
     enable_rag_on_chunking: bool = True,
 ) -> list[dict]:
     """
@@ -175,6 +176,7 @@ async def _llm_smart_chunk(
         personality_prompt: 角色个性提示词
         semantic_timestamp: 语义时间戳
         db: 数据库会话
+        memory_coefficient: 兼容旧调用方的默认记忆系数；LLM 分块时实际系数由 LLM 生成
         enable_rag_on_chunking: 是否在分块时启用 RAG 召回记忆
 
     Returns:

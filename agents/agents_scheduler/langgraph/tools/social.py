@@ -90,6 +90,8 @@ def view_notifications(
             - action: 自然语言操作记录，例如 "查看了消息列表，共看到 5 条消息"
             - data.notifications: 消息列表。每条消息包含 type、sender_id、sender_username、resource_type、
               post_id、comment_id、source_content、created_at 等字段。
+              如果要直接回复评论类消息，请使用该消息的 post_id 调用 create_comment.post_id，
+              并把该消息的 comment_id 填入 create_comment.parent_id；省略 parent_id 会创建一级评论。
             - data.total: 当前账号全部消息总数
             - data.unread_count: 本次查看后服务端返回的未读数量，通常为 0
 
@@ -325,7 +327,9 @@ def create_comment(
                 例如："用户想要表达对帖子的认同"、"用户想要回复某条评论"等。
         summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
                 例如："我在帖子下方看到了很多评论，想自己也说两句"等。
-        parent_id: 父评论 ID（可选），指定时创建回复，为空时创建一级评论
+        parent_id: 父评论 ID（可选），指定时创建回复，为空时创建一级评论。
+                   当你从 view_notifications 或 view_notification_origin 看到某条评论的 comment_id/id，
+                   且想回复那条评论时，必须把该评论 ID 填入 parent_id；不要省略。
 
     Returns:
         ToolResult: 包含以下字段:
@@ -344,7 +348,7 @@ def create_comment(
     if parent_id is not None:
         json_data["parent_id"] = parent_id
 
-    _make_request(
+    created_comment = _make_request(
         method="POST",
         endpoint=f"/posts/{post_id}/comments",
         json_data=json_data,
@@ -361,6 +365,12 @@ def create_comment(
         standardized_parent = _standardize_comment(parent_comment_data, current_user_id)
     else:
         standardized_parent = None
+
+    standardized_new_comment = (
+        _standardize_comment(created_comment, current_user_id)
+        if created_comment
+        else {"content": content, "post_id": post_id, "parent_id": parent_id}
+    )
 
     post_author = standardized_post.get("author_username", "")
     post_content = _truncate(standardized_post.get("content", ""), 120)
@@ -387,7 +397,7 @@ def create_comment(
         data={
             "post": standardized_post,
             "parent_comment": standardized_parent,
-            "new_comment": {"content": content},
+            "new_comment": standardized_new_comment,
         }
     )
 
