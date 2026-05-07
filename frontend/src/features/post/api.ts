@@ -3,7 +3,7 @@
  */
 
 import { apiClient } from '@/shared/api/client';
-import type { Post, PostWithLikeStatus, CreatePostData, UpdatePostData } from './types';
+import type { Post, PostWithLikeStatus, CreatePostData, UpdatePostData, RepostData } from './types';
 
 /**
  * 帖子API
@@ -31,6 +31,9 @@ export const postApi = {
    */
   createPost: (data: CreatePostData) =>
     apiClient.post<Post>('/posts/', data),
+
+  repost: (data: RepostData) =>
+    apiClient.post<Post>('/posts/repost', data),
 
   /**
    * 更新帖子

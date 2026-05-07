@@ -305,7 +305,7 @@ def _format_tool_result(result: Any) -> str:
 
 def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
     """格式化标准化帖子字段，确保 LLM 能读取完整结构。"""
-    return [
+    lines = [
         f"{indent}id / 帖子ID: {post.get('id', '?')}",
         f"{indent}author_id / 作者ID: {post.get('author_id', '?')}",
         f"{indent}author_username / 作者用户名: @{post.get('author_username') or '?'}",
@@ -314,9 +314,19 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
         f"{indent}created_at / 创建时间: {post.get('created_at', '')}",
         f"{indent}like_count / 点赞数: {post.get('like_count', 0)}",
         f"{indent}comment_count / 评论数: {post.get('comment_count', 0)}",
+        f"{indent}repost_count / 回复数: {post.get('repost_count', 0)}",
         f"{indent}is_liked / 当前用户是否已点赞: {post.get('is_liked', False)}",
         f"{indent}follow_status / 当前用户对作者的关注状态: {post.get('follow_status', '')}",
     ]
+    origin = post.get("repost_origin") or {}
+    if origin:
+        lines.extend([
+            f"{indent}repost_origin_id / 引用原帖ID: {origin.get('id', '?')}",
+            f"{indent}repost_origin_author_id / 引用原帖作者ID: {origin.get('author_id', '?')}",
+            f"{indent}repost_origin_author / 引用原帖作者: @{origin.get('author_username') or '?'}",
+            f"{indent}repost_origin_content / 引用原帖内容: {origin.get('content', '')}",
+        ])
+    return lines
 
 
 def _format_comment_fields(comment: Dict[str, Any], indent: str = "") -> List[str]:

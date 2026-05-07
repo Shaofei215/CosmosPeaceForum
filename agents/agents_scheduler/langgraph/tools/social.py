@@ -494,6 +494,78 @@ def create_post(
 
 
 @tool
+def repost(
+    source_type: str,
+    source_id: int,
+    content: Optional[str] = None,
+    reason: str = "想要转发内容",
+    summary: str = ""
+) -> ToolResult:
+    """
+    转发内容，产生一个新的帖子
+
+    支持两种转发来源：帖子（source_type="post"）和评论（source_type="comment"）。
+    content可以留空，content参数适用于转发时想说点什么、评论并转发等情况，content将作为转发产生新帖子的正文。
+
+    注意：此工具会自动从当前执行上下文获取认证信息，无需手动传入 Token。
+
+    Args:
+        source_type: 转发来源类型，必须是 "post" 或 "comment"。
+                     为 "post" 时转发一个帖子，为 "comment" 时转发一条评论。
+        source_id: 来源 ID。当 source_type 为 "post" 时是帖子 ID，为 "comment" 时是评论 ID。
+                   必须来自之前工具返回的真实 ID，不要编造。
+        content: 可选的转发正文内容，会作为转发产生新帖子的正文，可选。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
+                例如："用户觉得这篇帖子很有价值，想转发分享"、"用户想保存这条评论到自己的主页"等。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+                例如："我看到一篇很有趣的帖子，想转发给我的粉丝"等。
+
+    Returns:
+            ToolResult: 包含以下字段:
+                - action: "转发了 @{origin_author} 的原内容：{origin_content}；同时说：{repost_content}" 或 "转发了{source_type} {source_id}：{repost_content}"
+                - data: 包含新帖子信息的字典，其中 data.post.repost_origin 为被转发来源的标准化信息
+
+    Raises:
+        UnauthorizedError: 未登录或 Token 已过期
+        NotFoundError: 来源帖子或评论不存在
+        ValidationError: source_type 不是 "post" 或 "comment"
+        ToolExecutionError: 服务器内部错误
+    """
+    current_user_id = get_current_user_id()
+    source_type = source_type.lower()
+    if source_type not in {"post", "comment"}:
+        raise ValidationError('source_type 必须是 "post" 或 "comment"')
+
+    payload = {
+        "source_type": source_type,
+        "source_id": source_id,
+    }
+    if content is not None:
+        payload["content"] = content
+
+    created_post = _make_request(
+        method="POST",
+        endpoint="/posts/repost",
+        json_data=payload,
+        reason=reason,
+        summary=summary,
+    )
+    standardized_post = _standardize_post(created_post, current_user_id)
+
+    origin = standardized_post.get("repost_origin") or {}
+    origin_author = origin.get("author_username", "")
+    origin_content = _truncate(origin.get("content", ""), 80)
+    repost_content = _truncate(standardized_post.get("content", ""), 120)
+
+    if origin_author and origin_content:
+        action = f"转发了 @{origin_author} 的原内容：{origin_content}；同时说：{repost_content}"
+    else:
+        action = f"转发了{source_type} {source_id}：{repost_content}"
+
+    return ToolResult(action=action, data={"post": standardized_post})
+
+
+@tool
 def logout(
     reason: str = "用户想要结束本次会话",
     summary: str = ""

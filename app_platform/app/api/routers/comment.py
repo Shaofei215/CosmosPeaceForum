@@ -50,7 +50,8 @@ def create_comment(
             user_id=current_user.id,
             content=comment_data.content,
             parent_id=comment_data.parent_id,
-            db=db
+            db=db,
+            repost=comment_data.repost,
         )
 
         comment.is_liked = False

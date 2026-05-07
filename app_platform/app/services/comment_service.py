@@ -8,7 +8,7 @@ from collections import defaultdict
 from app_platform.app.models.comment import Comment, CommentLike
 from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
-from app_platform.app.services import notification_service
+from app_platform.app.services import notification_service, repost_service
 
 
 class PostNotFoundError(Exception):
@@ -88,7 +88,8 @@ def create_comment(
     user_id: int,
     content: str,
     parent_id: Optional[int],
-    db: Session
+    db: Session,
+    repost: bool = False
 ) -> Comment:
     """
     创建评论或回复
@@ -171,6 +172,16 @@ def create_comment(
             sender_id=user_id,
             parent_comment=parent_comment,
         )
+
+        if repost:
+            repost_service.create_repost(
+                db=db,
+                user_id=user_id,
+                source_type="comment",
+                source_id=new_comment.id,
+                content=content,
+                commit=False,
+            )
 
         # 4. 提交事务
         db.commit()

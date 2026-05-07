@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Heart, MessageCircle, UserPlus } from 'lucide-react';
+import { Bell, Heart, MessageCircle, Repeat2, UserPlus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
@@ -8,6 +8,7 @@ import { NotificationItem, useNotifications } from '@/features/notification';
 import { useAuthStore } from '@/features/auth';
 import { useCommentLikeStatus, useCreateComment, useToggleCommentLike } from '@/features/comment';
 import { useFollowStatus, useToggleFollow } from '@/features/follow';
+import { useToggleLike } from '@/features/like';
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
@@ -108,6 +109,13 @@ function NotificationActions({ notification }: { notification: NotificationItem 
     return <CommentActionBar postId={notification.post_id} commentId={notification.comment_id} />;
   }
 
+  if (
+    notification.type === 'repost' &&
+    notification.post_id
+  ) {
+    return <RepostActionBar postId={notification.post_id} />;
+  }
+
   return null;
 }
 
@@ -118,6 +126,7 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
   const createComment = useCreateComment(postId);
   const [isReplying, setIsReplying] = useState(false);
   const [content, setContent] = useState('');
+  const [shouldRepost, setShouldRepost] = useState(false);
   const isLiked = likeStatus?.is_liked ?? false;
 
   const submitReply = (event: React.FormEvent) => {
@@ -125,11 +134,12 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
     if (!content.trim()) return;
 
     createComment.mutate(
-      { content: content.trim(), parent_id: commentId },
+      { content: content.trim(), parent_id: commentId, repost: shouldRepost },
       {
         onSuccess: () => {
           setContent('');
           setIsReplying(false);
+          setShouldRepost(false);
         },
       }
     );
@@ -175,13 +185,24 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
             placeholder="写下你的回复..."
             className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
           />
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setIsReplying(false)}>
-              取消
-            </Button>
-            <Button type="submit" size="sm" disabled={!content.trim() || createComment.isPending}>
-              回复
-            </Button>
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={shouldRepost}
+                onChange={event => setShouldRepost(event.target.checked)}
+                className="h-3.5 w-3.5"
+              />
+              同时转发
+            </label>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setIsReplying(false)}>
+                取消
+              </Button>
+              <Button type="submit" size="sm" disabled={!content.trim() || createComment.isPending}>
+                回复
+              </Button>
+            </div>
           </div>
         </form>
       )}
@@ -212,6 +233,93 @@ function FollowBackButton({ userId }: { userId: number }) {
   );
 }
 
+function RepostActionBar({ postId }: { postId: number }) {
+  const { user } = useAuthStore();
+  const likeMutation = useToggleLike();
+  const createComment = useCreateComment(postId);
+  const [isReplying, setIsReplying] = useState(false);
+  const [content, setContent] = useState('');
+  const [shouldRepost, setShouldRepost] = useState(false);
+
+  const submitReply = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!content.trim()) return;
+
+    createComment.mutate(
+      { content: content.trim(), repost: shouldRepost },
+      {
+        onSuccess: () => {
+          setContent('');
+          setIsReplying(false);
+          setShouldRepost(false);
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 rounded-md gap-1 text-muted-foreground hover:text-red-500"
+          onClick={() => likeMutation.mutate(postId)}
+          disabled={!user || likeMutation.isPending}
+        >
+          <Heart className="h-3.5 w-3.5" />
+          点赞
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={`h-7 px-2 rounded-md gap-1 ${
+            isReplying
+              ? 'text-primary hover:text-primary'
+              : 'text-muted-foreground hover:text-primary'
+          }`}
+          onClick={() => setIsReplying(value => !value)}
+          disabled={!user}
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          回复
+        </Button>
+      </div>
+
+      {isReplying && (
+        <form onSubmit={submitReply} className="space-y-2">
+          <Textarea
+            value={content}
+            onChange={event => setContent(event.target.value)}
+            rows={2}
+            placeholder="写下你的回复..."
+            className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
+          />
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={shouldRepost}
+                onChange={event => setShouldRepost(event.target.checked)}
+                className="h-3.5 w-3.5"
+              />
+              同时转发
+            </label>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setIsReplying(false)}>
+                取消
+              </Button>
+              <Button type="submit" size="sm" disabled={!content.trim() || createComment.isPending}>
+                回复
+              </Button>
+            </div>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 function getTargetPath(notification: NotificationItem): string {
   if (notification.type === 'follow' && notification.sender) {
     return `/user/${notification.sender.id}`;
@@ -229,6 +337,10 @@ function getTargetPath(notification: NotificationItem): string {
 }
 
 function getTypeInfo(type: string) {
+  if (type === 'repost') {
+    return { label: '转发了你的内容', icon: Repeat2, color: 'text-primary' };
+  }
+
   const map = {
     post_like: { label: '赞了你的帖子', icon: Heart, color: 'text-primary' },
     comment_like: { label: '赞了你的评论', icon: Heart, color: 'text-primary' },

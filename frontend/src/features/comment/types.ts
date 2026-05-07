@@ -40,6 +40,8 @@ export interface CreateCommentData {
   content: string;
   /** 父评论ID（回复时填写） */
   parent_id?: number;
+  /** 是否评论并转发 */
+  repost?: boolean;
 }
 
 /**

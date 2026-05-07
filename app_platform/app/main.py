@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy import inspect, text
 
 from app_platform.app.core.config import get_settings
 from app_platform.app.core.paths import get_avatar_upload_dir
@@ -24,6 +25,35 @@ settings = get_settings()
 # 创建数据库表
 # Base.metadata.create_all 会根据模型定义自动创建所有表
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_runtime_schema():
+    inspector = inspect(engine)
+    if "posts" not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("posts")}
+    statements = []
+    if "repost_count" not in columns:
+        statements.append("ALTER TABLE posts ADD COLUMN repost_count INTEGER NOT NULL DEFAULT 0")
+    if "repost_source_type" not in columns:
+        statements.append("ALTER TABLE posts ADD COLUMN repost_source_type VARCHAR(20)")
+    if "repost_source_id" not in columns:
+        statements.append("ALTER TABLE posts ADD COLUMN repost_source_id INTEGER")
+    if "repost_root_post_id" not in columns:
+        statements.append("ALTER TABLE posts ADD COLUMN repost_root_post_id INTEGER")
+    if "repost_chain" not in columns:
+        statements.append("ALTER TABLE posts ADD COLUMN repost_chain TEXT")
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
+ensure_runtime_schema()
 
 # 创建定时任务调度器
 scheduler = BackgroundScheduler()

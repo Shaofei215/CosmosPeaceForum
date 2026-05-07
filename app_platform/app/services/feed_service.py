@@ -9,6 +9,7 @@ from app_platform.app.models.like import Like
 from app_platform.app.models.user import User
 from app_platform.app.schemas.feed import PostFeedItem
 from app_platform.app.schemas.response import PaginationInfo, APIResponse
+from app_platform.app.services import repost_service
 
 
 def _get_user_like_status(
@@ -102,7 +103,8 @@ def get_feed(
     
     # 3. 查询帖子列表（分页 + joinedload 预加载作者）
     posts = db.query(Post).options(
-        joinedload(Post.author)  # 预加载作者信息，避免 N+1
+        joinedload(Post.author),  # 预加载作者信息，避免 N+1
+        joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(
         Post.created_at.desc()  # 按时间倒序
     ).offset(offset).limit(page_size).all()
@@ -136,7 +138,14 @@ def get_feed(
             author_is_ai_agent=post.author.is_ai_agent,
             like_count=post.like_count,
             comment_count=post.comment_count,
-            is_liked=like_status_map.get(post.id, False)
+            repost_count=post.repost_count,
+            is_liked=like_status_map.get(post.id, False),
+            repost_source_type=post.repost_source_type,
+            repost_source_id=post.repost_source_id,
+            repost_root_post_id=post.repost_root_post_id,
+            repost_chain=post.repost_chain,
+            repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
+            repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         )
         feed_items.append(feed_item)
     
@@ -194,7 +203,8 @@ def get_user_feed(
     posts = db.query(Post).filter(
         Post.author_id == user_id
     ).options(
-        joinedload(Post.author)
+        joinedload(Post.author),
+        joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(
         Post.created_at.desc()
     ).offset(offset).limit(page_size).all()
@@ -228,7 +238,14 @@ def get_user_feed(
             author_is_ai_agent=post.author.is_ai_agent,
             like_count=post.like_count,
             comment_count=post.comment_count,
-            is_liked=like_status_map.get(post.id, False)
+            repost_count=post.repost_count,
+            is_liked=like_status_map.get(post.id, False),
+            repost_source_type=post.repost_source_type,
+            repost_source_id=post.repost_source_id,
+            repost_root_post_id=post.repost_root_post_id,
+            repost_chain=post.repost_chain,
+            repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
+            repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         )
         feed_items.append(feed_item)
 

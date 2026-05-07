@@ -1,180 +1,141 @@
-/**
- * 帖子卡片组件
- * 展示单个帖子的摘要信息
- */
-
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, ChevronDown, ChevronUp, CornerDownRight, ChevronDown as ExpandIcon } from 'lucide-react';
+import {
+  ChevronDown as ExpandIcon,
+  ChevronUp,
+  CornerDownRight,
+  Heart,
+  MessageCircle,
+  Repeat2,
+} from 'lucide-react';
 import type { PostFeedItem } from '@/features/feed';
 import type { PostWithLikeStatus } from '@/features/post';
+import { useRepost } from '@/features/post';
 import type { Comment } from '@/features/comment';
-import { Avatar, Skeleton, Button, Textarea } from '@/shared/components/ui';
-import { formatDate } from '@/shared/lib/utils';
-import { useToggleLike } from '@/features/like';
-import { useToggleFollow } from '@/features/follow';
-import { useFollowStatus } from '@/features/follow';
 import { useComments, useCreateComment, useToggleCommentLike } from '@/features/comment';
+import { useToggleLike } from '@/features/like';
+import { useFollowStatus, useToggleFollow } from '@/features/follow';
 import { useAuthStore } from '@/features/auth';
+import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
+import { formatDate } from '@/shared/lib/utils';
 
-/**
- * 帖子卡片组件属性
- */
 interface PostCardProps {
   post: PostFeedItem | PostWithLikeStatus;
   expanded?: boolean;
   focusedCommentId?: number;
 }
 
-/**
- * 帖子卡片组件
- */
 export function PostCard({ post, expanded = false, focusedCommentId }: PostCardProps) {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const toggleLike = useToggleLike();
   const toggleFollow = useToggleFollow();
+  const createComment = useCreateComment(post.id);
+  const repost = useRepost();
+
   const [isCommentsExpanded, setIsCommentsExpanded] = useState(expanded);
   const [isContentExpanded, setIsContentExpanded] = useState(expanded);
   const [isContentTruncated, setIsContentTruncated] = useState(false);
-  const contentRef = useRef<HTMLParagraphElement>(null);
   const [newCommentContent, setNewCommentContent] = useState('');
+  const [commentShouldRepost, setCommentShouldRepost] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: number; username: string } | null>(null);
+  const [isRepostOpen, setIsRepostOpen] = useState(false);
+  const [repostContent, setRepostContent] = useState('');
+  const contentRef = useRef<HTMLParagraphElement>(null);
 
-  // 适配两种数据类型的字段
-  const authorName = 'author_name' in post ? post.author_name : `用户${post.author_id}`;
-  const authorAvatar = 'author_avatar' in post ? post.author_avatar : null;
-  const authorBio = 'author_bio' in post ? post.author_bio : null;
+  const authorName = 'author_name' in post
+    ? post.author_name
+    : (post.author?.username || `用户${post.author_id}`);
+  const authorAvatar = 'author_avatar' in post
+    ? post.author_avatar
+    : (post.author?.avatar_url || null);
+  const authorBio = 'author_bio' in post ? post.author_bio : (post.author?.bio || null);
   const isLiked = 'is_liked' in post ? post.is_liked : post.is_liked_by_current_user;
-  const authorId = post.author_id;
-  const isAuthorAiAgent = 'author_is_ai_agent' in post ? post.author_is_ai_agent : false;
+  const isAuthorAiAgent = 'author_is_ai_agent' in post
+    ? post.author_is_ai_agent
+    : Boolean(post.author?.is_ai_agent);
+  const isCurrentUser = user?.id === post.author_id;
+  const { data: followStatus } = useFollowStatus(post.author_id);
 
-  // 判断是否为当前用户
-  const isCurrentUser = user?.id === authorId;
-
-  // 获取关注状态
-  const { data: followStatus } = useFollowStatus(authorId);
-
-  // 检测内容是否被截断
   useEffect(() => {
-    if (contentRef.current) {
-      const element = contentRef.current;
-      // 如果实际高度大于行高*3，说明内容被截断了
-      const lineHeight = parseInt(getComputedStyle(element).lineHeight) || 24;
-      const maxHeight = lineHeight * 3;
-      setIsContentTruncated(element.scrollHeight > maxHeight + 1);
-    }
+    if (!contentRef.current) return;
+    const lineHeight = parseInt(getComputedStyle(contentRef.current).lineHeight) || 24;
+    setIsContentTruncated(contentRef.current.scrollHeight > lineHeight * 3 + 1);
   }, [post.content]);
 
-  // 获取评论列表（仅在展开时请求）
-  const { data: commentsData, isLoading: isCommentsLoading } = useComments(
-    post.id,
-    user?.id,
-  );
-
-  // 创建评论（一级评论）
-  const createComment = useCreateComment(post.id);
-
-  const handleLike = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    toggleLike.mutate(post.id);
-  };
-
-  const handleFollow = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
-    if (isCurrentUser) return;
-    toggleFollow.mutate(authorId);
-  };
-
-  const handleCommentClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsCommentsExpanded(!isCommentsExpanded);
-  };
-
-  const handleViewAllComments = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    navigate(`/post/${post.id}`);
-  };
-
-  const handleSubmitNewComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!newCommentContent.trim() || createComment.isPending) return;
-
-    createComment.mutate(
-      { content: newCommentContent.trim() },
-      {
-        onSuccess: () => {
-          setNewCommentContent('');
-        },
-      }
-    );
-  };
-
-  const handleReply = (commentId: number, username: string) => {
-    setReplyingTo({ id: commentId, username });
-  };
-
-  const handleCancelReply = () => {
-    setReplyingTo(null);
-  };
-
-  const handleReplySuccess = () => {
-    setReplyingTo(null);
-  };
-
-  // 获取评论：展开模式显示所有，非展开模式显示前5条
+  const { data: commentsData, isLoading: isCommentsLoading } = useComments(post.id, user?.id);
   const previewComments = expanded
     ? (commentsData?.items || [])
     : (commentsData?.items?.slice(0, 5) || []);
   const hasMoreComments = !expanded && (commentsData?.total || 0) > 5;
 
+  const requireLogin = () => {
+    if (isAuthenticated) return true;
+    navigate('/login');
+    return false;
+  };
+
+  const handleSubmitNewComment = (event: React.FormEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!newCommentContent.trim() || createComment.isPending) return;
+
+    createComment.mutate(
+      { content: newCommentContent.trim(), repost: commentShouldRepost },
+      {
+        onSuccess: () => {
+          setNewCommentContent('');
+          setCommentShouldRepost(false);
+        },
+      },
+    );
+  };
+
+  const handleSubmitRepost = (event: React.FormEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (repost.isPending) return;
+
+    repost.mutate(
+      {
+        source_type: 'post',
+        source_id: post.id,
+        content: repostContent.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setRepostContent('');
+          setIsRepostOpen(false);
+        },
+      },
+    );
+  };
+
   return (
     <article className="p-4">
-      {/* 头部：作者信息 */}
-      <div className="flex items-center gap-3 mb-3">
+      <div className="mb-3 flex items-center gap-3">
         <Link to={`/user/${post.author_id}`}>
-          <Avatar
-            src={authorAvatar}
-            alt={authorName}
-            size="md"
-            className="!w-[42px] !h-[42px]"
-          />
+          <Avatar src={authorAvatar} alt={authorName} size="md" className="!h-[42px] !w-[42px]" />
         </Link>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <Link
             to={`/user/${post.author_id}`}
-            className="font-medium text-foreground hover:text-primary transition-colors"
+            className="font-medium text-foreground transition-colors hover:text-primary"
           >
             {authorName}
           </Link>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="mt-0.5 flex items-center gap-2">
             {authorBio ? (
-              <p className="text-xs text-muted-foreground truncate max-w-[50%]">
-                {authorBio}
-              </p>
+              <p className="max-w-[50%] truncate text-xs text-muted-foreground">{authorBio}</p>
             ) : (
               <span />
             )}
             <span className="text-xs text-muted-foreground">·</span>
-            <p className="text-xs text-muted-foreground shrink-0">
-              {formatDate(post.created_at)}
-            </p>
+            <p className="shrink-0 text-xs text-muted-foreground">{formatDate(post.created_at)}</p>
             {isAuthorAiAgent && (
               <>
                 <span className="text-xs text-muted-foreground">·</span>
-                <p className="text-xs text-muted-foreground shrink-0">
-                  AI生成
-                </p>
+                <p className="shrink-0 text-xs text-muted-foreground">AI生成</p>
               </>
             )}
           </div>
@@ -183,45 +144,50 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           <Button
             variant="outline"
             size="sm"
-            onClick={handleFollow}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!requireLogin()) return;
+              toggleFollow.mutate(post.author_id);
+            }}
             disabled={toggleFollow.isPending}
-            className="h-7 px-3 text-xs shrink-0 bg-white border-black text-black hover:bg-gray-100"
+            className="h-7 shrink-0 border-black bg-white px-3 text-xs text-black hover:bg-gray-100"
           >
             {toggleFollow.isPending ? (
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : (
-              "关注"
+              '关注'
             )}
           </Button>
         )}
       </div>
 
-      {/* 内容 */}
       <div className="min-w-0">
         {post.title && (
           <Link to={`/post/${post.id}`}>
-            <h3 className="font-semibold text-lg mb-2 line-clamp-2">
-              {post.title}
-            </h3>
+            <h3 className="mb-2 line-clamp-2 text-lg font-semibold">{post.title}</h3>
           </Link>
         )}
         <p
           ref={contentRef}
-          className={`text-foreground/90 whitespace-pre-wrap break-words ${
+          className={`whitespace-pre-wrap break-words text-foreground/90 ${
             isContentExpanded ? '' : 'line-clamp-3'
           }`}
         >
-          {post.content}
+          <LinkedMentions
+            text={post.content}
+            authors={post.repost_chain_authors || []}
+          />
         </p>
-        {/* 展开/收起按钮 - 仅在内容被截断时显示 */}
+        {post.repost_origin && <RepostOriginBlock origin={post.repost_origin} />}
         {isContentTruncated && (
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
               setIsContentExpanded(!isContentExpanded);
             }}
-            className="mt-2 text-sm text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+            className="mt-2 flex items-center gap-1 text-sm text-primary transition-colors hover:text-primary/80"
           >
             {isContentExpanded ? (
               <>
@@ -238,61 +204,94 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         )}
       </div>
 
-      {/* 底部：互动按钮 */}
-      <div className="flex items-center gap-6 mt-4">
+      <div className="mt-4 flex items-center gap-6">
         <button
           className={`flex items-center gap-1.5 text-sm transition-colors ${
-            isLiked
-              ? 'text-red-500'
-              : 'text-muted-foreground hover:text-red-500'
+            isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
           }`}
-          onClick={handleLike}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleLike.mutate(post.id);
+          }}
           disabled={toggleLike.isPending}
         >
-          <Heart
-            className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`}
-          />
+          <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
           <span>{post.like_count}</span>
         </button>
         <button
           className={`flex items-center gap-1.5 text-sm transition-colors ${
-            isCommentsExpanded
-              ? 'text-primary'
-              : 'text-muted-foreground hover:text-primary'
+            isCommentsExpanded ? 'text-primary' : 'text-muted-foreground hover:text-primary'
           }`}
-          onClick={handleCommentClick}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setIsCommentsExpanded(!isCommentsExpanded);
+          }}
         >
           <MessageCircle className="h-4 w-4" />
           <span>{post.comment_count}</span>
-          {isCommentsExpanded ? (
-            <ChevronUp className="h-3 w-3" />
-          ) : (
-            <ChevronDown className="h-3 w-3" />
-          )}
+        </button>
+        <button
+          className={`flex items-center gap-1.5 text-sm transition-colors ${
+            isRepostOpen ? 'text-primary' : 'text-muted-foreground hover:text-primary'
+          }`}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!requireLogin()) return;
+            setIsRepostOpen(!isRepostOpen);
+          }}
+        >
+          <Repeat2 className="h-4 w-4" />
+          <span>{post.repost_count || 0}</span>
         </button>
       </div>
 
-      {/* 评论预览区域 */}
+      {isRepostOpen && isAuthenticated && (
+        <form onSubmit={handleSubmitRepost} className="mt-3">
+          <Textarea
+            placeholder="写点什么再转发..."
+            value={repostContent}
+            onChange={(event) => setRepostContent(event.target.value)}
+            className="min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
+            onClick={(event) => event.stopPropagation()}
+          />
+          <div className="mt-2 flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIsRepostOpen(false)}>
+              取消
+            </Button>
+            <Button type="submit" size="sm" disabled={repost.isPending}>
+              转发
+            </Button>
+          </div>
+        </form>
+      )}
+
       {isCommentsExpanded && (
         <div className="mt-4">
-          {/* 发表评论输入框 - 仅登录用户可见，且不在回复其他评论时显示 */}
           {isAuthenticated && !replyingTo && (
             <form onSubmit={handleSubmitNewComment} className="mb-4">
               <div className="flex gap-2">
-                <Avatar
-                  src={null}
-                  alt={user?.username || '用户'}
-                  size="sm"
-                />
+                <Avatar src={user?.avatar_url || null} alt={user?.username || '用户'} size="sm" />
                 <div className="flex-1 space-y-2">
                   <Textarea
                     placeholder="写下你的评论..."
                     value={newCommentContent}
-                    onChange={(e) => setNewCommentContent(e.target.value)}
-                    className="min-h-[60px] resize-none border-0 shadow-none bg-muted/30 focus-visible:ring-0"
-                    onClick={(e) => e.stopPropagation()}
+                    onChange={(event) => setNewCommentContent(event.target.value)}
+                    className="min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
+                    onClick={(event) => event.stopPropagation()}
                   />
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={commentShouldRepost}
+                        onChange={(event) => setCommentShouldRepost(event.target.checked)}
+                        className="h-3.5 w-3.5"
+                      />
+                      同时转发
+                    </label>
                     <Button
                       type="submit"
                       size="sm"
@@ -320,30 +319,32 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   postId={post.id}
                   isAuthenticated={isAuthenticated}
                   currentUserId={user?.id}
-                  user={user}
+                  user={user ? { id: user.id, username: user.username } : null}
                   replyingTo={replyingTo}
-                  onReply={handleReply}
-                  onCancelReply={handleCancelReply}
-                  onReplySuccess={handleReplySuccess}
+                  onReply={(commentId, username) => setReplyingTo({ id: commentId, username })}
+                  onCancelReply={() => setReplyingTo(null)}
+                  onReplySuccess={() => setReplyingTo(null)}
                   depth={0}
                   parentOwner={null}
                   focusedCommentId={focusedCommentId}
                 />
               ))}
-
-              {/* 查看更多评论按钮 */}
               {hasMoreComments && (
                 <button
-                  onClick={handleViewAllComments}
-                  className="w-full text-center py-2 text-sm text-primary hover:text-primary/80 transition-colors"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    navigate(`/post/${post.id}`);
+                  }}
+                  className="w-full py-2 text-center text-sm text-primary transition-colors hover:text-primary/80"
                 >
                   查看所有 {commentsData?.total} 条评论
                 </button>
               )}
             </div>
           ) : (
-            <p className="text-center text-sm text-muted-foreground py-4">
-              {isAuthenticated ? '暂无评论，快来发表第一条评论吧！' : '暂无评论，登录后发表你的看法吧！'}
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              {isAuthenticated ? '暂无评论，快来发表第一条评论吧。' : '暂无评论，登录后发表你的看法。'}
             </p>
           )}
         </div>
@@ -352,13 +353,79 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   );
 }
 
-/**
- * 评论骨架屏
- */
+function RepostOriginBlock({
+  origin,
+}: {
+  origin: NonNullable<(PostFeedItem | PostWithLikeStatus)['repost_origin']>;
+}) {
+  const authorName = origin.author?.username || `用户${origin.author_id}`;
+
+  return (
+    <div className="mt-3 rounded-md border border-border/70 bg-muted/30 p-3 transition-colors hover:bg-muted/50">
+      <Link
+        to={`/user/${origin.author_id}`}
+        className="text-xs font-medium text-foreground/70 hover:text-primary"
+        onClick={(event) => event.stopPropagation()}
+      >
+        @{authorName}
+      </Link>
+      <Link
+        to={`/post/${origin.id}`}
+        className="mt-1 block line-clamp-3 whitespace-pre-wrap break-words text-sm text-foreground/75 hover:text-foreground"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {origin.content}
+      </Link>
+    </div>
+  );
+}
+
+function LinkedMentions({
+  text,
+  authors,
+}: {
+  text: string;
+  authors: { user_id: number; username: string }[];
+}) {
+  if (!authors.length) {
+    return <>{text}</>;
+  }
+
+  const authorByName = new Map(authors.map((author) => [author.username, author]));
+  const parts = text.split(/(@[^:\s/]+)/g);
+
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (!part.startsWith('@')) {
+          return <span key={`${part}-${index}`}>{part}</span>;
+        }
+
+        const username = part.slice(1);
+        const author = authorByName.get(username);
+        if (!author) {
+          return <span key={`${part}-${index}`}>{part}</span>;
+        }
+
+        return (
+          <Link
+            key={`${part}-${index}`}
+            to={`/user/${author.user_id}`}
+            className="font-medium text-primary hover:text-primary/80"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {part}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
 function CommentSkeleton() {
   return (
     <div className="flex gap-2">
-      <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
+      <Skeleton className="h-8 w-8 flex-shrink-0 rounded-full" />
       <div className="flex-1 space-y-2">
         <Skeleton className="h-16 w-full rounded-lg" />
       </div>
@@ -366,9 +433,6 @@ function CommentSkeleton() {
   );
 }
 
-/**
- * 评论项组件属性
- */
 interface CommentItemProps {
   comment: Comment;
   postId: number;
@@ -384,10 +448,6 @@ interface CommentItemProps {
   focusedCommentId?: number;
 }
 
-/**
- * 评论项组件
- * 展示单条评论及其所有回复（递归平级显示）
- */
 function CommentItem({
   comment,
   postId,
@@ -405,8 +465,14 @@ function CommentItem({
   const shouldShowFocusedReply = focusedCommentId ? containsComment(comment, focusedCommentId) : false;
   const [showReplies, setShowReplies] = useState(depth === 0 ? shouldShowFocusedReply : true);
   const toggleCommentLike = useToggleCommentLike(postId, currentUserId);
-  const isReplying = replyingTo?.id === comment.id;
+  const repost = useRepost();
   const itemRef = useRef<HTMLDivElement>(null);
+  const isReplying = replyingTo?.id === comment.id;
+  const [isRepostOpen, setIsRepostOpen] = useState(false);
+  const [repostContent, setRepostContent] = useState('');
+  const isTopLevel = depth === 0;
+  const isSecondLevel = depth === 1;
+  const hasReplies = comment.children && comment.children.length > 0;
 
   useEffect(() => {
     if (focusedCommentId && shouldShowFocusedReply) {
@@ -424,111 +490,86 @@ function CommentItem({
     }
   }, [focusedCommentId, comment.id]);
 
-  const handleLike = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    toggleCommentLike.mutate({ commentId: comment.id });
-  };
-
-  const handleReplyClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isReplying) {
-      onCancelReply();
-    } else {
-      onReply(comment.id, comment.owner.username);
-    }
-  };
-
-  const hasReplies = comment.children && comment.children.length > 0;
-  const isTopLevel = depth === 0;
-  const isSecondLevel = depth === 1;
-
   return (
-    <div className={`${isTopLevel ? 'space-y-3' : ''}`}>
-      {/* 评论内容 */}
+    <div className={isTopLevel ? 'space-y-3' : ''}>
       <div
         id={`comment-${comment.id}`}
         ref={itemRef}
         className={`flex gap-2 rounded-md transition-colors ${!isTopLevel ? 'mt-3' : ''}`}
       >
-        <Avatar
-          src={comment.owner.avatar_url}
-          alt={comment.owner.username}
-          size="sm"
-        />
-        <div className="flex-1 min-w-0">
-          <div className="px-0 py-0">
-            {/* 用户名显示 */}
-            {isTopLevel || isSecondLevel ? (
-              // 一级评论和一级回复：只显示用户名
-              <Link
-                to={`/user/${comment.owner_id}`}
-                className="text-sm font-medium text-foreground/70 hover:text-primary"
-              >
-                {comment.owner.username}
+        <Avatar src={comment.owner?.avatar_url} alt={comment.owner?.username || `用户${comment.owner_id}`} size="sm" />
+        <div className="min-w-0 flex-1">
+          {isTopLevel || isSecondLevel ? (
+            <Link
+              to={`/user/${comment.owner_id}`}
+              className="text-sm font-medium text-foreground/70 hover:text-primary"
+            >
+              {comment.owner?.username || `用户${comment.owner_id}`}
+            </Link>
+          ) : (
+            <div className="flex items-center gap-1 text-sm">
+              <Link to={`/user/${comment.owner_id}`} className="font-medium text-foreground/70 hover:text-primary">
+                {comment.owner?.username || `用户${comment.owner_id}`}
               </Link>
-            ) : (
-              // 三级及以上（回复的回复）：显示 xxx 回复 xxx
-              <div className="flex items-center gap-1 text-sm">
-                <Link
-                  to={`/user/${comment.owner_id}`}
-                  className="font-medium text-foreground/70 hover:text-primary"
-                >
-                  {comment.owner.username}
-                </Link>
-                <span className="text-muted-foreground">回复</span>
-                <Link
-                  to={`/user/${parentOwner?.id || comment.owner_id}`}
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  @{parentOwner?.username || comment.owner.username}
-                </Link>
-              </div>
-            )}
-            <p className="text-sm text-foreground/85 mt-0.5 whitespace-pre-wrap break-words">
-              {comment.content}
-            </p>
-          </div>
-          <div className="flex items-center gap-4 mt-1 ml-1">
-            <span className="text-xs text-muted-foreground">
-              {formatDate(comment.created_at)}
-            </span>
+              <span className="text-muted-foreground">回复</span>
+              <Link to={`/user/${parentOwner?.id || comment.owner_id}`} className="text-muted-foreground hover:text-primary">
+                @{parentOwner?.username || comment.owner?.username}
+              </Link>
+            </div>
+          )}
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/85">{comment.content}</p>
+
+          <div className="ml-1 mt-1 flex items-center gap-4">
+            <span className="text-xs text-muted-foreground">{formatDate(comment.created_at)}</span>
             <button
-              onClick={handleLike}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleCommentLike.mutate({ commentId: comment.id });
+              }}
               disabled={toggleCommentLike.isPending}
               className={`flex items-center gap-1 text-xs transition-colors ${
-                comment.is_liked
-                  ? 'text-red-500'
-                  : 'text-muted-foreground hover:text-red-500'
+                comment.is_liked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
               }`}
             >
-              <Heart
-                className={`h-3 w-3 ${comment.is_liked ? 'fill-current' : ''}`}
-              />
+              <Heart className={`h-3 w-3 ${comment.is_liked ? 'fill-current' : ''}`} />
               {comment.like_count > 0 && <span>{comment.like_count}</span>}
             </button>
             {isAuthenticated && !isReplying && (
               <button
-                onClick={handleReplyClick}
-                className={`text-xs transition-colors text-muted-foreground hover:text-primary`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onReply(comment.id, comment.owner?.username || `用户${comment.owner_id}`);
+                }}
+                className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
               >
-                回复
+                <MessageCircle className="h-3 w-3" />
               </button>
             )}
-            {comment.owner.is_ai_agent && (
-              <span className="text-xs text-muted-foreground">
-                AI生成
-              </span>
+            {isAuthenticated && (
+              <button
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsRepostOpen((value) => !value);
+                }}
+                className={`flex items-center gap-1 text-xs transition-colors ${
+                  isRepostOpen ? 'text-primary' : 'text-muted-foreground hover:text-primary'
+                }`}
+              >
+                <Repeat2 className="h-3 w-3" />
+              </button>
             )}
+            {comment.owner?.is_ai_agent && <span className="text-xs text-muted-foreground">AI生成</span>}
             {isTopLevel && hasReplies && (
               <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
                   setShowReplies(!showReplies);
                 }}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
               >
                 <CornerDownRight className="h-3 w-3" />
                 {showReplies ? '收起回复' : `查看 ${comment.reply_count} 条回复`}
@@ -536,7 +577,6 @@ function CommentItem({
             )}
           </div>
 
-          {/* 回复输入框 */}
           {isReplying && user && replyingTo && (
             <ReplyInput
               postId={postId}
@@ -546,12 +586,60 @@ function CommentItem({
               onSuccess={onReplySuccess}
             />
           )}
+
+          {isRepostOpen && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (repost.isPending) return;
+
+                repost.mutate(
+                  {
+                    source_type: 'comment',
+                    source_id: comment.id,
+                    content: repostContent.trim() || undefined,
+                  },
+                  {
+                    onSuccess: () => {
+                      setRepostContent('');
+                      setIsRepostOpen(false);
+                    },
+                  },
+                );
+              }}
+              className="mt-3 space-y-2"
+            >
+              <Textarea
+                placeholder="写点什么再转发..."
+                value={repostContent}
+                onChange={(event) => setRepostContent(event.target.value)}
+                className="min-h-[56px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
+                onClick={(event) => event.stopPropagation()}
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIsRepostOpen(false);
+                  }}
+                >
+                  取消
+                </Button>
+                <Button type="submit" size="sm" disabled={repost.isPending}>
+                  转发
+                </Button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
 
-      {/* 回复列表 - 递归平级显示 */}
       {showReplies && hasReplies && (
-        <div className={`${isTopLevel ? 'pl-8' : 'pl-0'}`}>
+        <div className={isTopLevel ? 'pl-8' : 'pl-0'}>
           {comment.children.map((child) => (
             <CommentItem
               key={child.id}
@@ -565,7 +653,7 @@ function CommentItem({
               onCancelReply={onCancelReply}
               onReplySuccess={onReplySuccess}
               depth={depth + 1}
-              parentOwner={{ id: comment.owner_id, username: comment.owner.username }}
+              parentOwner={{ id: comment.owner_id, username: comment.owner?.username || `用户${comment.owner_id}` }}
               focusedCommentId={focusedCommentId}
             />
           ))}
@@ -576,16 +664,10 @@ function CommentItem({
 }
 
 function containsComment(comment: Comment, commentId: number): boolean {
-  if (comment.id === commentId) {
-    return true;
-  }
-
+  if (comment.id === commentId) return true;
   return Boolean(comment.children?.some((child) => containsComment(child, commentId)));
 }
 
-/**
- * 回复输入框组件
- */
 function ReplyInput({
   postId,
   parentId,
@@ -600,61 +682,67 @@ function ReplyInput({
   onSuccess: () => void;
 }) {
   const [content, setContent] = useState('');
+  const [shouldRepost, setShouldRepost] = useState(false);
   const createComment = useCreateComment(postId);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
     if (!content.trim() || createComment.isPending) return;
 
     createComment.mutate(
       {
         content: content.trim(),
         parent_id: parentId,
+        repost: shouldRepost,
       },
       {
         onSuccess: () => {
+          setContent('');
+          setShouldRepost(false);
           onSuccess();
         },
-      }
+      },
     );
   };
 
   return (
     <form onSubmit={handleSubmit} className="mt-3">
-      <div className="flex gap-2">
-        <div className="flex-1 space-y-2">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>回复 @{replyToUsername}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCancel();
-              }}
-              className="text-primary hover:text-primary/80"
-            >
-              取消
-            </button>
-          </div>
-          <Textarea
-            placeholder="写下你的回复..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="min-h-[60px] resize-none border-0 shadow-none bg-muted/30 focus-visible:ring-0"
-            onClick={(e) => e.stopPropagation()}
-            autoFocus
-          />
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              size="sm"
-              disabled={!content.trim() || createComment.isPending}
-            >
-              评论
-            </Button>
-          </div>
+      <div className="flex-1 space-y-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>回复 @{replyToUsername}</span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onCancel();
+            }}
+            className="text-primary hover:text-primary/80"
+          >
+            取消
+          </button>
+        </div>
+        <Textarea
+          placeholder="写下你的回复..."
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+          className="min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
+          onClick={(event) => event.stopPropagation()}
+          autoFocus
+        />
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={shouldRepost}
+              onChange={(event) => setShouldRepost(event.target.checked)}
+              className="h-3.5 w-3.5"
+            />
+            同时转发
+          </label>
+          <Button type="submit" size="sm" disabled={!content.trim() || createComment.isPending}>
+            评论
+          </Button>
         </div>
       </div>
     </form>

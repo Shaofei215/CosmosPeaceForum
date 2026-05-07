@@ -181,6 +181,54 @@ def _expand_content_mentions_by_relation(
         return content
 
 
+def _format_repost_chain_for_llm(
+    repost_chain: str,
+    repost_chain_authors: List[Dict[str, Any]],
+    current_user_id: Optional[int],
+) -> str:
+    """
+    将转发链格式化为更适合 LLM 理解的正文。
+
+    输出会保留链路顺序，并在转发链作者标记上补充作者 ID，例如：
+    @alice[作者ID 12]: 转发内容
+    """
+    if not repost_chain:
+        return ""
+
+    author_id_map = {
+        str(item.get("username")): item.get("user_id")
+        for item in (repost_chain_authors or [])
+        if item.get("username")
+    }
+
+    segments = repost_chain.split(" //")
+    formatted_segments: List[str] = []
+    for segment in segments:
+        match = re.match(r"^@([^:\s/]+):\s*(.*)$", segment)
+        if not match:
+            formatted_segments.append(
+                _expand_content_mentions_by_relation(segment, current_user_id)
+            )
+            continue
+
+        raw_username, body = match.groups()
+        display_username = _expand_username_by_relation(
+            raw_username,
+            author_id_map.get(raw_username),
+            current_user_id,
+        )
+        display_body = _expand_content_mentions_by_relation(body, current_user_id)
+        user_id = author_id_map.get(raw_username)
+        if user_id:
+            formatted_segments.append(
+                f"@{display_username}[作者ID {user_id}]: {display_body}"
+            )
+        else:
+            formatted_segments.append(f"@{display_username}: {display_body}")
+
+    return " //".join(formatted_segments)
+
+
 def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] = None) -> Dict[str, Any]:
     """
     标准化帖子数据模型
@@ -209,9 +257,18 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
     author_id = post_data.get("author_id")
     raw_username = post_data.get("author_name") or post_data.get("author", {}).get("username", "")
     raw_content = post_data.get("content", "")
+    raw_repost_chain = post_data.get("repost_chain")
+    repost_chain_authors = post_data.get("repost_chain_authors", [])
 
     author_username = _expand_username_by_relation(raw_username, author_id, current_user_id)
     content = _expand_content_mentions_by_relation(raw_content, current_user_id)
+    formatted_repost_chain = _format_repost_chain_for_llm(
+        raw_repost_chain,
+        repost_chain_authors,
+        current_user_id,
+    )
+    if formatted_repost_chain:
+        content = formatted_repost_chain
 
     standardized = {
         "id": post_data.get("id"),
@@ -223,8 +280,34 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
         "like_count": post_data.get("like_count", 0),
         "comment_count": post_data.get("comment_count", 0),
         "is_liked": post_data.get("is_liked", post_data.get("is_liked_by_current_user", False)),
-        "follow_status": _get_follow_status_text(author_id, current_user_id)
+        "follow_status": _get_follow_status_text(author_id, current_user_id),
+        "repost_count": post_data.get("repost_count", 0),
+        "repost_source_type": post_data.get("repost_source_type"),
+        "repost_source_id": post_data.get("repost_source_id"),
+        "repost_root_post_id": post_data.get("repost_root_post_id"),
+        "repost_chain": formatted_repost_chain or raw_repost_chain,
+        "repost_chain_authors": repost_chain_authors,
     }
+
+    repost_origin = post_data.get("repost_origin")
+    if repost_origin:
+        origin_author_id = repost_origin.get("author_id")
+        origin_author = repost_origin.get("author") or {}
+        origin_username = origin_author.get("username", "")
+        standardized["repost_origin"] = {
+            "id": repost_origin.get("id"),
+            "author_id": origin_author_id,
+            "author_username": _expand_username_by_relation(
+                origin_username,
+                origin_author_id,
+                current_user_id,
+            ),
+            "content": _expand_content_mentions_by_relation(
+                repost_origin.get("content", ""),
+                current_user_id,
+            ),
+            "created_at": repost_origin.get("created_at", ""),
+        }
 
     return standardized
 
@@ -567,6 +650,7 @@ def get_social_tools(relation_map=None) -> List:
             toggle_post_like,
             toggle_comment_like,
             create_comment,
+            repost,
             toggle_follow,
             create_post,
             logout,
@@ -588,6 +672,7 @@ def get_social_tools(relation_map=None) -> List:
             toggle_post_like,
             toggle_comment_like,
             create_comment,
+            repost,
             toggle_follow,
             create_post,
             logout,

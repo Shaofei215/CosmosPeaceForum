@@ -214,3 +214,22 @@ class TestFormatToolResult:
         result = {"some_key": "some_value" * 100}
         formatted = _format_tool_result(result)
         assert len(formatted) <= 500
+
+    def test_format_post_result_includes_repost_count(self):
+        result = {
+            "post": {
+                "id": 1,
+                "author_username": "test_user",
+                "author_bio": "bio",
+                "content": "test content",
+                "like_count": 5,
+                "comment_count": 2,
+                "repost_count": 3,
+                "is_liked": False,
+                "created_at": "2024-01-01",
+            },
+            "comments": [],
+            "total": 0,
+        }
+        formatted = _format_tool_result(result)
+        assert "repost_count / repost count: 3" in formatted

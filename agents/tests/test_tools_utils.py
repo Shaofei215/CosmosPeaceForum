@@ -218,6 +218,38 @@ class TestStandardizePost:
             assert result["author_username"] == "nested_user"
             assert result["author_bio"] == "nested bio"
 
+    def test_standardize_post_formats_repost_chain_with_user_ids(self):
+        post_data = {
+            "id": 2,
+            "author_id": 99,
+            "author_name": "reposter",
+            "content": "我转发了B //@B: 我转发了C //@C: 原文",
+            "repost_chain": "我转发了B //@B: 我转发了C //@C: 原文",
+            "repost_chain_authors": [
+                {"user_id": 11, "username": "B"},
+                {"user_id": 12, "username": "C"},
+            ],
+            "created_at": "2024-01-01",
+            "like_count": 0,
+            "comment_count": 0,
+            "is_liked": False,
+        }
+        with patch(
+            "agents.agents_scheduler.langgraph.tools.utils._expand_username_by_relation",
+            side_effect=lambda username, user_id, owner_id: username,
+        ), patch(
+            "agents.agents_scheduler.langgraph.tools.utils._expand_content_mentions_by_relation",
+            side_effect=lambda content, owner_id: content,
+        ), patch(
+            "agents.agents_scheduler.langgraph.tools.utils._get_follow_status_text",
+            return_value="",
+        ):
+            result = _standardize_post(post_data, current_user_id=99)
+            assert result["content"] == (
+                "我转发了B //@B[作者ID 11]: 我转发了C //@C[作者ID 12]: 原文"
+            )
+            assert result["repost_chain"] == result["content"]
+
 
 class TestStandardizeComment:
     def test_standardize_comment_basic(self):

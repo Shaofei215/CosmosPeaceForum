@@ -13,6 +13,7 @@ from app_platform.app.models.user import User
 LIKE_TYPES = {"post_like", "comment_like"}
 COMMENT_TYPES = {"comment", "comment_reply"}
 FOLLOW_TYPES = {"follow"}
+REPOST_TYPES = {"repost"}
 
 
 def create_notification(
@@ -119,6 +120,39 @@ def create_follow_notification(db: Session, follower_id: int, following_id: int)
     )
 
 
+def create_repost_notifications(
+    db: Session,
+    root_post: Post,
+    repost: Post,
+    sender_id: int,
+    source_post: Optional[Post] = None,
+    source_comment: Optional[Comment] = None,
+    source_content: Optional[str] = None,
+) -> None:
+    recipients = []
+    if source_comment is not None:
+        recipients.append(source_comment.owner_id)
+    if source_post is not None:
+        recipients.append(source_post.author_id)
+    recipients.append(root_post.author_id)
+
+    notified = set()
+    for recipient_id in recipients:
+        if recipient_id in notified:
+            continue
+        create_notification(
+            db=db,
+            recipient_id=recipient_id,
+            sender_id=sender_id,
+            notification_type="repost",
+            resource_type="post",
+            resource_id=repost.id,
+            post_id=repost.id,
+            source_content=source_content or repost.content,
+        )
+        notified.add(recipient_id)
+
+
 def get_notifications(
     db: Session,
     user_id: int,
@@ -182,7 +216,10 @@ def get_summary(db: Session, user_id: int) -> Dict[str, int]:
 
 def get_origin(db: Session, notification: Notification) -> Dict[str, object]:
     if notification.post_id:
-        post = db.query(Post).options(joinedload(Post.author)).filter(Post.id == notification.post_id).first()
+        post = db.query(Post).options(
+            joinedload(Post.author),
+            joinedload(Post.repost_root_post).joinedload(Post.author),
+        ).filter(Post.id == notification.post_id).first()
     else:
         post = None
 

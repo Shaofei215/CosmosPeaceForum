@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app_platform.app.api.deps import get_db, get_current_user
 from app_platform.app.models.user import User
@@ -10,6 +10,7 @@ from app_platform.app.schemas.notification import (
     NotificationUnreadCountResponse,
 )
 from app_platform.app.services import notification_service
+from app_platform.app.services import repost_service
 
 router = APIRouter()
 
@@ -123,6 +124,18 @@ def _serialize_post(post):
         "created_at": post.created_at,
         "like_count": post.like_count,
         "comment_count": post.comment_count,
+        "repost_count": getattr(post, "repost_count", 0),
+        "repost_source_type": getattr(post, "repost_source_type", None),
+        "repost_source_id": getattr(post, "repost_source_id", None),
+        "repost_root_post_id": getattr(post, "repost_root_post_id", None),
+        "repost_chain": getattr(post, "repost_chain", None),
+        "repost_chain_authors": repost_service.build_repost_chain_authors(
+            object_session(post),
+            post.content,
+        ) if object_session(post) else [],
+        "repost_origin": _serialize_post(post.repost_root_post)
+        if getattr(post, "repost_root_post_id", None) and getattr(post, "repost_root_post", None)
+        else None,
     }
 
 

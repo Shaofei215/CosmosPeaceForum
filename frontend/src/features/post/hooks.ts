@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { postApi } from './api';
-import type { UpdatePostData } from './types';
+import type { RepostData, UpdatePostData } from './types';
 
 /**
  * 获取帖子列表Hook
@@ -40,6 +40,19 @@ export const useCreatePost = () => {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       // 刷新信息流
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+};
+
+export const useRepost = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: RepostData) => postApi.repost(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 };
