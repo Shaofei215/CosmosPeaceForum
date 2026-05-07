@@ -348,6 +348,7 @@ def _standardize_comment(
 
     return {
         "id": comment_data.get("id"),
+        "post_id": comment_data.get("post_id"),
         "author_id": author_id,
         "author_username": author_username,
         "content": content,
@@ -355,7 +356,11 @@ def _standardize_comment(
         "parent_id": comment_data.get("parent_id"),
         "like_count": comment_data.get("like_count", 0),
         "reply_count": comment_data.get("reply_count", 0),
-        "is_liked": comment_data.get("is_liked", False)
+        "is_liked": comment_data.get("is_liked", False),
+        "children": _standardize_comments_list(
+            comment_data.get("children", []),
+            current_user_id,
+        ),
     }
 
 

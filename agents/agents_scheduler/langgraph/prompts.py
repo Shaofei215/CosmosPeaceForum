@@ -207,7 +207,7 @@ def _format_tool_result(result: Any) -> str:
                 lines.append(f"\n【回复】(共{total}条，显示{len(replies)}条):")
                 for r in replies:
                     lines.append("  - 回复")
-                    lines.extend(_format_comment_fields(r, indent="    "))
+                    lines.extend(_format_comment_tree(r, indent="    "))
             else:
                 lines.append(f"\n【回复】(共{total}条，暂无回复)")
 
@@ -241,7 +241,7 @@ def _format_tool_result(result: Any) -> str:
                 lines.append(f"\n【评论】(共{total}条，显示{len(comments)}条):")
                 for c in comments:
                     lines.append("  - 评论")
-                    lines.extend(_format_comment_fields(c, indent="    "))
+                    lines.extend(_format_comment_tree(c, indent="    "))
             else:
                 lines.append(f"\n【评论】(共{total}条，暂无评论)")
 
@@ -295,7 +295,7 @@ def _format_tool_result(result: Any) -> str:
                     lines.extend(_format_post_fields(item, indent="  "))
                 else:
                     lines.append("- 评论")
-                    lines.extend(_format_comment_fields(item, indent="  "))
+                    lines.extend(_format_comment_tree(item, indent="  "))
             else:
                 lines.append(str(item)[:50])
         return "\n".join(lines)
@@ -314,7 +314,7 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
         f"{indent}created_at / 创建时间: {post.get('created_at', '')}",
         f"{indent}like_count / 点赞数: {post.get('like_count', 0)}",
         f"{indent}comment_count / 评论数: {post.get('comment_count', 0)}",
-        f"{indent}repost_count / 回复数: {post.get('repost_count', 0)}",
+        f"{indent}repost_count / repost count: {post.get('repost_count', 0)}",
         f"{indent}is_liked / 当前用户是否已点赞: {post.get('is_liked', False)}",
         f"{indent}follow_status / 当前用户对作者的关注状态: {post.get('follow_status', '')}",
     ]
@@ -333,6 +333,7 @@ def _format_comment_fields(comment: Dict[str, Any], indent: str = "") -> List[st
     """格式化标准化评论字段，确保 LLM 能读取完整结构。"""
     return [
         f"{indent}id / 评论ID: {comment.get('id', '?')}",
+        f"{indent}post_id / 所属帖子ID: {comment.get('post_id', '')}",
         f"{indent}author_id / 评论者ID: {comment.get('author_id', comment.get('owner_id', '?'))}",
         f"{indent}author_username / 评论者用户名: @{comment.get('author_username') or '?'}",
         f"{indent}content / 评论内容: {comment.get('content', '')}",
@@ -344,8 +345,17 @@ def _format_comment_fields(comment: Dict[str, Any], indent: str = "") -> List[st
     ]
 
 
+def _format_comment_tree(comment: Dict[str, Any], indent: str = "") -> List[str]:
+    lines = _format_comment_fields(comment, indent=indent)
+    children = comment.get("children") or []
+    for child in children:
+        lines.append(f"{indent}  - 子回复")
+        lines.extend(_format_comment_tree(child, indent=f"{indent}    "))
+    return lines
+
+
 def _format_notification_fields(notification: Dict[str, Any], indent: str = "") -> List[str]:
-    return [
+    lines = [
         f"{indent}notification_id / 查看原内容参数: {notification.get('id', '?')}",
         f"{indent}type / 消息类型: {notification.get('type', '')}",
         f"{indent}sender_id / 来源用户ID: {notification.get('sender_id', '?')}",
@@ -357,6 +367,12 @@ def _format_notification_fields(notification: Dict[str, Any], indent: str = "") 
         f"{indent}source_content / 被互动内容: {notification.get('source_content', '')}",
         f"{indent}created_at / 创建时间: {notification.get('created_at', '')}",
     ]
+    if notification.get("post_id") and notification.get("comment_id"):
+        lines.extend([
+            f"{indent}reply_post_id / 回复这条评论时传给 create_comment.post_id: {notification.get('post_id')}",
+            f"{indent}reply_parent_id / 回复这条评论时传给 create_comment.parent_id: {notification.get('comment_id')}",
+        ])
+    return lines
 
 
 def build_summarize_system_prompt(
