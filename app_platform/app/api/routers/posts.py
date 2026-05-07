@@ -8,6 +8,7 @@ from app_platform.app.api.deps import get_db, get_current_user, get_current_user
 from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
 from app_platform.app.models.like import Like
+from app_platform.app.models.comment import Comment
 from app_platform.app.schemas.post import (
     PostCreate,
     PostResponse,
@@ -219,6 +220,8 @@ def delete_post(
         {Post.repost_root_post_id: None},
         synchronize_session=False
     )
+    db.query(Like).filter(Like.post_id == post_id).delete(synchronize_session=False)
+    db.query(Comment).filter(Comment.post_id == post_id).delete(synchronize_session=False)
     db.delete(post)
     db.commit()
     return {"message": "帖子删除成功"}
