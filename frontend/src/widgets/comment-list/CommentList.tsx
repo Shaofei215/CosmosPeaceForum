@@ -2,11 +2,12 @@
  * 评论列表组件
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, MessageCircle, CornerDownRight, Repeat2 } from 'lucide-react';
 import type { Comment } from '@/features/comment';
 import { useToggleCommentLike, useCreateComment } from '@/features/comment';
+import { getInitialVisibleReplyCount, getNextVisibleReplyCount } from '@/features/comment/replyVisibility';
 import { useRepost } from '@/features/post';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Textarea } from '@/shared/components/ui';
@@ -66,8 +67,11 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
   const toggleCommentLike = useToggleCommentLike(postId, user?.id);
   const { mutate: createComment, isPending } = useCreateComment(postId);
   const repost = useRepost();
+  const totalReplies = comment.children?.length ?? 0;
+  const initialVisibleReplyCount = getInitialVisibleReplyCount(comment);
 
   const [showReplies, setShowReplies] = useState(depth === 0 ? false : true);
+  const [visibleReplyCount, setVisibleReplyCount] = useState(initialVisibleReplyCount);
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [isReposting, setIsReposting] = useState(false);
@@ -75,7 +79,15 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
 
   const isTopLevel = depth === 0;
   const isSecondLevel = depth === 1;
-  const hasReplies = comment.children && comment.children.length > 0;
+  const hasReplies = totalReplies > 0;
+  const visibleReplies = comment.children.slice(0, visibleReplyCount);
+  const hasMoreRepliesToShow = visibleReplyCount < totalReplies;
+
+  useEffect(() => {
+    if (visibleReplyCount > totalReplies) {
+      setVisibleReplyCount(totalReplies);
+    }
+  }, [totalReplies, visibleReplyCount]);
 
   /**
    * 处理点赞
@@ -285,7 +297,7 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
       {/* 回复列表 - 递归平级显示 */}
       {showReplies && hasReplies && (
         <div className={`${isTopLevel ? 'ml-12' : 'ml-0'}`}>
-          {comment.children.map((child) => (
+          {visibleReplies.map((child) => (
             <CommentItem
               key={child.id}
               comment={child}
@@ -294,6 +306,17 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
               parentOwner={{ id: comment.owner_id, username: comment.owner?.username || `用户${comment.owner_id}` }}
             />
           ))}
+          {hasMoreRepliesToShow && (
+            <button
+              type="button"
+              onClick={() =>
+                setVisibleReplyCount((count) => getNextVisibleReplyCount(count, totalReplies))
+              }
+              className="mt-3 text-sm text-primary transition-colors hover:text-primary/80"
+            >
+              展开更多回复 ({visibleReplyCount}/{totalReplies})
+            </button>
+          )}
         </div>
       )}
     </div>
