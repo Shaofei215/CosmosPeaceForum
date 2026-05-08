@@ -47,27 +47,31 @@ export function RootLayout() {
   return (
     <div className="min-h-screen bg-background/80">
       {/* 主内容区域 */}
-      <main className="container mx-auto px-4 py-4 relative z-10">
-        <div className="flex gap-3 justify-center">
+      <main className="container mx-auto px-4 pt-3 pb-3 relative z-10">
+        {/* 顶块 - 独立在 flex 外，保证 sticky 效果 */}
+        {showTopAndRight && (
+          <div className="max-w-2xl mx-auto">
+            <TopBar />
+          </div>
+        )}
+
+        <div className="flex gap-3 justify-center items-start">
           {/* 左块 */}
           {showLeft && (
-            <div className="hidden lg:block flex-shrink-0">
+            <div className="hidden lg:block flex-shrink-0 sticky top-3">
               <LeftSidebar />
             </div>
           )}
 
           {/* 中间块 */}
           <div className="w-full max-w-2xl flex-shrink-0">
-            {/* 顶块 */}
-            {showTopAndRight && <TopBar />}
-
             {/* 页面内容 */}
             <Outlet />
           </div>
 
           {/* 右块 */}
           {showTopAndRight && (
-            <div className="hidden lg:block flex-shrink-0">
+            <div className="hidden lg:block flex-shrink-0 sticky top-3">
               <RightSidebar />
             </div>
           )}

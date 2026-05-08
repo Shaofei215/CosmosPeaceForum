@@ -42,7 +42,7 @@ export function TopBar() {
   };
 
   return (
-    <div className="sticky top-6 z-40 rounded-[2rem] bg-white shadow-sm p-4 mb-5">
+    <div className="sticky top-3 z-40 rounded-[2rem] bg-white shadow-sm p-4 mb-3">
       <div className="flex items-center gap-4">
         {/* 搜索框 */}
         <div className="relative flex-1">
