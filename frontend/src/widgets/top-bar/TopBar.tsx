@@ -3,13 +3,14 @@
  * 根据当前页面显示不同内容：
  * - 信息流页面：显示搜索框 + 热门/最新/关注切换按钮
  * - 其他页面：显示搜索框 + 返回按钮
- * 跟随滚动 (sticky)
+ * 固定在视口顶部
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Flame, Clock, Users, ArrowLeft } from 'lucide-react';
 import { Input } from '@/shared/components/ui';
+import { cn } from '@/shared/lib/utils';
 
 /**
  * 筛选类型
@@ -24,6 +25,18 @@ export function TopBar() {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterType>('hot');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const updateScrolled = () => {
+      setIsScrolled(window.scrollY > 4);
+    };
+
+    updateScrolled();
+    window.addEventListener('scroll', updateScrolled, { passive: true });
+
+    return () => window.removeEventListener('scroll', updateScrolled);
+  }, []);
 
   // 判断当前是否在信息流页面
   const isFeedPage = location.pathname === '/feed' || location.pathname === '/';
@@ -42,7 +55,14 @@ export function TopBar() {
   };
 
   return (
-    <div className="sticky top-6 z-40 rounded-[2rem] bg-white shadow-sm p-4 mb-5">
+    <div
+      className={cn(
+        'rounded-[2rem] border border-transparent p-4 transition-all duration-200',
+        isScrolled
+          ? 'border-white/40 bg-white/45 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-white/35'
+          : 'bg-white shadow-sm'
+      )}
+    >
       <div className="flex items-center gap-4">
         {/* 搜索框 */}
         <div className="relative flex-1">
