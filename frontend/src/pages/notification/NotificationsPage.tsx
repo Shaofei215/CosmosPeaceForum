@@ -8,7 +8,7 @@ import { NotificationItem, useNotifications } from '@/features/notification';
 import { useAuthStore } from '@/features/auth';
 import { useCommentLikeStatus, useCreateComment, useToggleCommentLike } from '@/features/comment';
 import { useFollowStatus, useToggleFollow } from '@/features/follow';
-import { useToggleLike } from '@/features/like';
+import { useLikeStatus, useToggleLike } from '@/features/like';
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
@@ -110,10 +110,10 @@ function NotificationActions({ notification }: { notification: NotificationItem 
   }
 
   if (
-    notification.type === 'repost' &&
+    (notification.type === 'post_like' || notification.type === 'repost') &&
     notification.post_id
   ) {
-    return <RepostActionBar postId={notification.post_id} />;
+    return <PostActionBar postId={notification.post_id} />;
   }
 
   return null;
@@ -233,13 +233,15 @@ function FollowBackButton({ userId }: { userId: number }) {
   );
 }
 
-function RepostActionBar({ postId }: { postId: number }) {
+function PostActionBar({ postId }: { postId: number }) {
   const { user } = useAuthStore();
+  const { data: likeStatus } = useLikeStatus(postId, !!user);
   const likeMutation = useToggleLike();
   const createComment = useCreateComment(postId);
   const [isReplying, setIsReplying] = useState(false);
   const [content, setContent] = useState('');
   const [shouldRepost, setShouldRepost] = useState(false);
+  const isLiked = likeStatus?.is_liked ?? false;
 
   const submitReply = (event: React.FormEvent) => {
     event.preventDefault();
@@ -263,11 +265,13 @@ function RepostActionBar({ postId }: { postId: number }) {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-2 rounded-md gap-1 text-muted-foreground hover:text-red-500"
+          className={`h-7 px-2 rounded-md gap-1 ${
+            isLiked ? 'text-red-500 hover:text-red-500' : 'text-muted-foreground hover:text-red-500'
+          }`}
           onClick={() => likeMutation.mutate(postId)}
           disabled={!user || likeMutation.isPending}
         >
-          <Heart className="h-3.5 w-3.5" />
+          <Heart className={`h-3.5 w-3.5 ${isLiked ? 'fill-current' : ''}`} />
           点赞
         </Button>
         <Button

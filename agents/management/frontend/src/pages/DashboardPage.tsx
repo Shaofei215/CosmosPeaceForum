@@ -13,6 +13,8 @@ const levelColors: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const [selectedLogRole, setSelectedLogRole] = useState('');
+
   const { data: agents } = useQuery({
     queryKey: ['agents', 'dashboard'],
     queryFn: () => agentApi.list(0, 1000),
@@ -29,8 +31,8 @@ export default function DashboardPage() {
   });
 
   const { data: logsData, refetch } = useQuery({
-    queryKey: ['terminal-logs', 'dashboard'],
-    queryFn: () => terminalLogApi.recent(100),
+    queryKey: ['terminal-logs', 'dashboard', selectedLogRole],
+    queryFn: () => terminalLogApi.recent(100, selectedLogRole || undefined),
     refetchInterval: 2000,
   });
 
@@ -95,10 +97,25 @@ export default function DashboardPage() {
             <Terminal size={18} className="text-muted-foreground" />
             <CardTitle>终端日志</CardTitle>
           </div>
+          <div className="flex items-center gap-2">
+          <select
+            value={selectedLogRole}
+            onChange={(event) => setSelectedLogRole(event.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            aria-label="按角色过滤日志"
+          >
+            <option value="">全部角色</option>
+            {agents?.items.map((agent) => (
+              <option key={agent.id} value={agent.username}>
+                {agent.name} (@{agent.username})
+              </option>
+            ))}
+          </select>
           <Button variant="outline" size="sm" onClick={handleClearLogs}>
             <Trash2 size={14} className="mr-1" />
             清空
           </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div

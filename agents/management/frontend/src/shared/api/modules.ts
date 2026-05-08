@@ -102,8 +102,14 @@ export const systemApi = {
 };
 
 export const logApi = {
-  list: (skip = 0, limit = 100) =>
-    apiClient.get<OperationLogListResponse>(`/logs/?skip=${skip}&limit=${limit}`),
+  list: (skip = 0, limit = 100, agentId?: number) => {
+    const params = new URLSearchParams({
+      skip: String(skip),
+      limit: String(limit),
+    });
+    if (agentId !== undefined) params.set('agent_id', String(agentId));
+    return apiClient.get<OperationLogListResponse>(`/logs/?${params.toString()}`);
+  },
 };
 
 export const chunkModelApi = {
@@ -150,15 +156,24 @@ export const memoryApi = {
 };
 
 export const terminalLogApi = {
-  list: (skip = 0, limit = 200, level?: string, keyword?: string) => {
-    let url = `/terminal-logs/?skip=${skip}&limit=${limit}`;
-    if (level) url += `&level=${level}`;
-    if (keyword) url += `&keyword=${keyword}`;
-    return apiClient.get<TerminalLogListResponse>(url);
+  list: (skip = 0, limit = 200, level?: string, keyword?: string, role?: string) => {
+    const params = new URLSearchParams({
+      skip: String(skip),
+      limit: String(limit),
+    });
+    if (level) params.set('level', level);
+    if (keyword) params.set('keyword', keyword);
+    if (role) params.set('role', role);
+    return apiClient.get<TerminalLogListResponse>(`/terminal-logs/?${params.toString()}`);
   },
 
-  recent: (count = 50) =>
-    apiClient.get<{ items: TerminalLog[]; total: number }>(`/terminal-logs/recent?count=${count}`),
+  recent: (count = 50, role?: string) => {
+    const params = new URLSearchParams({ count: String(count) });
+    if (role) params.set('role', role);
+    return apiClient.get<{ items: TerminalLog[]; total: number }>(
+      `/terminal-logs/recent?${params.toString()}`,
+    );
+  },
 
   clear: () =>
     apiClient.post<MessageResponse>('/terminal-logs/clear'),

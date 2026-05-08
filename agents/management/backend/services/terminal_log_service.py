@@ -58,6 +58,7 @@ class TerminalLogCapture:
         limit: int = 100,
         level: Optional[str] = None,
         keyword: Optional[str] = None,
+        role: Optional[str] = None,
     ) -> tuple[List[dict], int]:
         with self._lock:
             all_logs = list(self._logs)
@@ -65,11 +66,18 @@ class TerminalLogCapture:
             all_logs = [log for log in all_logs if log["level"] == level]
         if keyword:
             all_logs = [log for log in all_logs if keyword.lower() in log["message"].lower()]
+        if role:
+            marker = f"[{role}]"
+            all_logs = [log for log in all_logs if marker in log["message"]]
         return all_logs[skip : skip + limit], len(all_logs)
 
-    def get_recent_logs(self, count: int = 50) -> List[dict]:
+    def get_recent_logs(self, count: int = 50, role: Optional[str] = None) -> List[dict]:
         with self._lock:
-            return list(self._logs)[-count:]
+            logs = list(self._logs)
+        if role:
+            marker = f"[{role}]"
+            logs = [log for log in logs if marker in log["message"]]
+        return logs[-count:] if count else logs
 
     def clear(self):
         with self._lock:

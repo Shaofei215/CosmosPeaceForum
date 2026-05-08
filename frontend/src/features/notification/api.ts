@@ -1,4 +1,5 @@
 import { apiClient } from '@/shared/api/client';
+import { API_CONFIG } from '@/shared/config/api';
 import type {
   NotificationListResponse,
   NotificationSummaryResponse,
@@ -17,4 +18,7 @@ export const notificationApi = {
 
   markRead: () =>
     apiClient.post<{ updated_count: number }>('/notifications/mark-read'),
+
+  getEventsUrl: (token: string) =>
+    `${API_CONFIG.BASE_URL}/notifications/events?token=${encodeURIComponent(token)}`,
 };
