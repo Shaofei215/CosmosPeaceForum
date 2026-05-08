@@ -78,10 +78,11 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   }, [post.content]);
 
   const { data: commentsData, isLoading: isCommentsLoading } = useComments(post.id, user?.id);
+  const topLevelComments = commentsData?.items || [];
   const previewComments = expanded
-    ? (commentsData?.items || [])
-    : (commentsData?.items?.slice(0, 5) || []);
-  const hasMoreComments = !expanded && (commentsData?.total || 0) > 5;
+    ? topLevelComments
+    : topLevelComments.slice(0, 5);
+  const hasMoreComments = !expanded && topLevelComments.length > 5;
 
   const requireLogin = () => {
     if (isAuthenticated) return true;
@@ -400,7 +401,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   }}
                   className="w-full py-2 text-center text-sm text-primary transition-colors hover:text-primary/80"
                 >
-                  查看所有 {commentsData?.total} 条评论
+                  查看所有评论
                 </button>
               )}
             </div>
