@@ -1,6 +1,6 @@
 /**
  * 右侧边栏组件
- * 展示热榜、趋势话题与回到顶部按钮，跟随滚动
+ * 展示热榜、趋势话题与回到顶部按钮，固定在视口内
  */
 
 import { TrendingUp, Flame } from 'lucide-react';
@@ -15,7 +15,7 @@ export function RightSidebar() {
   const { isAuthenticated } = useAuthStore();
 
   return (
-    <aside className="sticky top-28 h-fit w-64 space-y-3">
+    <aside className="fixed top-[5.75rem] z-30 h-fit max-h-[calc(100vh-6.5rem)] w-64 space-y-3 overflow-y-auto pb-3">
       {isAuthenticated && (
         <div className="rounded-lg bg-white p-3 shadow-sm">
           <CreatePostForm />
