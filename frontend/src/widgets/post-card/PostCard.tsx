@@ -20,6 +20,11 @@ import {
   useDeleteComment,
   useToggleCommentLike,
 } from '@/features/comment';
+import {
+  containsComment,
+  getInitialVisibleReplyCount,
+  getNextVisibleReplyCount,
+} from '@/features/comment/replyVisibility';
 import { useToggleLike } from '@/features/like';
 import { useFollowStatus, useToggleFollow } from '@/features/follow';
 import { useAuthStore } from '@/features/auth';
@@ -528,7 +533,10 @@ function CommentItem({
   focusedCommentId,
 }: CommentItemProps) {
   const shouldShowFocusedReply = focusedCommentId ? containsComment(comment, focusedCommentId) : false;
+  const totalReplies = comment.children?.length ?? 0;
+  const initialVisibleReplyCount = getInitialVisibleReplyCount(comment, focusedCommentId);
   const [showReplies, setShowReplies] = useState(depth === 0 ? shouldShowFocusedReply : true);
+  const [visibleReplyCount, setVisibleReplyCount] = useState(initialVisibleReplyCount);
   const toggleCommentLike = useToggleCommentLike(postId, currentUserId);
   const deleteComment = useDeleteComment(postId);
   const repost = useRepost();
@@ -540,7 +548,9 @@ function CommentItem({
   const isTopLevel = depth === 0;
   const isSecondLevel = depth === 1;
   const isCurrentUserComment = currentUserId === comment.owner_id;
-  const hasReplies = comment.children && comment.children.length > 0;
+  const hasReplies = totalReplies > 0;
+  const visibleReplies = comment.children.slice(0, visibleReplyCount);
+  const hasMoreRepliesToShow = visibleReplyCount < totalReplies;
 
   const handleDeleteComment = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -555,8 +565,15 @@ function CommentItem({
   useEffect(() => {
     if (focusedCommentId && shouldShowFocusedReply) {
       setShowReplies(true);
+      setVisibleReplyCount((count) => Math.max(count, initialVisibleReplyCount));
     }
-  }, [focusedCommentId, shouldShowFocusedReply]);
+  }, [focusedCommentId, initialVisibleReplyCount, shouldShowFocusedReply]);
+
+  useEffect(() => {
+    if (visibleReplyCount > totalReplies) {
+      setVisibleReplyCount(totalReplies);
+    }
+  }, [totalReplies, visibleReplyCount]);
 
   useEffect(() => {
     if (focusedCommentId === comment.id && itemRef.current) {
@@ -750,7 +767,7 @@ function CommentItem({
 
       {showReplies && hasReplies && (
         <div className={isTopLevel ? 'pl-8' : 'pl-0'}>
-          {comment.children.map((child) => (
+          {visibleReplies.map((child) => (
             <CommentItem
               key={child.id}
               comment={child}
@@ -767,15 +784,23 @@ function CommentItem({
               focusedCommentId={focusedCommentId}
             />
           ))}
+          {hasMoreRepliesToShow && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setVisibleReplyCount((count) => getNextVisibleReplyCount(count, totalReplies));
+              }}
+              className="mt-3 text-xs text-primary transition-colors hover:text-primary/80"
+            >
+              展开更多回复 ({visibleReplyCount}/{totalReplies})
+            </button>
+          )}
         </div>
       )}
     </div>
   );
-}
-
-function containsComment(comment: Comment, commentId: number): boolean {
-  if (comment.id === commentId) return true;
-  return Boolean(comment.children?.some((child) => containsComment(child, commentId)));
 }
 
 function ReplyInput({
