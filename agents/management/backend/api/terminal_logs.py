@@ -21,6 +21,7 @@ def get_terminal_logs(
     limit: int = 200,
     level: str = Query(None),
     keyword: str = Query(None),
+    role: str = Query(None),
     current_admin: AdminUser = Depends(get_current_admin),
 ):
     """获取终端日志列表"""
@@ -29,6 +30,7 @@ def get_terminal_logs(
         limit=limit,
         level=level,
         keyword=keyword,
+        role=role,
     )
     return TerminalLogListResponse(items=logs, total=total)
 
@@ -36,10 +38,11 @@ def get_terminal_logs(
 @router.get("/recent")
 def get_recent_terminal_logs(
     count: int = 50,
+    role: str = Query(None),
     current_admin: AdminUser = Depends(get_current_admin),
 ):
     """获取最近的终端日志"""
-    logs = terminal_log_capture.get_recent_logs(count=count)
+    logs = terminal_log_capture.get_recent_logs(count=count, role=role)
     return {"items": logs, "total": len(logs)}
 
 

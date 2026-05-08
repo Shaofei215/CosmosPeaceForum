@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { logApi } from '@/shared/api/modules';
-import { Card, CardContent, CardHeader, CardTitle, Badge, Skeleton } from '@/shared/components/ui';
+import { useState } from 'react';
+import { agentApi, logApi } from '@/shared/api/modules';
+import { Card, CardContent, Badge, Skeleton } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/format';
 import { FileText } from 'lucide-react';
 
@@ -26,14 +27,40 @@ const targetLabels: Record<string, string> = {
 };
 
 export default function LogPage() {
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+
+  const { data: agents } = useQuery({
+    queryKey: ['agents', 'log-filter'],
+    queryFn: () => agentApi.list(0, 1000),
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['logs'],
-    queryFn: () => logApi.list(0, 500),
+    queryKey: ['logs', selectedAgentId],
+    queryFn: () => logApi.list(
+      0,
+      500,
+      selectedAgentId ? Number(selectedAgentId) : undefined,
+    ),
   });
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">操作日志</h1>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">操作日志</h1>
+        <select
+          value={selectedAgentId}
+          onChange={(event) => setSelectedAgentId(event.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          aria-label="Filter logs by role"
+        >
+          <option value="">All roles</option>
+          {agents?.items.map((agent) => (
+            <option key={agent.id} value={agent.id}>
+              {agent.name} (@{agent.username})
+            </option>
+          ))}
+        </select>
+      </div>
 
       <Card>
         <CardContent className="p-0">

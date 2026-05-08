@@ -2,8 +2,17 @@
  * 点赞模块Hooks
  */
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { likeApi } from './api';
+import type { LikeStatusResponse } from './types';
+
+export const useLikeStatus = (postId: number, enabled = true) => {
+  return useQuery({
+    queryKey: ['posts', postId, 'like-status'],
+    queryFn: () => likeApi.getLikeStatus(postId),
+    enabled: enabled && postId > 0,
+  });
+};
 
 /**
  * 切换点赞Hook（乐观更新）
@@ -94,6 +103,9 @@ export const useToggleLike = () => {
       });
 
       return { previousPosts };
+    },
+    onSuccess: (data, postId) => {
+      queryClient.setQueryData<LikeStatusResponse>(['posts', postId, 'like-status'], data);
     },
     onError: (_error, _postId, context) => {
       // 回滚所有之前保存的状态

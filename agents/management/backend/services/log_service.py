@@ -36,12 +36,15 @@ def list_logs(
     skip: int = 0,
     limit: int = 100,
     target_type: Optional[str] = None,
+    target_id: Optional[int] = None,
     operator_id: Optional[int] = None,
 ) -> tuple[List[OperationLog], int]:
     """获取操作日志列表"""
     stmt = select(OperationLog)
     if target_type:
         stmt = stmt.where(OperationLog.target_type == target_type)
+    if target_id is not None:
+        stmt = stmt.where(OperationLog.target_id == target_id)
     if operator_id:
         stmt = stmt.where(OperationLog.operator_id == operator_id)
 

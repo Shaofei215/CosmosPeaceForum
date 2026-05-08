@@ -4,6 +4,7 @@
 import re
 import requests
 import os
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 from agents.agents_scheduler.scheduler.context import get_current_token, get_current_user_id
@@ -26,6 +27,45 @@ def _truncate(text: str, max_len: int = 100) -> str:
     if len(text) <= max_len:
         return text
     return text[:max_len] + "..."
+
+
+def _format_display_time(value: Any) -> str:
+    if not value:
+        return ""
+
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        raw_value = value.strip()
+        if not raw_value:
+            return ""
+        try:
+            dt = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+        except ValueError:
+            return raw_value
+    else:
+        return str(value)
+
+    if dt.tzinfo is None:
+        now = datetime.now()
+    else:
+        dt = dt.astimezone(timezone.utc)
+        now = datetime.now(timezone.utc)
+
+    diff_seconds = max(0, int((now - dt).total_seconds()))
+    if diff_seconds < 60:
+        return "刚刚"
+    if diff_seconds < 60 * 60:
+        return f"{diff_seconds // 60}分钟前"
+    if diff_seconds < 24 * 60 * 60:
+        return f"{diff_seconds // (60 * 60)}小时前"
+    if diff_seconds < 7 * 24 * 60 * 60:
+        return f"{diff_seconds // (24 * 60 * 60)}天前"
+
+    local_dt = dt.astimezone() if dt.tzinfo is not None else dt
+    if local_dt.year == datetime.now().year:
+        return f"{local_dt.month}月{local_dt.day}日 {local_dt:%H:%M}"
+    return f"{local_dt.year}年{local_dt.month}月{local_dt.day}日 {local_dt:%H:%M}"
 
 
 # ==================== 基础请求函数 ====================
@@ -276,7 +316,7 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
         "author_username": author_username,
         "author_bio": post_data.get("author_bio") or post_data.get("author", {}).get("bio", ""),
         "content": content,
-        "created_at": post_data.get("created_at", ""),
+        "created_at": _format_display_time(post_data.get("created_at", "")),
         "like_count": post_data.get("like_count", 0),
         "comment_count": post_data.get("comment_count", 0),
         "is_liked": post_data.get("is_liked", post_data.get("is_liked_by_current_user", False)),
@@ -307,7 +347,7 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
                 repost_origin.get("content", ""),
                 current_user_id,
             ),
-            "created_at": repost_origin.get("created_at", ""),
+            "created_at": _format_display_time(repost_origin.get("created_at", "")),
         }
 
     return standardized
@@ -353,7 +393,7 @@ def _standardize_comment(
         "author_id": author_id,
         "author_username": author_username,
         "content": content,
-        "created_at": comment_data.get("created_at", ""),
+        "created_at": _format_display_time(comment_data.get("created_at", "")),
         "parent_id": comment_data.get("parent_id"),
         "like_count": comment_data.get("like_count", 0),
         "reply_count": comment_data.get("reply_count", 0),
@@ -407,7 +447,7 @@ def _standardize_notification(
         "comment_id": notification_data.get("comment_id"),
         "source_content": _expand_content_mentions_by_relation(raw_content, current_user_id),
         "is_read": notification_data.get("is_read", False),
-        "created_at": notification_data.get("created_at", ""),
+        "created_at": _format_display_time(notification_data.get("created_at", "")),
     }
 
 

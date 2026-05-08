@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import func
+from sqlalchemy import event
 from sqlalchemy.orm import Session, joinedload
 
 from app_platform.app.models.comment import Comment
@@ -8,12 +9,26 @@ from app_platform.app.models.follow import Follow
 from app_platform.app.models.notification import Notification
 from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
+from app_platform.app.services.notification_events import publish_notification_update
 
 
 LIKE_TYPES = {"post_like", "comment_like"}
 COMMENT_TYPES = {"comment", "comment_reply"}
 FOLLOW_TYPES = {"follow"}
 REPOST_TYPES = {"repost"}
+_PENDING_NOTIFICATION_RECIPIENTS_KEY = "pending_notification_recipient_ids"
+
+
+@event.listens_for(Session, "after_commit")
+def _publish_pending_notification_updates(session: Session) -> None:
+    recipient_ids = session.info.pop(_PENDING_NOTIFICATION_RECIPIENTS_KEY, set())
+    for recipient_id in recipient_ids:
+        publish_notification_update(recipient_id)
+
+
+@event.listens_for(Session, "after_rollback")
+def _clear_pending_notification_updates(session: Session) -> None:
+    session.info.pop(_PENDING_NOTIFICATION_RECIPIENTS_KEY, None)
 
 
 def create_notification(
@@ -42,6 +57,8 @@ def create_notification(
         is_read=0,
     )
     db.add(notification)
+    pending = db.info.setdefault(_PENDING_NOTIFICATION_RECIPIENTS_KEY, set())
+    pending.add(recipient_id)
     return notification
 
 
@@ -199,6 +216,8 @@ def mark_all_as_read(db: Session, user_id: int) -> int:
         Notification.is_read == 0,
     ).update({"is_read": 1}, synchronize_session=False)
     db.commit()
+    if updated:
+        publish_notification_update(user_id)
     return updated
 
 
