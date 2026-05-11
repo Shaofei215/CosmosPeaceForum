@@ -75,12 +75,6 @@ export default function DashboardPage() {
       text: 'text-amber-950',
     },
     {
-      label: '今日 Token 花费',
-      value: dashboardStats?.today_token_cost ?? 0,
-      bg: 'bg-rose-100',
-      text: 'text-rose-950',
-    },
-    {
       label: '系统情况',
       bg: 'bg-sky-100',
       text: 'text-sky-950',
@@ -95,9 +89,9 @@ export default function DashboardPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">仪表盘</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+      <div className="flex flex-wrap gap-4 mb-8">
         {stats.map((stat) => (
-          <Card key={stat.label} className="h-32 overflow-hidden">
+          <Card key={stat.label} className="aspect-[2/1] w-64 max-w-full overflow-hidden">
             <div className="grid h-full grid-cols-2">
               <div className="flex items-center p-5">
                 <CardTitle className="text-base font-medium leading-6 text-muted-foreground">

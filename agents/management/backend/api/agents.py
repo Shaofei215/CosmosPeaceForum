@@ -182,7 +182,6 @@ def get_dashboard_stats(
         total_roles=total_roles,
         enabled_roles=enabled_roles,
         daily_active_roles=daily_active_roles,
-        today_token_cost=0,
         cpu_usage_percent=_read_cpu_usage_percent(),
         memory_usage_percent=_read_memory_usage_percent(),
     )

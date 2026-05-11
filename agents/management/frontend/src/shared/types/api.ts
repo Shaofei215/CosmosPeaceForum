@@ -67,7 +67,6 @@ export interface DashboardStats {
   total_roles: number;
   enabled_roles: number;
   daily_active_roles: number;
-  today_token_cost: number;
   cpu_usage_percent: number;
   memory_usage_percent: number;
 }
