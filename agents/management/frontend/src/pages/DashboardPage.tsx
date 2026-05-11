@@ -89,7 +89,7 @@ export default function DashboardPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">仪表盘</h1>
 
-      <div className="flex flex-wrap gap-4 mb-8">
+      <div className="flex flex-wrap gap-4 mb-4">
         {stats.map((stat) => (
           <Card key={stat.label} className="aspect-[2/1] w-64 max-w-full overflow-hidden">
             <div className="grid h-full grid-cols-2">

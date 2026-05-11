@@ -4,7 +4,7 @@ import { modelApi, embeddingApi, chunkModelApi } from '@/shared/api/modules';
 import type { ModelConfigCreate, ModelConfigUpdate, EmbeddingConfigUpdate, ChunkModelConfigCreate, ChunkModelConfigUpdate } from '@/shared/types/api';
 import {
   Button, Input, Card, CardContent,
-  Badge, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
+  Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription, Switch, Label, Separator,
 } from '@/shared/components/ui';
 import { Plus, Edit, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react';
@@ -150,9 +150,6 @@ export default function ModelListPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold">{model.name}</h3>
-                    <Badge variant={model.is_active ? 'default' : 'secondary'}>
-                      {model.is_active ? '启用' : '禁用'}
-                    </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {model.provider} / {model.model_name} / {model.base_url || '默认地址'}
@@ -199,9 +196,6 @@ export default function ModelListPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             Embedding 配置
-            <Badge variant={embeddingConfig?.is_active ? 'default' : 'secondary'}>
-              {embeddingConfig?.is_active ? '启用' : '禁用'}
-            </Badge>
           </h2>
           <Switch
             checked={embeddingConfig?.is_active ?? false}
@@ -239,9 +233,6 @@ export default function ModelListPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold">{config.name}</h3>
-                      <Badge variant={config.is_active ? 'default' : 'secondary'}>
-                        {config.is_active ? '启用' : '禁用'}
-                      </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {config.provider} / {config.model_name} / {config.base_url || '默认地址'}

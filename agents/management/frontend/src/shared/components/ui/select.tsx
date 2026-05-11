@@ -64,7 +64,7 @@ export function SelectTrigger({ children, className = '', ...props }: SelectTrig
       type="button"
       role="combobox"
       aria-expanded={open}
-      className={`flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`flex h-8 w-full items-center justify-between rounded-md border border-input bg-background px-2.5 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       onClick={() => setOpen(!open)}
       {...props}
     >
@@ -101,7 +101,7 @@ export function SelectItem({ value, children, className = '' }: SelectItemProps)
     <div
       role="option"
       aria-selected={isSelected}
-      className={`relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground cursor-pointer ${
+      className={`relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1 text-sm outline-none hover:bg-accent hover:text-accent-foreground cursor-pointer ${
         isSelected ? 'bg-accent' : ''
       } ${className}`}
       onClick={() => {
