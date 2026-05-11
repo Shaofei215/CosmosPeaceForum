@@ -129,6 +129,7 @@ def get_feed(
         feed_item = PostFeedItem(
             id=post.id,
             title=post.title,
+            type=post.type,
             content=post.content,
             created_at=post.created_at,
             author_id=post.author_id,
@@ -230,6 +231,7 @@ def get_user_feed(
         feed_item = PostFeedItem(
             id=post.id,
             title=post.title,
+            type=post.type,
             content=post.content,
             created_at=post.created_at,
             author_id=post.author_id,

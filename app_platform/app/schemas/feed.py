@@ -9,6 +9,7 @@ from app_platform.app.schemas.post import RepostChainAuthor, RepostOriginPost
 class PostFeedItem(BaseModel):
     id: int
     title: Optional[str] = None
+    type: str = "post"
     content: str
     created_at: datetime
     author_id: int

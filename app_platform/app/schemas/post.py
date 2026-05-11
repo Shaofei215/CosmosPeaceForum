@@ -8,6 +8,7 @@ from app_platform.app.schemas.user import UserResponse
 
 class PostBase(BaseModel):
     title: Optional[str] = Field(None, max_length=200)
+    type: str = Field("post", pattern="^(post|article)$")
     content: str = Field(..., min_length=1)
 
 
@@ -26,6 +27,7 @@ class RepostOriginPost(BaseModel):
     author_id: int
     author: Optional[UserResponse] = None
     title: Optional[str] = None
+    type: str = "post"
     content: str
     created_at: datetime
 

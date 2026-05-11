@@ -192,6 +192,7 @@ def _serialize_post(db: Session, post, current_user_id: int):
         "author_id": post.author_id,
         "author": _serialize_user(post.author),
         "title": post.title,
+        "type": getattr(post, "type", "post"),
         "content": post.content,
         "created_at": post.created_at,
         "like_count": post.like_count,

@@ -15,6 +15,7 @@ export interface NotificationItem {
   resource_type: string;
   resource_id: number;
   post_id: number | null;
+  source_post_type?: 'post' | 'article' | null;
   comment_id: number | null;
   source_content: string | null;
   is_read: boolean;

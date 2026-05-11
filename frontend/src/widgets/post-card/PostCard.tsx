@@ -30,6 +30,7 @@ import { useFollowStatus, useToggleFollow } from '@/features/follow';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
+import { MarkdownRenderer, stripMarkdown } from '@/shared/components/markdown/MarkdownRenderer';
 
 interface PostCardProps {
   post: PostFeedItem | PostWithLikeStatus;
@@ -69,13 +70,15 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
     ? post.author_is_ai_agent
     : Boolean(post.author?.is_ai_agent);
   const isCurrentUser = user?.id === post.author_id;
+  const isArticle = post.type === 'article';
   const { data: followStatus } = useFollowStatus(post.author_id);
 
   useEffect(() => {
+    if (isArticle) return;
     if (!contentRef.current) return;
     const lineHeight = parseInt(getComputedStyle(contentRef.current).lineHeight) || 24;
     setIsContentTruncated(contentRef.current.scrollHeight > lineHeight * 3 + 1);
-  }, [post.content]);
+  }, [isArticle, post.content]);
 
   const { data: commentsData, isLoading: isCommentsLoading } = useComments(post.id, user?.id);
   const topLevelComments = commentsData?.items || [];
@@ -193,25 +196,45 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
       </div>
 
       <div className="min-w-0">
-        {post.title && (
-          <Link to={`/post/${post.id}`}>
-            <h3 className="mb-2 line-clamp-2 text-lg font-semibold">{post.title}</h3>
-          </Link>
+        {isArticle ? (
+          expanded ? (
+            <div className="space-y-4">
+              <h1 className="text-2xl font-semibold leading-9 text-foreground">{post.title}</h1>
+              <MarkdownRenderer content={post.content} />
+            </div>
+          ) : (
+            <Link to={`/post/${post.id}`} className="block rounded-md transition-colors hover:bg-muted/20">
+              <h3 className="mb-2 line-clamp-2 text-2xl font-semibold leading-8 text-foreground">
+                {post.title || 'Untitled'}
+              </h3>
+              <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
+                {stripMarkdown(post.content)}
+              </p>
+            </Link>
+          )
+        ) : (
+          <>
+            {post.title && (
+              <Link to={`/post/${post.id}`}>
+                <h3 className="mb-2 line-clamp-2 text-lg font-semibold">{post.title}</h3>
+              </Link>
+            )}
+            <p
+              ref={contentRef}
+              className={`whitespace-pre-wrap break-words text-foreground/90 ${
+                isContentExpanded ? '' : 'line-clamp-3'
+              }`}
+            >
+              <LinkedMentions
+                text={post.content}
+                authors={post.repost_chain_authors || []}
+              />
+            </p>
+          </>
         )}
-        <p
-          ref={contentRef}
-          className={`whitespace-pre-wrap break-words text-foreground/90 ${
-            isContentExpanded ? '' : 'line-clamp-3'
-          }`}
-        >
-          <LinkedMentions
-            text={post.content}
-            authors={post.repost_chain_authors || []}
-          />
-        </p>
         {post.repost_origin && <RepostOriginBlock origin={post.repost_origin} />}
         {!post.repost_origin && post.repost_origin_missing && <MissingRepostOriginBlock />}
-        {isContentTruncated && (
+        {!isArticle && isContentTruncated && (
           <button
             onClick={(event) => {
               event.preventDefault();
@@ -422,6 +445,7 @@ function RepostOriginBlock({
   origin: NonNullable<(PostFeedItem | PostWithLikeStatus)['repost_origin']>;
 }) {
   const authorName = origin.author?.username || `用户${origin.author_id}`;
+  const isArticle = origin.type === 'article';
 
   return (
     <div className="mt-3 rounded-md border border-border/70 bg-muted/30 p-3 transition-colors hover:bg-muted/50">
@@ -434,10 +458,21 @@ function RepostOriginBlock({
       </Link>
       <Link
         to={`/post/${origin.id}`}
-        className="mt-1 block line-clamp-3 whitespace-pre-wrap break-words text-sm text-foreground/75 hover:text-foreground"
+        className="mt-1 block break-words text-sm text-foreground/75 hover:text-foreground"
         onClick={(event) => event.stopPropagation()}
       >
-        {origin.content}
+        {isArticle ? (
+          <>
+            <span className="mb-1 block line-clamp-2 text-base font-semibold text-foreground/85">
+              {origin.title || 'Untitled'}
+            </span>
+            <span className="line-clamp-2 text-xs text-muted-foreground">
+              {stripMarkdown(origin.content)}
+            </span>
+          </>
+        ) : (
+          <span className="line-clamp-3 whitespace-pre-wrap">{origin.content}</span>
+        )}
       </Link>
     </div>
   );

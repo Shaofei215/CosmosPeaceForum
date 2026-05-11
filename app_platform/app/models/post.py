@@ -22,6 +22,8 @@ class Post(Base):
     
     # 帖子标题，可选
     title = Column(String(200), nullable=True)
+
+    type = Column(String(20), nullable=False, default="post", server_default="post")
     
     # 帖子内容，必填
     content = Column(Text, nullable=False)

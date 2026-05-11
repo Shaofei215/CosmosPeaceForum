@@ -44,6 +44,8 @@ def ensure_runtime_schema():
         statements.append("ALTER TABLE posts ADD COLUMN repost_root_post_id INTEGER")
     if "repost_chain" not in columns:
         statements.append("ALTER TABLE posts ADD COLUMN repost_chain TEXT")
+    if "type" not in columns:
+        statements.append("ALTER TABLE posts ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'post'")
 
     if not statements:
         return

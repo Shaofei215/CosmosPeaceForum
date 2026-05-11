@@ -12,6 +12,7 @@ class NotificationResponse(BaseModel):
     resource_type: str
     resource_id: int
     post_id: Optional[int] = None
+    source_post_type: Optional[str] = None
     comment_id: Optional[int] = None
     source_content: Optional[str] = None
     is_read: bool = False

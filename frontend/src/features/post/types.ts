@@ -18,6 +18,7 @@ export interface Post {
   author_id: number;
   /** 标题 */
   title: string | null;
+  type: 'post' | 'article';
   /** 内容 */
   content: string;
   /** 创建时间 */
@@ -49,6 +50,7 @@ export interface RepostOriginPost {
   author_id: number;
   author?: PostAuthor | null;
   title: string | null;
+  type: 'post' | 'article';
   content: string;
   created_at: string;
 }
@@ -67,6 +69,7 @@ export interface PostWithLikeStatus extends Post {
 export interface CreatePostData {
   /** 标题 */
   title?: string;
+  type?: 'post' | 'article';
   /** 内容 */
   content: string;
 }

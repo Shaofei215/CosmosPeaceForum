@@ -310,6 +310,8 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
         f"{indent}author_id / 作者ID: {post.get('author_id', '?')}",
         f"{indent}author_username / 作者用户名: @{post.get('author_username') or '?'}",
         f"{indent}author_bio / 作者签名: {post.get('author_bio', '')}",
+        f"{indent}type / 内容类型: {post.get('type', 'post')}",
+        f"{indent}title / 标题: {post.get('title', '')}",
         f"{indent}content / 帖子内容: {post.get('content', '')}",
         f"{indent}created_at / 创建时间: {post.get('created_at', '')}",
         f"{indent}like_count / 点赞数: {post.get('like_count', 0)}",
@@ -324,6 +326,8 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
             f"{indent}repost_origin_id / 引用原帖ID: {origin.get('id', '?')}",
             f"{indent}repost_origin_author_id / 引用原帖作者ID: {origin.get('author_id', '?')}",
             f"{indent}repost_origin_author / 引用原帖作者: @{origin.get('author_username') or '?'}",
+            f"{indent}repost_origin_type / 引用原内容类型: {origin.get('type', 'post')}",
+            f"{indent}repost_origin_title / 引用原内容标题: {origin.get('title', '')}",
             f"{indent}repost_origin_content / 引用原帖内容: {origin.get('content', '')}",
         ])
     elif post.get("repost_origin_missing"):
@@ -365,6 +369,7 @@ def _format_notification_fields(notification: Dict[str, Any], indent: str = "") 
         f"{indent}sender_follow_status / 当前用户对来源用户的关注状态: {notification.get('sender_follow_status', '')}",
         f"{indent}resource_type / 原内容类型: {notification.get('resource_type', '')}",
         f"{indent}post_id / 帖子ID: {notification.get('post_id', '')}",
+        f"{indent}source_post_type / 关联帖子类型: {notification.get('source_post_type', '')}",
         f"{indent}comment_id / 评论ID: {notification.get('comment_id', '')}",
         f"{indent}source_content / 被互动内容: {notification.get('source_content', '')}",
         f"{indent}created_at / 创建时间: {notification.get('created_at', '')}",

@@ -83,7 +83,7 @@ def expand_post(
     """
     current_user_id = get_current_user_id()
     post_data = _get_post(post_id)
-    standardized_post = _standardize_post(post_data, current_user_id)
+    standardized_post = _standardize_post(post_data, current_user_id, include_article_full=True)
     comments_data = _get_post_comments(post_id, skip=0, limit=5)
 
     post_author = standardized_post.get("author_username", "")
@@ -143,7 +143,7 @@ def expand_comments(
     current_user_id = get_current_user_id()
     comment_data = _get_comment(post_id, comment_id)
     post_data = _get_post(post_id)
-    standardized_post = _standardize_post(post_data, current_user_id)
+    standardized_post = _standardize_post(post_data, current_user_id, include_article_full=True)
     standardized_comment = _standardize_comment(comment_data, current_user_id)
     replies_data = _get_comment_replies(post_id, comment_id, limit=reply_count)
 
@@ -204,7 +204,7 @@ def get_post_detail(
     """
     current_user_id = get_current_user_id()
     post_data = _get_post(post_id)
-    standardized_post = _standardize_post(post_data, current_user_id)
+    standardized_post = _standardize_post(post_data, current_user_id, include_article_full=True)
     comments_data = _get_post_comments(post_id, skip=5, limit=comment_count)
 
     post_author = standardized_post.get("author_username", "")

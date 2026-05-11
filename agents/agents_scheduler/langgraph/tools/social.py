@@ -154,7 +154,7 @@ def view_notification_origin(
 
     if post_id:
         post_data = _get_post(post_id)
-        result["post"] = _standardize_post(post_data, current_user_id)
+        result["post"] = _standardize_post(post_data, current_user_id, include_article_full=True)
 
     if post_id and comment_id:
         comment_data = _get_comment(post_id, comment_id)
@@ -463,6 +463,8 @@ def toggle_follow(
 @tool
 def create_post(
     content: str,
+    title: Optional[str] = None,
+    type: str = "post",
     reason: str = "用户想要分享内容",
     summary: str = ""
 ) -> ToolResult:
@@ -474,7 +476,9 @@ def create_post(
     注意：此工具会自动从当前执行上下文获取认证信息，无需手动传入 Token。
 
     Args:
-        content: 帖子的文本内容，至少需要 1 个字符
+        content: 帖子的文本内容，至少需要 1 个字符。发布文章时这里填写 Markdown 全文。
+        title: 可选标题。type 为 "article" 时必须填写。
+        type: 内容类型，"post" 为普通帖子，"article" 为文章。
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要分享日常"、"用户想要发布一条重要通知"等。
         summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
@@ -490,17 +494,33 @@ def create_post(
         ValidationError: 参数验证失败（如内容为空）
         ToolExecutionError: 服务器内部错误
     """
-    _make_request(
+    content_type = type.lower()
+    if content_type not in {"post", "article"}:
+        raise ValidationError('type 必须是 "post" 或 "article"')
+    if content_type == "article" and not (title or "").strip():
+        raise ValidationError('发布文章时必须填写 title')
+
+    payload = {"content": content, "type": content_type}
+    if title is not None:
+        payload["title"] = title
+
+    created_post = _make_request(
         method="POST",
         endpoint="/posts/",
-        json_data={"content": content},
+        json_data=payload,
         reason=reason,
         summary=summary
     )
 
-    action = f"发布了新帖子：{_truncate(content)}"
+    if content_type == "article":
+        action = f"发布了新文章《{title}》：{_truncate(content)}"
+    else:
+        action = f"发布了新帖子：{_truncate(content)}"
 
-    return ToolResult(action=action, data={"content": content})
+    return ToolResult(
+        action=action,
+        data={"post": _standardize_post(created_post, get_current_user_id(), include_article_full=True)},
+    )
 
 
 @tool
