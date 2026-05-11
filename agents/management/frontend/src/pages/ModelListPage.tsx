@@ -9,6 +9,11 @@ import {
 } from '@/shared/components/ui';
 import { Plus, Edit, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
+const modelProviderOptions = [
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Anthropic' },
+];
+
 export default function ModelListPage() {
   const queryClient = useQueryClient();
   const [editingModel, setEditingModel] = useState<number | null>(null);
@@ -485,6 +490,28 @@ interface EditDialogProps extends BaseDialogProps {
   model?: { name: string; provider: string; base_url: string; model_name: string; temperature: number; max_token: number; is_active: boolean };
 }
 
+function ProviderSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {modelProviderOptions.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDialogProps) {
   const [name, setName] = useState('');
   const [provider, setProvider] = useState('openai');
@@ -538,7 +565,7 @@ function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDi
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">提供商 *</label>
-                <Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="openai / anthropic" />
+                <ProviderSelect value={provider} onChange={setProvider} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
@@ -651,7 +678,7 @@ function EditModelDialog({ open, onOpenChange, onSubmit, isPending, model }: Edi
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">提供商 *</label>
-                <Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="openai / anthropic" />
+                <ProviderSelect value={provider} onChange={setProvider} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
@@ -765,7 +792,7 @@ function CreateChunkModelDialog({ open, onOpenChange, onSubmit, isPending }: {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">提供商 *</label>
-                <Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="openai / anthropic" />
+                <ProviderSelect value={provider} onChange={setProvider} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
@@ -884,7 +911,7 @@ function EditChunkModelDialog({ open, onOpenChange, onSubmit, isPending, model }
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">提供商 *</label>
-                <Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="openai / anthropic" />
+                <ProviderSelect value={provider} onChange={setProvider} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
