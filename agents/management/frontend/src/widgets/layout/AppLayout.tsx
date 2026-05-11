@@ -8,7 +8,7 @@ import { useLogout, useCurrentAdmin, ProfileDialog } from '@/features/auth';
 
 const navItems = [
   { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
-  { path: '/agents', label: 'Agent 管理', icon: Users },
+  { path: '/agents', label: '角色管理', icon: Users },
   { path: '/models', label: '模型配置', icon: Cpu },
   { path: '/memories', label: '记忆管理', icon: Brain },
   { path: '/system', label: '系统配置', icon: Settings },
@@ -33,7 +33,7 @@ export function AppLayout() {
         {/* Logo */}
         <div className="h-14 flex items-center justify-between px-4 border-b border-border">
           {sidebarOpen && (
-            <span className="font-bold text-lg truncate">Agent Manager</span>
+            <span className="font-bold text-lg truncate">角色管理后台</span>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}

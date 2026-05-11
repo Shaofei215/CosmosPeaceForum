@@ -68,14 +68,14 @@ export default function AgentDetailPage() {
   }
 
   if (!agent) {
-    return <div className="text-center py-12 text-muted-foreground">Agent 不存在</div>;
+    return <div className="text-center py-12 text-muted-foreground">角色不存在</div>;
   }
 
   const knownAgents = agent.knows_ids
     .filter((kid) => kid !== agent.id)
     .map((kid) => ({
       id: kid,
-      name: agentNameMap.get(kid) ?? `Agent #${kid}`,
+      name: agentNameMap.get(kid) ?? `角色 #${kid}`,
     }));
 
   return (
@@ -85,7 +85,7 @@ export default function AgentDetailPage() {
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft size={20} />
           </Button>
-          <h1 className="text-2xl font-bold">Agent 详情</h1>
+          <h1 className="text-2xl font-bold">角色详情</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate(`/agents/${agent.id}/edit`)}>
@@ -195,7 +195,7 @@ export default function AgentDetailPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">暂无关联 Agent</p>
+            <p className="text-sm text-muted-foreground">暂无关联角色</p>
           )}
         </CardContent>
       </Card>

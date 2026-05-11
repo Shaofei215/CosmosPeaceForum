@@ -49,7 +49,7 @@ export default function LoginPage() {
               <Shield size={24} className="text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Agent Management</CardTitle>
+          <CardTitle className="text-2xl font-bold">角色管理后台</CardTitle>
           <p className="text-sm text-muted-foreground">管理员登录</p>
         </CardHeader>
         <CardContent>

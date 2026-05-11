@@ -9,6 +9,7 @@ Management Database Client - 数据库抽象层
 
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -144,6 +145,30 @@ class ManagementDBClient:
                 conn.close()
         except Exception:
             return None
+
+    def update_agent_last_login(self, agent_id: int, login_at: datetime | None = None) -> bool:
+        """记录 Agent 最近一次成功登录时间。"""
+        try:
+            conn = self._get_connection()
+            try:
+                columns = {
+                    row["name"]
+                    for row in conn.execute("PRAGMA table_info(agent_configs)").fetchall()
+                }
+                if "last_login_at" not in columns:
+                    conn.execute("ALTER TABLE agent_configs ADD COLUMN last_login_at DATETIME")
+
+                timestamp = (login_at or datetime.utcnow()).isoformat(sep=" ")
+                conn.execute(
+                    "UPDATE agent_configs SET last_login_at = ?, updated_at = ? WHERE id = ?",
+                    (timestamp, timestamp, agent_id),
+                )
+                conn.commit()
+                return True
+            finally:
+                conn.close()
+        except Exception:
+            return False
     
     def get_active_model_configs(self) -> list:
         """

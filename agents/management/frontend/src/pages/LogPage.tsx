@@ -6,11 +6,17 @@ import { formatDate } from '@/shared/lib/format';
 import { FileText } from 'lucide-react';
 
 const actionLabels: Record<string, string> = {
-  create_agent: '创建 Agent',
-  update_agent: '更新 Agent',
-  delete_agent: '删除 Agent',
-  restart_agent: '重启 Agent',
-  import_agents: '批量导入 Agent',
+  create_agent: '创建角色',
+  update_agent: '更新角色',
+  delete_agent: '删除角色',
+  restart_agent: '重启角色',
+  start_agent: '启动角色',
+  stop_agent: '停止角色',
+  import_agents: '批量导入角色',
+  batch_start_agents: '批量启动角色',
+  batch_stop_agents: '批量停止角色',
+  batch_delete_agents: '批量删除角色',
+  update_agent_relation: '更新角色关系',
   upload_avatar: '上传头像',
   create_model: '创建模型',
   update_model: '更新模型',
@@ -21,7 +27,7 @@ const actionLabels: Record<string, string> = {
 };
 
 const targetLabels: Record<string, string> = {
-  agent: 'Agent',
+  agent: '角色',
   model: '模型',
   system: '系统',
 };
@@ -51,9 +57,9 @@ export default function LogPage() {
           value={selectedAgentId}
           onChange={(event) => setSelectedAgentId(event.target.value)}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          aria-label="Filter logs by role"
+          aria-label="按角色筛选日志"
         >
-          <option value="">All roles</option>
+          <option value="">全部角色</option>
           {agents?.items.map((agent) => (
             <option key={agent.id} value={agent.id}>
               {agent.name} (@{agent.username})

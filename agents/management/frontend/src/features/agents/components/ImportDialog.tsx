@@ -161,7 +161,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>批量导入 Agent</DialogTitle>
+          <DialogTitle>批量导入角色</DialogTitle>
           <DialogDescription>
             上传包含 ai_users_config.json 和 avatar 目录的 zip 压缩包
           </DialogDescription>

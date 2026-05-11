@@ -1,6 +1,7 @@
 import { apiClient } from '@/shared/api/client';
 import type {
   AgentConfig, AgentCreate, AgentUpdate, AgentListResponse, AgentRelationUpdate,
+  DashboardStats,
   ModelConfig, ModelConfigCreate, ModelConfigUpdate,
   SystemConfig, OperationLogListResponse, MessageResponse,
   EmbeddingConfig, EmbeddingConfigCreate, EmbeddingConfigUpdate,
@@ -57,6 +58,9 @@ export const agentApi = {
 
   updateRelation: (id: number, data: AgentRelationUpdate) =>
     apiClient.put<AgentConfig>(`/agents/${id}/relation`, data),
+
+  dashboardStats: () =>
+    apiClient.get<DashboardStats>('/agents/dashboard-stats'),
 };
 
 export const modelApi = {

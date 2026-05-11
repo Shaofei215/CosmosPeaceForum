@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { agentApi } from '@/shared/api/modules';
 import {
-  Button, Input, Card, CardContent, CardHeader, CardTitle,
-  Avatar, Badge, Dialog, DialogContent, DialogHeader, DialogTitle,
+  Button, Input, Card, CardContent,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription, Skeleton,
 } from '@/shared/components/ui';
 import {
@@ -12,6 +12,10 @@ import {
 } from 'lucide-react';
 import { ImportDialog } from '@/features/agents/components/ImportDialog';
 import { formatDate } from '@/shared/lib/format';
+
+function formatLastLogin(value: string | null): string {
+  return value ? formatDate(value) : '未登录';
+}
 
 export default function AgentListPage() {
   const navigate = useNavigate();
@@ -133,14 +137,14 @@ export default function AgentListPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Agent 管理</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold">角色管理</h1>
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setShowImport(true)}>
             <Upload size={16} className="mr-1" /> 批量导入
           </Button>
           <Button onClick={() => navigate('/agents/new')}>
-            <Plus size={16} className="mr-1" /> 创建 Agent
+            <Plus size={16} className="mr-1" /> 创建角色
           </Button>
         </div>
       </div>
@@ -149,7 +153,7 @@ export default function AgentListPage() {
         <Card className="mb-4 border-primary/20 bg-primary/5">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm">已选择 {selectedIds.size} 个 Agent</span>
+              <span className="text-sm">已选择 {selectedIds.size} 个角色</span>
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -185,17 +189,17 @@ export default function AgentListPage() {
 
       {/* Search */}
       <Card className="mb-6">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <Search size={18} className="text-muted-foreground" />
+        <CardContent className="p-4">
+          <div className="flex h-10 items-center gap-3">
+            <Search size={18} className="shrink-0 text-muted-foreground" />
             <Input
-              placeholder="搜索 Agent 名称或用户名..."
+              placeholder="搜索角色名称或用户名..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
+              className="h-10 max-w-md"
             />
           </div>
-        </CardHeader>
+        </CardContent>
       </Card>
 
       {/* Table */}
@@ -223,12 +227,11 @@ export default function AgentListPage() {
                         className="h-4 w-4 rounded border-gray-300"
                       />
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Agent</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">角色</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">用户名</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">状态</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">每月登录</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">ID</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">更新时间</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">最后登录时间</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">操作</th>
                   </tr>
                 </thead>
@@ -244,21 +247,13 @@ export default function AgentListPage() {
                         />
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Avatar src={null} alt={agent.name} size="sm" />
-                          <span className="font-medium">{agent.name}</span>
-                        </div>
+                        <span className="font-medium">{agent.name}</span>
                       </td>
                       <td className="py-3 px-4 text-sm">{agent.username}</td>
-                      <td className="py-3 px-4">
-                        <Badge variant={agent.is_active ? 'default' : 'secondary'}>
-                          {agent.is_active ? '启用' : '禁用'}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4 text-sm">{agent.monthly_logins}</td>
+                      <td className="py-3 px-4 text-sm tabular-nums">{agent.monthly_logins}</td>
                       <td className="py-3 px-4 text-sm">{agent.id}</td>
                       <td className="py-3 px-4 text-sm text-muted-foreground">
-                        {formatDate(agent.updated_at)}
+                        {formatLastLogin(agent.last_login_at)}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-end gap-1">
@@ -326,7 +321,7 @@ export default function AgentListPage() {
               </table>
               {filtered.length === 0 && (
                 <div className="py-12 text-center text-muted-foreground">
-                  {search ? '未找到匹配的 Agent' : '暂无 Agent，点击「创建 Agent」添加'}
+                  {search ? '未找到匹配的角色' : '暂无角色，点击「创建角色」添加'}
                 </div>
               )}
             </div>
@@ -340,7 +335,7 @@ export default function AgentListPage() {
           <DialogHeader>
             <DialogTitle>确认删除</DialogTitle>
             <DialogDescription>
-              确定要删除此 Agent 吗？此操作不可撤销。
+              确定要删除此角色吗？此操作不可撤销。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -362,7 +357,7 @@ export default function AgentListPage() {
           <DialogHeader>
             <DialogTitle>确认批量删除</DialogTitle>
             <DialogDescription>
-              确定要删除选中的 {selectedIds.size} 个 Agent 吗？此操作不可撤销。
+              确定要删除选中的 {selectedIds.size} 个角色吗？此操作不可撤销。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

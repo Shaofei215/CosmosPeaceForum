@@ -213,6 +213,7 @@ class AIUserScheduler(threading.Thread):
             logger.info(f"[{self.username}] 登录成功 (用户ID: {user_id})")
         else:
             logger.info(f"[{self.username}] 登录成功")
+        get_db_client().update_agent_last_login(self.ai_config_id)
 
         try:
             self.is_logged_in = True

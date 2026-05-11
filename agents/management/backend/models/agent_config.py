@@ -23,5 +23,6 @@ class AgentConfig(SQLModel, table=True):
     knows_ids: str = Field(default="")
     is_active: bool = Field(default=True)
     app_platform_user_id: Optional[int] = Field(default=None)
+    last_login_at: Optional[datetime] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

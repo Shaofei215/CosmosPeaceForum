@@ -51,7 +51,7 @@ export default function MemoryListPage() {
     (memoryOwners?.items ?? []).map((owner) => [owner.owner_id, owner])
   );
 
-  // 构建完整的 Agent 列表，包含记忆信息（即使没有记忆也会显示）
+  // 构建完整的角色列表，包含记忆信息（即使没有记忆也会显示）
   const agentsWithMemoryInfo = configuredAgents.map((agent) => {
     const ownerId = agent.app_platform_user_id!;
     const memoryInfo = memoryOwnerMap.get(ownerId);
@@ -117,7 +117,6 @@ export default function MemoryListPage() {
                   ) : (
                     <p className="text-xs text-muted-foreground mt-1">暂无记忆，点击添加</p>
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">owner_id: {ownerId}</p>
                 </div>
               </div>
             </CardContent>
@@ -128,7 +127,7 @@ export default function MemoryListPage() {
       {agentsWithMemoryInfo.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            暂无已配置的角色，请先在 Agent 管理页创建角色
+            暂无已配置的角色，请先在角色管理页创建角色
           </CardContent>
         </Card>
       )}

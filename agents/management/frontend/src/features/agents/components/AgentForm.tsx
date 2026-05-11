@@ -66,7 +66,6 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
       await queryClient.invalidateQueries({ queryKey: ['agents'] });
       await queryClient.invalidateQueries({ queryKey: ['agent'] });
       await queryClient.invalidateQueries({ queryKey: ['agents-all'] });
-      navigate('/agents');
     },
     onError: (err: { message?: string }) => {
       setError(err.message || '更新失败');
@@ -80,14 +79,13 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
       await queryClient.invalidateQueries({ queryKey: ['agents'] });
       await queryClient.invalidateQueries({ queryKey: ['agent'] });
       await queryClient.invalidateQueries({ queryKey: ['agents-all'] });
-      navigate('/agents');
     },
     onError: (err: { message?: string }) => {
       setError(err.message || '更新关系失败');
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -110,30 +108,29 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
         is_active: isActive,
       });
     } else if (agent) {
-      updateMutation.mutate({
-        id: agent.id,
-        data: {
-          name: name.trim(),
-          monthly_logins: monthlyLogins,
-          personal_signature: signature.trim(),
-          personality_prompt: personalityPrompt.trim(),
-          is_active: isActive,
-        },
-      });
+      try {
+        await updateMutation.mutateAsync({
+          id: agent.id,
+          data: {
+            name: name.trim(),
+            monthly_logins: monthlyLogins,
+            personal_signature: signature.trim(),
+            personality_prompt: personalityPrompt.trim(),
+            is_active: isActive,
+          },
+        });
+        await relationMutation.mutateAsync({
+          id: agent.id,
+          data: {
+            knows_ids: Array.from(selectedKnowsIds),
+            bidirectional,
+          },
+        });
+        navigate('/agents');
+      } catch {
+        // mutation 的 onError 会写入具体错误。
+      }
     }
-  };
-
-  const handleSaveRelations = () => {
-    if (!agent) return;
-    setError('');
-
-    relationMutation.mutate({
-      id: agent.id,
-      data: {
-        knows_ids: Array.from(selectedKnowsIds),
-        bidirectional,
-      },
-    });
   };
 
   const toggleKnows = (agentId: number) => {
@@ -148,8 +145,7 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
     });
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
-  const isRelationPending = relationMutation.isPending;
+  const isPending = createMutation.isPending || updateMutation.isPending || relationMutation.isPending;
 
   const otherAgents = (allAgents?.items ?? []).filter((a) => a.id !== agent?.id);
 
@@ -160,7 +156,7 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
           <ArrowLeft size={20} />
         </Button>
         <h1 className="text-2xl font-bold">
-          {mode === 'create' ? '创建 Agent' : `编辑 Agent - ${agent?.name}`}
+          {mode === 'create' ? '创建角色' : `编辑角色 - ${agent?.name}`}
         </h1>
       </div>
 
@@ -220,7 +216,7 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
                     onChange={(e) => setIsActive(e.target.checked)}
                     className="h-4 w-4"
                   />
-                  <label htmlFor="isActive" className="text-sm">启用此 Agent</label>
+                  <label htmlFor="isActive" className="text-sm">启用此角色</label>
                 </div>
               </div>
             </div>
@@ -240,7 +236,7 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
               <Textarea
                 value={personalityPrompt}
                 onChange={(e) => setPersonalityPrompt(e.target.value)}
-                placeholder="定义 Agent 的个性和行为方式..."
+                placeholder="定义角色的个性和行为方式..."
                 rows={5}
               />
             </div>
@@ -251,7 +247,7 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users size={18} /> 相识 Agent 关系
+                <Users size={18} /> 相识角色关系
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -262,11 +258,11 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
                   ))}
                 </div>
               ) : otherAgents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">暂无其他 Agent</p>
+                <p className="text-sm text-muted-foreground">暂无其他角色</p>
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    勾选 {agent.name} 认识的 Agent
+                    勾选 {agent.name} 认识的角色
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {otherAgents.map((other) => (
@@ -303,13 +299,13 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
                       className="h-4 w-4"
                     />
                     <label htmlFor="bidirectional" className="text-sm">
-                      双向操作（勾选/取消时对方也会同步添加/移除当前 Agent）
+                      双向操作（勾选/取消时对方也会同步添加/移除当前角色）
                     </label>
                   </div>
 
                   <div className="flex items-center gap-2 pt-2">
                     <span className="text-sm text-muted-foreground">
-                      已选择 {selectedKnowsIds.size} 位 Agent
+                      已选择 {selectedKnowsIds.size} 位角色
                     </span>
                   </div>
                 </div>
@@ -323,21 +319,10 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
             取消
           </Button>
           {mode === 'edit' ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isRelationPending}
-                onClick={handleSaveRelations}
-              >
-                <Users size={16} className="mr-1" />
-                {isRelationPending ? '保存中...' : '保存关系'}
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                <Save size={16} className="mr-1" />
-                {isPending ? '保存中...' : '保存'}
-              </Button>
-            </>
+            <Button type="submit" disabled={isPending}>
+              <Save size={16} className="mr-1" />
+              {isPending ? '保存中...' : '保存'}
+            </Button>
           ) : (
             <Button type="submit" disabled={isPending}>
               <Save size={16} className="mr-1" />

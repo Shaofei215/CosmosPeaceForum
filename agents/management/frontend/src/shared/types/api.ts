@@ -31,6 +31,7 @@ export interface AgentConfig {
   knows_ids: number[];
   is_active: boolean;
   app_platform_user_id: number | null;
+  last_login_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +61,15 @@ export interface AgentRelationUpdate {
 export interface AgentListResponse {
   items: AgentConfig[];
   total: number;
+}
+
+export interface DashboardStats {
+  total_roles: number;
+  enabled_roles: number;
+  daily_active_roles: number;
+  today_token_cost: number;
+  cpu_usage_percent: number;
+  memory_usage_percent: number;
 }
 
 export interface ModelConfig {
