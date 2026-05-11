@@ -1,3 +1,4 @@
+import re
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import func
@@ -71,7 +72,7 @@ def create_post_like_notification(db: Session, post: Post, sender_id: int) -> No
         resource_type="post",
         resource_id=post.id,
         post_id=post.id,
-        source_content=post.content,
+        source_content=format_post_source_content(post),
     )
 
 
@@ -154,6 +155,12 @@ def create_repost_notifications(
     recipients.append(root_post.author_id)
 
     notified = set()
+    display_content = source_content or format_post_source_content(repost)
+    if getattr(root_post, "type", "post") == "article":
+        display_content = _truncate(
+            f"{display_content}\n{format_post_source_content(root_post)}",
+            500,
+        )
     for recipient_id in recipients:
         if recipient_id in notified:
             continue
@@ -165,7 +172,7 @@ def create_repost_notifications(
             resource_type="post",
             resource_id=repost.id,
             post_id=repost.id,
-            source_content=source_content or repost.content,
+            source_content=display_content,
         )
         notified.add(recipient_id)
 
@@ -183,7 +190,10 @@ def get_notifications(
         query = query.filter(Notification.type == notification_type)
 
     total = query.count()
-    items = query.options(joinedload(Notification.sender)).order_by(
+    items = query.options(
+        joinedload(Notification.sender),
+        joinedload(Notification.post).joinedload(Post.repost_root_post),
+    ).order_by(
         Notification.created_at.desc()
     ).offset(skip).limit(limit).all()
 
@@ -255,6 +265,25 @@ def get_origin(db: Session, notification: Notification) -> Dict[str, object]:
         user = None
 
     return {"post": post, "comment": comment, "user": user}
+
+
+def format_post_source_content(post: Post, max_len: int = 500) -> str:
+    if getattr(post, "type", "post") == "article":
+        title = (post.title or "Untitled").strip()
+        body = _plain_markdown(post.content)
+        return _truncate(f"文章标题：{title}\n正文：{body}", max_len) or ""
+    return _truncate(post.content, max_len) or ""
+
+
+def _plain_markdown(content: Optional[str]) -> str:
+    text = content or ""
+    text = re.sub(r"```[\s\S]*?```", " ", text)
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = re.sub(r"!\[[^\]]*\]\([^)]+\)", " ", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"^[#>\-\*\+\d\.\s]+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"[*_~]+", "", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _truncate(content: Optional[str], max_len: int = 500) -> Optional[str]:

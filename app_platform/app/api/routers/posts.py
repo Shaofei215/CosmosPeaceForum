@@ -38,9 +38,13 @@ def create_post(
 
     返回：创建的帖子信息，包含 id、author_id、title、content、created_at 等字段
     """
+    if post.type == "article" and not (post.title or "").strip():
+        raise HTTPException(status_code=400, detail="Article title is required")
+
     db_post = Post(
         author_id=current_user.id,
         title=post.title,
+        type=post.type,
         content=post.content
     )
     db.add(db_post)
@@ -132,6 +136,7 @@ def get_post(
         author_id=post.author_id,
         author=post.author,
         title=post.title,
+        type=post.type,
         content=post.content,
         created_at=post.created_at,
         like_count=post.like_count,

@@ -29,6 +29,12 @@ class Notification(Base):
     post = relationship("Post", foreign_keys=[post_id])
     comment = relationship("Comment", foreign_keys=[comment_id])
 
+    @property
+    def source_post_type(self):
+        if self.type == "repost" and self.post and self.post.repost_root_post:
+            return self.post.repost_root_post.type
+        return self.post.type if self.post else None
+
     __table_args__ = (
         Index("idx_notifications_recipient_read_created", "recipient_id", "is_read", "created_at"),
         Index("idx_notifications_recipient_created", "recipient_id", "created_at"),

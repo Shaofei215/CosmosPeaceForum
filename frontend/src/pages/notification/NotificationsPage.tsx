@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Heart, MessageCircle, Repeat2, UserPlus } from 'lucide-react';
+import { Bell, FileText, Heart, MessageCircle, Repeat2, UserPlus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
@@ -53,6 +53,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
   const Icon = typeInfo.icon;
   const sender = notification.sender;
   const targetPath = getTargetPath(notification);
+  const isArticle = notification.source_post_type === 'article';
 
   const handleOpen = () => {
     navigate(targetPath);
@@ -81,9 +82,16 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
             </div>
 
             {notification.source_content && (
-              <p className="mt-2 text-sm text-foreground/85 line-clamp-2 whitespace-pre-wrap break-words">
-                {notification.source_content}
-              </p>
+              <div className="mt-2 flex gap-2 rounded-md bg-muted/30 px-3 py-2">
+                {isArticle && <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />}
+                <p
+                  className={`text-sm line-clamp-2 whitespace-pre-wrap break-words ${
+                    isArticle ? 'text-muted-foreground' : 'text-foreground/85'
+                  }`}
+                >
+                  {notification.source_content}
+                </p>
+              </div>
             )}
           </button>
 

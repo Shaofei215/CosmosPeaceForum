@@ -269,7 +269,40 @@ def _format_repost_chain_for_llm(
     return " //".join(formatted_segments)
 
 
-def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] = None) -> Dict[str, Any]:
+def _plain_markdown_excerpt(content: str, max_len: int = 220) -> str:
+    text = re.sub(r"```[\s\S]*?```", " ", content or "")
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = re.sub(r"!\[[^\]]*\]\([^)]+\)", " ", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"^[#>\-\*\+\d\.\s]+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"[*_~]+", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return _truncate(text, max_len)
+
+
+def _format_article_content_for_llm(
+    post_id: Any,
+    title: str,
+    markdown_content: str,
+    full: bool = False,
+) -> str:
+    safe_title = (title or "Untitled").strip()
+    if full:
+        return f"文章标题：{safe_title}\n正文（Markdown）：\n{markdown_content}"
+
+    excerpt = _plain_markdown_excerpt(markdown_content)
+    return (
+        f"文章标题：{safe_title}\n"
+        f"正文：{excerpt}\n"
+        f"这是一篇文章，调用 get_post_detail(post_id={post_id}) 可查看 Markdown 全文。"
+    )
+
+
+def _standardize_post(
+    post_data: Dict[str, Any],
+    current_user_id: Optional[int] = None,
+    include_article_full: bool = False,
+) -> Dict[str, Any]:
     """
     标准化帖子数据，供 LangGraph 工具结果和 prompt 格式化层使用。
 
@@ -311,11 +344,19 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
     author_id = post_data.get("author_id")
     raw_username = post_data.get("author_name") or post_data.get("author", {}).get("username", "")
     raw_content = post_data.get("content", "")
+    post_type = post_data.get("type", "post") or "post"
     raw_repost_chain = post_data.get("repost_chain")
     repost_chain_authors = post_data.get("repost_chain_authors", [])
 
     author_username = _expand_username_by_relation(raw_username, author_id, current_user_id)
     content = _expand_content_mentions_by_relation(raw_content, current_user_id)
+    if post_type == "article" and not raw_repost_chain:
+        content = _format_article_content_for_llm(
+            post_data.get("id"),
+            post_data.get("title") or "",
+            content,
+            full=include_article_full,
+        )
     formatted_repost_chain = _format_repost_chain_for_llm(
         raw_repost_chain,
         repost_chain_authors,
@@ -329,6 +370,8 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
         "author_id": author_id,
         "author_username": author_username,
         "author_bio": post_data.get("author_bio") or post_data.get("author", {}).get("bio", ""),
+        "title": post_data.get("title"),
+        "type": post_type,
         "content": content,
         "created_at": _format_display_time(post_data.get("created_at", "")),
         "like_count": post_data.get("like_count", 0),
@@ -355,7 +398,16 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
                 origin_author_id,
                 current_user_id,
             ),
-            "content": _expand_content_mentions_by_relation(
+            "title": repost_origin.get("title"),
+            "type": repost_origin.get("type", "post") or "post",
+            "content": _format_article_content_for_llm(
+                repost_origin.get("id"),
+                repost_origin.get("title") or "",
+                _expand_content_mentions_by_relation(
+                    repost_origin.get("content", ""),
+                    current_user_id,
+                ),
+            ) if (repost_origin.get("type", "post") or "post") == "article" else _expand_content_mentions_by_relation(
                 repost_origin.get("content", ""),
                 current_user_id,
             ),
@@ -445,6 +497,7 @@ def _standardize_notification(
     sender_id = sender.get("id") or notification_data.get("sender_id")
     raw_username = sender.get("username", "")
     raw_content = notification_data.get("source_content") or ""
+    source_post_type = notification_data.get("source_post_type")
 
     return {
         "id": notification_data.get("id"),
@@ -456,6 +509,7 @@ def _standardize_notification(
         "resource_type": notification_data.get("resource_type"),
         "resource_id": notification_data.get("resource_id"),
         "post_id": notification_data.get("post_id"),
+        "source_post_type": source_post_type,
         "comment_id": notification_data.get("comment_id"),
         "source_content": _expand_content_mentions_by_relation(raw_content, current_user_id),
         "is_read": notification_data.get("is_read", False),

@@ -189,6 +189,10 @@ def _comment_chain_segments(db: Session, comment: Comment, skip_source: bool = F
 
 def _format_post_segment(post: Post) -> str:
     username = post.author.username if post.author else f"user{post.author_id}"
+    if getattr(post, "type", "post") == "article":
+        title = (post.title or "Untitled").strip()
+        excerpt = _excerpt(post.content)
+        return f"@{username}: 文章《{title}》 {excerpt}"
     return f"@{username}: {post.content}"
 
 
@@ -199,3 +203,8 @@ def _format_comment_segment(comment: Comment) -> str:
 
 def _clean_content(content: Optional[str]) -> str:
     return content.strip() if content and content.strip() else ""
+
+
+def _excerpt(content: str, max_len: int = 160) -> str:
+    compact = re.sub(r"\s+", " ", content or "").strip()
+    return compact[:max_len] + ("..." if len(compact) > max_len else "")

@@ -3,6 +3,8 @@
  */
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { FileText } from 'lucide-react';
 import { useCreatePost } from '@/features/post';
 import { Button, Textarea } from '@/shared/components/ui';
 
@@ -41,7 +43,12 @@ export function CreatePostForm() {
         disabled={isPending}
         className="border-0 shadow-none bg-muted/30 focus-visible:ring-0 resize-none"
       />
-      <div className="flex justify-end mt-3">
+      <div className="mt-3 flex justify-end gap-2">
+        <Button asChild variant="outline" size="icon" className="h-8 w-8">
+          <Link to="/article/new" title="写文章">
+            <FileText className="h-4 w-4" />
+          </Link>
+        </Button>
         <Button type="submit" disabled={!content.trim() || isPending} size="sm" className="px-4">
           {isPending ? '发布中...' : '发布'}
         </Button>

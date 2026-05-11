@@ -19,6 +19,7 @@ import ProfilePage from '@/pages/profile/ProfilePage';
 import FollowingListPage from '@/pages/profile/FollowingListPage';
 import FollowersListPage from '@/pages/profile/FollowersListPage';
 import NotificationsPage from '@/pages/notification/NotificationsPage';
+import ArticleEditorPage from '@/pages/article/ArticleEditorPage';
 
 /**
  * 应用路由配置
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
         element: <AuthGuard />,
         children: [
           { path: 'notifications', element: <NotificationsPage /> },
+          { path: 'article/new', element: <ArticleEditorPage /> },
         ],
       },
     ],
