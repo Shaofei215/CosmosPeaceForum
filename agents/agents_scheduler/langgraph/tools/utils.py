@@ -271,11 +271,19 @@ def _format_repost_chain_for_llm(
 
 def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] = None) -> Dict[str, Any]:
     """
-    标准化帖子数据模型
+    标准化帖子数据，供 LangGraph 工具结果和 prompt 格式化层使用。
 
-    统一帖子信息包含：作者用户名、签名、创建时间、内容、点赞数、评论数、
-    点赞状态、作者关注状态、作者ID、帖子ID
-    自动根据关系映射拓展作者用户名和内容中的 @mention。
+    此函数负责把后端帖子响应统一成 LLM 易读的结构：
+    - 普通帖子：content 为关系映射后的正文。
+    - 转发帖子：如果存在 repost_chain，content 会被替换为格式化后的转发链，
+      例如 "@alice[作者ID 12]: 原内容"，让 LLM 直接从正文中理解转发链路。
+    - 引用原帖：repost_origin 会被压缩成根原帖的 ID、作者和正文信息；
+      如果根原帖缺失，则保留 repost_origin_missing 供 prompt 显示“原内容不存在”。
+
+    这里不暴露 repost_source_type / repost_source_id。它们表示直接转发来源，
+    但当前 prompt 不消费这两个字段，保留会增加 LLM 视野里的冗余和歧义。
+
+    函数还会根据关系映射拓展作者用户名和正文中的 @mention。
 
     Args:
         post_data: 原始帖子数据
@@ -293,6 +301,12 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
             - comment_count: 评论数
             - is_liked: 当前用户是否已点赞
             - follow_status: 当前用户对作者的关注状态
+            - repost_count: 被转发次数
+            - repost_root_post_id: 转发链根原帖 ID（非转发帖为空）
+            - repost_chain: 格式化后的转发链文本（非转发帖为空）
+            - repost_chain_authors: 后端解析出的转发链作者列表
+            - repost_origin_missing: 转发根原帖是否已缺失
+            - repost_origin: 根原帖的标准化摘要（存在时）
     """
     author_id = post_data.get("author_id")
     raw_username = post_data.get("author_name") or post_data.get("author", {}).get("username", "")
@@ -322,8 +336,6 @@ def _standardize_post(post_data: Dict[str, Any], current_user_id: Optional[int] 
         "is_liked": post_data.get("is_liked", post_data.get("is_liked_by_current_user", False)),
         "follow_status": _get_follow_status_text(author_id, current_user_id),
         "repost_count": post_data.get("repost_count", 0),
-        "repost_source_type": post_data.get("repost_source_type"),
-        "repost_source_id": post_data.get("repost_source_id"),
         "repost_root_post_id": post_data.get("repost_root_post_id"),
         "repost_chain": formatted_repost_chain or raw_repost_chain,
         "repost_chain_authors": repost_chain_authors,

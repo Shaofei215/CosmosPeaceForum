@@ -16,6 +16,8 @@ def test_standardize_post_reads_nested_author_and_like_status(monkeypatch):
             "like_count": 3,
             "comment_count": 1,
             "is_liked_by_current_user": True,
+            "repost_source_type": "post",
+            "repost_source_id": 12,
         },
         current_user_id=99,
     )
@@ -23,6 +25,8 @@ def test_standardize_post_reads_nested_author_and_like_status(monkeypatch):
     assert standardized["author_username"] == "march7th"
     assert standardized["author_bio"] == "hi"
     assert standardized["is_liked"] is True
+    assert "repost_source_type" not in standardized
+    assert "repost_source_id" not in standardized
 
 
 def test_prompt_formatters_fall_back_for_empty_username():
