@@ -31,6 +31,7 @@ from agents.management.backend.services.log_service import create_log
 from agents.management.backend.services.registrar import (
     register_agent,
     find_avatar_file,
+    get_scheduler_status,
     notify_scheduler_reload,
 )
 
@@ -185,6 +186,52 @@ def get_dashboard_stats(
         cpu_usage_percent=_read_cpu_usage_percent(),
         memory_usage_percent=_read_memory_usage_percent(),
     )
+
+
+@router.get("/runtime-status")
+def get_agents_runtime_status(
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """获取 scheduler 中 Agent 线程运行状态。"""
+    status_data = get_scheduler_status()
+    if status_data is None:
+        return {"agents": [], "scheduler_online": False}
+
+    return {**status_data, "scheduler_online": True}
+
+
+@router.get("/status-stream")
+def stream_agents_runtime_status(
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """SSE 推送 Agent 线程运行状态。"""
+
+    async def event_stream():
+        yield f"event: init\ndata: {json.dumps({'scheduler_online': True}, ensure_ascii=False)}\n\n"
+
+        last_payload = None
+        heartbeat_ticks = 0
+        while True:
+            status_data = await asyncio.to_thread(get_scheduler_status)
+            if status_data is None:
+                payload = {"agents": [], "scheduler_online": False}
+            else:
+                payload = {**status_data, "scheduler_online": True}
+
+            payload_text = json.dumps(payload, ensure_ascii=False)
+            if payload_text != last_payload:
+                yield f"event: status\ndata: {payload_text}\n\n"
+                last_payload = payload_text
+                heartbeat_ticks = 0
+            else:
+                heartbeat_ticks += 1
+                if heartbeat_ticks >= 15:
+                    yield f"event: ping\ndata: {json.dumps({'ok': True}, ensure_ascii=False)}\n\n"
+                    heartbeat_ticks = 0
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
@@ -355,14 +402,18 @@ def batch_start_agents(
 ):
     """批量启动 Agent"""
     started = 0
+    valid_ids = []
     for agent_id in agent_ids:
         agent = agent_service.get_agent(db, agent_id)
         if not agent:
             continue
 
         agent_service.update_agent(db, agent_id, AgentUpdate(is_active=True))
-        notify_scheduler_reload("agent", agent_id, action="start")
+        valid_ids.append(agent_id)
         started += 1
+
+    if valid_ids:
+        notify_scheduler_reload("agents", valid_ids, action="start")
 
     create_log(db, current_admin.id, "batch_start_agents", "agent", details=json.dumps({"count": started}))
 
@@ -377,14 +428,18 @@ def batch_stop_agents(
 ):
     """批量停止 Agent"""
     stopped = 0
+    valid_ids = []
     for agent_id in agent_ids:
         agent = agent_service.get_agent(db, agent_id)
         if not agent:
             continue
 
         agent_service.update_agent(db, agent_id, AgentUpdate(is_active=False))
-        notify_scheduler_reload("agent", agent_id, action="stop")
+        valid_ids.append(agent_id)
         stopped += 1
+
+    if valid_ids:
+        notify_scheduler_reload("agents", valid_ids, action="stop")
 
     create_log(db, current_admin.id, "batch_stop_agents", "agent", details=json.dumps({"count": stopped}))
 

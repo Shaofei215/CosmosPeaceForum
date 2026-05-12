@@ -63,6 +63,23 @@ export interface AgentListResponse {
   total: number;
 }
 
+export interface AgentRuntimeStatus {
+  agent_id: number;
+  username: string;
+  is_alive: boolean;
+  is_active: boolean;
+  is_logged_in: boolean;
+  is_stopping: boolean;
+  status: 'running' | 'in_session' | 'stopping' | 'paused' | 'stopped';
+  stop_requested_at: string | null;
+  next_login_time: string | null;
+}
+
+export interface AgentRuntimeStatusResponse {
+  agents: AgentRuntimeStatus[];
+  scheduler_online: boolean;
+}
+
 export interface DashboardStats {
   total_roles: number;
   enabled_roles: number;

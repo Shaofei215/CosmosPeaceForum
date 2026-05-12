@@ -19,7 +19,7 @@ import time
 import threading
 import traceback
 from datetime import datetime, timedelta
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Iterable
 
 from agents.agents_scheduler.scheduler.config import get_scheduler_config
 from agents.agents_scheduler.langgraph.executor import SessionExecutor, run_session
@@ -116,16 +116,24 @@ class AIUserScheduler(threading.Thread):
         self.pre_registered_user_id = pre_registered_user_id
 
         self._stop_event = threading.Event()
+        self._stop_requested_at: Optional[datetime] = None
         self._is_active = True
 
         self.next_login_time = None
         self.is_logged_in = False
 
-    def stop(self, timeout: float = 5.0):
+    @property
+    def is_stopping(self) -> bool:
+        """是否已经请求停止但线程尚未退出。"""
+        return self._stop_event.is_set() and self.is_alive()
+
+    def stop(self, timeout: float = 5.0, wait: bool = True):
         """停止调度线程"""
         self._is_active = False
+        self._stop_requested_at = datetime.now()
         self._stop_event.set()
-        self.join(timeout=timeout)
+        if wait and self.is_alive() and threading.current_thread() is not self:
+            self.join(timeout=timeout)
 
     def pause(self):
         """暂停调度（不退出线程）"""
@@ -221,6 +229,7 @@ class AIUserScheduler(threading.Thread):
                 user_id=user_id,
                 token=token,
                 ai_config_id=self.ai_config_id,
+                stop_event=self._stop_event,
             )
             set_current_context(agent_ctx)
 
@@ -262,7 +271,7 @@ class AgentSchedulerManager:
 
     def __init__(self, time_system=None):
         self.schedulers: Dict[int, AIUserScheduler] = {}
-        self._thread_lock = threading.Lock()
+        self._thread_lock = threading.RLock()
         self._is_running = False
         self.time_system = time_system or get_time_system()
         self._relation_map = None
@@ -298,17 +307,23 @@ class AgentSchedulerManager:
 
         logger.info(f"已启动 {len(self.schedulers)} 个 Agent 调度线程")
 
-    def stop(self):
+    def stop(self, wait: bool = True, timeout: float = 5.0):
         """停止所有 Agent 调度线程"""
         logger.info("停止所有 Agent 调度线程...")
         self._is_running = False
 
         with self._thread_lock:
-            for scheduler in self.schedulers.values():
-                scheduler.stop(timeout=5)
+            schedulers = list(self.schedulers.values())
 
-        self.schedulers.clear()
-        logger.info("所有 Agent 调度线程已停止")
+        for scheduler in schedulers:
+            scheduler.stop(timeout=timeout, wait=wait)
+
+        if wait:
+            with self._thread_lock:
+                self.schedulers.clear()
+            logger.info("所有 Agent 调度线程已停止")
+        else:
+            logger.info("已向所有 Agent 调度线程发送停止请求")
 
     def restart_agent(self, agent_id: int) -> bool:
         """
@@ -337,7 +352,8 @@ class AgentSchedulerManager:
             scheduler = self.schedulers.get(agent_id)
             if scheduler:
                 logger.info(f"[重启] 停止 Agent {agent_id} 的旧调度线程...")
-                scheduler.stop(timeout=5)
+                scheduler.stop(timeout=5, wait=True)
+                self.schedulers.pop(agent_id, None)
 
         logger.info(f"[重启] 为 Agent {agent_config['username']} (ID:{agent_id}) 创建新调度线程...")
         self._create_scheduler(agent_config)
@@ -357,8 +373,12 @@ class AgentSchedulerManager:
         logger.info("[重启] 停止所有旧调度线程...")
         self._is_running = False
         with self._thread_lock:
-            for scheduler in self.schedulers.values():
-                scheduler.stop(timeout=5)
+            schedulers = list(self.schedulers.values())
+
+        for scheduler in schedulers:
+            scheduler.stop(timeout=5, wait=True)
+
+        with self._thread_lock:
             self.schedulers.clear()
 
         self._is_running = True
@@ -384,8 +404,12 @@ class AgentSchedulerManager:
             bool: 是否成功
         """
         with self._thread_lock:
+            self._cleanup_finished_locked()
             if agent_id in self.schedulers:
                 existing = self.schedulers[agent_id]
+                if existing.is_stopping:
+                    logger.warning(f"[启动] Agent ID={agent_id} 正在停止中，暂不重复启动")
+                    return False
                 existing.resume()
                 return True
 
@@ -406,16 +430,27 @@ class AgentSchedulerManager:
             bool: 是否成功
         """
         with self._thread_lock:
+            self._cleanup_finished_locked()
             scheduler = self.schedulers.get(agent_id)
             if scheduler:
-                scheduler.stop(timeout=5)
-                del self.schedulers[agent_id]
+                scheduler.stop(timeout=0, wait=False)
+                if not scheduler.is_alive():
+                    del self.schedulers[agent_id]
                 return True
         return False
+
+    def start_agents(self, agent_ids: Iterable[int]) -> Dict[int, bool]:
+        """批量启动 Agent 线程。"""
+        return {agent_id: self.start_agent(agent_id) for agent_id in agent_ids}
+
+    def stop_agents(self, agent_ids: Iterable[int]) -> Dict[int, bool]:
+        """批量停止 Agent 线程。"""
+        return {agent_id: self.stop_agent(agent_id) for agent_id in agent_ids}
 
     def get_agent_status(self, agent_id: int) -> Optional[Dict]:
         """获取单个 Agent 状态"""
         with self._thread_lock:
+            self._cleanup_finished_locked()
             scheduler = self.schedulers.get(agent_id)
 
         if not scheduler:
@@ -427,6 +462,11 @@ class AgentSchedulerManager:
             "is_alive": scheduler.is_alive(),
             "is_active": scheduler._is_active,
             "is_logged_in": scheduler.is_logged_in,
+            "is_stopping": scheduler.is_stopping,
+            "status": self._get_scheduler_status_label(scheduler),
+            "stop_requested_at": (
+                scheduler._stop_requested_at.isoformat() if scheduler._stop_requested_at else None
+            ),
             "next_login_time": scheduler.next_login_time.isoformat() if scheduler.next_login_time else None,
         }
 
@@ -434,11 +474,48 @@ class AgentSchedulerManager:
         """获取所有 Agent 状态"""
         statuses = []
         with self._thread_lock:
-            for agent_id in list(self.schedulers.keys()):
-                status = self.get_agent_status(agent_id)
-                if status:
-                    statuses.append(status)
+            self._cleanup_finished_locked()
+            schedulers = list(self.schedulers.items())
+
+        for agent_id, scheduler in schedulers:
+            statuses.append({
+                "agent_id": agent_id,
+                "username": scheduler.username,
+                "is_alive": scheduler.is_alive(),
+                "is_active": scheduler._is_active,
+                "is_logged_in": scheduler.is_logged_in,
+                "is_stopping": scheduler.is_stopping,
+                "status": self._get_scheduler_status_label(scheduler),
+                "stop_requested_at": (
+                    scheduler._stop_requested_at.isoformat() if scheduler._stop_requested_at else None
+                ),
+                "next_login_time": (
+                    scheduler.next_login_time.isoformat() if scheduler.next_login_time else None
+                ),
+            })
         return statuses
+
+    def _cleanup_finished_locked(self):
+        """清理已退出的线程；调用方需持有 _thread_lock。"""
+        stopped_ids = [
+            agent_id
+            for agent_id, scheduler in self.schedulers.items()
+            if not scheduler.is_alive()
+        ]
+        for agent_id in stopped_ids:
+            del self.schedulers[agent_id]
+
+    @staticmethod
+    def _get_scheduler_status_label(scheduler: AIUserScheduler) -> str:
+        if scheduler.is_stopping:
+            return "stopping"
+        if scheduler.is_logged_in:
+            return "in_session"
+        if scheduler.is_alive() and scheduler._is_active:
+            return "running"
+        if scheduler.is_alive():
+            return "paused"
+        return "stopped"
 
     def _create_scheduler(self, agent_data: Dict) -> bool:
         """

@@ -1,6 +1,7 @@
 import { apiClient } from '@/shared/api/client';
 import type {
   AgentConfig, AgentCreate, AgentUpdate, AgentListResponse, AgentRelationUpdate,
+  AgentRuntimeStatusResponse,
   DashboardStats,
   ModelConfig, ModelConfigCreate, ModelConfigUpdate,
   SystemConfig, OperationLogListResponse, MessageResponse,
@@ -61,6 +62,9 @@ export const agentApi = {
 
   dashboardStats: () =>
     apiClient.get<DashboardStats>('/agents/dashboard-stats'),
+
+  runtimeStatus: () =>
+    apiClient.get<AgentRuntimeStatusResponse>('/agents/runtime-status'),
 };
 
 export const modelApi = {

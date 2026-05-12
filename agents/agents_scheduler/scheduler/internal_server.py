@@ -13,8 +13,9 @@ Scheduler 内部 HTTP 接口服务
 
 import logging
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional, Callable
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from typing import Optional
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -43,26 +44,51 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """处理 GET 请求"""
-        if self.path == '/health':
+        path = urlparse(self.path).path
+        if path == '/health':
             self._send_json_response(200, {
                 "status": "ok",
                 "service": "scheduler",
             })
+        elif path == '/internal/status':
+            self._handle_status()
         else:
             self._send_json_response(404, {"error": "not found"})
 
     def do_POST(self):
         """处理 POST 请求"""
-        if self.path == '/internal/reload/system':
+        path = urlparse(self.path).path
+        if path == '/internal/reload/system':
             self._handle_reload_system()
-        elif self.path == '/internal/reload/model':
+        elif path == '/internal/reload/model':
             self._handle_reload_model()
-        elif self.path == '/internal/reload/agent':
+        elif path == '/internal/reload/agent':
             self._handle_reload_agent()
-        elif self.path == '/internal/reload/all':
+        elif path == '/internal/reload/agents':
+            self._handle_reload_agents()
+        elif path == '/internal/reload/all':
             self._handle_reload_all()
         else:
             self._send_json_response(404, {"error": "not found"})
+
+    def _read_json_body(self) -> dict:
+        """读取 JSON 请求体。"""
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length <= 0:
+            return {}
+
+        import json
+        return json.loads(self.rfile.read(content_length))
+
+    def _handle_status(self):
+        """返回当前 Agent 线程运行状态。"""
+        if not self.scheduler_manager:
+            self._send_json_response(200, {"agents": []})
+            return
+
+        self._send_json_response(200, {
+            "agents": self.scheduler_manager.get_all_statuses(),
+        })
 
     def _handle_reload_system(self):
         """重载系统配置"""
@@ -103,10 +129,8 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
 
             rebuild_relation_maps()
 
-            content_length = int(self.headers.get('Content-Length', 0))
-            if content_length > 0:
-                import json
-                body = json.loads(self.rfile.read(content_length))
+            body = self._read_json_body()
+            if body:
                 agent_id = body.get('agent_id')
                 action = body.get('action', 'restart')
 
@@ -140,6 +164,42 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             self._send_json_response(200, {"message": "agent config reloaded"})
         except Exception as e:
             logger.error(f"[热更新] Agent 配置重载失败: {e}")
+            self._send_json_response(500, {"error": str(e)})
+
+    def _handle_reload_agents(self):
+        """批量重载 Agent 配置（支持 start / stop 动作）"""
+        try:
+            from agents.agents_scheduler.scheduler.relation_map import rebuild_relation_maps
+
+            body = self._read_json_body()
+            agent_ids = body.get('agent_ids') or []
+            action = body.get('action', 'restart')
+
+            if not isinstance(agent_ids, list):
+                self._send_json_response(400, {"error": "agent_ids must be a list"})
+                return
+
+            rebuild_relation_maps()
+
+            if not self.scheduler_manager:
+                self._send_json_response(503, {"error": "scheduler manager unavailable"})
+                return
+
+            ids = [int(agent_id) for agent_id in agent_ids]
+            if action == 'start':
+                results = self.scheduler_manager.start_agents(ids)
+            elif action == 'stop':
+                results = self.scheduler_manager.stop_agents(ids)
+            else:
+                results = {agent_id: self.scheduler_manager.restart_agent(agent_id) for agent_id in ids}
+
+            logger.info("[热更新] 批量 Agent 配置已重载: action=%s count=%d", action, len(ids))
+            self._send_json_response(200, {
+                "message": "agents config reloaded",
+                "results": results,
+            })
+        except Exception as e:
+            logger.error(f"[热更新] 批量 Agent 配置重载失败: {e}")
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_all(self):
@@ -178,14 +238,14 @@ class SchedulerInternalServer:
     def __init__(self, port: int = 8002, scheduler_manager=None):
         self.port = port
         self.scheduler_manager = scheduler_manager
-        self._server: Optional[HTTPServer] = None
+        self._server: Optional[ThreadingHTTPServer] = None
         self._thread: Optional[threading.Thread] = None
 
     def start(self):
         """启动内部 HTTP 服务器"""
         SchedulerInternalHandler.scheduler_manager = self.scheduler_manager
 
-        self._server = HTTPServer(('127.0.0.1', self.port), SchedulerInternalHandler)
+        self._server = ThreadingHTTPServer(('127.0.0.1', self.port), SchedulerInternalHandler)
         self._server.daemon_threads = True
 
         self._thread = threading.Thread(
@@ -197,8 +257,11 @@ class SchedulerInternalServer:
 
         logger.info(f"[内部接口] 服务器启动在 http://127.0.0.1:{self.port}")
 
-    def stop(self):
+    def stop(self, wait: bool = True):
         """停止内部 HTTP 服务器"""
         if self._server:
             self._server.shutdown()
+            self._server.server_close()
+            if wait and self._thread and self._thread.is_alive():
+                self._thread.join(timeout=2)
             logger.info("[内部接口] 服务器已停止")

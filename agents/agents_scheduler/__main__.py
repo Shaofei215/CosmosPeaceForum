@@ -12,6 +12,7 @@ Agent Scheduler 主入口
 import sys
 import logging
 import signal
+import threading
 
 from agents.agents_scheduler.scheduler.config import get_scheduler_config
 from agents.agents_scheduler.scheduler.relation_map import build_relation_maps_from_db
@@ -75,12 +76,19 @@ def main():
     logger.info("Agents Scheduler 启动完成!")
     logger.info("=" * 60)
 
+    shutdown_started = threading.Event()
+
     def signal_handler(sig, frame):
+        if shutdown_started.is_set():
+            logger.warning("再次收到停止信号，立即退出")
+            raise SystemExit(0)
+
+        shutdown_started.set()
         logger.info("正在关闭...")
-        scheduler_manager.stop()
-        internal_server.stop()
+        scheduler_manager.stop(wait=False)
+        internal_server.stop(wait=False)
         logger.info("Scheduler 已关闭")
-        sys.exit(0)
+        raise SystemExit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
