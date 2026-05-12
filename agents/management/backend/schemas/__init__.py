@@ -5,7 +5,7 @@ Management Backend - 请求/响应模型
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ==================== Auth ====================
@@ -81,6 +81,11 @@ class AgentListResponse(BaseModel):
 class AgentRelationUpdate(BaseModel):
     knows_ids: List[int] = []
     bidirectional: bool = False
+
+
+class PromptInjectionRequest(BaseModel):
+    agent_ids: List[int] = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=8000)
 
 
 class AgentRelationResponse(BaseModel):

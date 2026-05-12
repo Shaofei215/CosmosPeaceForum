@@ -24,7 +24,8 @@ from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.agent_config import AgentConfig
 from agents.management.backend.schemas import (
     AgentCreate, AgentUpdate, AgentResponse, AgentListResponse,
-    AgentRelationUpdate, DashboardStatsResponse, MessageResponse
+    AgentRelationUpdate, DashboardStatsResponse, MessageResponse,
+    PromptInjectionRequest,
 )
 from agents.management.backend.services import agent_service
 from agents.management.backend.services.log_service import create_log
@@ -33,6 +34,7 @@ from agents.management.backend.services.registrar import (
     find_avatar_file,
     get_scheduler_status,
     notify_scheduler_reload,
+    notify_scheduler_session_injection,
 )
 
 logger = logging.getLogger(__name__)
@@ -232,6 +234,47 @@ def stream_agents_runtime_status(
             await asyncio.sleep(1)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/prompt-injections", response_model=MessageResponse)
+def inject_prompt_for_next_session(
+    request: PromptInjectionRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """为选中的 Agent 设置下一次登录会话的一次性提示词注入。"""
+    content = request.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="提示词注入内容不能为空")
+
+    valid_ids = []
+    for agent_id in dict.fromkeys(request.agent_ids):
+        agent = agent_service.get_agent(db, agent_id)
+        if agent:
+            valid_ids.append(agent_id)
+
+    if not valid_ids:
+        raise HTTPException(status_code=404, detail="未找到可注入的 Agent")
+
+    success = notify_scheduler_session_injection(
+        agent_ids=valid_ids,
+        injection_type="prompt",
+        content=content,
+        source="management",
+        metadata={"admin_id": current_admin.id},
+    )
+    if not success:
+        raise HTTPException(status_code=502, detail="无法连接 scheduler 服务或注入失败")
+
+    create_log(
+        db,
+        current_admin.id,
+        "inject_prompt",
+        "agent",
+        details=json.dumps({"count": len(valid_ids), "agent_ids": valid_ids}, ensure_ascii=False),
+    )
+
+    return MessageResponse(message=f"已为 {len(valid_ids)} 个 Agent 设置提示词注入，将在下一次登录会话生效")
 
 
 @router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)

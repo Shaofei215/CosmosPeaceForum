@@ -30,6 +30,7 @@ from agents.agents_scheduler.scheduler.context import (
     set_current_context,
     clear_current_context,
 )
+from agents.agents_scheduler.scheduler.session_injections import consume_prompt_injection_text
 from agents.agents_scheduler.scheduler.time_system import get_time_system
 from agents.management.backend.db_client import get_db_client
 
@@ -233,6 +234,14 @@ class AIUserScheduler(threading.Thread):
             )
             set_current_context(agent_ctx)
 
+            session_prompt_injection = consume_prompt_injection_text(self.ai_config_id)
+            if session_prompt_injection:
+                logger.info(
+                    "[%s] 已消费下一次会话提示词注入: %d 字符",
+                    self.username,
+                    len(session_prompt_injection),
+                )
+
             session_cfg = SessionAgentConfig(
                 user_id=user_id,
                 username=self.username,
@@ -241,6 +250,7 @@ class AIUserScheduler(threading.Thread):
                 personality_prompt=self.personality_prompt,
                 personal_signature=self.personal_signature,
                 token=token,
+                session_prompt_injection=session_prompt_injection,
             )
 
             logger.info(f"[{self.username}] 开始 LangGraph 会话")

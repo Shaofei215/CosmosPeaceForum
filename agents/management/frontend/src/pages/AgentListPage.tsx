@@ -4,12 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { agentApi } from '@/shared/api/modules';
 import { API_CONFIG } from '@/shared/config/api';
 import {
-  Button, Input, Card, CardContent,
+  Button, Input, Textarea, Card, CardContent,
   Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogFooter, DialogDescription, Skeleton, Badge,
+  DialogFooter, DialogDescription, Skeleton, Badge, Label,
 } from '@/shared/components/ui';
 import {
-  Plus, Search, Eye, Edit, Trash2, Upload, Loader2, Play, Square,
+  Plus, Search, Eye, Edit, Trash2, Upload, Loader2, Play, Square, FileText,
 } from 'lucide-react';
 import { ImportDialog } from '@/features/agents/components/ImportDialog';
 import { formatDate } from '@/shared/lib/format';
@@ -38,6 +38,14 @@ function parseStatusEvent(text: string): AgentRuntimeStatusResponse | null {
   } catch {
     return null;
   }
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    return String((err as { message?: unknown }).message ?? fallback);
+  }
+  return fallback;
 }
 
 function getRuntimeLabel(status?: AgentRuntimeStatus) {
@@ -72,6 +80,9 @@ export default function AgentListPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showBatchDelete, setShowBatchDelete] = useState(false);
   const [batchProcessing, setBatchProcessing] = useState(false);
+  const [promptInjectionIds, setPromptInjectionIds] = useState<number[] | null>(null);
+  const [promptInjectionText, setPromptInjectionText] = useState('');
+  const [promptInjectionError, setPromptInjectionError] = useState('');
   const [runtimeStatuses, setRuntimeStatuses] = useState<Map<number, AgentRuntimeStatus>>(
     new Map(),
   );
@@ -170,6 +181,20 @@ export default function AgentListPage() {
     },
   });
 
+  const promptInjectionMutation = useMutation({
+    mutationFn: ({ ids, content }: { ids: number[]; content: string }) =>
+      agentApi.injectPrompt({ agent_ids: ids, content }),
+    onSuccess: () => {
+      setPromptInjectionIds(null);
+      setPromptInjectionText('');
+      setPromptInjectionError('');
+      setSelectedIds(new Set());
+    },
+    onError: (err: unknown) => {
+      setPromptInjectionError(getErrorMessage(err, '提示词注入失败，请稍后重试'));
+    },
+  });
+
   const filtered = data?.items.filter(
     (a) => a.name.toLowerCase().includes(search.toLowerCase()) ||
            a.username.toLowerCase().includes(search.toLowerCase())
@@ -208,6 +233,31 @@ export default function AgentListPage() {
 
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id);
+  };
+
+  const openPromptInjection = (ids: number[]) => {
+    setPromptInjectionIds(ids);
+    setPromptInjectionText('');
+    setPromptInjectionError('');
+  };
+
+  const closePromptInjection = () => {
+    if (promptInjectionMutation.isPending) return;
+    setPromptInjectionIds(null);
+    setPromptInjectionText('');
+    setPromptInjectionError('');
+  };
+
+  const handlePromptInjection = () => {
+    const ids = promptInjectionIds ?? [];
+    const content = promptInjectionText.trim();
+    if (ids.length === 0) return;
+    if (!content) {
+      setPromptInjectionError('请输入要注入的提示词');
+      return;
+    }
+
+    promptInjectionMutation.mutate({ ids, content });
   };
 
   const handleBatchStart = () => {
@@ -289,6 +339,15 @@ export default function AgentListPage() {
                 >
                   {batchProcessing ? <Loader2 size={14} className="animate-spin mr-1" /> : <Square size={14} className="mr-1" />}
                   批量停止
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openPromptInjection(Array.from(selectedIds))}
+                  disabled={batchProcessing}
+                >
+                  <FileText size={14} className="mr-1" />
+                  提示词注入
                 </Button>
                 <Button
                   size="sm"
@@ -436,6 +495,14 @@ export default function AgentListPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => openPromptInjection([agent.id])}
+                              title="提示词注入"
+                            >
+                              <FileText size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => setDeleteAgentId(agent.id)}
                               title="删除"
                               className="text-destructive hover:text-destructive"
@@ -498,6 +565,62 @@ export default function AgentListPage() {
               disabled={batchProcessing}
             >
               {batchProcessing ? '删除中...' : '删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Prompt injection dialog */}
+      <Dialog
+        open={promptInjectionIds !== null}
+        onOpenChange={(open) => {
+          if (!open) closePromptInjection();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>提示词注入</DialogTitle>
+            <DialogDescription>
+              将文本注入到选中 {promptInjectionIds?.length ?? 0} 个角色的下一次登录会话中，仅生效一次。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="prompt-injection-text">注入文本</Label>
+            <Textarea
+              id="prompt-injection-text"
+              value={promptInjectionText}
+              onChange={(e) => {
+                setPromptInjectionText(e.target.value);
+                if (promptInjectionError) setPromptInjectionError('');
+              }}
+              maxLength={8000}
+              rows={8}
+              placeholder="输入临时信息或操作倾向..."
+              className="min-h-[180px]"
+            />
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-destructive">{promptInjectionError}</span>
+              <span className="text-muted-foreground">{promptInjectionText.length}/8000</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={closePromptInjection}
+              disabled={promptInjectionMutation.isPending}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handlePromptInjection}
+              disabled={promptInjectionMutation.isPending || !promptInjectionText.trim()}
+            >
+              {promptInjectionMutation.isPending ? (
+                <Loader2 size={14} className="mr-1 animate-spin" />
+              ) : (
+                <FileText size={14} className="mr-1" />
+              )}
+              注入
             </Button>
           </DialogFooter>
         </DialogContent>

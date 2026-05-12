@@ -214,7 +214,8 @@ def recall_memory_node(state: SessionState) -> SessionState:
             username=state["username"],
             name=state.get("name", state["username"]),
             personality_prompt=state["personality_prompt"],
-            personal_signature=state["personal_signature"]
+            personal_signature=state["personal_signature"],
+            session_prompt_injection=state.get("session_prompt_injection", ""),
         )
 
         user_prompt = build_decision_prompt(state)
@@ -290,7 +291,8 @@ def llm_decision_node(
         username=state["username"],
         name=state.get("name", state["username"]),
         personality_prompt=state["personality_prompt"],
-        personal_signature=state["personal_signature"]
+        personal_signature=state["personal_signature"],
+        session_prompt_injection=state.get("session_prompt_injection", ""),
     )
 
     user_prompt = build_decision_prompt(state)

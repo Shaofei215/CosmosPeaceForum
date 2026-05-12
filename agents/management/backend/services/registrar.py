@@ -309,6 +309,50 @@ def notify_scheduler_reload(
         return False
 
 
+def notify_scheduler_session_injection(
+    agent_ids: Sequence[int],
+    injection_type: str,
+    content: str,
+    source: str = "management",
+    metadata: Optional[dict[str, Any]] = None,
+) -> bool:
+    """
+    通知 scheduler 为目标 Agent 添加下一次登录会话注入。
+
+    Args:
+        agent_ids: 目标 Agent ID 列表
+        injection_type: 注入类型，目前支持 prompt
+        content: 注入内容
+        source: 调用来源
+        metadata: 扩展元数据
+
+    Returns:
+        bool: 通知是否成功
+    """
+    url = f"{_get_scheduler_internal_url()}/internal/session-injections"
+    payload = {
+        "agent_ids": list(agent_ids),
+        "type": injection_type,
+        "content": content,
+        "source": source,
+        "metadata": metadata or {},
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            return True
+        logger.error(
+            "会话注入: scheduler 返回 HTTP %d: %s",
+            response.status_code,
+            response.text,
+        )
+        return False
+    except requests.exceptions.RequestException as e:
+        logger.error("会话注入: 通知 scheduler 失败: %s", e)
+        return False
+
+
 def get_scheduler_status() -> Optional[dict[str, Any]]:
     """获取 scheduler 当前运行态。"""
     url = f"{_get_scheduler_internal_url()}/internal/status"

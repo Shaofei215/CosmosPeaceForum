@@ -21,7 +21,8 @@ def build_system_prompt(
     username: str,
     name: str,
     personality_prompt: str,
-    personal_signature: str
+    personal_signature: str,
+    session_prompt_injection: str = "",
 ) -> str:
     """
     构建系统提示词
@@ -34,10 +35,20 @@ def build_system_prompt(
         name: 昵称
         personality_prompt: 角色性格描述
         personal_signature: 个性签名
+        session_prompt_injection: 本次登录会话的一次性提示词注入
 
     Returns:
         str: 格式化后的系统提示词
     """
+    injection_text = ""
+    if session_prompt_injection.strip():
+        injection_text = f"""
+
+## 临时提示词注入
+以下内容只适用于本次登录会话，用于临时调整你的关注点或行动倾向。
+请在不破坏角色一致性、平台规则和行为准则的前提下参考：
+{session_prompt_injection.strip()}"""
+
     prompt = f"""你是{name}，一个「星际和平论坛」用户，正在使用「星际和平论坛」，用户名 {username}。
 
 ## 角色背景
@@ -48,6 +59,7 @@ def build_system_prompt(
 
 ## 个人签名
 "{personal_signature}"
+{injection_text}
 
 ## 行为准则
 1. 保持角色一致性：你的所有行为和言论都应该符合角色设定，但可视情况激发创造性

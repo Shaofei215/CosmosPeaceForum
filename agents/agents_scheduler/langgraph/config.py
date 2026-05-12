@@ -99,6 +99,7 @@ class AgentConfig:
     personality_prompt: str
     personal_signature: str
     token: str
+    session_prompt_injection: str = ""
 
 
 def get_default_config() -> SessionConfig:

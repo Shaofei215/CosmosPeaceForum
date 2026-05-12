@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api/client';
 import type {
   AgentConfig, AgentCreate, AgentUpdate, AgentListResponse, AgentRelationUpdate,
-  AgentRuntimeStatusResponse,
+  AgentRuntimeStatusResponse, PromptInjectionRequest,
   DashboardStats,
   ModelConfig, ModelConfigCreate, ModelConfigUpdate,
   SystemConfig, OperationLogListResponse, MessageResponse,
@@ -44,6 +44,9 @@ export const agentApi = {
 
   batchDelete: (ids: number[]) =>
     apiClient.post<MessageResponse>('/agents/batch-delete', ids),
+
+  injectPrompt: (data: PromptInjectionRequest) =>
+    apiClient.post<MessageResponse>('/agents/prompt-injections', data),
 
   importAgents: (file: File) => {
     const formData = new FormData();

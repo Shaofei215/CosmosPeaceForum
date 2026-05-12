@@ -58,6 +58,11 @@ export interface AgentRelationUpdate {
   bidirectional?: boolean;
 }
 
+export interface PromptInjectionRequest {
+  agent_ids: number[];
+  content: string;
+}
+
 export interface AgentListResponse {
   items: AgentConfig[];
   total: number;

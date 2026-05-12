@@ -9,6 +9,7 @@ Scheduler 内部 HTTP 接口服务
 - POST /internal/reload/model   - 重载模型配置
 - POST /internal/reload/agent   - 重载 Agent 配置
 - POST /internal/reload/all     - 重载全部配置
+- POST /internal/session-injections - 添加下一次会话注入
 """
 
 import logging
@@ -68,6 +69,8 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             self._handle_reload_agents()
         elif path == '/internal/reload/all':
             self._handle_reload_all()
+        elif path == '/internal/session-injections':
+            self._handle_session_injections()
         else:
             self._send_json_response(404, {"error": "not found"})
 
@@ -224,6 +227,59 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             self._send_json_response(200, {"message": "all config reloaded"})
         except Exception as e:
             logger.error(f"[热更新] 全部配置重载失败: {e}")
+            self._send_json_response(500, {"error": str(e)})
+
+    def _handle_session_injections(self):
+        """添加下一次登录会话使用的一次性注入。"""
+        try:
+            from agents.agents_scheduler.scheduler.session_injections import (
+                SESSION_INJECTION_TYPE_PROMPT,
+                enqueue_session_injection,
+            )
+
+            body = self._read_json_body()
+            agent_ids = body.get('agent_ids') or []
+            injection_type = body.get('type') or body.get('injection_type')
+            content = (body.get('content') or '').strip()
+            source = body.get('source') or 'internal'
+            metadata = body.get('metadata') or {}
+
+            if not isinstance(agent_ids, list) or not agent_ids:
+                self._send_json_response(400, {"error": "agent_ids must be a non-empty list"})
+                return
+            if injection_type != SESSION_INJECTION_TYPE_PROMPT:
+                self._send_json_response(400, {"error": f"unsupported injection type: {injection_type}"})
+                return
+            if not content:
+                self._send_json_response(400, {"error": "content is required"})
+                return
+            if not isinstance(metadata, dict):
+                self._send_json_response(400, {"error": "metadata must be an object"})
+                return
+
+            ids = [int(agent_id) for agent_id in agent_ids]
+            queued = enqueue_session_injection(
+                agent_ids=ids,
+                injection_type=injection_type,
+                content=content,
+                source=source,
+                metadata=metadata,
+            )
+
+            logger.info(
+                "[会话注入] 已加入队列: type=%s count=%d source=%s",
+                injection_type,
+                len(queued),
+                source,
+            )
+            self._send_json_response(200, {
+                "message": "session injections queued",
+                "queued": queued,
+            })
+        except ValueError as e:
+            self._send_json_response(400, {"error": str(e)})
+        except Exception as e:
+            logger.error(f"[会话注入] 加入队列失败: {e}")
             self._send_json_response(500, {"error": str(e)})
 
 
