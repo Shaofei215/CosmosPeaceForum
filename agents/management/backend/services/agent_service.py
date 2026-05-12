@@ -73,6 +73,19 @@ def update_agent(db: Session, agent_id: int, agent_in: AgentUpdate) -> Optional[
     return db_agent
 
 
+def update_agent_last_login(db: Session, agent_id: int, login_at: Optional[datetime] = None) -> bool:
+    """记录 Agent 最近一次成功登录时间。"""
+    db_agent = db.get(AgentConfig, agent_id)
+    if not db_agent:
+        return False
+
+    db_agent.last_login_at = login_at or datetime.utcnow()
+    db_agent.updated_at = datetime.utcnow()
+    db.add(db_agent)
+    db.commit()
+    return True
+
+
 def delete_agent(db: Session, agent_id: int) -> bool:
     """删除 Agent"""
     db_agent = db.get(AgentConfig, agent_id)
@@ -141,6 +154,7 @@ def agent_to_response(agent: AgentConfig) -> dict:
         "knows_ids": parse_knows_ids(agent),
         "is_active": agent.is_active,
         "app_platform_user_id": agent.app_platform_user_id,
+        "last_login_at": agent.last_login_at,
         "created_at": agent.created_at,
         "updated_at": agent.updated_at,
     }

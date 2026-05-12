@@ -5,6 +5,7 @@ Management Backend - 数据库连接管理
 
 import logging
 from pathlib import Path
+from sqlalchemy import inspect, text
 from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -53,7 +54,21 @@ def init_db():
     """初始化数据库（创建所有表）"""
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
+    _ensure_lightweight_migrations(engine)
     logger.info("表结构初始化完成: %s", get_config().get_db_path())
+
+
+def _ensure_lightweight_migrations(engine):
+    """补齐 SQLModel create_all 不会更新的旧 SQLite 表字段。"""
+    inspector = inspect(engine)
+    if "agent_configs" not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("agent_configs")}
+    if "last_login_at" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE agent_configs ADD COLUMN last_login_at DATETIME"))
+        logger.info("已为 agent_configs 添加 last_login_at 字段")
 
 
 def get_db():

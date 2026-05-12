@@ -12,7 +12,9 @@ import asyncio
 from pathlib import Path
 from typing import Optional
 
+from datetime import datetime, time as datetime_time
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from sqlmodel import func, select
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
@@ -22,19 +24,68 @@ from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.agent_config import AgentConfig
 from agents.management.backend.schemas import (
     AgentCreate, AgentUpdate, AgentResponse, AgentListResponse,
-    AgentRelationUpdate, MessageResponse
+    AgentRelationUpdate, DashboardStatsResponse, MessageResponse,
+    PromptInjectionRequest,
 )
 from agents.management.backend.services import agent_service
 from agents.management.backend.services.log_service import create_log
 from agents.management.backend.services.registrar import (
     register_agent,
     find_avatar_file,
+    get_scheduler_status,
     notify_scheduler_reload,
+    notify_scheduler_session_injection,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+_last_cpu_snapshot: tuple[int, int] | None = None
+
+
+def _read_cpu_usage_percent() -> float:
+    """读取 Linux /proc/stat 计算 CPU 使用率，首次调用用 load average 兜底。"""
+    global _last_cpu_snapshot
+    try:
+        with open("/proc/stat", "r", encoding="utf-8") as f:
+            fields = f.readline().split()[1:]
+        values = [int(v) for v in fields[:8]]
+        idle = values[3] + values[4]
+        total = sum(values)
+
+        if _last_cpu_snapshot is None:
+            _last_cpu_snapshot = (idle, total)
+            load_1m = os.getloadavg()[0]
+            cpu_count = os.cpu_count() or 1
+            return round(min(load_1m / cpu_count * 100, 100), 1)
+
+        last_idle, last_total = _last_cpu_snapshot
+        _last_cpu_snapshot = (idle, total)
+        total_delta = total - last_total
+        idle_delta = idle - last_idle
+        if total_delta <= 0:
+            return 0.0
+        return round(max(0, min((1 - idle_delta / total_delta) * 100, 100)), 1)
+    except OSError:
+        return 0.0
+
+
+def _read_memory_usage_percent() -> float:
+    """读取 Linux /proc/meminfo 计算内存使用率。"""
+    try:
+        meminfo: dict[str, int] = {}
+        with open("/proc/meminfo", "r", encoding="utf-8") as f:
+            for line in f:
+                key, value = line.split(":", 1)
+                meminfo[key] = int(value.strip().split()[0])
+
+        total = meminfo.get("MemTotal", 0)
+        available = meminfo.get("MemAvailable", 0)
+        if total <= 0:
+            return 0.0
+        return round(max(0, min((1 - available / total) * 100, 100)), 1)
+    except (OSError, ValueError):
+        return 0.0
 
 
 def _find_avatar_in_zip(tmp_dir: str, avatar_filename: str) -> Optional[str]:
@@ -110,6 +161,120 @@ def list_agents(
     items, total = agent_service.list_agents(db, skip, limit)
     responses = [agent_service.agent_to_response(a) for a in items]
     return AgentListResponse(items=responses, total=total)
+
+
+@router.get("/dashboard-stats", response_model=DashboardStatsResponse)
+def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """获取管理仪表盘统计。"""
+    today_start = datetime.combine(datetime.utcnow().date(), datetime_time.min)
+
+    total_roles = db.exec(select(func.count()).select_from(AgentConfig)).one()
+    enabled_roles = db.exec(
+        select(func.count()).select_from(AgentConfig).where(AgentConfig.is_active == True)  # noqa: E712
+    ).one()
+    daily_active_roles = db.exec(
+        select(func.count())
+        .select_from(AgentConfig)
+        .where(AgentConfig.last_login_at >= today_start)
+    ).one()
+
+    return DashboardStatsResponse(
+        total_roles=total_roles,
+        enabled_roles=enabled_roles,
+        daily_active_roles=daily_active_roles,
+        cpu_usage_percent=_read_cpu_usage_percent(),
+        memory_usage_percent=_read_memory_usage_percent(),
+    )
+
+
+@router.get("/runtime-status")
+def get_agents_runtime_status(
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """获取 scheduler 中 Agent 线程运行状态。"""
+    status_data = get_scheduler_status()
+    if status_data is None:
+        return {"agents": [], "scheduler_online": False}
+
+    return {**status_data, "scheduler_online": True}
+
+
+@router.get("/status-stream")
+def stream_agents_runtime_status(
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """SSE 推送 Agent 线程运行状态。"""
+
+    async def event_stream():
+        yield f"event: init\ndata: {json.dumps({'scheduler_online': True}, ensure_ascii=False)}\n\n"
+
+        last_payload = None
+        heartbeat_ticks = 0
+        while True:
+            status_data = await asyncio.to_thread(get_scheduler_status)
+            if status_data is None:
+                payload = {"agents": [], "scheduler_online": False}
+            else:
+                payload = {**status_data, "scheduler_online": True}
+
+            payload_text = json.dumps(payload, ensure_ascii=False)
+            if payload_text != last_payload:
+                yield f"event: status\ndata: {payload_text}\n\n"
+                last_payload = payload_text
+                heartbeat_ticks = 0
+            else:
+                heartbeat_ticks += 1
+                if heartbeat_ticks >= 15:
+                    yield f"event: ping\ndata: {json.dumps({'ok': True}, ensure_ascii=False)}\n\n"
+                    heartbeat_ticks = 0
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/prompt-injections", response_model=MessageResponse)
+def inject_prompt_for_next_session(
+    request: PromptInjectionRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """为选中的 Agent 设置下一次登录会话的一次性提示词注入。"""
+    content = request.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="提示词注入内容不能为空")
+
+    valid_ids = []
+    for agent_id in dict.fromkeys(request.agent_ids):
+        agent = agent_service.get_agent(db, agent_id)
+        if agent:
+            valid_ids.append(agent_id)
+
+    if not valid_ids:
+        raise HTTPException(status_code=404, detail="未找到可注入的 Agent")
+
+    success = notify_scheduler_session_injection(
+        agent_ids=valid_ids,
+        injection_type="prompt",
+        content=content,
+        source="management",
+        metadata={"admin_id": current_admin.id},
+    )
+    if not success:
+        raise HTTPException(status_code=502, detail="无法连接 scheduler 服务或注入失败")
+
+    create_log(
+        db,
+        current_admin.id,
+        "inject_prompt",
+        "agent",
+        details=json.dumps({"count": len(valid_ids), "agent_ids": valid_ids}, ensure_ascii=False),
+    )
+
+    return MessageResponse(message=f"已为 {len(valid_ids)} 个 Agent 设置提示词注入，将在下一次登录会话生效")
 
 
 @router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
@@ -280,14 +445,18 @@ def batch_start_agents(
 ):
     """批量启动 Agent"""
     started = 0
+    valid_ids = []
     for agent_id in agent_ids:
         agent = agent_service.get_agent(db, agent_id)
         if not agent:
             continue
 
         agent_service.update_agent(db, agent_id, AgentUpdate(is_active=True))
-        notify_scheduler_reload("agent", agent_id, action="start")
+        valid_ids.append(agent_id)
         started += 1
+
+    if valid_ids:
+        notify_scheduler_reload("agents", valid_ids, action="start")
 
     create_log(db, current_admin.id, "batch_start_agents", "agent", details=json.dumps({"count": started}))
 
@@ -302,14 +471,18 @@ def batch_stop_agents(
 ):
     """批量停止 Agent"""
     stopped = 0
+    valid_ids = []
     for agent_id in agent_ids:
         agent = agent_service.get_agent(db, agent_id)
         if not agent:
             continue
 
         agent_service.update_agent(db, agent_id, AgentUpdate(is_active=False))
-        notify_scheduler_reload("agent", agent_id, action="stop")
+        valid_ids.append(agent_id)
         stopped += 1
+
+    if valid_ids:
+        notify_scheduler_reload("agents", valid_ids, action="stop")
 
     create_log(db, current_admin.id, "batch_stop_agents", "agent", details=json.dumps({"count": stopped}))
 

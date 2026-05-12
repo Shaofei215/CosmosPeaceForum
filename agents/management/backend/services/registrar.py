@@ -28,7 +28,7 @@ import mimetypes
 import os
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Sequence, Tuple, Union
 
 import requests
 
@@ -259,13 +259,17 @@ def _upload_user_avatar(api_base_url: str, username: str, password: str, avatar_
         return False
 
 
-def notify_scheduler_reload(reload_type: str, target_id: Optional[int] = None, action: str = "restart") -> bool:
+def notify_scheduler_reload(
+    reload_type: str,
+    target_id: Optional[Union[int, Sequence[int]]] = None,
+    action: str = "restart",
+) -> bool:
     """
     通知 scheduler 重载配置
 
     Args:
         reload_type: system / model / agent / all
-        target_id: 目标 ID（model 或 agent 类型时需要）
+        target_id: 目标 ID（model 或 agent 类型时需要），agents 类型时传 ID 列表
         action: restart / start / stop（仅 agent 类型时有效）
 
     Returns:
@@ -285,6 +289,10 @@ def notify_scheduler_reload(reload_type: str, target_id: Optional[int] = None, a
     elif reload_type == "agent":
         endpoint = "/internal/reload/agent"
         payload = {"agent_id": target_id, "action": action} if target_id is not None else None
+    elif reload_type == "agents":
+        endpoint = "/internal/reload/agents"
+        agent_ids = [target_id] if isinstance(target_id, int) else list(target_id or [])
+        payload = {"agent_ids": agent_ids, "action": action}
     else:
         return False
 
@@ -299,6 +307,64 @@ def notify_scheduler_reload(reload_type: str, target_id: Optional[int] = None, a
     except requests.exceptions.RequestException as e:
         logger.error("热更新: 通知 scheduler 失败: %s", e)
         return False
+
+
+def notify_scheduler_session_injection(
+    agent_ids: Sequence[int],
+    injection_type: str,
+    content: str,
+    source: str = "management",
+    metadata: Optional[dict[str, Any]] = None,
+) -> bool:
+    """
+    通知 scheduler 为目标 Agent 添加下一次登录会话注入。
+
+    Args:
+        agent_ids: 目标 Agent ID 列表
+        injection_type: 注入类型，目前支持 prompt
+        content: 注入内容
+        source: 调用来源
+        metadata: 扩展元数据
+
+    Returns:
+        bool: 通知是否成功
+    """
+    url = f"{_get_scheduler_internal_url()}/internal/session-injections"
+    payload = {
+        "agent_ids": list(agent_ids),
+        "type": injection_type,
+        "content": content,
+        "source": source,
+        "metadata": metadata or {},
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            return True
+        logger.error(
+            "会话注入: scheduler 返回 HTTP %d: %s",
+            response.status_code,
+            response.text,
+        )
+        return False
+    except requests.exceptions.RequestException as e:
+        logger.error("会话注入: 通知 scheduler 失败: %s", e)
+        return False
+
+
+def get_scheduler_status() -> Optional[dict[str, Any]]:
+    """获取 scheduler 当前运行态。"""
+    url = f"{_get_scheduler_internal_url()}/internal/status"
+    try:
+        response = requests.get(url, timeout=3)
+        if response.status_code == 200:
+            return response.json()
+        logger.warning("获取 scheduler 状态失败: HTTP %d", response.status_code)
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.warning("获取 scheduler 状态失败: %s", e)
+        return None
 
 
 def find_avatar_file(avatar_dir: str, agent_name: str, agent_username: str) -> Optional[str]:

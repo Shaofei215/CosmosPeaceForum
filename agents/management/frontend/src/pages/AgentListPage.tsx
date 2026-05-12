@@ -1,17 +1,73 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { agentApi } from '@/shared/api/modules';
+import { API_CONFIG } from '@/shared/config/api';
 import {
-  Button, Input, Card, CardContent, CardHeader, CardTitle,
-  Avatar, Badge, Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogFooter, DialogDescription, Skeleton,
+  Button, Input, Textarea, Card, CardContent,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogFooter, DialogDescription, Skeleton, Badge, Label,
 } from '@/shared/components/ui';
 import {
-  Plus, Search, Eye, Edit, Trash2, Upload, Loader2, Play, Square,
+  Plus, Search, Eye, Edit, Trash2, Upload, Loader2, Play, Square, FileText,
 } from 'lucide-react';
 import { ImportDialog } from '@/features/agents/components/ImportDialog';
 import { formatDate } from '@/shared/lib/format';
+import type { AgentRuntimeStatus, AgentRuntimeStatusResponse } from '@/shared/types/api';
+
+function formatLastLogin(value: string | null): string {
+  return value ? formatDate(value) : '未登录';
+}
+
+function parseStatusEvent(text: string): AgentRuntimeStatusResponse | null {
+  let eventName = '';
+  let data = '';
+
+  for (const line of text.split('\n')) {
+    if (line.startsWith('event:')) {
+      eventName = line.slice(6).trim();
+    } else if (line.startsWith('data:')) {
+      data += line.slice(5).trim();
+    }
+  }
+
+  if (eventName !== 'status' || !data) return null;
+
+  try {
+    return JSON.parse(data) as AgentRuntimeStatusResponse;
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    return String((err as { message?: unknown }).message ?? fallback);
+  }
+  return fallback;
+}
+
+function getRuntimeLabel(status?: AgentRuntimeStatus) {
+  if (!status) {
+    return { text: '未运行', className: 'bg-muted text-muted-foreground' };
+  }
+
+  if (!status.is_alive || status.status === 'stopped') {
+    return { text: '已停止', className: 'bg-muted text-muted-foreground' };
+  }
+  if (status.status === 'stopping') {
+    return { text: '停止中', className: 'bg-orange-100 text-orange-700' };
+  }
+  if (status.status === 'in_session') {
+    return { text: '会话中', className: 'bg-blue-100 text-blue-700' };
+  }
+  if (status.status === 'paused') {
+    return { text: '已暂停', className: 'bg-yellow-100 text-yellow-700' };
+  }
+
+  return { text: '运行中', className: 'bg-green-100 text-green-700' };
+}
 
 export default function AgentListPage() {
   const navigate = useNavigate();
@@ -24,11 +80,82 @@ export default function AgentListPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showBatchDelete, setShowBatchDelete] = useState(false);
   const [batchProcessing, setBatchProcessing] = useState(false);
+  const [promptInjectionIds, setPromptInjectionIds] = useState<number[] | null>(null);
+  const [promptInjectionText, setPromptInjectionText] = useState('');
+  const [promptInjectionError, setPromptInjectionError] = useState('');
+  const [runtimeStatuses, setRuntimeStatuses] = useState<Map<number, AgentRuntimeStatus>>(
+    new Map(),
+  );
+  const [schedulerOnline, setSchedulerOnline] = useState(true);
 
   const { data, isLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: () => agentApi.list(0, 1000),
   });
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return undefined;
+
+    const controller = new AbortController();
+    let retryTimer: number | undefined;
+
+    const scheduleReconnect = () => {
+      setSchedulerOnline(false);
+      retryTimer = window.setTimeout(connect, 2000);
+    };
+
+    async function connect() {
+      try {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/agents/status-stream`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error('status stream unavailable');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (!controller.signal.aborted) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() ?? '';
+
+          for (const part of parts) {
+            const event = parseStatusEvent(part);
+            if (!event) continue;
+
+            setSchedulerOnline(event.scheduler_online);
+            setRuntimeStatuses(new Map(event.agents.map((item) => [item.agent_id, item])));
+          }
+        }
+
+        if (!controller.signal.aborted) {
+          scheduleReconnect();
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          scheduleReconnect();
+        }
+      }
+    }
+
+    connect();
+
+    return () => {
+      controller.abort();
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
+    };
+  }, []);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => agentApi.remove(id),
@@ -51,6 +178,20 @@ export default function AgentListPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] });
       setStartingId(null);
+    },
+  });
+
+  const promptInjectionMutation = useMutation({
+    mutationFn: ({ ids, content }: { ids: number[]; content: string }) =>
+      agentApi.injectPrompt({ agent_ids: ids, content }),
+    onSuccess: () => {
+      setPromptInjectionIds(null);
+      setPromptInjectionText('');
+      setPromptInjectionError('');
+      setSelectedIds(new Set());
+    },
+    onError: (err: unknown) => {
+      setPromptInjectionError(getErrorMessage(err, '提示词注入失败，请稍后重试'));
     },
   });
 
@@ -94,6 +235,31 @@ export default function AgentListPage() {
     deleteMutation.mutate(id);
   };
 
+  const openPromptInjection = (ids: number[]) => {
+    setPromptInjectionIds(ids);
+    setPromptInjectionText('');
+    setPromptInjectionError('');
+  };
+
+  const closePromptInjection = () => {
+    if (promptInjectionMutation.isPending) return;
+    setPromptInjectionIds(null);
+    setPromptInjectionText('');
+    setPromptInjectionError('');
+  };
+
+  const handlePromptInjection = () => {
+    const ids = promptInjectionIds ?? [];
+    const content = promptInjectionText.trim();
+    if (ids.length === 0) return;
+    if (!content) {
+      setPromptInjectionError('请输入要注入的提示词');
+      return;
+    }
+
+    promptInjectionMutation.mutate({ ids, content });
+  };
+
   const handleBatchStart = () => {
     if (selectedIds.size === 0) return;
     setBatchProcessing(true);
@@ -133,23 +299,29 @@ export default function AgentListPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Agent 管理</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold">角色管理</h1>
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setShowImport(true)}>
             <Upload size={16} className="mr-1" /> 批量导入
           </Button>
           <Button onClick={() => navigate('/agents/new')}>
-            <Plus size={16} className="mr-1" /> 创建 Agent
+            <Plus size={16} className="mr-1" /> 创建角色
           </Button>
         </div>
       </div>
+
+      {!schedulerOnline && (
+        <div className="mb-4 rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
+          Scheduler 未连接，运行状态暂不可用。
+        </div>
+      )}
 
       {selectedIds.size > 0 && (
         <Card className="mb-4 border-primary/20 bg-primary/5">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm">已选择 {selectedIds.size} 个 Agent</span>
+              <span className="text-sm">已选择 {selectedIds.size} 个角色</span>
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -170,6 +342,15 @@ export default function AgentListPage() {
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
+                  onClick={() => openPromptInjection(Array.from(selectedIds))}
+                  disabled={batchProcessing}
+                >
+                  <FileText size={14} className="mr-1" />
+                  提示词注入
+                </Button>
+                <Button
+                  size="sm"
                   variant="destructive"
                   onClick={() => setShowBatchDelete(true)}
                   disabled={batchProcessing}
@@ -185,17 +366,17 @@ export default function AgentListPage() {
 
       {/* Search */}
       <Card className="mb-6">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <Search size={18} className="text-muted-foreground" />
+        <CardContent className="p-4">
+          <div className="flex h-10 items-center gap-3">
+            <Search size={18} className="shrink-0 text-muted-foreground" />
             <Input
-              placeholder="搜索 Agent 名称或用户名..."
+              placeholder="搜索角色名称或用户名..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
+              className="h-10 max-w-md"
             />
           </div>
-        </CardHeader>
+        </CardContent>
       </Card>
 
       {/* Table */}
@@ -223,110 +404,121 @@ export default function AgentListPage() {
                         className="h-4 w-4 rounded border-gray-300"
                       />
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Agent</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">角色</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">用户名</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">状态</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">每月登录</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">ID</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">更新时间</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">最后登录时间</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">运行状态</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((agent) => (
-                    <tr key={agent.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                      <td className="py-3 px-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(agent.id)}
-                          onChange={() => toggleSelectOne(agent.id)}
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Avatar src={null} alt={agent.name} size="sm" />
+                  {filtered.map((agent) => {
+                    const runtime = runtimeStatuses.get(agent.id);
+                    const runtimeLabel = getRuntimeLabel(runtime);
+                    const isStopping = stoppingId === agent.id || runtime?.status === 'stopping';
+
+                    return (
+                      <tr key={agent.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                        <td className="py-3 px-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(agent.id)}
+                            onChange={() => toggleSelectOne(agent.id)}
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
                           <span className="font-medium">{agent.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-sm">{agent.username}</td>
-                      <td className="py-3 px-4">
-                        <Badge variant={agent.is_active ? 'default' : 'secondary'}>
-                          {agent.is_active ? '启用' : '禁用'}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4 text-sm">{agent.monthly_logins}</td>
-                      <td className="py-3 px-4 text-sm">{agent.id}</td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">
-                        {formatDate(agent.updated_at)}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate(`/agents/${agent.id}`)}
-                            title="查看详情"
-                          >
-                            <Eye size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate(`/agents/${agent.id}/edit`)}
-                            title="编辑"
-                          >
-                            <Edit size={16} />
-                          </Button>
-                          {agent.is_active ? (
+                        </td>
+                        <td className="py-3 px-4 text-sm">{agent.username}</td>
+                        <td className="py-3 px-4 text-sm tabular-nums">{agent.monthly_logins}</td>
+                        <td className="py-3 px-4 text-sm">{agent.id}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {formatLastLogin(agent.last_login_at)}
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge variant="outline" className={runtimeLabel.className}>
+                            {runtimeLabel.text}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleStop(agent.id)}
-                              disabled={stoppingId === agent.id}
-                              title="停止"
-                              className="text-orange-600 hover:text-orange-600"
+                              onClick={() => navigate(`/agents/${agent.id}`)}
+                              title="查看详情"
                             >
-                              {stoppingId === agent.id ? (
-                                <Loader2 size={16} className="animate-spin" />
-                              ) : (
-                                <Square size={16} />
-                              )}
+                              <Eye size={16} />
                             </Button>
-                          ) : (
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleStart(agent.id)}
-                              disabled={startingId === agent.id}
-                              title="启动"
-                              className="text-green-600 hover:text-green-600"
+                              onClick={() => navigate(`/agents/${agent.id}/edit`)}
+                              title="编辑"
                             >
-                              {startingId === agent.id ? (
-                                <Loader2 size={16} className="animate-spin" />
-                              ) : (
-                                <Play size={16} />
-                              )}
+                              <Edit size={16} />
                             </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteAgentId(agent.id)}
-                            title="删除"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {agent.is_active ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleStop(agent.id)}
+                                disabled={isStopping}
+                                title="停止"
+                                className="text-orange-600 hover:text-orange-600"
+                              >
+                                {isStopping ? (
+                                  <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                  <Square size={16} />
+                                )}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleStart(agent.id)}
+                                disabled={startingId === agent.id || runtime?.status === 'stopping'}
+                                title="启动"
+                                className="text-green-600 hover:text-green-600"
+                              >
+                                {startingId === agent.id ? (
+                                  <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                  <Play size={16} />
+                                )}
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openPromptInjection([agent.id])}
+                              title="提示词注入"
+                            >
+                              <FileText size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeleteAgentId(agent.id)}
+                              title="删除"
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {filtered.length === 0 && (
                 <div className="py-12 text-center text-muted-foreground">
-                  {search ? '未找到匹配的 Agent' : '暂无 Agent，点击「创建 Agent」添加'}
+                  {search ? '未找到匹配的角色' : '暂无角色，点击「创建角色」添加'}
                 </div>
               )}
             </div>
@@ -340,7 +532,7 @@ export default function AgentListPage() {
           <DialogHeader>
             <DialogTitle>确认删除</DialogTitle>
             <DialogDescription>
-              确定要删除此 Agent 吗？此操作不可撤销。
+              确定要删除此角色吗？此操作不可撤销。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -362,7 +554,7 @@ export default function AgentListPage() {
           <DialogHeader>
             <DialogTitle>确认批量删除</DialogTitle>
             <DialogDescription>
-              确定要删除选中的 {selectedIds.size} 个 Agent 吗？此操作不可撤销。
+              确定要删除选中的 {selectedIds.size} 个角色吗？此操作不可撤销。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -373,6 +565,62 @@ export default function AgentListPage() {
               disabled={batchProcessing}
             >
               {batchProcessing ? '删除中...' : '删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Prompt injection dialog */}
+      <Dialog
+        open={promptInjectionIds !== null}
+        onOpenChange={(open) => {
+          if (!open) closePromptInjection();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>提示词注入</DialogTitle>
+            <DialogDescription>
+              将文本注入到选中 {promptInjectionIds?.length ?? 0} 个角色的下一次登录会话中，仅生效一次。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="prompt-injection-text">注入文本</Label>
+            <Textarea
+              id="prompt-injection-text"
+              value={promptInjectionText}
+              onChange={(e) => {
+                setPromptInjectionText(e.target.value);
+                if (promptInjectionError) setPromptInjectionError('');
+              }}
+              maxLength={8000}
+              rows={8}
+              placeholder="输入临时信息或操作倾向..."
+              className="min-h-[180px]"
+            />
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-destructive">{promptInjectionError}</span>
+              <span className="text-muted-foreground">{promptInjectionText.length}/8000</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={closePromptInjection}
+              disabled={promptInjectionMutation.isPending}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handlePromptInjection}
+              disabled={promptInjectionMutation.isPending || !promptInjectionText.trim()}
+            >
+              {promptInjectionMutation.isPending ? (
+                <Loader2 size={14} className="mr-1 animate-spin" />
+              ) : (
+                <FileText size={14} className="mr-1" />
+              )}
+              注入
             </Button>
           </DialogFooter>
         </DialogContent>

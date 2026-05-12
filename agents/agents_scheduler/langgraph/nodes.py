@@ -16,6 +16,7 @@ from agents.agents_scheduler.langgraph.prompts import (
     build_summarize_system_prompt,
 )
 from agents.agents_scheduler.memory.config import get_memory_config
+from agents.agents_scheduler.scheduler.context import is_stop_requested
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,14 @@ def recall_memory_node(state: SessionState) -> SessionState:
     """
     import asyncio
 
+    if is_stop_requested():
+        logger.info("recall_memory_node | 用户=%s | 收到停止请求，跳过记忆召回", state.get("username", "未知"))
+        return {
+            **state,
+            "exit_reason": ExitReason.USER_CHOICE,
+            "recalled_memories": "",
+        }
+
     config = get_memory_config()
 
     if not config.memory_enabled:
@@ -205,7 +214,8 @@ def recall_memory_node(state: SessionState) -> SessionState:
             username=state["username"],
             name=state.get("name", state["username"]),
             personality_prompt=state["personality_prompt"],
-            personal_signature=state["personal_signature"]
+            personal_signature=state["personal_signature"],
+            session_prompt_injection=state.get("session_prompt_injection", ""),
         )
 
         user_prompt = build_decision_prompt(state)
@@ -261,6 +271,15 @@ def llm_decision_node(
     username = state.get("username", "未知")
     step_count = state.get("step_count", 0)
     current_location = state.get("current_location", "未知")
+
+    if is_stop_requested():
+        logger.info("llm_decision_node | 用户=%s | 收到停止请求，准备结束会话", username)
+        return {
+            **state,
+            "pending_tool": {"tool_name": "logout", "args": {"reason": "调度器停止请求"}},
+            "pending_tools": None,
+        }
+
     logger.info("llm_decision_node | 用户=%s | 步骤=%d | 位置=%s | 正在请求LLM决策", username, step_count, current_location)
 
     # recalled_memories 已由 recall_memory_node 填充，直接使用
@@ -272,7 +291,8 @@ def llm_decision_node(
         username=state["username"],
         name=state.get("name", state["username"]),
         personality_prompt=state["personality_prompt"],
-        personal_signature=state["personal_signature"]
+        personal_signature=state["personal_signature"],
+        session_prompt_injection=state.get("session_prompt_injection", ""),
     )
 
     user_prompt = build_decision_prompt(state)
@@ -388,6 +408,16 @@ def tool_execution_node(state: SessionState) -> SessionState:
     username = state.get("username", "未知")
     step_count = state.get("step_count", 0)
     pending = state.get("pending_tool")
+
+    if is_stop_requested() and (pending is None or pending.get("tool_name", "").lower() != "logout"):
+        logger.info("tool_execution_node | 用户=%s | 收到停止请求，跳过后续工具执行", username)
+        return {
+            **state,
+            "exit_reason": ExitReason.USER_CHOICE,
+            "pending_tool": None,
+            "pending_tools": None,
+            "last_error": None,
+        }
 
     if pending is None:
         pending_tools = state.get("pending_tools")
@@ -507,6 +537,10 @@ def should_continue_edge(state: SessionState) -> str:
     max_steps = state.get("max_steps", 10)
     exit_reason = state.get("exit_reason")
 
+    if is_stop_requested():
+        logger.info("should_continue_edge | 用户=%s | 收到停止请求 | 路由=summarize", username)
+        return "summarize"
+
     if exit_reason is not None:
         reason_str = exit_reason.value if isinstance(exit_reason, ExitReason) else str(exit_reason)
         logger.info("should_continue_edge | 用户=%s | 步骤=%d/%d | 退出原因=%s | 路由=summarize", username, step_count, max_steps, reason_str)
@@ -540,6 +574,13 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
         SessionState: 更新后的状态，包含 summary
     """
     username = state.get("username", "未知")
+
+    if is_stop_requested():
+        logger.info("summarize_node | 用户=%s | 收到停止请求，跳过LLM总结", username)
+        return {
+            **state,
+            "summary": f"用户 {state.get('username', '未知')} 的本次会话因调度停止请求结束。",
+        }
 
     if not state.get("action_history"):
         return {

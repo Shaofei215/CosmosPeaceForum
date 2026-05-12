@@ -4,10 +4,15 @@ import { modelApi, embeddingApi, chunkModelApi } from '@/shared/api/modules';
 import type { ModelConfigCreate, ModelConfigUpdate, EmbeddingConfigUpdate, ChunkModelConfigCreate, ChunkModelConfigUpdate } from '@/shared/types/api';
 import {
   Button, Input, Card, CardContent,
-  Badge, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
+  Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription, Switch, Label, Separator,
 } from '@/shared/components/ui';
 import { Plus, Edit, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react';
+
+const modelProviderOptions = [
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Anthropic' },
+];
 
 export default function ModelListPage() {
   const queryClient = useQueryClient();
@@ -150,9 +155,6 @@ export default function ModelListPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold">{model.name}</h3>
-                    <Badge variant={model.is_active ? 'default' : 'secondary'}>
-                      {model.is_active ? '启用' : '禁用'}
-                    </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {model.provider} / {model.model_name} / {model.base_url || '默认地址'}
@@ -199,9 +201,6 @@ export default function ModelListPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             Embedding 配置
-            <Badge variant={embeddingConfig?.is_active ? 'default' : 'secondary'}>
-              {embeddingConfig?.is_active ? '启用' : '禁用'}
-            </Badge>
           </h2>
           <Switch
             checked={embeddingConfig?.is_active ?? false}
@@ -239,9 +238,6 @@ export default function ModelListPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold">{config.name}</h3>
-                      <Badge variant={config.is_active ? 'default' : 'secondary'}>
-                        {config.is_active ? '启用' : '禁用'}
-                      </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {config.provider} / {config.model_name} / {config.base_url || '默认地址'}
@@ -494,6 +490,28 @@ interface EditDialogProps extends BaseDialogProps {
   model?: { name: string; provider: string; base_url: string; model_name: string; temperature: number; max_token: number; is_active: boolean };
 }
 
+function ProviderSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {modelProviderOptions.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDialogProps) {
   const [name, setName] = useState('');
   const [provider, setProvider] = useState('openai');
@@ -547,7 +565,7 @@ function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDi
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">提供商 *</label>
-                <Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="openai / anthropic" />
+                <ProviderSelect value={provider} onChange={setProvider} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
@@ -660,7 +678,7 @@ function EditModelDialog({ open, onOpenChange, onSubmit, isPending, model }: Edi
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">提供商 *</label>
-                <Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="openai / anthropic" />
+                <ProviderSelect value={provider} onChange={setProvider} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
@@ -774,7 +792,7 @@ function CreateChunkModelDialog({ open, onOpenChange, onSubmit, isPending }: {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">提供商 *</label>
-                <Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="openai / anthropic" />
+                <ProviderSelect value={provider} onChange={setProvider} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
@@ -893,7 +911,7 @@ function EditChunkModelDialog({ open, onOpenChange, onSubmit, isPending, model }
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">提供商 *</label>
-                <Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="openai / anthropic" />
+                <ProviderSelect value={provider} onChange={setProvider} />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>

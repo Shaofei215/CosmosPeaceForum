@@ -31,6 +31,7 @@ export interface AgentConfig {
   knows_ids: number[];
   is_active: boolean;
   app_platform_user_id: number | null;
+  last_login_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,9 +58,39 @@ export interface AgentRelationUpdate {
   bidirectional?: boolean;
 }
 
+export interface PromptInjectionRequest {
+  agent_ids: number[];
+  content: string;
+}
+
 export interface AgentListResponse {
   items: AgentConfig[];
   total: number;
+}
+
+export interface AgentRuntimeStatus {
+  agent_id: number;
+  username: string;
+  is_alive: boolean;
+  is_active: boolean;
+  is_logged_in: boolean;
+  is_stopping: boolean;
+  status: 'running' | 'in_session' | 'stopping' | 'paused' | 'stopped';
+  stop_requested_at: string | null;
+  next_login_time: string | null;
+}
+
+export interface AgentRuntimeStatusResponse {
+  agents: AgentRuntimeStatus[];
+  scheduler_online: boolean;
+}
+
+export interface DashboardStats {
+  total_roles: number;
+  enabled_roles: number;
+  daily_active_roles: number;
+  cpu_usage_percent: number;
+  memory_usage_percent: number;
 }
 
 export interface ModelConfig {

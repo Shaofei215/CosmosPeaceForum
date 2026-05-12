@@ -1,6 +1,8 @@
 import { apiClient } from '@/shared/api/client';
 import type {
   AgentConfig, AgentCreate, AgentUpdate, AgentListResponse, AgentRelationUpdate,
+  AgentRuntimeStatusResponse, PromptInjectionRequest,
+  DashboardStats,
   ModelConfig, ModelConfigCreate, ModelConfigUpdate,
   SystemConfig, OperationLogListResponse, MessageResponse,
   EmbeddingConfig, EmbeddingConfigCreate, EmbeddingConfigUpdate,
@@ -43,6 +45,9 @@ export const agentApi = {
   batchDelete: (ids: number[]) =>
     apiClient.post<MessageResponse>('/agents/batch-delete', ids),
 
+  injectPrompt: (data: PromptInjectionRequest) =>
+    apiClient.post<MessageResponse>('/agents/prompt-injections', data),
+
   importAgents: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -57,6 +62,12 @@ export const agentApi = {
 
   updateRelation: (id: number, data: AgentRelationUpdate) =>
     apiClient.put<AgentConfig>(`/agents/${id}/relation`, data),
+
+  dashboardStats: () =>
+    apiClient.get<DashboardStats>('/agents/dashboard-stats'),
+
+  runtimeStatus: () =>
+    apiClient.get<AgentRuntimeStatusResponse>('/agents/runtime-status'),
 };
 
 export const modelApi = {

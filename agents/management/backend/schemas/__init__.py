@@ -5,7 +5,7 @@ Management Backend - 请求/响应模型
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ==================== Auth ====================
@@ -65,6 +65,7 @@ class AgentResponse(BaseModel):
     knows_ids: List[int]
     is_active: bool
     app_platform_user_id: Optional[int] = None
+    last_login_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -82,6 +83,11 @@ class AgentRelationUpdate(BaseModel):
     bidirectional: bool = False
 
 
+class PromptInjectionRequest(BaseModel):
+    agent_ids: List[int] = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=8000)
+
+
 class AgentRelationResponse(BaseModel):
     id: int
     name: str
@@ -90,6 +96,14 @@ class AgentRelationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DashboardStatsResponse(BaseModel):
+    total_roles: int
+    enabled_roles: int
+    daily_active_roles: int
+    cpu_usage_percent: float = 0.0
+    memory_usage_percent: float = 0.0
 
 
 # ==================== Model Config ====================

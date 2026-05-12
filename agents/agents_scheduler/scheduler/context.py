@@ -29,13 +29,15 @@ class AgentContext:
         username: Optional[str] = None,
         ai_config_id: Optional[int] = None,
         token: Optional[str] = None,
-        user_config: Optional[Dict[str, Any]] = None
+        user_config: Optional[Dict[str, Any]] = None,
+        stop_event: Optional[threading.Event] = None,
     ):
         self.user_id = user_id
         self.username = username
         self.ai_config_id = ai_config_id
         self.token = token
         self.user_config = user_config or {}
+        self.stop_event = stop_event
 
 
 _thread_local = threading.local()
@@ -124,3 +126,9 @@ def get_current_ai_config_id() -> Optional[int]:
     if context:
         return context.ai_config_id
     return None
+
+
+def is_stop_requested() -> bool:
+    """当前 Agent 线程是否已收到停止请求。"""
+    context = get_current_context()
+    return bool(context and context.stop_event and context.stop_event.is_set())

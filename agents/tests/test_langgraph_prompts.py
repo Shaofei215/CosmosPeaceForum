@@ -46,6 +46,18 @@ class TestBuildSystemPrompt:
         assert "真实性" in prompt
         assert "选择性" in prompt
 
+    def test_build_system_prompt_with_session_prompt_injection(self):
+        prompt = build_system_prompt(
+            username="test_user",
+            name="Test",
+            personality_prompt="friendly",
+            personal_signature="sig",
+            session_prompt_injection="今天重点关注活动通知",
+        )
+        assert "临时提示词注入" in prompt
+        assert "今天重点关注活动通知" in prompt
+        assert prompt.index("个人签名") < prompt.index("临时提示词注入") < prompt.index("行为准则")
+
 
 class TestBuildDecisionPrompt:
     def test_build_decision_prompt_first_decision(self):

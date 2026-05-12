@@ -160,6 +160,7 @@ class SessionExecutor:
         personal_signature: str,
         config: Optional[SessionConfig] = None,
         name: Optional[str] = None,
+        session_prompt_injection: str = "",
     ):
         """
         初始化会话执行器
@@ -172,6 +173,7 @@ class SessionExecutor:
             personal_signature: 个性签名
             config: 会话配置，默认为 SessionConfig()
             name: 昵称（显示用），默认为 username
+            session_prompt_injection: 本次登录会话的一次性提示词注入
         """
         self.session_id = str(uuid.uuid4())
         self.start_time = datetime.now()
@@ -188,6 +190,7 @@ class SessionExecutor:
             "ai_config_id": ai_config_id,
             "personality_prompt": personality_prompt,
             "personal_signature": personal_signature,
+            "session_prompt_injection": session_prompt_injection,
             "step_count": 0,
             "max_steps": self.config.max_steps,
             "exit_reason": None,
@@ -434,6 +437,7 @@ def run_session(
         ai_config_id=agent_config.ai_config_id,
         personality_prompt=agent_config.personality_prompt,
         personal_signature=agent_config.personal_signature,
+        session_prompt_injection=agent_config.session_prompt_injection,
         config=config,
     )
 

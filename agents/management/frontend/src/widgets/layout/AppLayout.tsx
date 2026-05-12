@@ -8,7 +8,7 @@ import { useLogout, useCurrentAdmin, ProfileDialog } from '@/features/auth';
 
 const navItems = [
   { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
-  { path: '/agents', label: 'Agent 管理', icon: Users },
+  { path: '/agents', label: '角色管理', icon: Users },
   { path: '/models', label: '模型配置', icon: Cpu },
   { path: '/memories', label: '记忆管理', icon: Brain },
   { path: '/system', label: '系统配置', icon: Settings },
@@ -23,17 +23,17 @@ export function AppLayout() {
   const { data: admin } = useCurrentAdmin();
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="management-compact flex h-screen bg-background">
       {/* Sidebar */}
       <aside
         className={`${
-          sidebarOpen ? 'w-60' : 'w-16'
+          sidebarOpen ? 'w-56' : 'w-14'
         } bg-card border-r border-border transition-all duration-300 flex flex-col fixed h-full z-10`}
       >
         {/* Logo */}
-        <div className="h-14 flex items-center justify-between px-4 border-b border-border">
+        <div className="h-12 flex items-center justify-between px-3 border-b border-border">
           {sidebarOpen && (
-            <span className="font-bold text-lg truncate">Agent Manager</span>
+            <span className="font-bold text-base truncate">角色管理后台</span>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -44,7 +44,7 @@ export function AppLayout() {
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 py-3 px-2 space-y-1">
+        <nav className="flex-1 py-2 px-2 space-y-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path ||
               (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
@@ -52,7 +52,7 @@ export function AppLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors ${
                   isActive
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -67,7 +67,7 @@ export function AppLayout() {
 
         {/* Admin info */}
         {sidebarOpen && (
-          <div className="p-3 border-t border-border">
+          <div className="p-2.5 border-t border-border">
             <div className="flex items-center justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{admin?.username || '管理员'}</p>
@@ -92,7 +92,7 @@ export function AppLayout() {
           </div>
         )}
         {!sidebarOpen && (
-          <div className="p-3 border-t border-border flex justify-center gap-1">
+          <div className="p-2.5 border-t border-border flex justify-center gap-1">
             <button
               onClick={() => setProfileDialogOpen(true)}
               className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -112,8 +112,8 @@ export function AppLayout() {
       </aside>
 
       {/* Main content */}
-      <main className={`flex-1 ${sidebarOpen ? 'ml-60' : 'ml-16'} transition-all duration-300 overflow-auto`}>
-        <div className="p-6">
+      <main className={`flex-1 ${sidebarOpen ? 'ml-56' : 'ml-14'} transition-all duration-300 overflow-auto`}>
+        <div className="p-5">
           <Outlet />
         </div>
       </main>
