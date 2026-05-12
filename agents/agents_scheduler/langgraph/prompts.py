@@ -51,7 +51,7 @@ def _build_attention_header() -> str:
         f"关注：{summary.get('following_count', 0)} "
         f"粉丝：{summary.get('followers_count', 0)} "
         f"消息：{summary.get('unread_count', 0)} "
-        f"总登录次数：{total_login_count} "
+        f"过去登录次数：{total_login_count} "
         f"上次登录：{last_login_time}"
     )
 
