@@ -32,6 +32,8 @@ export interface AgentConfig {
   is_active: boolean;
   app_platform_user_id: number | null;
   last_login_at: string | null;
+  last_login_timestamp: number | null;
+  total_login_count: number;
   created_at: string;
   updated_at: string;
 }

@@ -222,7 +222,10 @@ class AIUserScheduler(threading.Thread):
             logger.info(f"[{self.username}] 登录成功 (用户ID: {user_id})")
         else:
             logger.info(f"[{self.username}] 登录成功")
-        get_db_client().update_agent_last_login(self.ai_config_id)
+        login_stats = get_db_client().record_agent_login(
+            self.ai_config_id,
+            scaled_timestamp=self.time_system.get_scaled_timestamp(),
+        )
 
         try:
             self.is_logged_in = True
@@ -230,6 +233,7 @@ class AIUserScheduler(threading.Thread):
                 user_id=user_id,
                 token=token,
                 ai_config_id=self.ai_config_id,
+                user_config=login_stats,
                 stop_event=self._stop_event,
             )
             set_current_context(agent_ctx)

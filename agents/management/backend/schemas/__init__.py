@@ -66,6 +66,8 @@ class AgentResponse(BaseModel):
     is_active: bool
     app_platform_user_id: Optional[int] = None
     last_login_at: Optional[datetime] = None
+    last_login_timestamp: Optional[float] = None
+    total_login_count: int = 0
     created_at: datetime
     updated_at: datetime
 

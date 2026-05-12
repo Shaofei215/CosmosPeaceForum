@@ -3,6 +3,39 @@
 from typing import Dict, Any, List
 
 
+def _build_login_stats_summary() -> Dict[str, Any]:
+    try:
+        from agents.agents_scheduler.scheduler.context import get_current_context
+        context = get_current_context()
+        if context and context.user_config:
+            return {
+                "total_login_count": context.user_config.get("total_login_count", 0),
+                "last_login_timestamp": context.user_config.get(
+                    "previous_last_login_timestamp",
+                    context.user_config.get("last_login_timestamp"),
+                ),
+            }
+
+        if context and context.ai_config_id:
+            from agents.management.backend.db_client import get_db_client
+            return get_db_client().get_agent_login_stats(context.ai_config_id)
+    except Exception:
+        pass
+
+    return {"total_login_count": 0, "last_login_timestamp": None}
+
+
+def _format_last_login_time(timestamp: Any) -> str:
+    if timestamp is None:
+        return "暂无记录"
+
+    try:
+        from agents.agents_scheduler.memory.utils import calculate_time_description
+        return calculate_time_description(float(timestamp))
+    except Exception:
+        return "暂无记录"
+
+
 def _build_attention_header() -> str:
     try:
         from agents.agents_scheduler.langgraph.tools.utils import _get_notification_summary
@@ -10,10 +43,16 @@ def _build_attention_header() -> str:
     except Exception:
         summary = {"following_count": 0, "followers_count": 0, "unread_count": 0}
 
+    login_stats = _build_login_stats_summary()
+    total_login_count = login_stats.get("total_login_count", 0) or 0
+    last_login_time = _format_last_login_time(login_stats.get("last_login_timestamp"))
+
     return (
         f"关注：{summary.get('following_count', 0)} "
         f"粉丝：{summary.get('followers_count', 0)} "
-        f"消息：{summary.get('unread_count', 0)}"
+        f"消息：{summary.get('unread_count', 0)} "
+        f"总登录次数：{total_login_count} "
+        f"上次登录：{last_login_time}"
     )
 
 

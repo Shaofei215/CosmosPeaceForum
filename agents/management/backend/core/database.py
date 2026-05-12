@@ -69,6 +69,14 @@ def _ensure_lightweight_migrations(engine):
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE agent_configs ADD COLUMN last_login_at DATETIME"))
         logger.info("已为 agent_configs 添加 last_login_at 字段")
+    if "last_login_timestamp" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE agent_configs ADD COLUMN last_login_timestamp REAL"))
+        logger.info("已为 agent_configs 添加 last_login_timestamp 字段")
+    if "total_login_count" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE agent_configs ADD COLUMN total_login_count INTEGER DEFAULT 0"))
+        logger.info("已为 agent_configs 添加 total_login_count 字段")
 
 
 def get_db():
