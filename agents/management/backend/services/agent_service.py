@@ -80,6 +80,7 @@ def update_agent_last_login(db: Session, agent_id: int, login_at: Optional[datet
         return False
 
     db_agent.last_login_at = login_at or datetime.utcnow()
+    db_agent.total_login_count = (db_agent.total_login_count or 0) + 1
     db_agent.updated_at = datetime.utcnow()
     db.add(db_agent)
     db.commit()
@@ -155,6 +156,8 @@ def agent_to_response(agent: AgentConfig) -> dict:
         "is_active": agent.is_active,
         "app_platform_user_id": agent.app_platform_user_id,
         "last_login_at": agent.last_login_at,
+        "last_login_timestamp": agent.last_login_timestamp,
+        "total_login_count": agent.total_login_count,
         "created_at": agent.created_at,
         "updated_at": agent.updated_at,
     }

@@ -7,6 +7,12 @@ from agents.agents_scheduler.langgraph.prompts import (
     build_summarize_system_prompt,
     build_summarize_prompt,
     _format_tool_result,
+    _build_attention_header,
+)
+from agents.agents_scheduler.scheduler.context import (
+    AgentContext,
+    clear_current_context,
+    set_current_context,
 )
 
 
@@ -60,6 +66,37 @@ class TestBuildSystemPrompt:
 
 
 class TestBuildDecisionPrompt:
+    def teardown_method(self):
+        clear_current_context()
+
+    def test_attention_header_includes_login_stats(self):
+        set_current_context(AgentContext(user_config={
+            "total_login_count": 3,
+            "previous_last_login_timestamp": 60.0,
+        }))
+
+        mock_time_system = MagicMock()
+        mock_time_system.get_scaled_timestamp.return_value = 3600.0
+
+        with patch(
+            "agents.agents_scheduler.langgraph.tools.utils._get_notification_summary",
+            return_value={
+                "following_count": 1,
+                "followers_count": 2,
+                "unread_count": 3,
+            },
+        ), patch(
+            "agents.agents_scheduler.memory.utils.get_time_system",
+            return_value=mock_time_system,
+        ):
+            header = _build_attention_header()
+
+        assert "关注：1" in header
+        assert "粉丝：2" in header
+        assert "消息：3" in header
+        assert "总登录：3" in header
+        assert "上次登录：" in header
+
     def test_build_decision_prompt_first_decision(self):
         state = {
             "step_count": 0,

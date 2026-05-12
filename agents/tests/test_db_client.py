@@ -117,6 +117,40 @@ class TestManagementDBClient:
         result = client.get_agent_config(999)
         assert result is None
 
+    def test_record_agent_login_adds_stats_columns(self, temp_db):
+        client = ManagementDBClient(db_path=temp_db)
+        result = client.record_agent_login(1, scaled_timestamp=120.0)
+
+        assert result["total_login_count"] == 1
+        assert result["previous_last_login_timestamp"] is None
+        assert result["last_login_timestamp"] == 120.0
+
+        conn = sqlite3.connect(temp_db)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT total_login_count, last_login_timestamp FROM agent_configs WHERE id = 1"
+        ).fetchone()
+        conn.close()
+
+        assert row["total_login_count"] == 1
+        assert row["last_login_timestamp"] == 120.0
+
+    def test_record_agent_login_returns_previous_timestamp(self, temp_db):
+        client = ManagementDBClient(db_path=temp_db)
+        client.record_agent_login(1, scaled_timestamp=120.0)
+        result = client.record_agent_login(1, scaled_timestamp=360.0)
+
+        assert result["total_login_count"] == 2
+        assert result["previous_last_login_timestamp"] == 120.0
+        assert result["last_login_timestamp"] == 360.0
+
+    def test_get_agent_login_stats_defaults(self, temp_db):
+        client = ManagementDBClient(db_path=temp_db)
+        result = client.get_agent_login_stats(1)
+
+        assert result["total_login_count"] == 0
+        assert result["last_login_timestamp"] is None
+
     def test_get_active_model_configs(self, temp_db):
         client = ManagementDBClient(db_path=temp_db)
         result = client.get_active_model_configs()

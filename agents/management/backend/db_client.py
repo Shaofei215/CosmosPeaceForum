@@ -146,29 +146,129 @@ class ManagementDBClient:
         except Exception:
             return None
 
-    def update_agent_last_login(self, agent_id: int, login_at: datetime | None = None) -> bool:
-        """记录 Agent 最近一次成功登录时间。"""
+    def _ensure_agent_login_columns(self, conn: sqlite3.Connection) -> set[str]:
+        """Ensure lightweight login-stat columns exist on older management DBs."""
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(agent_configs)").fetchall()
+        }
+        if "last_login_at" not in columns:
+            conn.execute("ALTER TABLE agent_configs ADD COLUMN last_login_at DATETIME")
+            columns.add("last_login_at")
+        if "last_login_timestamp" not in columns:
+            conn.execute("ALTER TABLE agent_configs ADD COLUMN last_login_timestamp REAL")
+            columns.add("last_login_timestamp")
+        if "total_login_count" not in columns:
+            conn.execute("ALTER TABLE agent_configs ADD COLUMN total_login_count INTEGER DEFAULT 0")
+            columns.add("total_login_count")
+        return columns
+
+    def get_agent_login_stats(self, agent_id: int) -> dict:
+        """Return persisted login stats for an Agent config."""
         try:
             conn = self._get_connection()
             try:
-                columns = {
-                    row["name"]
-                    for row in conn.execute("PRAGMA table_info(agent_configs)").fetchall()
-                }
-                if "last_login_at" not in columns:
-                    conn.execute("ALTER TABLE agent_configs ADD COLUMN last_login_at DATETIME")
-
-                timestamp = (login_at or datetime.utcnow()).isoformat(sep=" ")
-                conn.execute(
-                    "UPDATE agent_configs SET last_login_at = ?, updated_at = ? WHERE id = ?",
-                    (timestamp, timestamp, agent_id),
+                self._ensure_agent_login_columns(conn)
+                cursor = conn.execute(
+                    """
+                    SELECT total_login_count, last_login_timestamp, last_login_at
+                    FROM agent_configs
+                    WHERE id = ?
+                    """,
+                    (agent_id,),
                 )
-                conn.commit()
-                return True
+                row = cursor.fetchone()
+                if not row:
+                    return {
+                        "total_login_count": 0,
+                        "last_login_timestamp": None,
+                        "last_login_at": None,
+                    }
+                return {
+                    "total_login_count": row["total_login_count"] or 0,
+                    "last_login_timestamp": row["last_login_timestamp"],
+                    "last_login_at": row["last_login_at"],
+                }
             finally:
                 conn.close()
         except Exception:
-            return False
+            return {
+                "total_login_count": 0,
+                "last_login_timestamp": None,
+                "last_login_at": None,
+            }
+
+    def record_agent_login(
+        self,
+        agent_id: int,
+        scaled_timestamp: float | None = None,
+        login_at: datetime | None = None,
+    ) -> dict:
+        """Record one successful Agent login and return stats for prompt injection."""
+        try:
+            conn = self._get_connection()
+            try:
+                columns = self._ensure_agent_login_columns(conn)
+                cursor = conn.execute(
+                    """
+                    SELECT total_login_count, last_login_timestamp, last_login_at
+                    FROM agent_configs
+                    WHERE id = ?
+                    """,
+                    (agent_id,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return {
+                        "total_login_count": 0,
+                        "previous_last_login_timestamp": None,
+                        "last_login_timestamp": scaled_timestamp,
+                        "last_login_at": None,
+                    }
+
+                previous_count = row["total_login_count"] or 0
+                previous_timestamp = row["last_login_timestamp"]
+                timestamp = (login_at or datetime.utcnow()).isoformat(sep=" ")
+                new_count = previous_count + 1
+
+                update_columns = [
+                    "last_login_at = ?",
+                    "total_login_count = ?",
+                ]
+                values: list = [timestamp, new_count]
+                if scaled_timestamp is not None:
+                    update_columns.append("last_login_timestamp = ?")
+                    values.append(scaled_timestamp)
+                if "updated_at" in columns:
+                    update_columns.append("updated_at = ?")
+                    values.append(timestamp)
+                values.append(agent_id)
+
+                conn.execute(
+                    f"UPDATE agent_configs SET {', '.join(update_columns)} WHERE id = ?",
+                    values,
+                )
+                conn.commit()
+                return {
+                    "total_login_count": new_count,
+                    "previous_last_login_timestamp": previous_timestamp,
+                    "last_login_timestamp": scaled_timestamp,
+                    "last_login_at": timestamp,
+                }
+            finally:
+                conn.close()
+        except Exception:
+            return {
+                "total_login_count": 0,
+                "previous_last_login_timestamp": None,
+                "last_login_timestamp": scaled_timestamp,
+                "last_login_at": None,
+            }
+
+    def update_agent_last_login(self, agent_id: int, login_at: datetime | None = None) -> bool:
+        """记录 Agent 最近一次成功登录时间。"""
+        result = self.record_agent_login(agent_id=agent_id, login_at=login_at)
+        return result.get("total_login_count", 0) > 0
     
     def get_active_model_configs(self) -> list:
         """
