@@ -1,7 +1,7 @@
 /**
  * 顶部栏组件
  * 根据当前页面显示不同内容：
- * - 信息流页面：显示搜索框 + 热门/最新/关注切换按钮
+ * - 信息流页面：显示搜索框 + 推荐/最新/关注切换按钮
  * - 其他页面：显示搜索框 + 返回按钮
  * 固定在视口顶部
  */
@@ -15,7 +15,7 @@ import { cn } from '@/shared/lib/utils';
 /**
  * 筛选类型
  */
-type FilterType = 'hot' | 'latest' | 'following';
+type FilterType = 'recommended' | 'latest' | 'following';
 
 /**
  * 顶部栏组件
@@ -23,7 +23,6 @@ type FilterType = 'hot' | 'latest' | 'following';
 export function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [activeFilter, setActiveFilter] = useState<FilterType>('hot');
   const [searchQuery, setSearchQuery] = useState('');
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -40,9 +39,16 @@ export function TopBar() {
 
   // 判断当前是否在信息流页面
   const isFeedPage = location.pathname === '/feed' || location.pathname === '/';
+  // 将 feed 类型放进 URL，保证刷新、返回和无限滚动缓存都能保持同一视图。
+  const searchParams = new URLSearchParams(location.search);
+  const currentFeedType = searchParams.get('feed_type');
+  const activeFilter: FilterType =
+    currentFeedType === 'latest' || currentFeedType === 'following'
+      ? currentFeedType
+      : 'recommended';
 
   const filters = [
-    { id: 'hot' as FilterType, label: '热门', icon: Flame },
+    { id: 'recommended' as FilterType, label: '推荐', icon: Flame },
     { id: 'latest' as FilterType, label: '最新', icon: Clock },
     { id: 'following' as FilterType, label: '关注', icon: Users },
   ];
@@ -84,7 +90,16 @@ export function TopBar() {
               return (
                 <button
                   key={filter.id}
-                  onClick={() => setActiveFilter(filter.id)}
+                  onClick={() => {
+                    const nextParams = new URLSearchParams(location.search);
+                    if (filter.id === 'recommended') {
+                      nextParams.delete('feed_type');
+                    } else {
+                      nextParams.set('feed_type', filter.id);
+                    }
+                    const search = nextParams.toString();
+                    navigate({ pathname: '/feed', search: search ? `?${search}` : '' });
+                  }}
                   className={`flex items-center gap-2 px-3 py-2 rounded-[1.5rem] text-sm font-medium transition-colors ${
                     activeFilter === filter.id
                       ? 'bg-primary text-primary-foreground'

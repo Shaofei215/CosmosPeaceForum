@@ -20,6 +20,7 @@ class PostFeedItem(BaseModel):
     like_count: int = 0
     comment_count: int = 0
     repost_count: int = 0
+    heat_score: float = 0
     is_liked: bool = False
     repost_source_type: Optional[str] = None
     repost_source_id: Optional[int] = None

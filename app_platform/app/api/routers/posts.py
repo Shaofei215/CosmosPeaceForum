@@ -16,7 +16,7 @@ from app_platform.app.schemas.post import (
     PostResponseWithLikeStatus,
     RepostCreate,
 )
-from app_platform.app.services import repost_service
+from app_platform.app.services import heat_service, repost_service
 
 router = APIRouter()
 
@@ -48,6 +48,8 @@ def create_post(
         content=post.content
     )
     db.add(db_post)
+    db.flush()
+    heat_service.refresh_post_heat_score(db, db_post)
     db.commit()
     db.refresh(db_post)
     return db_post

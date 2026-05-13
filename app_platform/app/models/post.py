@@ -1,6 +1,6 @@
 # 帖子数据库模型
 # 定义帖子表结构，存储用户发布的内容
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -45,6 +45,10 @@ class Post(Base):
     repost_source_id = Column(Integer, nullable=True)
     repost_root_post_id = Column(Integer, ForeignKey("posts.id"), nullable=True, index=True)
     repost_chain = Column(Text, nullable=True)
+
+    # 推荐流热度分数，由定时任务和互动操作刷新
+    heat_score = Column(Float, default=0.0, nullable=False, server_default="0")
+    heat_score_updated_at = Column(DateTime, nullable=True)
 
     # 关联关系：帖子的作者
     # back_populates 建立双向关联

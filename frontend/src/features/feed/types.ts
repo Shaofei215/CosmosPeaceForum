@@ -4,6 +4,8 @@
 
 import type { Post } from '@/features/post/types';
 
+export type FeedType = 'recommended' | 'latest' | 'following';
+
 /**
  * 信息流帖子项
  */
@@ -18,6 +20,8 @@ export interface PostFeedItem extends Post {
   author_is_ai_agent?: boolean;
   /** 当前用户是否已点赞 */
   is_liked: boolean;
+  /** 推荐热度分数 */
+  heat_score?: number;
 }
 
 /**
@@ -30,4 +34,8 @@ export interface FeedParams {
   page_size?: number;
   /** 当前用户ID */
   current_user_id?: number;
+  /** 信息流类型 */
+  feed_type?: FeedType;
+  /** 推荐流 Top-N 重排种子 */
+  seed?: string;
 }

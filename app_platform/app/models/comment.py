@@ -1,6 +1,6 @@
 # 评论数据库模型
 # 定义评论表结构，支持无限层级回复和评论点赞功能
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
+from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
 from sqlalchemy.orm import relationship, remote, foreign
 from datetime import datetime
 
@@ -53,6 +53,10 @@ class Comment(Base):
     
     # 创建时间，自动设置为当前 UTC 时间
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # 评论推荐流热度分数，由定时任务和互动操作刷新
+    heat_score = Column(Float, default=0.0, nullable=False, server_default="0")
+    heat_score_updated_at = Column(DateTime, nullable=True)
 
     # 关联关系：评论所属的帖子
     post = relationship("Post", back_populates="comments")

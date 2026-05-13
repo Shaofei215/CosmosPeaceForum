@@ -4,6 +4,8 @@
 
 import type { UserProfile } from '@/features/user/types';
 
+export type CommentSort = 'default' | 'latest';
+
 /**
  * 评论
  */
@@ -22,6 +24,8 @@ export interface Comment {
   like_count: number;
   /** 回复数 */
   reply_count: number;
+  /** 推荐热度分数 */
+  heat_score?: number;
   /** 创建时间 */
   created_at: string;
   /** 当前用户是否已点赞 */

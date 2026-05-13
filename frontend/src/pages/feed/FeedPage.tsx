@@ -4,7 +4,9 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useInfiniteGlobalFeed } from '@/features/feed';
+import type { FeedType } from '@/features/feed';
 import { useAuthStore } from '@/features/auth';
 import { PostCard } from '@/widgets/post-card';
 import { Skeleton } from '@/shared/components/ui';
@@ -14,13 +16,20 @@ import { Skeleton } from '@/shared/components/ui';
  */
 export default function FeedPage() {
   const { user } = useAuthStore();
+  const [searchParams] = useSearchParams();
+  const requestedFeedType = searchParams.get('feed_type');
+  // URL 只接受后端支持的三种流；缺省时显示推荐流。
+  const feedType: FeedType =
+    requestedFeedType === 'latest' || requestedFeedType === 'following'
+      ? requestedFeedType
+      : 'recommended';
   const {
     data,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
     isLoading,
-  } = useInfiniteGlobalFeed(user?.id);
+  } = useInfiniteGlobalFeed(user?.id, feedType);
 
   // 无限滚动监听
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -65,7 +74,7 @@ export default function FeedPage() {
         </div>
       ) : (
         <div className="text-center py-10 text-muted-foreground">
-          暂无帖子，快来发布第一条吧！
+          {feedType === 'following' ? '关注的人还没有新内容。' : '暂无帖子，快来发布第一条吧！'}
         </div>
       )}
 

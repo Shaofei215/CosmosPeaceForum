@@ -28,24 +28,36 @@ Base.metadata.create_all(bind=engine)
 
 
 def ensure_runtime_schema():
+    # 项目当前没有正式迁移系统，新增运行期字段沿用启动时补列策略。
     inspector = inspect(engine)
     if "posts" not in inspector.get_table_names():
         return
 
-    columns = {column["name"] for column in inspector.get_columns("posts")}
+    post_columns = {column["name"] for column in inspector.get_columns("posts")}
     statements = []
-    if "repost_count" not in columns:
+    if "repost_count" not in post_columns:
         statements.append("ALTER TABLE posts ADD COLUMN repost_count INTEGER NOT NULL DEFAULT 0")
-    if "repost_source_type" not in columns:
+    if "repost_source_type" not in post_columns:
         statements.append("ALTER TABLE posts ADD COLUMN repost_source_type VARCHAR(20)")
-    if "repost_source_id" not in columns:
+    if "repost_source_id" not in post_columns:
         statements.append("ALTER TABLE posts ADD COLUMN repost_source_id INTEGER")
-    if "repost_root_post_id" not in columns:
+    if "repost_root_post_id" not in post_columns:
         statements.append("ALTER TABLE posts ADD COLUMN repost_root_post_id INTEGER")
-    if "repost_chain" not in columns:
+    if "repost_chain" not in post_columns:
         statements.append("ALTER TABLE posts ADD COLUMN repost_chain TEXT")
-    if "type" not in columns:
+    if "type" not in post_columns:
         statements.append("ALTER TABLE posts ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'post'")
+    if "heat_score" not in post_columns:
+        statements.append("ALTER TABLE posts ADD COLUMN heat_score FLOAT NOT NULL DEFAULT 0")
+    if "heat_score_updated_at" not in post_columns:
+        statements.append("ALTER TABLE posts ADD COLUMN heat_score_updated_at DATETIME")
+
+    if "comments" in inspector.get_table_names():
+        comment_columns = {column["name"] for column in inspector.get_columns("comments")}
+        if "heat_score" not in comment_columns:
+            statements.append("ALTER TABLE comments ADD COLUMN heat_score FLOAT NOT NULL DEFAULT 0")
+        if "heat_score_updated_at" not in comment_columns:
+            statements.append("ALTER TABLE comments ADD COLUMN heat_score_updated_at DATETIME")
 
     if not statements:
         return
@@ -68,6 +80,7 @@ def start_scheduler():
     定期清理过期的验证码记录，防止数据库膨胀
     - 每6小时执行一次
     """
+    from app_platform.app.services.heat_service import refresh_all_heat_scores
     from app_platform.app.tasks import cleanup_expired_verification_codes
 
     scheduler.add_job(
@@ -77,8 +90,17 @@ def start_scheduler():
         id='cleanup_expired_codes',
         replace_existing=True
     )
+    scheduler.add_job(
+        refresh_all_heat_scores,
+        'interval',
+        minutes=5,
+        id='refresh_heat_scores',
+        replace_existing=True
+    )
+    # 启动时先刷新一次，避免旧数据在首次定时任务前全部以 0 分参与推荐排序。
     scheduler.start()
-    print("[启动] 验证码清理任务调度器已启动（每6小时执行）")
+    refresh_all_heat_scores()
+    print("[启动] 验证码清理任务调度器已启动（每6小时执行），热度分数任务已启动（每5分钟执行）")
 
 
 @asynccontextmanager
