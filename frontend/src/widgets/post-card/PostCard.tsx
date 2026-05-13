@@ -3,7 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDown as ExpandIcon,
   ChevronUp,
+  Clock,
   CornerDownRight,
+  Flame,
   Heart,
   MessageCircle,
   MoreHorizontal,
@@ -13,7 +15,7 @@ import {
 import type { PostFeedItem } from '@/features/feed';
 import type { PostWithLikeStatus } from '@/features/post';
 import { useDeletePost, useRepost } from '@/features/post';
-import type { Comment } from '@/features/comment';
+import type { Comment, CommentSort } from '@/features/comment';
 import {
   useComments,
   useCreateComment,
@@ -51,6 +53,8 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const [isContentExpanded, setIsContentExpanded] = useState(expanded);
   const [isContentTruncated, setIsContentTruncated] = useState(false);
   const [newCommentContent, setNewCommentContent] = useState('');
+  // 评论排序是每张帖子卡片自己的状态，避免展开多个帖子时互相影响。
+  const [commentSort, setCommentSort] = useState<CommentSort>('default');
   const [commentShouldRepost, setCommentShouldRepost] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: number; username: string } | null>(null);
   const [isRepostOpen, setIsRepostOpen] = useState(false);
@@ -80,7 +84,11 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
     setIsContentTruncated(contentRef.current.scrollHeight > lineHeight * 3 + 1);
   }, [isArticle, post.content]);
 
-  const { data: commentsData, isLoading: isCommentsLoading } = useComments(post.id, user?.id);
+  const { data: commentsData, isLoading: isCommentsLoading } = useComments(
+    post.id,
+    user?.id,
+    commentSort,
+  );
   const topLevelComments = commentsData?.items || [];
   const previewComments = expanded
     ? topLevelComments
@@ -356,6 +364,44 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
 
       {isCommentsExpanded && (
         <div className="mt-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground/80">评论</span>
+            <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setCommentSort('default');
+                }}
+                className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
+                  commentSort === 'default'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Flame className="h-3 w-3" />
+                默认
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setCommentSort('latest');
+                }}
+                className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
+                  commentSort === 'latest'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Clock className="h-3 w-3" />
+                最新
+              </button>
+            </div>
+          </div>
+
           {isAuthenticated && !replyingTo && (
             <form onSubmit={handleSubmitNewComment} className="mb-4">
               <div className="flex gap-2">
@@ -405,6 +451,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   postId={post.id}
                   isAuthenticated={isAuthenticated}
                   currentUserId={user?.id}
+                  commentSort={commentSort}
                   user={user ? { id: user.id, username: user.username } : null}
                   replyingTo={replyingTo}
                   onReply={(commentId, username) => setReplyingTo({ id: commentId, username })}
@@ -544,6 +591,7 @@ interface CommentItemProps {
   postId: number;
   isAuthenticated: boolean;
   currentUserId?: number;
+  commentSort: CommentSort;
   user: { id: number; username: string } | null;
   replyingTo: { id: number; username: string } | null;
   onReply: (commentId: number, username: string) => void;
@@ -559,6 +607,7 @@ function CommentItem({
   postId,
   isAuthenticated,
   currentUserId,
+  commentSort,
   user,
   replyingTo,
   onReply,
@@ -573,7 +622,7 @@ function CommentItem({
   const initialVisibleReplyCount = getInitialVisibleReplyCount(comment, focusedCommentId);
   const [showReplies, setShowReplies] = useState(depth === 0 ? shouldShowFocusedReply : true);
   const [visibleReplyCount, setVisibleReplyCount] = useState(initialVisibleReplyCount);
-  const toggleCommentLike = useToggleCommentLike(postId, currentUserId);
+  const toggleCommentLike = useToggleCommentLike(postId, currentUserId, commentSort);
   const deleteComment = useDeleteComment(postId);
   const repost = useRepost();
   const itemRef = useRef<HTMLDivElement>(null);
@@ -810,6 +859,7 @@ function CommentItem({
               postId={postId}
               isAuthenticated={isAuthenticated}
               currentUserId={currentUserId}
+              commentSort={commentSort}
               user={user}
               replyingTo={replyingTo}
               onReply={onReply}

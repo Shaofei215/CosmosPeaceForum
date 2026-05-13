@@ -1,5 +1,6 @@
 # 评论业务逻辑层
 # 实现评论相关的核心业务逻辑，包括创建、查询、点赞等功能
+import hashlib
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from typing import Tuple, List, Optional, Dict
@@ -8,7 +9,10 @@ from collections import defaultdict
 from app_platform.app.models.comment import Comment, CommentLike
 from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
-from app_platform.app.services import notification_service, repost_service
+from app_platform.app.services import heat_service, notification_service, repost_service
+
+MIN_COMMENT_POOL_SIZE = 40
+COMMENT_POOL_PAGE_MULTIPLIER = 4
 
 
 class PostNotFoundError(Exception):
@@ -83,6 +87,63 @@ class ParentCommentMismatchError(Exception):
         super().__init__(f"父评论 (ID: {parent_id}) 不属于帖子 (ID: {post_id})，实际属于帖子 (ID: {actual_post_id})")
 
 
+def _normalize_comment_sort(sort: str) -> str:
+    value = (sort or "default").lower()
+    # default 表示评论区的推荐排序；保留 hot/recommended 作为兼容别名。
+    aliases = {
+        "default": "default",
+        "recommended": "default",
+        "hot": "default",
+        "latest": "latest",
+    }
+    if value not in aliases:
+        raise ValueError("sort 必须是 default 或 latest")
+    return aliases[value]
+
+
+def _comment_order_by(sort: str):
+    if sort == "latest":
+        return (Comment.created_at.desc(), Comment.id.desc())
+    # 评论默认流使用缓存热度，时间倒序和 ID 只作为稳定兜底。
+    return (Comment.heat_score.desc(), Comment.created_at.desc(), Comment.id.desc())
+
+
+def _normalize_seed(seed: Optional[str]) -> str:
+    return (seed or "default").strip() or "default"
+
+
+def _seeded_jitter(seed: str, item_id: int) -> float:
+    digest = hashlib.sha256(f"{seed}:{item_id}".encode("utf-8")).hexdigest()
+    return int(digest[:12], 16) / float(0xFFFFFFFFFFFF)
+
+
+def _comment_recommendation_rank(index: int, pool_size: int, comment: Comment, seed: str) -> float:
+    jitter = _seeded_jitter(seed, comment.id)
+    quality = 1 - index / max(pool_size - 1, 1)
+    return quality * 0.8 + jitter * 0.2
+
+
+def _get_comments_for_tree(query, skip: int, limit: int, total: int, sort: str, seed: str) -> List[Comment]:
+    if sort == "latest":
+        return query.order_by(*_comment_order_by(sort)).offset(skip).limit(limit).all()
+
+    pool_size = min(
+        total,
+        max(MIN_COMMENT_POOL_SIZE, skip + limit * COMMENT_POOL_PAGE_MULTIPLIER),
+    )
+    candidates = query.order_by(*_comment_order_by(sort)).limit(pool_size).all()
+    pool_size = len(candidates)
+    candidates = [
+        comment
+        for _, comment in sorted(
+            enumerate(candidates),
+            key=lambda item: _comment_recommendation_rank(item[0], pool_size, item[1], seed),
+            reverse=True,
+        )
+    ]
+    return candidates[skip:skip + limit]
+
+
 def create_comment(
     post_id: int,
     user_id: int,
@@ -152,6 +213,9 @@ def create_comment(
         
         # 2. 更新帖子的评论计数
         post.comment_count = post.comment_count + 1
+        # 评论会影响帖子热度，新评论本身也需要立即进入默认评论流。
+        heat_service.refresh_post_heat_score(db, post)
+        heat_service.refresh_comment_heat_score(db, new_comment)
         
         # 3. 如果是回复，循环更新所有祖先的 reply_count
         if parent_id is not None:
@@ -240,6 +304,7 @@ def toggle_like(
             db.delete(existing_like)
             # 2. 减少评论点赞计数（确保不会减到负数）
             comment.like_count = max(0, comment.like_count - 1)
+            heat_service.refresh_comment_heat_score(db, comment)
             # 3. 提交事务
             db.commit()
             db.refresh(comment)
@@ -252,6 +317,7 @@ def toggle_like(
             db.add(new_like)
             # 2. 增加评论点赞计数
             comment.like_count = comment.like_count + 1
+            heat_service.refresh_comment_heat_score(db, comment)
             notification_service.create_comment_like_notification(db, comment, user_id)
             # 3. 提交事务
             db.commit()
@@ -319,7 +385,9 @@ def get_comment_tree(
     user_id: Optional[int],
     skip: int,
     limit: int,
-    db: Session
+    db: Session,
+    sort: str = "default",
+    seed: Optional[str] = None,
 ) -> Tuple[List[Comment], int]:
     """
     获取帖子的评论树
@@ -352,6 +420,9 @@ def get_comment_tree(
         ... )
         >>> print(f"共 {total} 条评论，本次返回 {len(comments)} 条一级评论")
     """
+    sort = _normalize_comment_sort(sort)
+    seed = _normalize_seed(seed)
+
     # 检查帖子是否存在
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
@@ -360,16 +431,22 @@ def get_comment_tree(
     # 获取帖子下所有评论的总数
     total = db.query(Comment).filter(Comment.post_id == post_id).count()
     
-    # 查询一级评论（parent_id IS NULL）
-    # 使用 joinedload 预加载 owner 信息，减少 N+1 查询
-    root_comments = db.query(Comment).filter(
+    root_query = db.query(Comment).filter(
         Comment.post_id == post_id,
         Comment.parent_id == None
-    ).options(
-        joinedload(Comment.owner)
-    ).order_by(
-        Comment.created_at.desc()
-    ).offset(skip).limit(limit).all()
+    )
+    root_total = root_query.count()
+
+    # 查询一级评论（parent_id IS NULL）。分页只作用于一级评论，避免截断回复树。
+    # 默认流先取 Top-N 候选池，再用本次浏览 seed 在候选池内轻量重排。
+    root_comments = _get_comments_for_tree(
+        query=root_query.options(joinedload(Comment.owner)),
+        skip=skip,
+        limit=limit,
+        total=root_total,
+        sort=sort,
+        seed=seed,
+    )
     
     # 如果没有一级评论，直接返回
     if not root_comments:
@@ -378,14 +455,14 @@ def get_comment_tree(
     # 获取所有一级评论的 ID
     root_comment_ids = [c.id for c in root_comments]
     
-    # 批量查询所有回复（非一级评论）
+    # 批量查询所有回复（非一级评论），并按同一排序模式组织每个父节点下的回复。
     all_replies = db.query(Comment).filter(
         Comment.post_id == post_id,
         Comment.parent_id != None
     ).options(
         joinedload(Comment.owner)
     ).order_by(
-        Comment.created_at.asc()  # 回复按时间正序排列
+        *_comment_order_by(sort)
     ).all()
     
     # 构建评论树结构
@@ -541,6 +618,7 @@ def delete_comment(
         post = db.query(Post).filter(Post.id == post_id).first()
         if post:
             post.comment_count = max(0, post.comment_count - reply_count_to_subtract)
+            heat_service.refresh_post_heat_score(db, post)
         
         # 3. 更新所有祖先的 reply_count
         if parent_id is not None:
@@ -594,6 +672,7 @@ def delete_comment_precise(
         post = db.query(Post).filter(Post.id == post_id).first()
         if post:
             post.comment_count = max(0, post.comment_count - count_to_subtract)
+            heat_service.refresh_post_heat_score(db, post)
 
         if parent_id is not None:
             current_id = parent_id

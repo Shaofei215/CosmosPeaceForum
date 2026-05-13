@@ -27,6 +27,7 @@ class CommentResponse(CommentBase):
     parent_id: Optional[int] = None
     like_count: int = 0
     reply_count: int = 0
+    heat_score: float = 0
     created_at: datetime
     is_liked: bool = False
     owner: Optional[UserResponse] = None

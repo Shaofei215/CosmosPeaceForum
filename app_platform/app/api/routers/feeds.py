@@ -18,6 +18,14 @@ router = APIRouter()
 def get_global_feed(
     page: int = Query(1, ge=1, description="页码，从1开始"),
     page_size: int = Query(20, ge=1, le=100, description="每页记录数，最大100"),
+    feed_type: str = Query(
+        "recommended",
+        description="信息流类型：recommended（推荐）、latest（最新）或 following（关注）"
+    ),
+    seed: str = Query(
+        "default",
+        description="推荐流重排种子；同一 seed 下分页稳定，不同 seed 会在 Top-N 候选池内换序"
+    ),
     current_user: User = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
@@ -51,9 +59,13 @@ def get_global_feed(
             db=db,
             page=page,
             page_size=page_size,
-            current_user_id=current_user_id
+            current_user_id=current_user_id,
+            feed_type=feed_type,
+            seed=seed,
         )
         return response
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取信息流失败: {str(e)}")
 

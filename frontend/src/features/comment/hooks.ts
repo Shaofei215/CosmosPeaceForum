@@ -2,17 +2,29 @@
  * 评论模块Hooks
  */
 
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { commentApi } from './api';
-import type { CreateCommentData, Comment, CommentLikeResponse, CommentListResponse } from './types';
+import type {
+  CommentSort,
+  CreateCommentData,
+  Comment,
+  CommentLikeResponse,
+  CommentListResponse,
+} from './types';
 
 /**
  * 获取评论树Hook
  */
-export const useComments = (postId: number, userId?: number) => {
+export const useComments = (postId: number, userId?: number, sort: CommentSort = 'default') => {
+  const seed = useMemo(
+    () => `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    [postId, sort],
+  );
+
   return useQuery({
-    queryKey: ['comments', postId, userId],
-    queryFn: () => commentApi.getComments(postId, { user_id: userId }),
+    queryKey: ['comments', postId, userId, sort, seed],
+    queryFn: () => commentApi.getComments(postId, { user_id: userId, sort, seed }),
     enabled: !!postId,
   });
 };
@@ -67,7 +79,11 @@ export const useDeleteComment = (postId: number) => {
 /**
  * 评论点赞Hook（乐观更新）
  */
-export const useToggleCommentLike = (postId: number, userId?: number) => {
+export const useToggleCommentLike = (
+  postId: number,
+  userId?: number,
+  sort: CommentSort = 'default',
+) => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -78,9 +94,11 @@ export const useToggleCommentLike = (postId: number, userId?: number) => {
       await queryClient.cancelQueries({ queryKey: ['comments', postId] });
 
       // 获取之前的缓存数据（包含 userId 的 queryKey）
-      const queryKey = ['comments', postId, userId];
+      const queryKey = ['comments', postId, userId, sort];
       const likeStatusQueryKey = ['comments', postId, commentId, 'like-status'];
-      const previousComments = queryClient.getQueryData<CommentListResponse>(queryKey);
+      const previousComments = queryClient.getQueriesData<CommentListResponse>({
+        queryKey,
+      });
       const previousLikeStatus = queryClient.getQueryData<CommentLikeResponse>(likeStatusQueryKey);
 
       // 递归更新评论点赞状态
@@ -104,7 +122,7 @@ export const useToggleCommentLike = (postId: number, userId?: number) => {
       };
 
       // 乐观更新缓存
-      queryClient.setQueryData<CommentListResponse>(queryKey, old => {
+      queryClient.setQueriesData<CommentListResponse>({ queryKey }, old => {
         if (!old) return old;
         return {
           ...old,
@@ -124,8 +142,10 @@ export const useToggleCommentLike = (postId: number, userId?: number) => {
       return { previousComments, previousLikeStatus, queryKey, likeStatusQueryKey };
     },
     onError: (_, __, context) => {
-      if (context?.previousComments && context?.queryKey) {
-        queryClient.setQueryData(context.queryKey, context.previousComments);
+      if (context?.previousComments) {
+        context.previousComments.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
       }
       if (context?.previousLikeStatus && context?.likeStatusQueryKey) {
         queryClient.setQueryData(context.likeStatusQueryKey, context.previousLikeStatus);

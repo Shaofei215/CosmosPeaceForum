@@ -3,7 +3,13 @@
  */
 
 import { apiClient } from '@/shared/api/client';
-import type { Comment, CreateCommentData, CommentListResponse, CommentLikeResponse } from './types';
+import type {
+  Comment,
+  CommentSort,
+  CreateCommentData,
+  CommentListResponse,
+  CommentLikeResponse,
+} from './types';
 
 /**
  * 评论API
@@ -15,7 +21,7 @@ export const commentApi = {
    */
   getComments: (
     postId: number,
-    params: { user_id?: number; skip?: number; limit?: number } = {}
+    params: { user_id?: number; skip?: number; limit?: number; sort?: CommentSort; seed?: string } = {}
   ) =>
     apiClient.get<CommentListResponse>(`/posts/${postId}/comments`, { params }),
 

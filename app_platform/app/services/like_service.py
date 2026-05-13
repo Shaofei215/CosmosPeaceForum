@@ -6,7 +6,7 @@ from typing import Tuple
 
 from app_platform.app.models.like import Like
 from app_platform.app.models.post import Post
-from app_platform.app.services import notification_service
+from app_platform.app.services import heat_service, notification_service
 
 
 class PostNotFoundError(Exception):
@@ -92,6 +92,7 @@ def toggle_like(
             db.delete(existing_like)
             # 2. 减少帖子点赞计数（确保不会减到负数）
             post.like_count = max(0, post.like_count - 1)
+            heat_service.refresh_post_heat_score(db, post)
             # 3. 提交事务
             db.commit()
             # 返回：已取消点赞，新的点赞数
@@ -103,6 +104,7 @@ def toggle_like(
             db.add(new_like)
             # 2. 增加帖子点赞计数
             post.like_count = post.like_count + 1
+            heat_service.refresh_post_heat_score(db, post)
             notification_service.create_post_like_notification(db, post, user_id)
             # 3. 提交事务
             db.commit()

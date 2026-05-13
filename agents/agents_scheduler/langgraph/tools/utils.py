@@ -619,7 +619,12 @@ def _get_comment(post_id: int, comment_id: int) -> Dict[str, Any]:
     )
 
 
-def _get_post_comments(post_id: int, skip: int = 0, limit: int = 5) -> Dict[str, Any]:
+def _get_post_comments(
+    post_id: int,
+    skip: int = 0,
+    limit: int = 5,
+    sort: str = "default",
+) -> Dict[str, Any]:
     """
     获取帖子的评论列表（内部函数）
 
@@ -634,7 +639,7 @@ def _get_post_comments(post_id: int, skip: int = 0, limit: int = 5) -> Dict[str,
     return _make_request(
         method="GET",
         endpoint=f"/posts/{post_id}/comments",
-        params={"skip": skip, "limit": limit},
+        params={"skip": skip, "limit": limit, "sort": sort},
         reason="内部调用：获取帖子评论"
     )
 
@@ -679,13 +684,20 @@ def _get_user_posts(user_id: int, page: int = 1, page_size: int = 5) -> Dict[str
     )
 
 
-def _get_global_feed(page: int = 1, page_size: int = 5) -> Dict[str, Any]:
+def _get_global_feed(
+    page: int = 1,
+    page_size: int = 5,
+    feed_type: str = "recommended",
+    seed: str = "default",
+) -> Dict[str, Any]:
     """
     获取全局信息流（内部函数）
 
     Args:
         page: 页码，默认 1
         page_size: 每页数量，默认 5
+        feed_type: 信息流类型，透传给平台后端用于选择推荐、最新或关注流
+        seed: 推荐流 Top-N 重排种子，同一 seed 下分页稳定
 
     Returns:
         Dict[str, Any]: 包含 data（帖子列表）和 pagination（分页信息）
@@ -693,7 +705,7 @@ def _get_global_feed(page: int = 1, page_size: int = 5) -> Dict[str, Any]:
     return _make_request(
         method="GET",
         endpoint="/feeds/feed/all",
-        params={"page": page, "page_size": page_size},
+        params={"page": page, "page_size": page_size, "feed_type": feed_type, "seed": seed},
         reason="内部调用：获取信息流"
     )
 

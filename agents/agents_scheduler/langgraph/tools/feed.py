@@ -15,19 +15,45 @@ from agents.agents_scheduler.langgraph.tools.utils import (
 )
 
 
+def _normalize_feed_type(feed_type: str) -> str:
+    value = (feed_type or "recommended").lower()
+    aliases = {
+        "hot": "recommended",
+        "recommend": "recommended",
+        "recommended": "recommended",
+        "latest": "latest",
+        "following": "following",
+    }
+    return aliases.get(value, "recommended")
+
+
+def _feed_type_label(feed_type: str) -> str:
+    return {
+        "recommended": "推荐",
+        "latest": "最新",
+        "following": "关注",
+    }.get(feed_type, "推荐")
+
+
 @tool
 def get_global_feed(
+    feed_type: str = "recommended",
+    seed: str = "default",
     reason: str = "",
     summary: str = ""
 ) -> ToolResult:
     """
     社交平台主页信息流获取，用于回到主页，不可连续调用，如要查看更多内容请调用scroll_global_feed
 
-    获取所有用户发布的公开帖子信息流，返回信息流顶端的 5 条帖子。
+    获取指定类型的信息流顶端 5 条帖子。feed_type 可选：
+    recommended（推荐，按热度排序）、latest（最新，按时间倒序）、following（关注的人，按推荐排序）。
 
     注意：此工具会自动从当前执行上下文获取认证信息（如有），用于获取点赞状态和关注状态。
 
     Args:
+        feed_type: 信息流类型，必须是 "recommended"、"latest" 或 "following"。
+                   也兼容 "hot"，会视为 "recommended"。
+        seed: 推荐/关注流 Top-N 重排种子；想保持翻页稳定时，scroll_global_feed 使用同一个 seed。
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要浏览主页信息流"、"查看最新动态"等。
         summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
@@ -42,13 +68,14 @@ def get_global_feed(
         ToolExecutionError: 服务器内部错误
     """
     current_user_id = get_current_user_id()
-    feed_data = _get_global_feed(page=1, page_size=5)
+    normalized_feed_type = _normalize_feed_type(feed_type)
+    feed_data = _get_global_feed(page=1, page_size=5, feed_type=normalized_feed_type, seed=seed)
     feed_data["data"] = _standardize_posts_list(
         feed_data.get("data", []),
         current_user_id
     )
 
-    return ToolResult(action="浏览了主页信息流", data=feed_data)
+    return ToolResult(action=f"浏览了主页{_feed_type_label(normalized_feed_type)}信息流", data=feed_data)
 
 
 @tool
@@ -227,6 +254,8 @@ def get_post_detail(
 
 @tool
 def scroll_global_feed(
+    feed_type: str = "recommended",
+    seed: str = "default",
     reason: str = "",
     summary: str = ""
 ) -> ToolResult:
@@ -234,11 +263,15 @@ def scroll_global_feed(
     滑动查看主页信息流中的更多帖子
 
     获取当前信息流之后的下一批帖子（每批 5 条），用于持续浏览。
+    feed_type 可选：recommended（推荐）、latest（最新）或 following（关注）。
     每次调用返回不同的帖子内容。
 
     注意：此工具会自动从当前执行上下文获取认证信息（如有）。
 
     Args:
+        feed_type: 信息流类型，必须是 "recommended"、"latest" 或 "following"。
+                   也兼容 "hot"，会视为 "recommended"。
+        seed: 推荐/关注流 Top-N 重排种子；应与 get_global_feed 使用同一个 seed，避免翻页重复。
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要查看更多帖子"等。
         summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
@@ -253,12 +286,13 @@ def scroll_global_feed(
         ToolExecutionError: 服务器内部错误
     """
     current_user_id = get_current_user_id()
-    feed_data = _get_global_feed(page=2, page_size=5)
+    normalized_feed_type = _normalize_feed_type(feed_type)
+    feed_data = _get_global_feed(page=2, page_size=5, feed_type=normalized_feed_type, seed=seed)
     feed_data["data"] = _standardize_posts_list(
         feed_data.get("data", []),
         current_user_id
     )
-    return ToolResult(action="向下滑动浏览了更多信息流帖子", data=feed_data)
+    return ToolResult(action=f"向下滑动浏览了更多{_feed_type_label(normalized_feed_type)}信息流帖子", data=feed_data)
 
 
 @tool

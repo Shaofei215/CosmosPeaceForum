@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app_platform.app.models.comment import Comment
 from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
-from app_platform.app.services import notification_service
+from app_platform.app.services import heat_service, notification_service
 
 
 class RepostSourceNotFoundError(Exception):
@@ -57,11 +57,14 @@ def create_repost(
     )
     db.add(repost)
     db.flush()
+    heat_service.refresh_post_heat_score(db, repost)
 
     if source_post is not None:
         source_post.repost_count = (source_post.repost_count or 0) + 1
+        heat_service.refresh_post_heat_score(db, source_post)
     if root_post.id != getattr(source_post, "id", None):
         root_post.repost_count = (root_post.repost_count or 0) + 1
+        heat_service.refresh_post_heat_score(db, root_post)
 
     notification_service.create_repost_notifications(
         db=db,

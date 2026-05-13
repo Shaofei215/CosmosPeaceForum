@@ -96,6 +96,8 @@ def get_comment_tree(
     current_user: Optional[User] = Depends(get_current_user_optional),
     skip: int = Query(0, ge=0, description="跳过的数量，用于一级评论分页"),
     limit: int = Query(20, ge=1, le=100, description="返回的最大数量，用于一级评论分页"),
+    sort: str = Query("default", description="评论排序：default（默认推荐）或 latest（最新）"),
+    seed: str = Query("default", description="默认评论流 Top-N 重排种子；同一 seed 下分页稳定"),
     db: Session = Depends(get_db)
 ):
     """
@@ -125,7 +127,9 @@ def get_comment_tree(
             user_id=user_id,
             skip=skip,
             limit=limit,
-            db=db
+            db=db,
+            sort=sort,
+            seed=seed,
         )
 
         return CommentListResponse(
@@ -137,6 +141,8 @@ def get_comment_tree(
 
     except comment_service.PostNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/{post_id}/comments/{comment_id}/like", response_model=CommentLikeToggleResponse,
