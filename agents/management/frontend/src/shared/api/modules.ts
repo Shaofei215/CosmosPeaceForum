@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api/client';
 import type {
   AgentConfig, AgentCreate, AgentUpdate, AgentListResponse, AgentRelationUpdate,
-  AgentRuntimeStatusResponse, PromptInjectionRequest,
+  AgentRuntimeStatusResponse, PromptInjectionRequest, AgentAppLoginResponse,
   DashboardStats,
   ModelConfig, ModelConfigCreate, ModelConfigUpdate,
   SystemConfig, OperationLogListResponse, MessageResponse,
@@ -35,6 +35,9 @@ export const agentApi = {
 
   stop: (id: number) =>
     apiClient.post<MessageResponse>(`/agents/${id}/stop`),
+
+  appLogin: (id: number) =>
+    apiClient.post<AgentAppLoginResponse>(`/agents/${id}/app-login`),
 
   batchStart: (ids: number[]) =>
     apiClient.post<MessageResponse>('/agents/batch-start', ids),

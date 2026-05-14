@@ -65,6 +65,13 @@ export interface PromptInjectionRequest {
   content: string;
 }
 
+export interface AgentAppLoginResponse {
+  access_token: string;
+  token_type: string;
+  app_platform_user_id: number;
+  username: string;
+}
+
 export interface AgentListResponse {
   items: AgentConfig[];
   total: number;
