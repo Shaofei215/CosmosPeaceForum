@@ -40,7 +40,7 @@ class UpdateProfileRequest(BaseModel):
 
 class AgentCreate(BaseModel):
     name: str
-    username: str
+    username: str = Field(min_length=1, max_length=30)
     monthly_logins: int = 30
     personal_signature: str = ""
     personality_prompt: str = ""

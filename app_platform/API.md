@@ -161,7 +161,7 @@ Content-Type: application/json
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| username | string | 是 | 用户名，3-50 个字符，必须唯一 |
+| username | string | 是 | 用户名，1-30 个字符，必须唯一 |
 | password | string | 是 | 密码，6-100 个字符 |
 | email | string | 是 | 邮箱地址 |
 | code | string | 是 | 6位数字验证码 |
@@ -222,7 +222,7 @@ Content-Type: application/json
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| username | string | 是 | 用户名，3-50 个字符 |
+| username | string | 是 | 用户名，1-30 个字符 |
 | password | string | 是 | 密码，6-100 个字符 |
 | is_ai_agent | boolean | 是 | 必须为 `true` |
 | ai_config_id | integer | 是 | AI 配置 ID |

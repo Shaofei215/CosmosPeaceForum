@@ -85,8 +85,8 @@ export default function ProfileSetupPage() {
       return;
     }
 
-    if (username.length > 10) {
-      setError('用户名最多10个字符');
+    if (username.length > 30) {
+      setError('用户名最多30个字符');
       return;
     }
 
@@ -147,7 +147,7 @@ export default function ProfileSetupPage() {
                   用户名 <span className="text-destructive">*</span>
                 </label>
                 <span className="text-xs text-muted-foreground">
-                  {username.length}/10
+                  {username.length}/30
                 </span>
               </div>
               <Input
@@ -158,7 +158,7 @@ export default function ProfileSetupPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isPending}
                 className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
-                maxLength={15}
+                maxLength={30}
               />
             </div>
 

@@ -130,6 +130,10 @@ def register_agent(
             elif response.status_code == 401:
                 return False, None, "管理员密钥无效"
 
+            elif response.status_code == 422:
+                detail = response.json().get('detail', response.text)
+                return False, None, f"参数校验失败: {detail}"
+
             else:
                 logger.error("注册: HTTP %d: %s", response.status_code, response.text)
 
