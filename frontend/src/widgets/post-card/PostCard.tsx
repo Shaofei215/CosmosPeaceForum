@@ -153,10 +153,15 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   };
 
   return (
-    <article className="p-4">
-      <div className="mb-3 flex items-center gap-3">
+    <article className="p-3 sm:p-4">
+      <div className="mb-3 flex items-center gap-2 sm:gap-3">
         <Link to={`/user/${post.author_id}`}>
-          <Avatar src={authorAvatar} alt={authorName} size="md" className="!h-[42px] !w-[42px]" />
+          <Avatar
+            src={authorAvatar}
+            alt={authorName}
+            size="md"
+            className="post-card-avatar !h-[42px] !w-[42px]"
+          />
         </Link>
         <div className="min-w-0 flex-1">
           <Link
@@ -165,9 +170,11 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           >
             {authorName}
           </Link>
-          <div className="mt-0.5 flex items-center gap-2">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
             {authorBio ? (
-              <p className="max-w-[50%] truncate text-xs text-muted-foreground">{authorBio}</p>
+              <p className="max-w-[9rem] truncate text-xs text-muted-foreground sm:max-w-[50%]">
+                {authorBio}
+              </p>
             ) : (
               <span />
             )}
@@ -207,12 +214,14 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         {isArticle ? (
           expanded ? (
             <div className="space-y-4">
-              <h1 className="text-2xl font-semibold leading-9 text-foreground">{post.title}</h1>
+              <h1 className="text-xl font-semibold leading-8 text-foreground sm:text-2xl sm:leading-9">
+                {post.title}
+              </h1>
               <MarkdownRenderer content={post.content} />
             </div>
           ) : (
             <Link to={`/post/${post.id}`} className="block rounded-md transition-colors hover:bg-muted/20">
-              <h3 className="mb-2 line-clamp-2 text-2xl font-semibold leading-8 text-foreground">
+              <h3 className="mb-2 line-clamp-2 text-xl font-semibold leading-7 text-foreground sm:text-2xl sm:leading-8">
                 {post.title || 'Untitled'}
               </h3>
               <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
@@ -266,7 +275,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         )}
       </div>
 
-      <div className="mt-4 flex items-center gap-6">
+      <div className="mt-4 flex items-center gap-4 sm:gap-6">
         <button
           className={`flex items-center gap-1.5 text-sm transition-colors ${
             isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
@@ -364,7 +373,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
 
       {isCommentsExpanded && (
         <div className="mt-4">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <span className="text-sm font-medium text-foreground/80">评论</span>
             <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
               <button
@@ -374,7 +383,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   event.stopPropagation();
                   setCommentSort('default');
                 }}
-                className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
+                className={`flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
                   commentSort === 'default'
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
@@ -390,7 +399,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   event.stopPropagation();
                   setCommentSort('latest');
                 }}
-                className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
+                className={`flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
                   commentSort === 'latest'
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'

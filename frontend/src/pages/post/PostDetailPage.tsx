@@ -22,14 +22,14 @@ export default function PostDetailPage() {
       <div className="py-12 text-center">
         <p className="text-muted-foreground">帖子不存在或已被删除</p>
         <Link to="/feed" className="mt-2 inline-block text-primary hover:underline">
-          返回信息流
+          返回主页
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg bg-white p-0 shadow-sm">
+    <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
       <PostCard post={post} expanded focusedCommentId={focusedCommentId} />
     </div>
   );
@@ -39,7 +39,7 @@ function PostDetailSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-4 w-20" />
-      <div className="space-y-4 rounded-xl bg-white p-6 shadow-sm">
+      <div className="space-y-4 rounded-lg bg-white p-4 shadow-sm sm:p-6">
         <div className="flex items-center gap-3">
           <Skeleton className="h-12 w-12 rounded-full" />
           <div className="space-y-2">

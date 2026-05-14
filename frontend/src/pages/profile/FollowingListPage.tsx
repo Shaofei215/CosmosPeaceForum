@@ -54,7 +54,7 @@ export default function FollowingListPage() {
   }
 
   return (
-    <div className="rounded-lg bg-white shadow-sm p-0">
+    <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
       <h2 className="text-lg font-semibold px-3 pt-3">关注</h2>
 
       {isLoading ? (

@@ -289,20 +289,20 @@ export default function ArticleEditorPage() {
   };
 
   return (
-    <form onSubmit={submitArticle} className="rounded-lg bg-white shadow-sm">
-      <div className="border-b border-border/60 px-4 py-3">
+    <form onSubmit={submitArticle} className="overflow-hidden rounded-lg bg-white shadow-sm">
+      <div className="border-b border-border/60 px-3 py-3 sm:px-4">
         <Input
           value={title}
           onChange={event => setTitle(event.target.value)}
           placeholder={text.titlePlaceholder}
-          className="h-11 border-0 px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
+          className="h-10 border-0 px-0 text-xl font-semibold shadow-none focus-visible:ring-0 sm:h-11 sm:text-2xl"
         />
       </div>
 
       <div
         className={cn(
-          'sticky top-[5.75rem] z-10 flex flex-wrap items-center gap-1',
-          'border-b border-border/60 bg-white px-3 py-2'
+          'sticky top-[4.5rem] z-10 flex flex-wrap items-center gap-1 sm:top-[5.75rem]',
+          'border-b border-border/60 bg-white px-2 py-2 sm:px-3'
         )}
       >
         <ToolbarButton
@@ -403,7 +403,10 @@ export default function ArticleEditorPage() {
       </div>
 
       {mode === 'rich' ? (
-        <EditorContent editor={editor} className="article-rich-editor min-h-[560px] px-6 py-6" />
+        <EditorContent
+          editor={editor}
+          className="article-rich-editor min-h-[420px] px-4 py-4 sm:min-h-[560px] sm:px-6 sm:py-6"
+        />
       ) : (
         <div className="grid gap-0 lg:grid-cols-2">
           <Textarea
@@ -411,14 +414,14 @@ export default function ArticleEditorPage() {
             value={content}
             onChange={event => setContent(event.target.value)}
             className={cn(
-              'min-h-[560px] resize-none rounded-none border-0 px-5 py-5',
+              'min-h-[420px] resize-none rounded-none border-0 px-4 py-4 sm:min-h-[560px] sm:px-5 sm:py-5',
               'font-mono text-sm leading-6 shadow-none focus-visible:ring-0'
             )}
             placeholder={text.markdownPlaceholder}
           />
           <div
             className={cn(
-              'min-h-[560px] border-t border-border/60 px-5 py-5',
+              'min-h-[320px] border-t border-border/60 px-4 py-4 sm:min-h-[560px] sm:px-5 sm:py-5',
               'lg:border-l lg:border-t-0'
             )}
           >
@@ -427,7 +430,7 @@ export default function ArticleEditorPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2 border-t border-border/60 px-4 py-3">
+      <div className="flex items-center justify-end gap-2 border-t border-border/60 px-3 py-3 sm:px-4">
         <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
           {text.cancel}
         </Button>

@@ -84,7 +84,7 @@ export default function ProfilePage() {
       <div className="text-center py-12">
         <p className="text-muted-foreground">用户不存在</p>
         <Link to="/feed" className="text-primary hover:underline mt-2 inline-block">
-          返回信息流
+          返回主页
         </Link>
       </div>
     );
@@ -95,23 +95,23 @@ export default function ProfilePage() {
   return (
     <div className="space-y-3">
       {/* 用户资料卡片 */}
-      <div className="rounded-lg bg-white shadow-sm p-5">
-        <div className="flex items-center gap-4">
+      <div className="rounded-lg bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex items-start gap-3 sm:items-center sm:gap-4">
           <Avatar
             src={user.avatar_url}
             alt={user.username}
             size="xl"
           />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold">{user.username}</h1>
+            <div className="flex items-start justify-between gap-2 sm:items-center">
+              <h1 className="min-w-0 truncate text-xl font-bold sm:text-2xl">{user.username}</h1>
               {!isCurrentUser && (
                 <Button
                   variant={followStatus?.is_following ? "outline" : "default"}
                   size="sm"
                   onClick={handleFollow}
                   disabled={toggleFollow.isPending}
-                  className="px-4"
+                  className="shrink-0 px-4"
                 >
                   {toggleFollow.isPending ? (
                     <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -130,7 +130,7 @@ export default function ProfilePage() {
                 {user.bio}
               </p>
             )}
-            <div className="flex items-center gap-4 mt-3">
+            <div className="mt-3 flex items-center gap-4">
               <Link
                 to={`/user/${user.id}/following`}
                 className="text-sm text-muted-foreground hover:text-primary transition-colors"
@@ -151,17 +151,18 @@ export default function ProfilePage() {
               variant="ghost"
               size="sm"
               onClick={handleLogout}
-              className="gap-2"
+              className="shrink-0 gap-2 px-2 sm:px-3"
+              aria-label="退出登录"
             >
               <LogOut className="h-4 w-4" />
-              退出
+              <span className="hidden sm:inline">退出</span>
             </Button>
           )}
         </div>
       </div>
 
       {/* 用户帖子列表 - 包含在大容器中 */}
-      <div className="rounded-lg bg-white shadow-sm p-0">
+      <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
         <h2 className="text-lg font-semibold px-3 pt-3">
           {isCurrentUser ? '我的帖子' : `${user.username} 的帖子`}
         </h2>
@@ -230,7 +231,7 @@ function ProfileSkeleton() {
  */
 function PostCardSkeleton() {
   return (
-    <div className="rounded-xl border bg-card p-4 shadow space-y-4">
+    <div className="space-y-4 rounded-lg bg-card p-3 sm:p-4">
       <div className="flex items-center gap-3">
         <Skeleton className="h-10 w-10 rounded-full" />
         <div className="space-y-2">

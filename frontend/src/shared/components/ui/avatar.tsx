@@ -4,6 +4,7 @@
  */
 
 import * as React from 'react';
+import { getFullAvatarUrl } from '@/shared/config/api';
 import { cn } from '@/shared/lib/utils';
 
 /**
@@ -28,18 +29,6 @@ const sizeMap = {
   xl: 'w-20 h-20 text-lg',
   '2xl': 'w-24 h-24 text-xl',
 };
-
-/**
- * 获取完整的头像URL
- * 如果是相对路径则拼接API基础URL
- */
-function getFullAvatarUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return url;
-  }
-  return `http://localhost:8000/${url}`;
-}
 
 /**
  * 获取用户名的首字母作为头像占位符

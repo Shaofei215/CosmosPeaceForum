@@ -28,7 +28,7 @@ export default function NotificationsPage() {
   const items = data?.items ?? [];
 
   return (
-    <div className="rounded-lg bg-white shadow-sm p-0">
+    <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
       <h2 className="text-lg font-semibold px-3 pt-3">消息</h2>
 
       {items.length === 0 ? (
@@ -60,8 +60,8 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
   };
 
   return (
-    <div className="p-4 hover:bg-muted/30 transition-colors">
-      <div className="flex gap-3">
+    <div className="p-3 transition-colors hover:bg-muted/30 sm:p-4">
+      <div className="flex gap-2 sm:gap-3">
         <Link to={sender ? `/user/${sender.id}` : '#'} onClick={e => e.stopPropagation()}>
           <Avatar src={sender?.avatar_url} alt={sender?.username ?? '用户'} size="md" />
         </Link>
@@ -71,10 +71,10 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
             <div className="flex items-start gap-2 text-sm">
               <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${typeInfo.color}`} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="font-medium truncate">{sender?.username ?? '有人'}</span>
                   <span className="text-muted-foreground shrink-0">{typeInfo.label}</span>
-                  <span className="ml-auto text-xs text-muted-foreground shrink-0">
+                  <span className="text-xs text-muted-foreground sm:ml-auto shrink-0">
                     {formatDate(notification.created_at)}
                   </span>
                 </div>
@@ -155,7 +155,7 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
 
   return (
     <div className="mt-2 space-y-2">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
         <Button
           variant="ghost"
           size="sm"

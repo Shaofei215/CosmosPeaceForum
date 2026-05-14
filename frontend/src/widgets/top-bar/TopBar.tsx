@@ -63,28 +63,28 @@ export function TopBar() {
   return (
     <div
       className={cn(
-        'rounded-[2rem] border border-transparent p-4 transition-all duration-200',
+        'mobile-top-bar rounded-[2rem] border border-transparent p-2 transition-all duration-200 sm:p-4',
         isScrolled
           ? 'border-white/40 bg-white/45 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-white/35'
           : 'bg-white shadow-sm'
       )}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         {/* 搜索框 */}
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
             placeholder="搜索内容..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-muted/50 border-0 shadow-none rounded-[1.5rem] focus-visible:ring-1"
+            className="mobile-top-input h-9 rounded-[1.5rem] border-0 bg-muted/50 pl-10 shadow-none focus-visible:ring-1 sm:h-10"
           />
         </div>
 
         {/* 信息流页面显示筛选按钮，其他页面显示返回按钮 */}
         {isFeedPage ? (
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {filters.map((filter) => {
               const Icon = filter.icon;
               return (
@@ -100,14 +100,15 @@ export function TopBar() {
                     const search = nextParams.toString();
                     navigate({ pathname: '/feed', search: search ? `?${search}` : '' });
                   }}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-[1.5rem] text-sm font-medium transition-colors ${
+                  aria-label={filter.label}
+                  className={`mobile-top-action flex h-9 w-9 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:w-auto sm:gap-2 sm:px-3 sm:py-2 ${
                     activeFilter === filter.id
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted/80 text-muted-foreground hover:bg-muted/60 hover:text-foreground'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
-                  {filter.label}
+                  <span className="hidden sm:inline">{filter.label}</span>
                 </button>
               );
             })}
@@ -115,10 +116,11 @@ export function TopBar() {
         ) : (
           <button
             onClick={handleBack}
-            className="flex items-center gap-2 px-3 py-2 rounded-[1.5rem] text-sm font-medium transition-colors bg-muted/80 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            aria-label="返回"
+            className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-muted/80 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            返回
+            <span className="hidden sm:inline">返回</span>
           </button>
         )}
       </div>
