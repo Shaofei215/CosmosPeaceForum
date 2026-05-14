@@ -293,7 +293,8 @@ class TestToolLocationMapping:
     def test_get_location_after_tool_known(self):
         assert _get_location_after_tool("get_global_feed") == "主页（信息流）"
         assert _get_location_after_tool("expand_post") == "帖子详情页"
-        assert _get_location_after_tool("expand_comments") == "评论页"
+        assert _get_location_after_tool("expand_comment") == "评论页"
+        assert _get_location_after_tool("view_post_comments") == "评论页"
         assert _get_location_after_tool("get_user_profile") == "用户主页"
 
     def test_get_location_after_tool_unknown(self):
@@ -306,8 +307,9 @@ class TestToolLocationMapping:
         assert _get_location_after_tool("GET_GLOBAL_FEED") == "主页（信息流）"
 
     def test_tools_with_return_value(self):
-        assert "get_profile" in TOOLS_WITH_RETURN_VALUE
+        assert "get_profile" not in TOOLS_WITH_RETURN_VALUE
         assert "get_global_feed" in TOOLS_WITH_RETURN_VALUE
+        assert "scroll" in TOOLS_WITH_RETURN_VALUE
         assert "logout" not in TOOLS_WITH_RETURN_VALUE
 
     def test_tools_no_return_value(self):

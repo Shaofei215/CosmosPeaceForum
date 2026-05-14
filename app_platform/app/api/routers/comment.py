@@ -259,6 +259,44 @@ def get_comment_by_id(
     return comment
 
 
+@router.get("/{post_id}/comments/{comment_id}/replies", response_model=CommentListResponse,
+            summary="获取评论回复", description="分页获取指定评论下的直接回复，并附带子回复树。")
+def get_comment_replies(
+    post_id: int,
+    comment_id: int,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    skip: int = Query(0, ge=0, description="跳过的直接回复数量"),
+    limit: int = Query(20, ge=1, le=100, description="返回的直接回复数量"),
+    sort: str = Query("default", description="回复排序：default（默认推荐）或 latest（最新）"),
+    seed: str = Query("default", description="默认回复流 Top-N 重排种子；同一 seed 下分页稳定"),
+    db: Session = Depends(get_db)
+):
+    try:
+        user_id = current_user.id if current_user else None
+        replies, total = comment_service.get_comment_replies(
+            post_id=post_id,
+            comment_id=comment_id,
+            user_id=user_id,
+            skip=skip,
+            limit=limit,
+            db=db,
+            sort=sort,
+            seed=seed,
+        )
+        return CommentListResponse(
+            items=replies,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+    except comment_service.CommentNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except comment_service.ParentCommentMismatchError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.delete("/{post_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT,
                summary="删除评论", description="删除指定评论及其所有回复，仅评论作者可以操作。")
 def delete_comment(

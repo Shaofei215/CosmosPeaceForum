@@ -513,6 +513,94 @@ def get_comment_tree(
     return (root_comments, total)
 
 
+def get_comment_replies(
+    post_id: int,
+    comment_id: int,
+    user_id: Optional[int],
+    skip: int,
+    limit: int,
+    db: Session,
+    sort: str = "default",
+    seed: str = "default",
+) -> Tuple[List[Comment], int]:
+    """获取某条评论下的直接回复，并为每条回复附加子回复树。"""
+    sort = _normalize_comment_sort(sort)
+    seed = _normalize_seed(seed)
+
+    parent = db.query(Comment).filter(Comment.id == comment_id).first()
+    if not parent:
+        raise CommentNotFoundError(comment_id)
+    if parent.post_id != post_id:
+        raise ParentCommentMismatchError(comment_id, post_id, parent.post_id)
+
+    replies_query = db.query(Comment).filter(
+        Comment.post_id == post_id,
+        Comment.parent_id == comment_id,
+    )
+    total = replies_query.count()
+    replies = _get_comments_for_tree(
+        query=replies_query.options(joinedload(Comment.owner)),
+        skip=skip,
+        limit=limit,
+        total=total,
+        sort=sort,
+        seed=seed,
+    )
+
+    if not replies:
+        return ([], total)
+
+    all_descendants = db.query(Comment).filter(
+        Comment.post_id == post_id,
+        Comment.parent_id != None,
+        Comment.parent_id != comment_id,
+    ).options(
+        joinedload(Comment.owner)
+    ).order_by(
+        *_comment_order_by(sort)
+    ).all()
+
+    children_map: Dict[int, List[Comment]] = defaultdict(list)
+    for reply in all_descendants:
+        children_map[reply.parent_id].append(reply)
+
+    def attach_children(comment: Comment) -> None:
+        comment.children = children_map.get(comment.id, [])
+        for child in comment.children:
+            attach_children(child)
+
+    for reply in replies:
+        attach_children(reply)
+
+    if user_id is not None:
+        all_comment_ids = []
+
+        def collect_ids(comment: Comment) -> None:
+            all_comment_ids.append(comment.id)
+            for child in comment.children:
+                collect_ids(child)
+
+        for reply in replies:
+            collect_ids(reply)
+
+        liked_comment_ids = set(
+            row[0] for row in db.query(CommentLike.comment_id).filter(
+                CommentLike.user_id == user_id,
+                CommentLike.comment_id.in_(all_comment_ids)
+            ).all()
+        )
+
+        def set_like_status(comment: Comment) -> None:
+            comment.is_liked = comment.id in liked_comment_ids
+            for child in comment.children:
+                set_like_status(child)
+
+        for reply in replies:
+            set_like_status(reply)
+
+    return (replies, total)
+
+
 def get_comment_by_id(
     comment_id: int,
     user_id: Optional[int],

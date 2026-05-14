@@ -2,12 +2,17 @@
 # 工具辅助函数
 
 import re
+import threading
 import requests
 import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
-from agents.agents_scheduler.scheduler.context import get_current_token, get_current_user_id
+from agents.agents_scheduler.scheduler.context import (
+    get_current_context,
+    get_current_token,
+    get_current_user_id,
+)
 from agents.agents_scheduler.langgraph.tools.types import ToolExecutionError, AuthenticationError, NotFoundError, ValidationError, UnauthorizedError
 
 
@@ -294,7 +299,7 @@ def _format_article_content_for_llm(
     return (
         f"文章标题：{safe_title}\n"
         f"正文：{excerpt}\n"
-        f"这是一篇文章，调用 get_post_detail(post_id={post_id}) 可查看 Markdown 全文。"
+        f"这是一篇文章，调用 expand_post(post_id={post_id}) 可查看 Markdown 全文。"
     )
 
 
@@ -550,7 +555,7 @@ def _get_current_user() -> Dict[str, Any]:
     获取当前登录用户信息（内部函数，供系统使用）
 
     此函数不包含 reason 参数，专为系统级调用设计。
-    Agent 应使用 @tool get_profile 获取用户信息。
+    Agent 应使用 @tool get_user_profile 获取用户信息。
 
     Args:
 
@@ -624,6 +629,7 @@ def _get_post_comments(
     skip: int = 0,
     limit: int = 5,
     sort: str = "default",
+    seed: str = "default",
 ) -> Dict[str, Any]:
     """
     获取帖子的评论列表（内部函数）
@@ -639,18 +645,24 @@ def _get_post_comments(
     return _make_request(
         method="GET",
         endpoint=f"/posts/{post_id}/comments",
-        params={"skip": skip, "limit": limit, "sort": sort},
+        params={"skip": skip, "limit": limit, "sort": sort, "seed": seed},
         reason="内部调用：获取帖子评论"
     )
 
 
-def _get_comment_replies(post_id: int, comment_id: int, limit: int = 5) -> Dict[str, Any]:
+def _get_comment_replies(
+    post_id: int,
+    comment_id: int,
+    skip: int = 0,
+    limit: int = 5,
+) -> Dict[str, Any]:
     """
     获取评论的回复列表（内部函数）
 
     Args:
         post_id: 评论所属帖子的 ID
         comment_id: 目标评论的 ID
+        skip: 跳过的回复数量，默认 0
         limit: 返回的回复数量，默认 5
 
     Returns:
@@ -659,9 +671,33 @@ def _get_comment_replies(post_id: int, comment_id: int, limit: int = 5) -> Dict[
     return _make_request(
         method="GET",
         endpoint=f"/posts/{post_id}/comments/{comment_id}/replies",
-        params={"limit": limit},
+        params={"skip": skip, "limit": limit},
         reason="内部调用：获取评论回复"
     )
+
+
+_scroll_cursor_fallback = threading.local()
+
+
+def _get_scroll_cursor() -> Dict[str, Any]:
+    """读取当前 Agent 的浏览游标。"""
+    context = get_current_context()
+    if context is not None:
+        return getattr(context, "_scroll_cursor", {}) or {}
+    return getattr(_scroll_cursor_fallback, "cursor", {}) or {}
+
+
+def _set_scroll_cursor(cursor: Optional[Dict[str, Any]]) -> None:
+    """记录当前页面的下一次 scroll 目标。"""
+    context = get_current_context()
+    if context is not None:
+        setattr(context, "_scroll_cursor", cursor or {})
+        return
+    _scroll_cursor_fallback.cursor = cursor or {}
+
+
+def _clear_scroll_cursor() -> None:
+    _set_scroll_cursor({})
 
 
 def _get_user_posts(user_id: int, page: int = 1, page_size: int = 5) -> Dict[str, Any]:
@@ -768,7 +804,6 @@ def get_social_tools(relation_map=None) -> List:
 
     if _social_tools is None:
         from agents.agents_scheduler.langgraph.tools.social import (
-            get_profile,
             view_notifications,
             view_notification_origin,
             toggle_post_like,
@@ -784,14 +819,12 @@ def get_social_tools(relation_map=None) -> List:
         from agents.agents_scheduler.langgraph.tools.feed import (
             get_global_feed,
             expand_post,
-            expand_comments,
-            get_post_detail,
-            scroll_global_feed,
-            scroll_user_posts,
+            view_post_comments,
+            expand_comment,
+            scroll,
         )
 
         _social_tools = [
-            get_profile,
             view_notifications,
             view_notification_origin,
             toggle_post_like,
@@ -805,10 +838,9 @@ def get_social_tools(relation_map=None) -> List:
             get_user_profile,
             get_global_feed,
             expand_post,
-            expand_comments,
-            get_post_detail,
-            scroll_global_feed,
-            scroll_user_posts,
+            view_post_comments,
+            expand_comment,
+            scroll,
         ]
 
     return _social_tools

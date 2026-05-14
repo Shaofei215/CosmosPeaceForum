@@ -11,61 +11,9 @@ from agents.agents_scheduler.langgraph.tools.utils import (
     _make_request, _get_user, _get_post, _get_comment, _get_user_posts, _get_follow_status_text,
     _get_notifications, _get_notification,
     _standardize_post, _standardize_posts_list, _standardize_comment,
-    _standardize_notification, _standardize_notifications_list, _truncate
+    _standardize_notification, _standardize_notifications_list, _truncate,
+    _set_scroll_cursor
 )
-
-
-@tool
-def get_profile(
-    reason: str = "用户想要查看自己的个人资料",
-    summary: str = ""
-) -> ToolResult:
-    """
-    获取当前登录用户的个人资料信息
-
-    返回当前 Agent 用户的核心信息，包括用户名、个人签名、粉丝数量、关注数量等，
-    以及自己发布的最新 3 条帖子。
-
-    注意：此工具会自动从当前执行上下文获取认证信息，无需手动传入 Token。
-
-    Args:
-        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
-                例如："用户想要查看自己的信息"、"查看个人资料"等。
-        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
-                例如："我打开了个人主页，看到我的粉丝数是xxx，关注数是xxx"等。
-
-    Returns:
-        ToolResult: 包含以下字段:
-            - action: "查看了自己的个人资料（@{username}）"
-            - data: 用户信息字典，包含 id, username, bio, following_count, followers_count, follow_status, recent_posts
-
-    Raises:
-        UnauthorizedError: 未登录或 Token 已过期
-        AuthenticationError: Token 无效
-        ToolExecutionError: 服务器内部错误
-    """
-    current_user_id = get_current_user_id()
-    data = _make_request(
-        method="GET",
-        endpoint="/auth/me",
-        reason=reason,
-        summary=summary
-    )
-    data.pop("avatar_url", None)
-    data.pop("created_at", None)
-
-    data["follow_status"] = "self"
-
-    posts_data = _get_user_posts(current_user_id, page=1, page_size=3)
-    data["recent_posts"] = _standardize_posts_list(
-        posts_data.get("data", []),
-        current_user_id
-    )
-
-    username = data.get("username", "")
-    action = f"查看了自己的个人资料（@{username}）" if username else "查看了自己的个人资料"
-
-    return ToolResult(action=action, data=data)
 
 
 @tool
@@ -681,7 +629,7 @@ def get_user_profile(
 
     获取目标用户的个人资料信息及其最新帖子列表。
     返回用户名、个人签名、粉丝数、关注数、当前用户对其的关注状态，
-    以及该用户发布的最新 3 条帖子。
+    以及该用户发布的最新 5 条帖子。
     这是一个公开接口，不需要认证也可以查看。
 
     注意：此工具会自动从当前执行上下文获取认证信息（如有），用于获取关注状态。
@@ -704,13 +652,21 @@ def get_user_profile(
     """
     current_user_id = get_current_user_id()
     user_data = _get_user(user_id, reason, summary)
-    user_data["follow_status"] = _get_follow_status_text(user_id, current_user_id)
+    user_data["follow_status"] = (
+        "self" if current_user_id == user_id else _get_follow_status_text(user_id, current_user_id)
+    )
 
-    posts_data = _get_user_posts(user_id, page=1, page_size=3)
+    posts_data = _get_user_posts(user_id, page=1, page_size=5)
     user_data["recent_posts"] = _standardize_posts_list(
         posts_data.get("data", []),
         current_user_id
     )
+    _set_scroll_cursor({
+        "kind": "user_posts",
+        "user_id": user_id,
+        "username": user_data.get("username", ""),
+        "offset": len(user_data["recent_posts"]),
+    })
 
     username = user_data.get("username", "")
     action = f"查看了 @{username} 的个人主页" if username else f"查看了用户 {user_id} 的个人主页"

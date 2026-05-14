@@ -335,11 +335,10 @@ class TestGetSocialTools:
         tools = get_social_tools()
         tool_names = [t.name.lower() for t in tools]
         expected_names = [
-            "get_profile", "toggle_post_like", "toggle_comment_like",
+            "toggle_post_like", "toggle_comment_like",
             "create_comment", "toggle_follow", "create_post", "logout",
             "get_user_profile", "get_global_feed", "expand_post",
-            "expand_comments", "get_post_detail", "scroll_global_feed",
-            "scroll_user_posts",
+            "view_post_comments", "expand_comment", "scroll",
         ]
         for name in expected_names:
             assert name in tool_names, f"Missing tool: {name}"
