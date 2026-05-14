@@ -49,7 +49,7 @@ def _comment_payload(comment_id=201, parent_id=None, content="root comment", chi
     }
 
 
-def test_expand_comments_returns_comment_and_reply_ids(monkeypatch):
+def test_expand_comment_returns_comment_and_reply_ids(monkeypatch):
     _disable_relation_expansion(monkeypatch)
     monkeypatch.setattr(feed, "get_current_user_id", lambda: 99)
     monkeypatch.setattr(feed, "_get_post", lambda post_id: _post_payload())
@@ -57,7 +57,7 @@ def test_expand_comments_returns_comment_and_reply_ids(monkeypatch):
     monkeypatch.setattr(
         feed,
         "_get_comment_replies",
-        lambda post_id, comment_id, limit=5: {
+        lambda post_id, comment_id, skip=0, limit=5: {
             "items": [
                 _comment_payload(301, parent_id=comment_id, content="first reply"),
                 _comment_payload(302, parent_id=comment_id, content="second reply"),
@@ -66,7 +66,7 @@ def test_expand_comments_returns_comment_and_reply_ids(monkeypatch):
         },
     )
 
-    result = feed.expand_comments.invoke(
+    result = feed.expand_comment.invoke(
         {"post_id": 10, "comment_id": 201, "reply_count": 2}
     )
 
@@ -85,7 +85,7 @@ def test_tool_execution_then_decision_prompt_exposes_reply_parent_ids(monkeypatc
     monkeypatch.setattr(
         feed,
         "_get_comment_replies",
-        lambda post_id, comment_id, limit=5: {
+        lambda post_id, comment_id, skip=0, limit=5: {
             "items": [_comment_payload(301, parent_id=comment_id, content="reply target")],
             "total": 1,
         },
@@ -100,7 +100,7 @@ def test_tool_execution_then_decision_prompt_exposes_reply_parent_ids(monkeypatc
         "current_location": "帖子详情页",
         "last_tool_result": None,
         "pending_tool": {
-            "tool_name": "expand_comments",
+            "tool_name": "expand_comment",
             "args": {
                 "post_id": 10,
                 "comment_id": 201,
@@ -213,6 +213,90 @@ def test_prompt_for_created_reply_includes_new_comment_id():
     assert "【新评论】" in formatted
     assert "id / 评论ID: 501" in formatted
     assert "parent_id / 父评论ID: 201" in formatted
+
+
+def test_scroll_continues_global_feed_without_args(monkeypatch):
+    _disable_relation_expansion(monkeypatch)
+    utils._clear_scroll_cursor()
+    monkeypatch.setattr(feed, "get_current_user_id", lambda: 99)
+
+    def fake_global_feed(page=1, page_size=5, feed_type="recommended", seed="default"):
+        posts = [
+            {
+                **_post_payload(),
+                "id": post_id,
+                "content": f"post {post_id}",
+            }
+            for post_id in range(1, page_size + 1)
+        ]
+        return {"data": posts, "pagination": {"total": 12}}
+
+    monkeypatch.setattr(feed, "_get_global_feed", fake_global_feed)
+
+    first = feed.get_global_feed.invoke({})
+    second = feed.scroll.invoke({})
+
+    assert [post["id"] for post in first["data"]["data"]] == [1, 2, 3, 4, 5]
+    assert [post["id"] for post in second["data"]["data"]] == [6, 7, 8, 9, 10]
+
+
+def test_scroll_continues_post_comments(monkeypatch):
+    _disable_relation_expansion(monkeypatch)
+    utils._clear_scroll_cursor()
+    monkeypatch.setattr(feed, "get_current_user_id", lambda: 99)
+    monkeypatch.setattr(feed, "_get_post", lambda post_id: _post_payload())
+
+    def fake_post_comments(post_id, skip=0, limit=5, sort="default", seed="default"):
+        return {
+            "items": [
+                _comment_payload(comment_id, content=f"comment {comment_id}")
+                for comment_id in range(201 + skip, 201 + skip + limit)
+            ],
+            "total": 12,
+        }
+
+    monkeypatch.setattr(feed, "_get_post_comments", fake_post_comments)
+
+    first = feed.view_post_comments.invoke({"post_id": 10})
+    second = feed.scroll.invoke({})
+
+    assert [comment["id"] for comment in first["data"]["comments"]] == [201, 202, 203, 204, 205]
+    assert [comment["id"] for comment in second["data"]["comments"]] == [206, 207, 208, 209, 210]
+
+
+def test_scroll_continues_user_profile_posts(monkeypatch):
+    _disable_relation_expansion(monkeypatch)
+    utils._clear_scroll_cursor()
+    monkeypatch.setattr(social, "get_current_user_id", lambda: 99)
+    monkeypatch.setattr(feed, "get_current_user_id", lambda: 99)
+    monkeypatch.setattr(
+        social,
+        "_get_user",
+        lambda user_id, reason="", summary="": {"id": user_id, "username": "profile_user"},
+    )
+    monkeypatch.setattr(social, "_get_follow_status_text", lambda user_id, current_user_id: "")
+
+    def fake_user_posts(user_id, page=1, page_size=5):
+        posts = [
+            {
+                **_post_payload(),
+                "id": post_id,
+                "author_id": user_id,
+                "author_name": "profile_user",
+                "content": f"profile post {post_id}",
+            }
+            for post_id in range(1, page_size + 1)
+        ]
+        return {"data": posts, "pagination": {"total": 12}}
+
+    monkeypatch.setattr(social, "_get_user_posts", fake_user_posts)
+    monkeypatch.setattr(feed, "_get_user_posts", fake_user_posts)
+
+    profile = social.get_user_profile.invoke({"user_id": 1})
+    next_posts = feed.scroll.invoke({})
+
+    assert [post["id"] for post in profile["data"]["recent_posts"]] == [1, 2, 3, 4, 5]
+    assert [post["id"] for post in next_posts["data"]["data"]] == [6, 7, 8, 9, 10]
 
 
 def test_notification_prompt_marks_comment_id_as_create_comment_parent_id():

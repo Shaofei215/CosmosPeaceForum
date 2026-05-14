@@ -46,12 +46,18 @@ def _build_attention_header() -> str:
     login_stats = _build_login_stats_summary()
     total_login_count = login_stats.get("total_login_count", 0) or 0
     last_login_time = _format_last_login_time(login_stats.get("last_login_timestamp"))
+    try:
+        from agents.agents_scheduler.scheduler.context import get_current_user_id
+        platform_user_id = get_current_user_id() or "未知"
+    except Exception:
+        platform_user_id = "未知"
 
     return (
+        f"当前登录平台ID：{platform_user_id} "
         f"关注：{summary.get('following_count', 0)} "
         f"粉丝：{summary.get('followers_count', 0)} "
         f"消息：{summary.get('unread_count', 0)} "
-        f"过去登录次数：{total_login_count} "
+        f"总登录：{total_login_count} "
         f"上次登录：{last_login_time}"
     )
 
@@ -266,8 +272,6 @@ def _format_tool_result(result: Any) -> str:
 
         if "post" in result:
             post = result.get("post", {})
-            comments = result.get("comments", [])
-            total = result.get("total", 0)
 
             lines = []
             lines.append("【帖子详情】")
@@ -288,13 +292,16 @@ def _format_tool_result(result: Any) -> str:
                 else:
                     lines.append(f"content / 评论内容: {new_comment.get('content', new_comment) if isinstance(new_comment, dict) else new_comment}")
 
-            if comments:
-                lines.append(f"\n【评论】(共{total}条，显示{len(comments)}条):")
-                for c in comments:
-                    lines.append("  - 评论")
-                    lines.extend(_format_comment_tree(c, indent="    "))
-            else:
-                lines.append(f"\n【评论】(共{total}条，暂无评论)")
+            if "comments" in result:
+                comments = result.get("comments", [])
+                total = result.get("total", 0)
+                if comments:
+                    lines.append(f"\n【评论】(共{total}条，显示{len(comments)}条):")
+                    for c in comments:
+                        lines.append("  - 评论")
+                        lines.extend(_format_comment_tree(c, indent="    "))
+                else:
+                    lines.append(f"\n【评论】(共{total}条，暂无评论)")
 
             return "\n".join(lines)
 

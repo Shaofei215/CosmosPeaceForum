@@ -30,32 +30,28 @@ TOOL_TO_LOCATION = {
     "view_notification_origin": "帖子详情页",
     "get_global_feed": "主页（信息流）",
     "expand_post": "帖子详情页",
-    "expand_comments": "评论页",
+    "view_post_comments": "评论页",
+    "expand_comment": "评论页",
     "get_user_profile": "用户主页",
-    "get_post_detail": "帖子详情页",
-    "scroll_global_feed": "主页（信息流）",
-    "scroll_user_posts": "用户主页",
     "toggle_post_like": None,
     "toggle_comment_like": None,
     "toggle_follow": None,
     "create_comment": None,
     "repost": None,
     "create_post": None,
-    "get_profile": "主页（信息流）",
+    "scroll": None,
     "logout": None,
 }
 
 TOOLS_WITH_RETURN_VALUE = {
     "view_notifications",
     "view_notification_origin",
-    "get_profile",
     "get_user_profile",
     "get_global_feed",
     "expand_post",
-    "expand_comments",
-    "get_post_detail",
-    "scroll_global_feed",
-    "scroll_user_posts",
+    "view_post_comments",
+    "expand_comment",
+    "scroll",
 }
 
 TOOL_NO_RETURN_VALUE = {
@@ -152,6 +148,11 @@ def start_node(state: SessionState) -> SessionState:
     """
     username = state.get("username", "未知")
     logger.info("start_node | 用户=%s | 初始化会话状态", username)
+    try:
+        from agents.agents_scheduler.langgraph.tools.utils import _clear_scroll_cursor
+        _clear_scroll_cursor()
+    except Exception:
+        pass
 
     return {
         **state,
