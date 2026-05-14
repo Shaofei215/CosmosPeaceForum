@@ -20,6 +20,13 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class AgentAppLoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    app_platform_user_id: int
+    username: str
+
+
 class AdminUserResponse(BaseModel):
     id: int
     username: str

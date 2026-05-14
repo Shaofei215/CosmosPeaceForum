@@ -6,6 +6,7 @@ import { TopBar } from '@/widgets/top-bar';
 
 const AUTH_PATHS = [
   '/login',
+  '/management-login',
   '/register',
   '/profile-setup',
   '/forgot-password',

@@ -25,7 +25,7 @@ from agents.management.backend.models.agent_config import AgentConfig
 from agents.management.backend.schemas import (
     AgentCreate, AgentUpdate, AgentResponse, AgentListResponse,
     AgentRelationUpdate, DashboardStatsResponse, MessageResponse,
-    PromptInjectionRequest,
+    PromptInjectionRequest, AgentAppLoginResponse,
 )
 from agents.management.backend.services import agent_service
 from agents.management.backend.services.log_service import create_log
@@ -35,6 +35,10 @@ from agents.management.backend.services.registrar import (
     get_scheduler_status,
     notify_scheduler_reload,
     notify_scheduler_session_injection,
+    _get_api_base_url,
+    _get_ai_user_password,
+    _get_user_id,
+    _login_user,
 )
 
 logger = logging.getLogger(__name__)
@@ -329,6 +333,39 @@ def get_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent 不存在")
     return agent_service.agent_to_response(agent)
+
+
+@router.post("/{agent_id}/app-login", response_model=AgentAppLoginResponse)
+def login_agent_app_platform_account(
+    agent_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """为管理员生成指定 Agent 的 app_platform 登录令牌。"""
+    agent = agent_service.get_agent(db, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
+
+    if not agent.app_platform_user_id:
+        raise HTTPException(status_code=400, detail="Agent 尚未注册到 app_platform")
+
+    api_base_url = _get_api_base_url(db)
+    password = _get_ai_user_password(db)
+    token = _login_user(api_base_url, agent.username, password)
+    if not token:
+        raise HTTPException(status_code=502, detail="无法登录 app_platform")
+
+    platform_user_id = _get_user_id(api_base_url, token)
+    if platform_user_id != agent.app_platform_user_id:
+        raise HTTPException(status_code=502, detail="app_platform 账号映射不一致")
+
+    create_log(db, current_admin.id, "login_agent_app_platform", "agent", agent.id)
+
+    return AgentAppLoginResponse(
+        access_token=token,
+        app_platform_user_id=agent.app_platform_user_id,
+        username=agent.username,
+    )
 
 
 @router.put("/{agent_id}", response_model=AgentResponse)

@@ -9,6 +9,7 @@ import { RootLayout } from '@/widgets/layout';
 
 // 页面组件
 import LoginPage from '@/pages/auth/LoginPage';
+import ManagementLoginPage from '@/pages/auth/ManagementLoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import ProfileSetupPage from '@/pages/auth/ProfileSetupPage';
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
 
       // 认证路由
       { path: 'login', element: <LoginPage /> },
+      { path: 'management-login', element: <ManagementLoginPage /> },
       { path: 'register', element: <RegisterPage /> },
       { path: 'profile-setup', element: <ProfileSetupPage /> },
       { path: 'forgot-password', element: <ForgotPasswordPage /> },

@@ -10,6 +10,7 @@ import {
 } from '@/shared/components/ui';
 import {
   Plus, Search, Eye, Edit, Trash2, Upload, Loader2, Play, Square, FileText,
+  LogIn,
 } from 'lucide-react';
 import { ImportDialog } from '@/features/agents/components/ImportDialog';
 import { formatDate } from '@/shared/lib/format';
@@ -83,6 +84,8 @@ export default function AgentListPage() {
   const [promptInjectionIds, setPromptInjectionIds] = useState<number[] | null>(null);
   const [promptInjectionText, setPromptInjectionText] = useState('');
   const [promptInjectionError, setPromptInjectionError] = useState('');
+  const [appLoginAgentId, setAppLoginAgentId] = useState<number | null>(null);
+  const [appLoginError, setAppLoginError] = useState('');
   const [runtimeStatuses, setRuntimeStatuses] = useState<Map<number, AgentRuntimeStatus>>(
     new Map(),
   );
@@ -195,6 +198,26 @@ export default function AgentListPage() {
     },
   });
 
+  const appLoginMutation = useMutation({
+    mutationFn: (id: number) => agentApi.appLogin(id),
+    onSuccess: (result) => {
+      setAppLoginAgentId(null);
+      setAppLoginError('');
+
+      const loginUrl = new URL('/management-login', API_CONFIG.APP_PLATFORM_FRONTEND_URL);
+      const hashParams = new URLSearchParams({
+        token: result.access_token,
+        redirect: `/user/${result.app_platform_user_id}`,
+      });
+      loginUrl.hash = hashParams.toString();
+      window.location.href = loginUrl.toString();
+    },
+    onError: (err: unknown) => {
+      setAppLoginAgentId(null);
+      setAppLoginError(getErrorMessage(err, '登录 app_platform 失败，请稍后重试'));
+    },
+  });
+
   const filtered = data?.items.filter(
     (a) => a.name.toLowerCase().includes(search.toLowerCase()) ||
            a.username.toLowerCase().includes(search.toLowerCase())
@@ -233,6 +256,12 @@ export default function AgentListPage() {
 
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id);
+  };
+
+  const handleAppLogin = (id: number) => {
+    setAppLoginError('');
+    setAppLoginAgentId(id);
+    appLoginMutation.mutate(id);
   };
 
   const openPromptInjection = (ids: number[]) => {
@@ -314,6 +343,12 @@ export default function AgentListPage() {
       {!schedulerOnline && (
         <div className="mb-4 rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
           Scheduler 未连接，运行状态暂不可用。
+        </div>
+      )}
+
+      {appLoginError && (
+        <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {appLoginError}
         </div>
       )}
 
@@ -460,6 +495,20 @@ export default function AgentListPage() {
                               title="编辑"
                             >
                               <Edit size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleAppLogin(agent.id)}
+                              disabled={appLoginAgentId === agent.id}
+                              title="登录公开平台账号"
+                              className="text-blue-600 hover:text-blue-600"
+                            >
+                              {appLoginAgentId === agent.id ? (
+                                <Loader2 size={16} className="animate-spin" />
+                              ) : (
+                                <LogIn size={16} />
+                              )}
                             </Button>
                             {agent.is_active ? (
                               <Button
