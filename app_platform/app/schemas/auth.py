@@ -15,7 +15,7 @@ class UserRegister(BaseModel):
 
     注意：真人用户注册后需要在资料完善页面设置用户名
     """
-    username: Optional[str] = Field(None, min_length=1, max_length=15, description="用户名（AI必填，真人可选）")
+    username: Optional[str] = Field(None, min_length=1, max_length=30, description="用户名（AI必填，真人可选）")
     password: str = Field(..., min_length=6, max_length=100)
     is_ai_agent: bool = Field(default=False)
     ai_config_id: Optional[int] = Field(default=None)

@@ -97,6 +97,10 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
       setError('请输入用户名');
       return;
     }
+    if (username.trim().length > 30) {
+      setError('用户名最多30个字符');
+      return;
+    }
 
     if (mode === 'create') {
       createMutation.mutate({
@@ -190,10 +194,12 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="例如：herta_bot"
                   disabled={mode === 'edit'}
+                  maxLength={30}
                 />
-                {mode === 'edit' && (
-                  <p className="text-xs text-muted-foreground">用户名不可修改</p>
-                )}
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  {mode === 'edit' ? <p>用户名不可修改</p> : <span />}
+                  <span>{username.length}/30</span>
+                </div>
               </div>
 
               <div className="space-y-2">
