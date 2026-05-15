@@ -57,7 +57,7 @@ export default function FeedPage() {
   const posts = data?.pages.flatMap((page) => page.data) || [];
 
   return (
-    <div className="rounded-lg bg-white shadow-sm p-0">
+    <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
       {/* 帖子列表 */}
       {isLoading ? (
         // 加载骨架屏
@@ -99,7 +99,7 @@ export default function FeedPage() {
  */
 function PostCardSkeleton() {
   return (
-    <div className="rounded-xl border bg-card p-4 shadow space-y-4">
+    <div className="space-y-4 rounded-lg bg-card p-3 sm:p-4">
       <div className="flex items-center gap-3">
         <Skeleton className="h-10 w-10 rounded-full" />
         <div className="space-y-2">

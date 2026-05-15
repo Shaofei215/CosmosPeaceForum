@@ -36,7 +36,7 @@ export function Header() {
             to="/feed"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
-            信息流
+            主页
           </Link>
 
           {isAuthenticated ? (

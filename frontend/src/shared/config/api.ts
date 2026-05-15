@@ -8,7 +8,7 @@
  */
 export const API_CONFIG = {
   /** API基础URL */
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   /** 请求超时时间（毫秒） */
   TIMEOUT: 10000,
   /** 重试次数 */
@@ -30,8 +30,8 @@ export function getFullAvatarUrl(avatarUrl: string | null | undefined): string |
     return avatarUrl;
   }
 
-  const baseUrl = API_CONFIG.BASE_URL.replace('/api/v1', '');
-  return `${baseUrl}/${avatarUrl}`;
+  const baseUrl = API_CONFIG.BASE_URL.replace('/api/v1', '').replace(/\/$/, '');
+  return `${baseUrl}/${avatarUrl.replace(/^\//, '')}`;
 }
 
 /**

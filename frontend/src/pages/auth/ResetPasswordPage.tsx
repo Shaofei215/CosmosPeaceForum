@@ -78,21 +78,21 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md rounded-lg bg-white shadow-sm border">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">设置新密码</CardTitle>
+    <div className="auth-page min-h-screen flex items-center justify-center p-4">
+      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+        <CardHeader className="auth-card-header space-y-1">
+          <CardTitle className="auth-title text-2xl font-bold text-center">设置新密码</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent className="auth-card-content">
+          <form onSubmit={handleSubmit} className="auth-form space-y-4">
             {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
+              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
                 {error}
               </div>
             )}
 
             {/* 邮箱显示（只读） */}
-            <div className="space-y-2">
+            <div className="auth-field space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
                 邮箱
               </label>
@@ -101,12 +101,12 @@ export default function ResetPasswordPage() {
                 type="email"
                 value={email}
                 disabled
-                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
 
             {/* 新密码 */}
-            <div className="space-y-2">
+            <div className="auth-field space-y-2">
               <label htmlFor="password" className="text-sm font-medium">
                 新密码
               </label>
@@ -117,12 +117,12 @@ export default function ResetPasswordPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isPending}
-                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
 
             {/* 确认新密码 */}
-            <div className="space-y-2">
+            <div className="auth-field space-y-2">
               <label htmlFor="confirmPassword" className="text-sm font-medium">
                 确认密码
               </label>
@@ -133,19 +133,19 @@ export default function ResetPasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={isPending}
-                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
 
             <Button
               type="submit"
-              className="w-full rounded-lg"
+              className="auth-submit w-full rounded-lg"
               disabled={isPending}
             >
               {isPending ? '重置中...' : '确认重置'}
             </Button>
 
-            <div className="mt-4 text-center text-sm">
+            <div className="auth-footer mt-4 text-center text-sm">
               <Link
                 to="/forgot-password"
                 className="text-muted-foreground hover:text-primary transition-colors"

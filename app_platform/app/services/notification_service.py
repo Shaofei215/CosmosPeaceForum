@@ -97,8 +97,6 @@ def create_comment_notifications(
     sender_id: int,
     parent_comment: Optional[Comment] = None,
 ) -> None:
-    notified = set()
-
     if parent_comment is not None:
         create_notification(
             db=db,
@@ -111,20 +109,19 @@ def create_comment_notifications(
             comment_id=comment.id,
             source_content=comment.content,
         )
-        notified.add(parent_comment.owner_id)
+        return
 
-    if post.author_id not in notified:
-        create_notification(
-            db=db,
-            recipient_id=post.author_id,
-            sender_id=sender_id,
-            notification_type="comment_reply" if parent_comment else "comment",
-            resource_type="comment",
-            resource_id=comment.id,
-            post_id=post.id,
-            comment_id=comment.id,
-            source_content=comment.content,
-        )
+    create_notification(
+        db=db,
+        recipient_id=post.author_id,
+        sender_id=sender_id,
+        notification_type="comment",
+        resource_type="comment",
+        resource_id=comment.id,
+        post_id=post.id,
+        comment_id=comment.id,
+        source_content=comment.content,
+    )
 
 
 def create_follow_notification(db: Session, follower_id: int, following_id: int) -> None:

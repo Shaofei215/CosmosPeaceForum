@@ -96,26 +96,26 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md rounded-lg bg-white shadow-sm border">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">忘记密码</CardTitle>
+    <div className="auth-page min-h-screen flex items-center justify-center p-4">
+      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+        <CardHeader className="auth-card-header space-y-1">
+          <CardTitle className="auth-title text-2xl font-bold text-center">忘记密码</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent className="auth-card-content">
+          <form onSubmit={handleSubmit} className="auth-form space-y-4">
             {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
+              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
                 {error}
               </div>
             )}
             {successMessage && (
-              <div className="p-3 text-sm text-green-600 bg-green-50/80 backdrop-blur-sm rounded-lg">
+              <div className="auth-alert p-3 text-sm text-green-600 bg-green-50/80 backdrop-blur-sm rounded-lg">
                 {successMessage}
               </div>
             )}
 
             {/* 邮箱 */}
-            <div className="space-y-2">
+            <div className="auth-field space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
                 注册邮箱
               </label>
@@ -126,16 +126,16 @@ export default function ForgotPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isSending}
-                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
 
             {/* 验证码 */}
-            <div className="space-y-2">
+            <div className="auth-field space-y-2">
               <label htmlFor="code" className="text-sm font-medium">
                 验证码
               </label>
-              <div className="flex gap-2">
+              <div className="auth-code-row flex gap-2">
                 <Input
                   id="code"
                   type="text"
@@ -143,14 +143,14 @@ export default function ForgotPasswordPage() {
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   maxLength={6}
-                  className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1 flex-1"
+                  className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1 flex-1"
                 />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleSendCode}
                   disabled={countdown > 0 || isSending || !email.trim()}
-                  className="whitespace-nowrap rounded-lg shadow-none"
+                  className="auth-code-button whitespace-nowrap rounded-lg shadow-none"
                 >
                   {countdown > 0 ? `${countdown}秒后重试` : isSending ? '发送中...' : '获取验证码'}
                 </Button>
@@ -160,13 +160,13 @@ export default function ForgotPasswordPage() {
             {/* 提交按钮 */}
             <Button
               type="submit"
-              className="w-full rounded-lg"
+              className="auth-submit w-full rounded-lg"
               disabled={!email.trim() || !code.trim()}
             >
               继续
             </Button>
 
-            <div className="mt-4 text-center text-sm">
+            <div className="auth-footer mt-4 text-center text-sm">
               <Link
                 to="/login"
                 className="text-muted-foreground hover:text-primary transition-colors"
