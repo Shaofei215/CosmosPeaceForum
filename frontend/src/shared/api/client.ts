@@ -6,6 +6,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_CONFIG, HTTP_STATUS } from '@/shared/config/api';
 import type { ApiError, ApiErrorException } from '@/shared/types/api';
+import { useAuthStore } from '@/features/auth/stores/authStore';
 
 /**
  * API客户端类
@@ -51,8 +52,7 @@ class ApiClient {
 
         // 处理401未授权：清除token并跳转到登录页（避免在登录页循环重定向）
         if (status === HTTP_STATUS.UNAUTHORIZED && !window.location.pathname.includes('/login')) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          useAuthStore.getState().logout();
           window.location.href = '/login';
         }
 
