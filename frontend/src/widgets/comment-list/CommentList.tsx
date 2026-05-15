@@ -7,7 +7,11 @@ import { Link } from 'react-router-dom';
 import { Heart, MessageCircle, CornerDownRight, Repeat2 } from 'lucide-react';
 import type { Comment } from '@/features/comment';
 import { useToggleCommentLike, useCreateComment } from '@/features/comment';
-import { getInitialVisibleReplyCount, getNextVisibleReplyCount } from '@/features/comment/replyVisibility';
+import {
+  getInitialVisibleReplyCount,
+  getNextVisibleReplyCount,
+  getReplyCount,
+} from '@/features/comment/replyVisibility';
 import { useRepost } from '@/features/post';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Textarea } from '@/shared/components/ui';
@@ -56,19 +60,28 @@ interface CommentItemProps {
   postId: number;
   depth: number;
   parentOwner: { id: number; username: string } | null;
+  renderReplies?: boolean;
+  visibleReplyLimit?: number;
 }
 
 /**
  * 评论项组件
  * 展示单条评论及其所有回复（递归平级显示）
  */
-function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) {
+function CommentItem({
+  comment,
+  postId,
+  depth,
+  parentOwner,
+  renderReplies = true,
+  visibleReplyLimit,
+}: CommentItemProps) {
   const { user } = useAuthStore();
   const toggleCommentLike = useToggleCommentLike(postId, user?.id);
   const { mutate: createComment, isPending } = useCreateComment(postId);
   const repost = useRepost();
-  const totalReplies = comment.children?.length ?? 0;
-  const initialVisibleReplyCount = getInitialVisibleReplyCount(comment);
+  const totalReplies = renderReplies ? getReplyCount(comment) : 0;
+  const initialVisibleReplyCount = renderReplies ? getInitialVisibleReplyCount(comment) : 0;
 
   const [showReplies, setShowReplies] = useState(depth === 0 ? false : true);
   const [visibleReplyCount, setVisibleReplyCount] = useState(initialVisibleReplyCount);
@@ -80,14 +93,18 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
   const isTopLevel = depth === 0;
   const isSecondLevel = depth === 1;
   const hasReplies = totalReplies > 0;
-  const visibleReplies = comment.children.slice(0, visibleReplyCount);
-  const hasMoreRepliesToShow = visibleReplyCount < totalReplies;
+  const displayedReplyCount = visibleReplyLimit ?? visibleReplyCount;
+  const hasMoreRepliesToShow = visibleReplyLimit === undefined && visibleReplyCount < totalReplies;
 
   useEffect(() => {
+    if (visibleReplyLimit !== undefined) return;
+
     if (visibleReplyCount > totalReplies) {
       setVisibleReplyCount(totalReplies);
+    } else if (visibleReplyCount === 0 && totalReplies > 0) {
+      setVisibleReplyCount(getNextVisibleReplyCount(0, totalReplies));
     }
-  }, [totalReplies, visibleReplyCount]);
+  }, [totalReplies, visibleReplyCount, visibleReplyLimit]);
 
   /**
    * 处理点赞
@@ -207,7 +224,7 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
                 className="flex items-center gap-1 hover:text-primary transition-colors"
               >
                 <CornerDownRight className="h-3.5 w-3.5" />
-                {showReplies ? '收起回复' : `查看 ${comment.reply_count} 条回复`}
+                {showReplies ? '收起回复' : `查看 ${totalReplies} 条回复`}
               </button>
             )}
           </div>
@@ -297,15 +314,28 @@ function CommentItem({ comment, postId, depth, parentOwner }: CommentItemProps) 
       {/* 回复列表 - 递归平级显示 */}
       {showReplies && hasReplies && (
         <div className={`${isTopLevel ? 'ml-12' : 'ml-0'}`}>
-          {visibleReplies.map((child) => (
-            <CommentItem
-              key={child.id}
-              comment={child}
-              postId={postId}
-              depth={depth + 1}
-              parentOwner={{ id: comment.owner_id, username: comment.owner?.username || `用户${comment.owner_id}` }}
-            />
-          ))}
+          {(() => {
+            let remainingReplyCount = displayedReplyCount;
+
+            return comment.children.map((child) => {
+              if (remainingReplyCount <= 0) return null;
+
+              const childReplyCount = getReplyCount(child);
+              const childVisibleReplyLimit = Math.min(childReplyCount, remainingReplyCount - 1);
+              remainingReplyCount -= 1 + childVisibleReplyLimit;
+
+              return (
+                <CommentItem
+                  key={child.id}
+                  comment={child}
+                  postId={postId}
+                  depth={depth + 1}
+                  parentOwner={{ id: comment.owner_id, username: comment.owner?.username || `用户${comment.owner_id}` }}
+                  visibleReplyLimit={childVisibleReplyLimit}
+                />
+              );
+            });
+          })()}
           {hasMoreRepliesToShow && (
             <button
               type="button"

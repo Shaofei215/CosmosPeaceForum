@@ -26,6 +26,7 @@ import {
   containsComment,
   getInitialVisibleReplyCount,
   getNextVisibleReplyCount,
+  getReplyCount,
 } from '@/features/comment/replyVisibility';
 import { useToggleLike } from '@/features/like';
 import { useFollowStatus, useToggleFollow } from '@/features/follow';
@@ -609,6 +610,8 @@ interface CommentItemProps {
   depth: number;
   parentOwner: { id: number; username: string } | null;
   focusedCommentId?: number;
+  renderReplies?: boolean;
+  visibleReplyLimit?: number;
 }
 
 function CommentItem({
@@ -625,10 +628,12 @@ function CommentItem({
   depth,
   parentOwner,
   focusedCommentId,
+  renderReplies = true,
+  visibleReplyLimit,
 }: CommentItemProps) {
   const shouldShowFocusedReply = focusedCommentId ? containsComment(comment, focusedCommentId) : false;
-  const totalReplies = comment.children?.length ?? 0;
-  const initialVisibleReplyCount = getInitialVisibleReplyCount(comment, focusedCommentId);
+  const totalReplies = renderReplies ? getReplyCount(comment) : 0;
+  const initialVisibleReplyCount = renderReplies ? getInitialVisibleReplyCount(comment, focusedCommentId) : 0;
   const [showReplies, setShowReplies] = useState(depth === 0 ? shouldShowFocusedReply : true);
   const [visibleReplyCount, setVisibleReplyCount] = useState(initialVisibleReplyCount);
   const toggleCommentLike = useToggleCommentLike(postId, currentUserId, commentSort);
@@ -643,8 +648,8 @@ function CommentItem({
   const isSecondLevel = depth === 1;
   const isCurrentUserComment = currentUserId === comment.owner_id;
   const hasReplies = totalReplies > 0;
-  const visibleReplies = comment.children.slice(0, visibleReplyCount);
-  const hasMoreRepliesToShow = visibleReplyCount < totalReplies;
+  const displayedReplyCount = visibleReplyLimit ?? visibleReplyCount;
+  const hasMoreRepliesToShow = visibleReplyLimit === undefined && visibleReplyCount < totalReplies;
 
   const handleDeleteComment = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -664,10 +669,14 @@ function CommentItem({
   }, [focusedCommentId, initialVisibleReplyCount, shouldShowFocusedReply]);
 
   useEffect(() => {
+    if (visibleReplyLimit !== undefined) return;
+
     if (visibleReplyCount > totalReplies) {
       setVisibleReplyCount(totalReplies);
+    } else if (visibleReplyCount === 0 && totalReplies > 0) {
+      setVisibleReplyCount(getNextVisibleReplyCount(0, totalReplies));
     }
-  }, [totalReplies, visibleReplyCount]);
+  }, [totalReplies, visibleReplyCount, visibleReplyLimit]);
 
   useEffect(() => {
     if (focusedCommentId === comment.id && itemRef.current) {
@@ -798,10 +807,10 @@ function CommentItem({
               >
                 <CornerDownRight className="h-3 w-3" />
                 <span className="reply-toggle-full">
-                  {showReplies ? '收起回复' : `查看 ${comment.reply_count} 条回复`}
+                  {showReplies ? '收起回复' : `查看 ${totalReplies} 条回复`}
                 </span>
                 <span className="reply-toggle-short">
-                  {showReplies ? '收起' : `${comment.reply_count}回复`}
+                  {showReplies ? '收起' : `${totalReplies}回复`}
                 </span>
               </button>
             )}
@@ -870,24 +879,37 @@ function CommentItem({
 
       {showReplies && hasReplies && (
         <div className={isTopLevel ? 'pl-8' : 'pl-0'}>
-          {visibleReplies.map((child) => (
-            <CommentItem
-              key={child.id}
-              comment={child}
-              postId={postId}
-              isAuthenticated={isAuthenticated}
-              currentUserId={currentUserId}
-              commentSort={commentSort}
-              user={user}
-              replyingTo={replyingTo}
-              onReply={onReply}
-              onCancelReply={onCancelReply}
-              onReplySuccess={onReplySuccess}
-              depth={depth + 1}
-              parentOwner={{ id: comment.owner_id, username: comment.owner?.username || `用户${comment.owner_id}` }}
-              focusedCommentId={focusedCommentId}
-            />
-          ))}
+          {(() => {
+            let remainingReplyCount = displayedReplyCount;
+
+            return comment.children.map((child) => {
+              if (remainingReplyCount <= 0) return null;
+
+              const childReplyCount = getReplyCount(child);
+              const childVisibleReplyLimit = Math.min(childReplyCount, remainingReplyCount - 1);
+              remainingReplyCount -= 1 + childVisibleReplyLimit;
+
+              return (
+                <CommentItem
+                  key={child.id}
+                  comment={child}
+                  postId={postId}
+                  isAuthenticated={isAuthenticated}
+                  currentUserId={currentUserId}
+                  commentSort={commentSort}
+                  user={user}
+                  replyingTo={replyingTo}
+                  onReply={onReply}
+                  onCancelReply={onCancelReply}
+                  onReplySuccess={onReplySuccess}
+                  depth={depth + 1}
+                  parentOwner={{ id: comment.owner_id, username: comment.owner?.username || `用户${comment.owner_id}` }}
+                  focusedCommentId={focusedCommentId}
+                  visibleReplyLimit={childVisibleReplyLimit}
+                />
+              );
+            });
+          })()}
           {hasMoreRepliesToShow && (
             <button
               type="button"
