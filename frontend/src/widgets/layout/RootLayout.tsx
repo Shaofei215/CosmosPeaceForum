@@ -33,9 +33,14 @@ export function RootLayout() {
       className={cn('min-h-screen bg-background/80', isMobileDevice && 'mobile-device')}
       data-mobile-device={isMobileDevice ? 'true' : undefined}
     >
-      <main className="relative z-10 container mx-auto px-2 pb-24 pt-2 sm:px-4 sm:pt-3 lg:pb-3">
+      <main
+        className={cn(
+          'relative z-10 container mx-auto px-2 pt-2 sm:px-4 sm:pt-3',
+          showTopAndRight ? 'pb-24 lg:pb-3' : 'pb-2 sm:pb-3'
+        )}
+      >
         {showTopAndRight && (
-          <div className="h-[4.25rem] sm:h-20">
+          <div className="mobile-top-spacer h-[4.25rem] sm:h-20">
             <div className="fixed left-1/2 top-2 z-40 w-[calc(100%-1rem)] max-w-2xl -translate-x-1/2 sm:top-3 sm:w-[calc(100%-2rem)]">
               <TopBar />
             </div>

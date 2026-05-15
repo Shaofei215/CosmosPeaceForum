@@ -116,15 +116,20 @@ export default function ProfileSetupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md rounded-lg bg-white shadow-sm border">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">完善个人资料</CardTitle>
+    <div className="auth-page min-h-screen flex items-center justify-center p-4">
+      <div className="auth-mobile-hero">
+        <p className="auth-mobile-brand">Imaginary Tree</p>
+        <h1>完善资料</h1>
+        <p>设置头像、名字和一句短短的自我介绍。</p>
+      </div>
+      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+        <CardHeader className="auth-card-header space-y-1">
+          <CardTitle className="auth-title text-2xl font-bold text-center">完善个人资料</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <CardContent className="auth-card-content">
+          <form onSubmit={handleSubmit} className="auth-form space-y-6">
             {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
+              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
                 {error}
               </div>
             )}
@@ -141,7 +146,7 @@ export default function ProfileSetupPage() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="auth-field space-y-2">
               <div className="flex items-center justify-between">
                 <label htmlFor="username" className="text-sm font-medium">
                   用户名 <span className="text-destructive">*</span>
@@ -157,12 +162,12 @@ export default function ProfileSetupPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isPending}
-                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
                 maxLength={30}
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="auth-field space-y-2">
               <div className="flex items-center justify-between">
                 <label htmlFor="bio" className="text-sm font-medium">
                   个人签名
@@ -178,14 +183,14 @@ export default function ProfileSetupPage() {
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 disabled={isPending}
-                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
                 maxLength={20}
               />
             </div>
 
             <Button
               type="submit"
-              className="w-full rounded-lg"
+              className="auth-submit w-full rounded-lg"
               disabled={isPending}
             >
               {isCompleting ? '保存中...' : '完成设置'}

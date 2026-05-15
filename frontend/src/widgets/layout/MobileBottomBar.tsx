@@ -58,7 +58,7 @@ export function MobileBottomBar() {
         </>
       )}
 
-      <nav className="mobile-bottom-nav fixed inset-x-2 bottom-2 z-50 rounded-[2rem] border border-white/60 bg-white/90 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-lg backdrop-blur-xl">
+      <nav className="mobile-bottom-nav fixed inset-x-2 bottom-2 z-50 rounded-[2rem] border border-white/40 bg-white/45 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-white/35">
         <div className="grid grid-cols-4 items-center gap-1">
           <MobileNavLink
             to="/feed"

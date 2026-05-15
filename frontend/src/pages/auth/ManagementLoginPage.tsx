@@ -42,9 +42,14 @@ export default function ManagementLoginPage() {
   }, [logout, navigate, setAuth]);
 
   return (
-    <div className="min-h-[60vh] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md rounded-lg bg-white shadow-sm border">
-        <CardContent className="p-6 text-center text-sm text-muted-foreground">
+    <div className="auth-page min-h-[60vh] flex items-center justify-center p-4">
+      <div className="auth-mobile-hero">
+        <p className="auth-mobile-brand">Imaginary Tree</p>
+        <h1>角色登录</h1>
+        <p>正在接入管理端授权。</p>
+      </div>
+      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+        <CardContent className="auth-card-content p-6 text-center text-sm text-muted-foreground">
           {error || '正在登录角色账号...'}
         </CardContent>
       </Card>

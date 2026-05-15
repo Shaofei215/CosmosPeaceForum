@@ -170,7 +170,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           >
             {authorName}
           </Link>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <div className="post-meta-row mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
             {authorBio ? (
               <p className="max-w-[9rem] truncate text-xs text-muted-foreground sm:max-w-[50%]">
                 {authorBio}
@@ -275,7 +275,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         )}
       </div>
 
-      <div className="mt-4 flex items-center gap-4 sm:gap-6">
+      <div className="post-action-row mt-4 flex items-center gap-4 sm:gap-6">
         <button
           className={`flex items-center gap-1.5 text-sm transition-colors ${
             isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
@@ -708,8 +708,10 @@ function CommentItem({
           )}
           <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/85">{comment.content}</p>
 
-          <div className="ml-1 mt-1 flex items-center gap-4">
-            <span className="text-xs text-muted-foreground">{formatDate(comment.created_at)}</span>
+          <div className="comment-action-row ml-1 mt-1 flex items-center gap-4">
+            <span className="comment-action-label text-xs text-muted-foreground">
+              {formatDate(comment.created_at)}
+            </span>
             <button
               onClick={(event) => {
                 event.preventDefault();
@@ -717,7 +719,7 @@ function CommentItem({
                 toggleCommentLike.mutate({ commentId: comment.id });
               }}
               disabled={toggleCommentLike.isPending}
-              className={`flex items-center gap-1 text-xs transition-colors ${
+              className={`comment-icon-action flex items-center gap-1 text-xs transition-colors ${
                 comment.is_liked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
               }`}
             >
@@ -731,7 +733,7 @@ function CommentItem({
                   event.stopPropagation();
                   onReply(comment.id, comment.owner?.username || `用户${comment.owner_id}`);
                 }}
-                className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+                className="comment-icon-action flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
               >
                 <MessageCircle className="h-3 w-3" />
               </button>
@@ -743,15 +745,17 @@ function CommentItem({
                   event.stopPropagation();
                   setIsRepostOpen((value) => !value);
                 }}
-                className={`flex items-center gap-1 text-xs transition-colors ${
+                className={`comment-icon-action flex items-center gap-1 text-xs transition-colors ${
                   isRepostOpen ? 'text-primary' : 'text-muted-foreground hover:text-primary'
                 }`}
               >
                 <Repeat2 className="h-3 w-3" />
               </button>
             )}
-            {comment.owner?.is_ai_agent && <span className="text-xs text-muted-foreground">AI生成</span>}
-            <div className="relative order-2 ml-auto">
+            {comment.owner?.is_ai_agent && (
+              <span className="comment-ai-label text-xs text-muted-foreground">AI生成</span>
+            )}
+            <div className="comment-more-menu relative order-2 ml-auto">
               <button
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${
                   isMoreOpen ? 'bg-muted text-foreground' : ''
@@ -790,10 +794,15 @@ function CommentItem({
                   event.stopPropagation();
                   setShowReplies(!showReplies);
                 }}
-                className="order-1 flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+                className="comment-reply-toggle order-1 flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
               >
                 <CornerDownRight className="h-3 w-3" />
-                {showReplies ? '收起回复' : `查看 ${comment.reply_count} 条回复`}
+                <span className="reply-toggle-full">
+                  {showReplies ? '收起回复' : `查看 ${comment.reply_count} 条回复`}
+                </span>
+                <span className="reply-toggle-short">
+                  {showReplies ? '收起' : `${comment.reply_count}回复`}
+                </span>
               </button>
             )}
           </div>

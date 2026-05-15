@@ -154,29 +154,34 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md rounded-lg bg-white shadow-sm border">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">登录</CardTitle>
+    <div className="auth-page min-h-screen flex items-center justify-center p-4">
+      <div className="auth-mobile-hero">
+        <p className="auth-mobile-brand">Imaginary Tree</p>
+        <h1>登录</h1>
+        <p>回到你的时间线，继续和大家一起生长。</p>
+      </div>
+      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+        <CardHeader className="auth-card-header space-y-1">
+          <CardTitle className="auth-title text-2xl font-bold text-center">登录</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent className="auth-card-content">
+          <form onSubmit={handleSubmit} className="auth-form space-y-4">
             {/* 错误提示 */}
             {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
+              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
                 {error}
               </div>
             )}
 
             {/* 成功提示 */}
             {successMessage && (
-              <div className="p-3 text-sm text-green-600 bg-green-50/80 backdrop-blur-sm rounded-lg">
+              <div className="auth-alert p-3 text-sm text-green-600 bg-green-50/80 backdrop-blur-sm rounded-lg">
                 {successMessage}
               </div>
             )}
 
             {/* 邮箱输入 */}
-            <div className="space-y-2">
+            <div className="auth-field space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
                 邮箱
               </label>
@@ -187,12 +192,12 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isPending}
-                className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
 
             {/* 登录方式切换 */}
-            <div className="flex gap-2 p-1 bg-muted/50 rounded-lg">
+            <div className="auth-segmented flex gap-2 p-1 bg-muted/50 rounded-lg">
               <button
                 type="button"
                 onClick={() => setLoginMethod('password')}
@@ -219,7 +224,7 @@ export default function LoginPage() {
 
             {/* 密码输入 */}
             {loginMethod === 'password' && (
-              <div className="space-y-2">
+              <div className="auth-field space-y-2">
                 <label htmlFor="password" className="text-sm font-medium">
                   密码
                 </label>
@@ -230,18 +235,18 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isPending}
-                  className="bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                  className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
                 />
               </div>
             )}
 
             {/* 验证码输入 */}
             {loginMethod === 'code' && (
-              <div className="space-y-2">
+              <div className="auth-field space-y-2">
                 <label htmlFor="code" className="text-sm font-medium">
                   验证码
                 </label>
-                <div className="flex gap-2">
+                <div className="auth-code-row flex gap-2">
                   <Input
                     id="code"
                     type="text"
@@ -249,7 +254,7 @@ export default function LoginPage() {
                     value={code}
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     disabled={isPending}
-                    className="flex-1 bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                    className="auth-input flex-1 bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
                     maxLength={6}
                   />
                   <Button
@@ -257,7 +262,7 @@ export default function LoginPage() {
                     variant="outline"
                     onClick={handleSendCode}
                     disabled={isPending || countdown > 0 || !email.trim()}
-                    className="whitespace-nowrap"
+                    className="auth-code-button whitespace-nowrap"
                   >
                     {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
                   </Button>
@@ -278,7 +283,7 @@ export default function LoginPage() {
             {/* 登录按钮 */}
             <Button
               type="submit"
-              className="w-full rounded-lg"
+              className="auth-submit w-full rounded-lg"
               disabled={isPending}
             >
               {isLoginPending ? '登录中...' : '登录'}
@@ -286,7 +291,7 @@ export default function LoginPage() {
           </form>
 
           {/* 注册链接 */}
-          <div className="mt-4 text-center text-sm">
+          <div className="auth-footer mt-4 text-center text-sm">
             还没有账号？{' '}
             <Link to="/register" className="text-primary hover:underline">
               立即注册
