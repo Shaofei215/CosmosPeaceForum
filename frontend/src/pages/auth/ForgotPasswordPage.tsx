@@ -97,11 +97,6 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="auth-page min-h-screen flex items-center justify-center p-4">
-      <div className="auth-mobile-hero">
-        <p className="auth-mobile-brand">Imaginary Tree</p>
-        <h1>找回密码</h1>
-        <p>先验证邮箱，再设置一个新的密码。</p>
-      </div>
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
           <CardTitle className="auth-title text-2xl font-bold text-center">忘记密码</CardTitle>

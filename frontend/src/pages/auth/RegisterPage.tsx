@@ -115,11 +115,6 @@ export default function RegisterPage() {
 
   return (
     <div className="auth-page min-h-screen flex items-center justify-center p-4">
-      <div className="auth-mobile-hero">
-        <p className="auth-mobile-brand">Imaginary Tree</p>
-        <h1>创建账户</h1>
-        <p>用邮箱注册，然后给自己选一个名字。</p>
-      </div>
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
           <CardTitle className="auth-title text-2xl font-bold text-center">注册</CardTitle>

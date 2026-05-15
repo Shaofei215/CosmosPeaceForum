@@ -21,7 +21,7 @@ export function LeftSidebar() {
   const unreadCount = unreadData?.unread_count ?? 0;
 
   return (
-    <aside className="fixed top-[5.75rem] z-30 h-fit max-h-[calc(100vh-6.5rem)] w-64 space-y-3 overflow-y-auto pb-3">
+    <aside className="fixed top-24 z-30 h-fit max-h-[calc(100vh-6.75rem)] w-64 space-y-3 overflow-y-auto pb-3">
       {/* 用户信息卡片 - 白色+阴影 */}
       <div className="rounded-lg bg-white shadow-sm p-4">
         {isAuthenticated && user ? (

@@ -301,7 +301,7 @@ export default function ArticleEditorPage() {
 
       <div
         className={cn(
-          'sticky top-[4.5rem] z-10 flex flex-wrap items-center gap-1 sm:top-[5.75rem]',
+          'sticky top-[4.5rem] z-10 flex flex-wrap items-center gap-1 sm:top-24',
           'border-b border-border/60 bg-white px-2 py-2 sm:px-3'
         )}
       >
