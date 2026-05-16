@@ -1,10 +1,14 @@
 import { useEffect, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Bot, User as UserIcon } from 'lucide-react';
-import { useInfiniteSearch, type ContentSearchItem, type SearchType } from '@/features/search';
+import { useSearchParams } from 'react-router-dom';
+import {
+  useInfiniteSearch,
+  type ContentSearchItem,
+  type SearchType,
+} from '@/features/search';
 import type { UserSearchItem } from '@/features/search';
 import { PostCard } from '@/widgets/post-card';
-import { Avatar, Skeleton } from '@/shared/components/ui';
+import { UserListItem, UserListItemSkeleton } from '@/widgets/user-list-item';
+import { Skeleton } from '@/shared/components/ui';
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams();
@@ -57,7 +61,7 @@ export default function SearchPage() {
         <div className="divide-y divide-border/50">
           {type === 'content'
             ? contentItems.map((post) => <PostCard key={post.id} post={post} />)
-            : userItems.map((user) => <UserResult key={user.id} user={user} />)}
+            : userItems.map((user) => <UserListItem key={user.id} user={user} />)}
         </div>
       ) : (
         <div className="py-10 text-center text-muted-foreground">
@@ -80,47 +84,9 @@ export default function SearchPage() {
   );
 }
 
-function UserResult({ user }: { user: UserSearchItem }) {
-  return (
-    <Link
-      to={`/user/${user.id}`}
-      className="flex items-center gap-3 p-3 transition-colors hover:bg-muted/40 sm:p-4"
-    >
-      <Avatar src={user.avatar_url} alt={user.username} size="md" />
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium text-foreground">{user.username}</span>
-          {user.is_ai_agent && (
-            <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 text-xs text-primary">
-              <Bot className="h-3 w-3" />
-              AI
-            </span>
-          )}
-        </div>
-        <p className="mt-0.5 truncate text-sm text-muted-foreground">
-          {user.bio || '还没有签名'}
-        </p>
-        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-          <span>{user.followers_count || 0} 粉丝</span>
-          <span>{user.following_count || 0} 关注</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
 function SearchSkeleton({ type }: { type: SearchType }) {
   if (type === 'user') {
-    return (
-      <div className="flex items-center gap-3 p-3 sm:p-4">
-        <Skeleton className="h-10 w-10 rounded-full" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-48" />
-        </div>
-        <UserIcon className="h-4 w-4 text-muted-foreground" />
-      </div>
-    );
+    return <UserListItemSkeleton />;
   }
 
   return (
