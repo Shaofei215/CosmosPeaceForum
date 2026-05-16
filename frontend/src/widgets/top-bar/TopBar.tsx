@@ -1,6 +1,7 @@
 /**
  * 顶部栏组件
  * 根据当前页面显示不同内容：
+ * - 左侧 Logo：点击回到主页并刷新
  * - 信息流页面：显示搜索框 + 推荐/最新/关注切换按钮
  * - 其他页面：显示搜索框 + 返回按钮
  * 固定在视口顶部
@@ -76,6 +77,10 @@ export function TopBar() {
     navigate(-1);
   };
 
+  const handleLogoClick = () => {
+    window.location.assign('/feed');
+  };
+
   const navigateToSearch = (nextType: SearchType = urlSearchType) => {
     const query = searchQuery.trim();
     if (!query) return;
@@ -102,6 +107,15 @@ export function TopBar() {
       )}
     >
       <div className="flex items-center gap-2 sm:gap-4">
+        <button
+          type="button"
+          onClick={handleLogoClick}
+          aria-label="回到主页并刷新"
+          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[1.5rem] transition-opacity hover:opacity-85 sm:h-10 sm:w-10"
+        >
+          <img src="/logo.png" alt="Imaginary Tree" className="h-full w-full object-contain" />
+        </button>
+
         {/* 搜索框 */}
         <form
           className="relative min-w-0 flex-1"
