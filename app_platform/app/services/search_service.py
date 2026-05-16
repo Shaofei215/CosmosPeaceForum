@@ -1,6 +1,6 @@
 # 平台搜索业务逻辑
 import logging
-from typing import List, Literal
+from typing import Dict, List, Literal
 
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session, joinedload
@@ -17,6 +17,10 @@ from app_platform.app.services.search_index import get_content_index, get_user_i
 logger = logging.getLogger(__name__)
 SearchType = Literal["content", "user"]
 MAX_INDEX_RESULTS = 500
+TITLE_CONTAINS_BOOST = 0.20
+TITLE_EXACT_BOOST = 0.35
+CONTENT_CONTAINS_BOOST = 0.05
+MAX_HEAT_BOOST = 0.10
 
 
 def _calculate_pagination(page: int, page_size: int, total: int) -> PaginationInfo:
@@ -77,6 +81,53 @@ def delete_user(user_id: int) -> None:
         logger.warning("删除用户搜索索引失败: user_id=%s error=%s", user_id, exc)
 
 
+def _normalize_query_text(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def _rank_content_search_posts(
+    posts: List[Post],
+    hit_score_map: Dict[int, float],
+    query: str,
+) -> List[Post]:
+    if not posts:
+        return []
+
+    normalized_query = _normalize_query_text(query)
+    max_bm25_score = max((score for score in hit_score_map.values() if score > 0), default=0)
+    max_heat_score = max((post.heat_score or 0 for post in posts), default=0)
+    hit_rank_map = {post_id: index for index, post_id in enumerate(hit_score_map.keys())}
+
+    def final_score(post: Post) -> tuple[float, float, float, int]:
+        bm25_score = hit_score_map.get(post.id, 0.0)
+        bm25_boost = bm25_score / max_bm25_score if max_bm25_score > 0 else 0.0
+
+        title = _normalize_query_text(post.title)
+        content = _normalize_query_text(post.content)
+        title_contains_boost = (
+            TITLE_CONTAINS_BOOST if normalized_query and normalized_query in title else 0.0
+        )
+        title_exact_boost = (
+            TITLE_EXACT_BOOST if normalized_query and title == normalized_query else 0.0
+        )
+        content_contains_boost = (
+            CONTENT_CONTAINS_BOOST if normalized_query and normalized_query in content else 0.0
+        )
+
+        heat_score = post.heat_score or 0.0
+        heat_boost = (heat_score / max_heat_score * MAX_HEAT_BOOST) if max_heat_score > 0 else 0.0
+        score = (
+            bm25_boost
+            + title_contains_boost
+            + title_exact_boost
+            + content_contains_boost
+            + heat_boost
+        )
+        return (score, bm25_boost, heat_score, -hit_rank_map.get(post.id, MAX_INDEX_RESULTS))
+
+    return sorted(posts, key=final_score, reverse=True)
+
+
 def search_content(
     db: Session,
     query: str,
@@ -95,24 +146,26 @@ def search_content(
 
     ensure_search_indexes(db)
     hits = get_content_index().search(query, limit=MAX_INDEX_RESULTS)
-    post_ids = [hit.id for hit in hits]
-    total = len(post_ids)
-    page_ids = post_ids[(page - 1) * page_size: page * page_size]
+    hit_score_map = {hit.id: hit.score for hit in hits}
+    post_ids = list(hit_score_map.keys())
 
-    if not page_ids:
+    if not post_ids:
         return APIResponse(
             code=200,
             message="success",
             data=[],
-            pagination=_calculate_pagination(page, page_size, total),
+            pagination=_calculate_pagination(page, page_size, 0),
         )
 
-    order_case = case({post_id: index for index, post_id in enumerate(page_ids)}, value=Post.id)
-    posts = db.query(Post).filter(Post.id.in_(page_ids)).options(
+    posts = db.query(Post).filter(Post.id.in_(post_ids)).options(
         joinedload(Post.author),
         joinedload(Post.repost_root_post).joinedload(Post.author),
-    ).order_by(order_case).all()
-    feed_items = feed_service._build_feed_items(db, posts, current_user_id)
+    ).all()
+    ranked_posts = _rank_content_search_posts(posts, hit_score_map, query)
+
+    total = len(ranked_posts)
+    page_posts = ranked_posts[(page - 1) * page_size: page * page_size]
+    feed_items = feed_service._build_feed_items(db, page_posts, current_user_id)
 
     return APIResponse(
         code=200,
