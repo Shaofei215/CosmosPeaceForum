@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { followApi } from './api';
 import type { FollowStatusResponse } from './types';
+import { useAuthStore } from '@/features/auth/stores/authStore';
 
 export const useToggleFollow = () => {
   const queryClient = useQueryClient();
@@ -58,10 +59,12 @@ export const useToggleFollow = () => {
 };
 
 export const useFollowStatus = (userId: number) => {
+  const { isAuthenticated } = useAuthStore();
+
   return useQuery({
     queryKey: ['followStatus', userId],
     queryFn: () => followApi.getFollowStatus(userId),
-    enabled: !!userId,
+    enabled: isAuthenticated && !!userId,
   });
 };
 
