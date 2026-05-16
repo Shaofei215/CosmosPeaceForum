@@ -746,6 +746,23 @@ def _get_global_feed(
     )
 
 
+def _search_platform(
+    search_type: str,
+    query: str,
+    page: int = 1,
+    page_size: int = 5,
+) -> Dict[str, Any]:
+    """
+    搜索平台内容或用户（内部函数）
+    """
+    return _make_request(
+        method="GET",
+        endpoint="/search",
+        params={"type": search_type, "q": query, "page": page, "page_size": page_size},
+        reason="内部调用：搜索平台"
+    )
+
+
 def _get_notification_summary() -> Dict[str, Any]:
     """获取关注、粉丝、未读消息数量；失败时返回空计数，避免阻断 prompt 构建。"""
     if not get_current_token():
@@ -804,6 +821,7 @@ def get_social_tools(relation_map=None) -> List:
 
     if _social_tools is None:
         from agents.agents_scheduler.langgraph.tools.social import (
+            search_platform,
             view_notifications,
             view_notification_origin,
             toggle_post_like,
@@ -825,6 +843,7 @@ def get_social_tools(relation_map=None) -> List:
         )
 
         _social_tools = [
+            search_platform,
             view_notifications,
             view_notification_origin,
             toggle_post_like,

@@ -7,8 +7,10 @@ from sqlalchemy import or_
 from typing import List
 
 from app_platform.app.api.deps import get_db, get_current_user
+from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
 from app_platform.app.schemas.user import UserResponse, UserUpdate, CompleteProfileRequest
+from app_platform.app.services import search_service
 
 router = APIRouter()
 
@@ -111,6 +113,7 @@ def update_user(
 
     db.commit()
     db.refresh(user)
+    search_service.index_user(user)
     return user
 
 
@@ -216,6 +219,10 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
+    post_ids = [row[0] for row in db.query(Post.id).filter(Post.author_id == user_id).all()]
     db.delete(user)
     db.commit()
+    search_service.delete_user(user_id)
+    for post_id in post_ids:
+        search_service.delete_post(post_id)
     return {"message": "用户删除成功"}

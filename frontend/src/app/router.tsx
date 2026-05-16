@@ -21,6 +21,7 @@ import FollowingListPage from '@/pages/profile/FollowingListPage';
 import FollowersListPage from '@/pages/profile/FollowersListPage';
 import NotificationsPage from '@/pages/notification/NotificationsPage';
 import ArticleEditorPage from '@/pages/article/ArticleEditorPage';
+import SearchPage from '@/pages/search/SearchPage';
 
 /**
  * 应用路由配置
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
       { path: 'user/:userId', element: <ProfilePage /> },
       { path: 'user/:userId/following', element: <FollowingListPage /> },
       { path: 'user/:userId/followers', element: <FollowersListPage /> },
+      { path: 'search', element: <SearchPage /> },
 
       // 认证路由
       { path: 'login', element: <LoginPage /> },

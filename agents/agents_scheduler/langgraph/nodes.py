@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 TOOL_TO_LOCATION = {
     "view_notifications": "消息页",
     "view_notification_origin": "帖子详情页",
+    "search_platform": "搜索结果页",
     "get_global_feed": "主页（信息流）",
     "expand_post": "帖子详情页",
     "view_post_comments": "评论页",
@@ -46,6 +47,7 @@ TOOL_TO_LOCATION = {
 TOOLS_WITH_RETURN_VALUE = {
     "view_notifications",
     "view_notification_origin",
+    "search_platform",
     "get_user_profile",
     "get_global_feed",
     "expand_post",

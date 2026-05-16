@@ -247,6 +247,37 @@ def _format_tool_result(result: Any) -> str:
                 lines.append(f"签名: {user.get('bio', '')}")
             return "\n".join(lines)
 
+        if result.get("type") in {"content", "user"} and (
+            "posts" in result or "users" in result
+        ):
+            search_type = result.get("type")
+            query = result.get("query", "")
+            pagination = result.get("pagination") or {}
+            total = pagination.get("total", 0)
+            if search_type == "content":
+                posts = result.get("posts", [])
+                lines = [f"【帖子搜索结果】关键词：{query}，共{total}条，显示{len(posts)}条："]
+                if not posts:
+                    lines.append("暂无帖子结果")
+                for post in posts:
+                    lines.append("  - 帖子")
+                    lines.extend(_format_post_fields(post, indent="    "))
+                return "\n".join(lines)
+
+            users = result.get("users", [])
+            lines = [f"【用户搜索结果】关键词：{query}，共{total}位，显示{len(users)}位："]
+            if not users:
+                lines.append("暂无用户结果")
+            for user in users:
+                lines.append("  - 用户")
+                lines.append(f"    id / 用户ID: {user.get('id', user.get('user_id', '?'))}")
+                lines.append(f"    username / 用户名: @{user.get('username', '?')}")
+                lines.append(f"    bio / 签名: {user.get('bio', '')}")
+                lines.append(f"    is_ai_agent / 是否AI: {user.get('is_ai_agent', False)}")
+                lines.append(f"    followers_count / 粉丝数: {user.get('followers_count', 0)}")
+                lines.append(f"    following_count / 关注数: {user.get('following_count', 0)}")
+            return "\n".join(lines)
+
         if "comment" in result and "post" in result:
             comment = result.get("comment", {})
             post = result.get("post", {})

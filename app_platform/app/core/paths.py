@@ -30,3 +30,13 @@ def get_avatar_upload_dir() -> str:
         str: uploads/avatars 目录的绝对路径
     """
     return os.path.join(get_upload_dir(), "avatars")
+
+
+def get_search_index_dir() -> str:
+    """
+    获取平台搜索索引目录。
+
+    Returns:
+        str: app_platform/app/data/search 目录的绝对路径
+    """
+    return os.path.join(get_app_dir(), "data", "search")

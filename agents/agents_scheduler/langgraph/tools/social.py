@@ -9,7 +9,7 @@ from agents.agents_scheduler.scheduler.context import get_current_user_id
 from agents.agents_scheduler.langgraph.tools.types import ToolResult, UnauthorizedError, NotFoundError, ValidationError, ToolExecutionError
 from agents.agents_scheduler.langgraph.tools.utils import (
     _make_request, _get_user, _get_post, _get_comment, _get_user_posts, _get_follow_status_text,
-    _get_notifications, _get_notification,
+    _get_notifications, _get_notification, _search_platform,
     _standardize_post, _standardize_posts_list, _standardize_comment,
     _standardize_notification, _standardize_notifications_list, _truncate,
     _set_scroll_cursor
@@ -131,6 +131,86 @@ def view_notification_origin(
         return ToolResult(action=f"查看了来源用户 @{username} 的主页", data=result)
 
     raise ValidationError("这条消息没有可查看的原内容")
+
+
+@tool
+def search_platform(
+    type: str,
+    query: str,
+    count: int = 5,
+    reason: str = "",
+    summary: str = ""
+) -> ToolResult:
+    """
+    搜索社交平台上的内容或用户。
+
+    搜索类型：
+    - type="content"：搜索帖子/文章标题和正文。
+    - type="user"：搜索用户名
+
+    Args:
+        type: 搜索类型，必须是 "content" 或 "user"。
+        query: 搜索关键词，不要为空。
+        count: 返回数量，1 到 20 之间。
+        reason: 调用该工具的原因，用于记录操作动机与上下文，75字以内。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+
+    Returns:
+        ToolResult:
+            - content 搜索返回 posts 和 pagination。
+            - user 搜索返回 users 和 pagination。
+
+    Raises:
+        ValidationError: 参数不合法
+        ToolExecutionError: 服务器内部错误
+    """
+    search_type = (type or "").strip().lower()
+    if search_type not in {"content", "user"}:
+        raise ValidationError('type 必须是 "content" 或 "user"')
+
+    keyword = (query or "").strip()
+    if not keyword:
+        raise ValidationError("query 不能为空")
+
+    safe_count = max(1, min(int(count), 20))
+    current_user_id = get_current_user_id()
+    search_data = _search_platform(search_type, keyword, page=1, page_size=safe_count)
+
+    if search_type == "content":
+        posts = _standardize_posts_list(search_data.get("data", []), current_user_id)
+        search_data["data"] = posts
+        _set_scroll_cursor({
+            "kind": "search_results",
+            "search_type": search_type,
+            "query": keyword,
+            "offset": len(posts),
+        })
+        return ToolResult(
+            action=f"搜索了内容关键词「{_truncate(keyword, 30)}」，看到 {len(posts)} 条结果",
+            data={
+                "type": "content",
+                "query": keyword,
+                "posts": posts,
+                "pagination": search_data.get("pagination", {}),
+            }
+        )
+
+    users = search_data.get("data", [])
+    _set_scroll_cursor({
+        "kind": "search_results",
+        "search_type": search_type,
+        "query": keyword,
+        "offset": len(users),
+    })
+    return ToolResult(
+        action=f"搜索了用户关键词「{_truncate(keyword, 30)}」，看到 {len(users)} 位用户",
+        data={
+            "type": "user",
+            "query": keyword,
+            "users": users,
+            "pagination": search_data.get("pagination", {}),
+        }
+    )
 
 
 @tool

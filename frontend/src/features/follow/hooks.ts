@@ -7,6 +7,11 @@ import { followApi } from './api';
 import type { FollowStatusResponse } from './types';
 import { useAuthStore } from '@/features/auth/stores/authStore';
 
+interface UseFollowStatusOptions {
+  enabled?: boolean;
+  initialData?: FollowStatusResponse;
+}
+
 export const useToggleFollow = () => {
   const queryClient = useQueryClient();
 
@@ -54,17 +59,21 @@ export const useToggleFollow = () => {
       queryClient.invalidateQueries({ queryKey: ['followStatus', data.user_id] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       queryClient.invalidateQueries({ queryKey: ['user'] });
+      queryClient.invalidateQueries({ queryKey: ['search'] });
+      queryClient.invalidateQueries({ queryKey: ['infiniteFollowingList'] });
+      queryClient.invalidateQueries({ queryKey: ['infiniteFollowersList'] });
     },
   });
 };
 
-export const useFollowStatus = (userId: number) => {
+export const useFollowStatus = (userId: number, options: UseFollowStatusOptions = {}) => {
   const { isAuthenticated } = useAuthStore();
 
   return useQuery({
     queryKey: ['followStatus', userId],
     queryFn: () => followApi.getFollowStatus(userId),
-    enabled: isAuthenticated && !!userId,
+    enabled: isAuthenticated && !!userId && (options.enabled ?? true),
+    initialData: options.initialData,
   });
 };
 

@@ -4,10 +4,9 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useInfiniteFollowingList } from '@/features/follow';
-import { Avatar, Skeleton } from '@/shared/components/ui';
-import type { FollowUserItem } from '@/features/follow';
+import { UserListItem, UserListItemSkeleton } from '@/widgets/user-list-item';
 
 export default function FollowingListPage() {
   const { userId } = useParams<{ userId: string }>();
@@ -59,14 +58,14 @@ export default function FollowingListPage() {
 
       {isLoading ? (
         <div className="divide-y divide-border/50">
-          <UserItemSkeleton />
-          <UserItemSkeleton />
-          <UserItemSkeleton />
+          <UserListItemSkeleton />
+          <UserListItemSkeleton />
+          <UserListItemSkeleton />
         </div>
       ) : followingList.length > 0 ? (
         <div className="divide-y divide-border/50">
           {followingList.map((item) => (
-            <UserItem key={item.id} user={item} />
+            <UserListItem key={item.id} user={item} />
           ))}
         </div>
       ) : (
@@ -85,43 +84,6 @@ export default function FollowingListPage() {
         {!hasNextPage && followingList.length > 0 && (
           <span className="text-muted-foreground text-sm">没有更多了</span>
         )}
-      </div>
-    </div>
-  );
-}
-
-interface UserItemProps {
-  user: FollowUserItem;
-}
-
-function UserItem({ user }: UserItemProps) {
-  return (
-    <Link
-      to={`/user/${user.id}`}
-      className="flex items-center gap-3 px-3 py-2"
-    >
-      <Avatar src={user.avatar_url} alt={user.username} size="md" />
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-foreground truncate">
-          {user.username}
-        </div>
-        {user.bio && (
-          <p className="text-sm text-muted-foreground truncate mt-0.5">
-            {user.bio}
-          </p>
-        )}
-      </div>
-    </Link>
-  );
-}
-
-function UserItemSkeleton() {
-  return (
-    <div className="flex items-center gap-3 px-3 py-2">
-      <Skeleton className="h-10 w-10 rounded-full" />
-      <div className="flex-1 space-y-2">
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-3 w-32" />
       </div>
     </div>
   );

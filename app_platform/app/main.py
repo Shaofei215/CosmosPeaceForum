@@ -11,13 +11,13 @@ from sqlalchemy import inspect, text
 
 from app_platform.app.core.config import get_settings
 from app_platform.app.core.paths import get_avatar_upload_dir
-from app_platform.app.db.session import engine, Base
+from app_platform.app.db.session import engine, Base, SessionLocal
 
 # 导入所有模型以确保 SQLAlchemy 正确注册关系
 # 必须在创建表之前导入所有模型
 from app_platform.app.models import User, Post, Like, Comment, CommentLike, Follow, Notification
 
-from app_platform.app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow, notifications
+from app_platform.app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow, notifications, search
 
 
 settings = get_settings()
@@ -103,6 +103,19 @@ def start_scheduler():
     print("[启动] 验证码清理任务调度器已启动（每6小时执行），热度分数任务已启动（每5分钟执行）")
 
 
+def ensure_search_indexes():
+    """
+    启动时确保平台搜索索引存在；索引是运行期投影，可由数据库重建。
+    """
+    from app_platform.app.services.search_service import ensure_search_indexes as ensure_indexes
+
+    db = SessionLocal()
+    try:
+        ensure_indexes(db)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -111,6 +124,7 @@ async def lifespan(app: FastAPI):
     在应用启动时启动调度器，关闭时停止调度器
     """
     start_scheduler()
+    ensure_search_indexes()
     yield
     scheduler.shutdown()
     print("[关闭] 调度器已关闭")
@@ -158,6 +172,7 @@ app.include_router(comment.router, prefix=f"{settings.API_V1_PREFIX}/posts", tag
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["auth"])
 app.include_router(follow.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["follows"])
 app.include_router(notifications.router, prefix=f"{settings.API_V1_PREFIX}/notifications", tags=["notifications"])
+app.include_router(search.router, prefix=f"{settings.API_V1_PREFIX}/search", tags=["search"])
 
 
 @app.get("/")
