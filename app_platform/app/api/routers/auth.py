@@ -34,6 +34,7 @@ from app_platform.app.schemas.email_verification import (
     PasswordResetConfirmRequest,
 )
 from app_platform.app.services.email_service import email_service
+from app_platform.app.services import search_service
 
 
 router = APIRouter()
@@ -383,6 +384,7 @@ def register(
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
+        search_service.index_user(db_user)
 
         return UserResponse.model_validate(db_user)
 

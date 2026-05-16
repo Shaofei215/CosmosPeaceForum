@@ -16,7 +16,7 @@ from app_platform.app.schemas.post import (
     PostResponseWithLikeStatus,
     RepostCreate,
 )
-from app_platform.app.services import heat_service, repost_service
+from app_platform.app.services import heat_service, repost_service, search_service
 
 router = APIRouter()
 
@@ -52,6 +52,7 @@ def create_post(
     heat_service.refresh_post_heat_score(db, db_post)
     db.commit()
     db.refresh(db_post)
+    search_service.index_post(db_post)
     return db_post
 
 
@@ -62,13 +63,15 @@ def repost(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        return repost_service.create_repost(
+        created_post = repost_service.create_repost(
             db=db,
             user_id=current_user.id,
             source_type=data.source_type,
             source_id=data.source_id,
             content=data.content,
         )
+        search_service.index_post(created_post)
+        return created_post
     except repost_service.RepostSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except repost_service.InvalidRepostSourceError as e:
@@ -192,6 +195,7 @@ def update_post(
 
     db.commit()
     db.refresh(post)
+    search_service.index_post(post)
     return post
 
 
@@ -231,6 +235,7 @@ def delete_post(
     db.query(Comment).filter(Comment.post_id == post_id).delete(synchronize_session=False)
     db.delete(post)
     db.commit()
+    search_service.delete_post(post_id)
     return {"message": "帖子删除成功"}
 
 

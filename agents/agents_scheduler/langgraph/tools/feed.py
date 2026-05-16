@@ -9,7 +9,7 @@ from agents.agents_scheduler.scheduler.context import get_current_user_id
 from agents.agents_scheduler.langgraph.tools.types import ToolResult, ToolExecutionError
 from agents.agents_scheduler.langgraph.tools.utils import (
     _get_post, _get_comment, _get_post_comments, _get_comment_replies,
-    _get_global_feed, _get_user_posts,
+    _get_global_feed, _get_user_posts, _search_platform,
     _standardize_post, _standardize_posts_list, _standardize_comment,
     _standardize_comments_list, _truncate,
     _get_scroll_cursor, _set_scroll_cursor, _clear_scroll_cursor
@@ -330,8 +330,9 @@ def scroll(
     向下滑动当前页面，自动查看后续内容
 
     该工具不需要知道当前位置，会自动延续最近一次打开的可滚动页面：
-    get_global_feed 之后继续加载主页信息流；view_post_comments 之后继续加载一级评论；
-    expand_comment 之后继续加载该评论下的回复；get_user_profile 之后继续加载用户主页帖子。
+    get_global_feed 之后继续加载主页信息流；search_platform 之后继续加载搜索结果；
+    view_post_comments 之后继续加载一级评论；expand_comment 之后继续加载该评论下的回复；
+    get_user_profile 之后继续加载用户主页帖子。
 
     注意：此工具会自动从当前执行上下文获取认证信息（如有）。
 
@@ -393,6 +394,45 @@ def scroll(
         action = f"向下滑动浏览了 @{target_username} 的更多帖子" if target_username else f"向下滑动浏览了用户 {user_id} 的更多帖子"
         return ToolResult(action=action, data=posts_data)
 
+    if kind == "search_results":
+        search_type = cursor.get("search_type", "content")
+        query = cursor.get("query", "")
+        offset = int(cursor.get("offset", 0))
+        search_data = _fetch_paged_posts_after_offset(
+            lambda page, page_size: _search_platform(
+                search_type=search_type,
+                query=query,
+                page=page,
+                page_size=page_size,
+            ),
+            offset,
+            count,
+        )
+        _set_scroll_cursor({**cursor, "offset": offset + len(search_data.get("data", []))})
+
+        if search_type == "content":
+            posts = _standardize_posts_list(search_data.get("data", []), current_user_id)
+            return ToolResult(
+                action=f"向下滑动浏览了更多「{_truncate(query, 30)}」的帖子搜索结果",
+                data={
+                    "type": "content",
+                    "query": query,
+                    "posts": posts,
+                    "pagination": search_data.get("pagination", {}),
+                },
+            )
+
+        users = search_data.get("data", [])
+        return ToolResult(
+            action=f"向下滑动浏览了更多「{_truncate(query, 30)}」的用户搜索结果",
+            data={
+                "type": "user",
+                "query": query,
+                "users": users,
+                "pagination": search_data.get("pagination", {}),
+            },
+        )
+
     if kind == "post_comments":
         post_id = cursor.get("post_id")
         offset = int(cursor.get("offset", 0))
@@ -445,4 +485,4 @@ def scroll(
             },
         )
 
-    raise ToolExecutionError("当前页面没有可继续滚动的内容，请先调用 get_global_feed、view_post_comments、expand_comment 或 get_user_profile。")
+    raise ToolExecutionError("当前页面没有可继续滚动的内容，请先调用 get_global_feed、search_platform、view_post_comments、expand_comment 或 get_user_profile。")
