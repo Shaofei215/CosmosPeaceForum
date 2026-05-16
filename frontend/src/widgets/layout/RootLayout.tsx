@@ -1,5 +1,5 @@
-import { useLayoutEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { LeftSidebar } from '@/widgets/left-sidebar';
 import { RightSidebar } from '@/widgets/right-sidebar';
 import { TopBar } from '@/widgets/top-bar';
@@ -15,14 +15,44 @@ const AUTH_PATHS = [
   '/reset-password',
 ];
 
+const scrollPositions = new Map<string, { x: number; y: number }>();
+
 export function RootLayout() {
   const location = useLocation();
+  const navigationType = useNavigationType();
+  const previousLocationKeyRef = useRef(location.key);
   const pathname = location.pathname;
   const isMobileDevice = isMobileUserAgent();
 
+  useEffect(() => {
+    if (!('scrollRestoration' in window.history)) {
+      return undefined;
+    }
+
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+
+    return () => {
+      window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, []);
+
   useLayoutEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, [location.key]);
+    scrollPositions.set(previousLocationKeyRef.current, {
+      x: window.scrollX,
+      y: window.scrollY,
+    });
+
+    const scrollPosition = scrollPositions.get(location.key);
+
+    if (navigationType === 'POP' && scrollPosition) {
+      window.scrollTo({ top: scrollPosition.y, left: scrollPosition.x, behavior: 'auto' });
+    } else if (navigationType !== 'POP') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+
+    previousLocationKeyRef.current = location.key;
+  }, [location.key, navigationType]);
 
   const isAuthPage = AUTH_PATHS.some(path => pathname === path || pathname.startsWith(path + '/'));
   const showTopAndRight = !isAuthPage;
