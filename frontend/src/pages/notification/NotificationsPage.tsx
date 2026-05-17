@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, FileText, Heart, MessageCircle, Repeat2, UserPlus } from 'lucide-react';
+import { Bell, FileText, Heart, MessageCircle, Repeat2, ShieldAlert, UserPlus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
@@ -54,6 +54,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
   const sender = notification.sender;
   const targetPath = getTargetPath(notification);
   const isArticle = notification.source_post_type === 'article';
+  const senderName = sender?.username ?? (notification.type === 'moderation' ? '平台系统' : '有人');
 
   const handleOpen = () => {
     navigate(targetPath);
@@ -62,9 +63,13 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
   return (
     <div className="p-3 transition-colors hover:bg-muted/30 sm:p-4">
       <div className="flex gap-2 sm:gap-3">
-        <Link to={sender ? `/user/${sender.id}` : '#'} onClick={e => e.stopPropagation()}>
-          <Avatar src={sender?.avatar_url} alt={sender?.username ?? '用户'} size="md" />
-        </Link>
+        {sender ? (
+          <Link to={`/user/${sender.id}`} onClick={e => e.stopPropagation()}>
+            <Avatar src={sender.avatar_url} alt={sender.username ?? '用户'} size="md" />
+          </Link>
+        ) : (
+          <Avatar src={undefined} alt={senderName} size="md" />
+        )}
 
         <div className="min-w-0 flex-1">
           <button type="button" onClick={handleOpen} className="block w-full text-left">
@@ -72,7 +77,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
               <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${typeInfo.color}`} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span className="font-medium truncate">{sender?.username ?? '有人'}</span>
+                  <span className="font-medium truncate">{senderName}</span>
                   <span className="text-muted-foreground shrink-0">{typeInfo.label}</span>
                   <span className="text-xs text-muted-foreground sm:ml-auto shrink-0">
                     {formatDate(notification.created_at)}
@@ -359,6 +364,7 @@ function getTypeInfo(type: string) {
     comment: { label: '评论了你的帖子', icon: MessageCircle, color: 'text-primary' },
     comment_reply: { label: '回复了你', icon: MessageCircle, color: 'text-primary' },
     follow: { label: '关注了你', icon: UserPlus, color: 'text-emerald-600' },
+    moderation: { label: '发来一条管理通知', icon: ShieldAlert, color: 'text-destructive' },
   };
 
   return (

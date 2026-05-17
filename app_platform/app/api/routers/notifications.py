@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, object_session
 
-from app_platform.app.api.deps import get_db, get_current_user
+from app_platform.app.api.deps import get_db, get_current_user_including_banned
 from app_platform.app.core.security import decode_access_token
 from app_platform.app.db.session import SessionLocal
 from app_platform.app.models.comment import CommentLike
@@ -33,7 +33,7 @@ def list_notifications(
     limit: int = Query(20, ge=1, le=100),
     type: str | None = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_including_banned),
 ):
     items, total, unread_count = notification_service.get_notifications(
         db=db,
@@ -55,7 +55,7 @@ def list_notifications(
 @router.get("/summary", response_model=NotificationSummaryResponse)
 def get_notification_summary(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_including_banned),
 ):
     return notification_service.get_summary(db, current_user.id)
 
@@ -63,7 +63,7 @@ def get_notification_summary(
 @router.get("/unread-count", response_model=NotificationUnreadCountResponse)
 def get_unread_count(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_including_banned),
 ):
     return NotificationUnreadCountResponse(
         unread_count=notification_service.get_unread_count(db, current_user.id)
@@ -130,7 +130,7 @@ async def stream_notification_events(token: str = Query(...)):
 def get_notification(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_including_banned),
 ):
     notification = notification_service.get_notification(db, current_user.id, notification_id)
     if not notification:
@@ -141,7 +141,7 @@ def get_notification(
 @router.post("/mark-read")
 def mark_notifications_read(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_including_banned),
 ):
     updated = notification_service.mark_all_as_read(db, current_user.id)
     return {"updated_count": updated}
@@ -151,7 +151,7 @@ def mark_notifications_read(
 def get_notification_origin(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_including_banned),
 ):
     notification = notification_service.get_notification(db, current_user.id, notification_id)
     if not notification:

@@ -7,6 +7,7 @@ export type NotificationType =
   | 'comment_reply'
   | 'repost'
   | 'follow'
+  | 'moderation'
   | string;
 
 export interface NotificationItem {
