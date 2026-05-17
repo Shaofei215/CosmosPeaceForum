@@ -21,6 +21,8 @@ const actionLabels: Record<string, string> = {
   create_model: '创建模型',
   update_model: '更新模型',
   delete_model: '删除模型',
+  update_system_config: '更新系统配置',
+  restart_scheduler: '重载 Scheduler',
   update_system: '更新系统配置',
   restart_system: '重启 Scheduler',
   login: '登录',
@@ -47,6 +49,7 @@ export default function LogPage() {
       500,
       selectedAgentId ? Number(selectedAgentId) : undefined,
     ),
+    refetchInterval: 2000,
   });
 
   return (

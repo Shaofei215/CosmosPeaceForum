@@ -26,7 +26,12 @@ export const API_CONFIG = {
 export function getFullAvatarUrl(avatarUrl: string | null | undefined): string | null {
   if (!avatarUrl) return null;
 
-  if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
+  if (
+    avatarUrl.startsWith('http://') ||
+    avatarUrl.startsWith('https://') ||
+    avatarUrl.startsWith('blob:') ||
+    avatarUrl.startsWith('data:')
+  ) {
     return avatarUrl;
   }
 

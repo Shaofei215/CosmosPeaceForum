@@ -28,13 +28,14 @@ export default function DashboardPage() {
 
   const { data: logsData, refetch } = useQuery({
     queryKey: ['terminal-logs', 'dashboard', selectedLogRole, logSearch],
-    queryFn: () => terminalLogApi.list(
-      0,
-      200,
-      undefined,
-      logSearch.trim() || undefined,
-      selectedLogRole || undefined,
-    ),
+    queryFn: async () => {
+      const data = await terminalLogApi.recent(200, selectedLogRole || undefined);
+      const keyword = logSearch.trim().toLowerCase();
+      if (!keyword) return data;
+
+      const items = data.items.filter((log) => log.message.toLowerCase().includes(keyword));
+      return { ...data, items, total: items.length };
+    },
     refetchInterval: 2000,
   });
 
@@ -159,7 +160,10 @@ export default function DashboardPage() {
             className="h-96 overflow-auto rounded-lg bg-zinc-950 p-4 font-mono text-sm"
           >
             {logsData?.items.map((log: TerminalLog, index: number) => (
-              <div key={index} className="flex gap-3 leading-6">
+              <div
+                key={`${log.timestamp}-${index}-${log.message}`}
+                className="flex gap-3 leading-6"
+              >
                 <span className={`shrink-0 w-16 ${levelColors[log.level] || 'text-zinc-400'}`}>
                   [{log.level}]
                 </span>

@@ -27,12 +27,20 @@ interface AvatarUploadProps {
   error?: string;
 }
 
+const sizeMap = {
+  sm: 'w-8 h-8',
+  md: 'w-10 h-10',
+  lg: 'w-12 h-12',
+  xl: 'w-20 h-20',
+  '2xl': 'w-24 h-24',
+};
+
 /**
  * 头像上传组件
  */
 export function AvatarUpload({
   avatarUrl,
-  username = '用户',
+  username = '',
   size = 'lg',
   disabled = false,
   isUploading = false,
@@ -44,17 +52,12 @@ export function AvatarUpload({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (avatarUrl) {
-      setPreviewUrl(null);
-    }
-  }, [avatarUrl]);
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       handleFile(file);
     }
+    e.target.value = '';
   };
 
   const handleFile = (file: File) => {
@@ -100,10 +103,21 @@ export function AvatarUpload({
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     setPreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     onDelete?.();
   };
 
   const displayUrl = previewUrl || avatarUrl;
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -118,15 +132,27 @@ export function AvatarUpload({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <Avatar
-          src={displayUrl}
-          alt={username}
-          size={size}
-          className={cn(
-            'transition-all duration-200',
-            !disabled && 'group-hover:opacity-70'
-          )}
-        />
+        {displayUrl || username.trim() ? (
+          <Avatar
+            src={displayUrl}
+            alt={username}
+            size={size}
+            className={cn(
+              'transition-all duration-200',
+              !disabled && 'group-hover:opacity-70'
+            )}
+          />
+        ) : (
+          <div
+            className={cn(
+              'relative flex shrink-0 items-center justify-center rounded-full border border-dashed border-border bg-muted text-muted-foreground transition-all duration-200',
+              sizeMap[size],
+              !disabled && 'group-hover:opacity-70'
+            )}
+          >
+            <Camera className="h-6 w-6" />
+          </div>
+        )}
 
         {!disabled && !isUploading && (
           <>
