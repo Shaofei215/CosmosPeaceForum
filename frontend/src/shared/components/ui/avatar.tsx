@@ -76,6 +76,10 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
 
     const fullSrc = getFullAvatarUrl(src);
 
+    React.useEffect(() => {
+      setError(false);
+    }, [fullSrc]);
+
     // 如果没有图片或加载失败，显示首字母占位符
     if (!fullSrc || error) {
       return (

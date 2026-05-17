@@ -2,11 +2,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { systemApi } from '@/shared/api/modules';
 import {
-  Button, Input, Card, CardContent, CardHeader, CardTitle,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-  DialogDescription,
+  Button, Input, Card, CardContent,
 } from '@/shared/components/ui';
-import { Settings, Edit, RefreshCw, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Settings, Edit, Eye, EyeOff } from 'lucide-react';
 
 const PASSWORD_KEYS = ['AI_USER_PASSWORD'];
 
@@ -43,13 +41,6 @@ export default function SystemConfigPage() {
     },
   });
 
-  const restartMutation = useMutation({
-    mutationFn: () => systemApi.restart(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['system'] });
-    },
-  });
-
   const groupedConfigs: Record<string, typeof configs> = {};
   configs?.forEach((c) => {
     const group = getConfigGroup(c.key);
@@ -74,18 +65,6 @@ export default function SystemConfigPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">系统配置</h1>
-        <Button
-          variant="outline"
-          onClick={() => restartMutation.mutate()}
-          disabled={restartMutation.isPending}
-        >
-          {restartMutation.isPending ? (
-            <Loader2 size={16} className="mr-1 animate-spin" />
-          ) : (
-            <RefreshCw size={16} className="mr-1" />
-          )}
-          重启 Scheduler
-        </Button>
       </div>
 
       {Object.entries(groupedConfigs).map(([group, items]) => (
@@ -176,18 +155,6 @@ export default function SystemConfigPage() {
         </div>
       ))}
 
-      {/* Confirm restart dialog */}
-      {false && (
-        <Dialog open={false} onOpenChange={() => {}}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>确认重启</DialogTitle><DialogDescription>确定要重启 scheduler 吗？所有配置将重新加载。</DialogDescription></DialogHeader>
-            <DialogFooter>
-              <Button variant="outline">取消</Button>
-              <Button>确认重启</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }
