@@ -5,12 +5,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import inspect, text
 
 from app_platform.app.core.config import get_settings
 from app_platform.app.core.paths import get_avatar_upload_dir
+from app_platform.app.core.static_files import RaceSafeStaticFiles
 from app_platform.app.db.session import engine, Base, SessionLocal
 
 # 导入所有模型以确保 SQLAlchemy 正确注册关系
@@ -159,7 +159,7 @@ os.makedirs(avatar_dir, exist_ok=True)
 # 挂载静态文件服务器，提供头像访问
 # 访问URL: /uploads/avatars/avatar_1_xxx.jpg
 # 实际目录: app_platform/uploads/avatars/
-app.mount("/uploads", StaticFiles(directory=os.path.dirname(avatar_dir)), name="uploads")
+app.mount("/uploads", RaceSafeStaticFiles(directory=os.path.dirname(avatar_dir)), name="uploads")
 
 # 注册路由
 # 将各个模块的路由器注册到应用中

@@ -40,9 +40,9 @@ export default function ProfileSetupPage() {
 
   const { mutate: completeProfile, isPending: isCompleting } = useCompleteProfile();
   const { mutate: uploadAvatar, isPending: isUploading } = useUploadAvatar();
-  const { mutate: deleteAvatar } = useDeleteAvatar();
+  const { mutate: deleteAvatar, isPending: isDeletingAvatar } = useDeleteAvatar();
 
-  const isPending = isCompleting || isUploading;
+  const isPending = isCompleting || isUploading || isDeletingAvatar;
 
   useEffect(() => {
     if (!location.state?.userId && !user?.id) {
@@ -128,10 +128,10 @@ export default function ProfileSetupPage() {
 
             <div className="flex justify-center">
               <AvatarUpload
-                avatarUrl={user?.avatar_url}
+                avatarUrl={isDeletingAvatar ? null : user?.avatar_url}
                 username={username}
                 size="2xl"
-                isUploading={isUploading}
+                isUploading={isUploading || isDeletingAvatar}
                 onUpload={handleAvatarUpload}
                 onDelete={handleAvatarDelete}
                 error={avatarError}
