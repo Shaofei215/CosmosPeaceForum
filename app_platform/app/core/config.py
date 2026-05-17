@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     SERVER_HOST: str = "0.0.0.0"
     SERVER_PORT: int = 8000
 
+    # 公开平台管理器初始管理员。首次启动会创建该账号，并强制登录后修改。
+    PLATFORM_ADMIN_INITIAL_USERNAME: str = "platform_admin"
+    PLATFORM_ADMIN_INITIAL_PASSWORD: str = "ChangeMe123!"
+
     class Config:
         env_file = find_env_file()
         env_file_encoding = "utf-8"

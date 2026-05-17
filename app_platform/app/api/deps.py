@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app_platform.app.core.security import decode_access_token
 from app_platform.app.db.session import SessionLocal
 from app_platform.app.models.user import User
+from app_platform.app.admin.services.moderation_guard import ensure_account_available
 
 
 security = HTTPBearer()
@@ -87,6 +88,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    ensure_account_available(db, user)
     return user
 
 
@@ -170,4 +172,9 @@ def get_current_user_optional(
         return None
 
     user = db.query(User).filter(User.id == user_id).first()
+    if user is not None:
+        try:
+            ensure_account_available(db, user)
+        except HTTPException:
+            return None
     return user

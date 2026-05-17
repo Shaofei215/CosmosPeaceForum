@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
+from app_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from app_platform.app.models.user import User
 from app_platform.app.schemas.comment import (
     CommentCreate,
@@ -65,6 +66,7 @@ def create_comment(
     - 404：帖子不存在或父评论不存在
     - 400：父评论与帖子不匹配
     """
+    ensure_action_allowed(db, current_user, "comment")
     try:
         comment = comment_service.create_comment(
             post_id=post_id,
@@ -167,6 +169,7 @@ def toggle_comment_like(
     错误：
     - 404：评论不存在
     """
+    ensure_action_allowed(db, current_user, "interaction")
     try:
         is_liked, like_count = comment_service.toggle_like(
             comment_id=comment_id,

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 
+from app_platform.app.admin.services.moderation_guard import ensure_account_available
 from app_platform.app.api.deps import get_db, get_current_user
 from app_platform.app.core.config import get_settings
 from app_platform.app.core.security import (
@@ -646,6 +647,7 @@ def login(
         verification.used_at = datetime.utcnow()
         db.commit()
 
+    ensure_account_available(db, user)
     access_token = create_access_token(data={"sub": str(user.id)})
 
     return TokenResponse(
@@ -714,6 +716,7 @@ def ai_login(
             detail="用户名或密码错误"
         )
 
+    ensure_account_available(db, user)
     access_token = create_access_token(data={"sub": str(user.id)})
 
     return TokenResponse(

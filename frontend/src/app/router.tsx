@@ -5,7 +5,9 @@
 
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AuthGuard } from '@/features/auth';
+import { AdminAuthGuard } from '@/features/admin/AdminAuthGuard';
 import { RootLayout } from '@/widgets/layout';
+import { AdminLayout } from '@/widgets/admin-layout';
 
 // 页面组件
 import LoginPage from '@/pages/auth/LoginPage';
@@ -22,11 +24,40 @@ import FollowersListPage from '@/pages/profile/FollowersListPage';
 import NotificationsPage from '@/pages/notification/NotificationsPage';
 import ArticleEditorPage from '@/pages/article/ArticleEditorPage';
 import SearchPage from '@/pages/search/SearchPage';
+import AdminLoginPage from '@/pages/admin/AdminLoginPage';
+import AdminSetupPage from '@/pages/admin/AdminSetupPage';
+import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
+import AdminUsersPage from '@/pages/admin/AdminUsersPage';
+import AdminContentPage from '@/pages/admin/AdminContentPage';
+import AdminAdminsPage from '@/pages/admin/AdminAdminsPage';
+import AdminLogsPage from '@/pages/admin/AdminLogsPage';
 
 /**
  * 应用路由配置
  */
 export const router = createBrowserRouter([
+  {
+    path: '/admin/login',
+    element: <AdminLoginPage />,
+  },
+  {
+    path: '/admin',
+    element: <AdminAuthGuard />,
+    children: [
+      { path: 'setup', element: <AdminSetupPage /> },
+      {
+        element: <AdminLayout />,
+        children: [
+          { index: true, element: <Navigate to="/admin/dashboard" replace /> },
+          { path: 'dashboard', element: <AdminDashboardPage /> },
+          { path: 'users', element: <AdminUsersPage /> },
+          { path: 'content', element: <AdminContentPage /> },
+          { path: 'admins', element: <AdminAdminsPage /> },
+          { path: 'logs', element: <AdminLogsPage /> },
+        ],
+      },
+    ],
+  },
   {
     path: '/',
     element: <RootLayout />,

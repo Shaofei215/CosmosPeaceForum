@@ -9,6 +9,7 @@ from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
 from app_platform.app.models.like import Like
 from app_platform.app.models.comment import Comment
+from app_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from app_platform.app.schemas.post import (
     PostCreate,
     PostResponse,
@@ -38,6 +39,7 @@ def create_post(
 
     返回：创建的帖子信息，包含 id、author_id、title、content、created_at 等字段
     """
+    ensure_action_allowed(db, current_user, "publish")
     if post.type == "article" and not (post.title or "").strip():
         raise HTTPException(status_code=400, detail="Article title is required")
 
@@ -62,6 +64,8 @@ def repost(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    ensure_action_allowed(db, current_user, "publish")
+    ensure_action_allowed(db, current_user, "interaction")
     try:
         created_post = repost_service.create_repost(
             db=db,

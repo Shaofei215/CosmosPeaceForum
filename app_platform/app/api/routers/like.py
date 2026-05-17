@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from app_platform.app.api.deps import get_db, get_current_user
 from app_platform.app.models.user import User
 from app_platform.app.schemas.like import LikeToggleResponse
@@ -35,6 +36,7 @@ def toggle_like(
     - 404：帖子不存在
     - 400：重复操作异常（理论上不会发生）
     """
+    ensure_action_allowed(db, current_user, "interaction")
     try:
         is_liked, like_count = like_service.toggle_like(
             post_id=post_id,

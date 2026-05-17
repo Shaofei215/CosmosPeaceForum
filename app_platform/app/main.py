@@ -12,10 +12,14 @@ from app_platform.app.core.config import get_settings
 from app_platform.app.core.paths import get_avatar_upload_dir
 from app_platform.app.core.static_files import RaceSafeStaticFiles
 from app_platform.app.db.session import engine, Base, SessionLocal
+from app_platform.app.admin.api import admin_router
+from app_platform.app.admin.services.auth_service import ensure_initial_admin
+from app_platform.app.admin.services.terminal_log_service import terminal_log_capture
 
 # 导入所有模型以确保 SQLAlchemy 正确注册关系
 # 必须在创建表之前导入所有模型
 from app_platform.app.models import User, Post, Like, Comment, CommentLike, Follow, Notification
+from app_platform.app.admin.models import PlatformAdminUser, PlatformAdminOperationLog, UserModeration
 
 from app_platform.app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow, notifications, search
 
@@ -116,6 +120,15 @@ def ensure_search_indexes():
         db.close()
 
 
+def initialize_admin_manager():
+    """初始化公开平台管理器运行时数据。"""
+    db = SessionLocal()
+    try:
+        ensure_initial_admin(db)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -123,10 +136,13 @@ async def lifespan(app: FastAPI):
 
     在应用启动时启动调度器，关闭时停止调度器
     """
+    terminal_log_capture.start()
+    initialize_admin_manager()
     start_scheduler()
     ensure_search_indexes()
     yield
     scheduler.shutdown()
+    terminal_log_capture.stop()
     print("[关闭] 调度器已关闭")
 
 
@@ -173,6 +189,7 @@ app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["
 app.include_router(follow.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["follows"])
 app.include_router(notifications.router, prefix=f"{settings.API_V1_PREFIX}/notifications", tags=["notifications"])
 app.include_router(search.router, prefix=f"{settings.API_V1_PREFIX}/search", tags=["search"])
+app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")
