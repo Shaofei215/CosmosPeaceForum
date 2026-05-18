@@ -1,6 +1,8 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_CONFIG } from '@/shared/config/api';
 import type {
+  AdminAnnouncementRequest,
+  AdminAnnouncementResponse,
   AdminCreateRequest,
   AdminLoginRequest,
   AdminLoginResponse,
@@ -13,13 +15,16 @@ import type {
   OperationLog,
   PaginatedResponse,
   TerminalLogList,
+  UserModerationBatchUpdateRequest,
+  UserModerationBatchUpdateResponse,
+  UserModerationResponse,
   UserModerationUpdateRequest,
   UserWithModeration,
 } from './types';
 import { useAdminAuthStore } from './store';
 
 interface ApiErrorPayload {
-  detail?: string;
+  detail?: unknown;
 }
 
 export interface AdminApiError {
@@ -35,6 +40,22 @@ const client = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+function getApiErrorMessage(detail: unknown) {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (item && typeof item === 'object' && 'msg' in item) {
+          return String((item as { msg?: unknown }).msg);
+        }
+        return null;
+      })
+      .filter(Boolean);
+    if (messages.length > 0) return messages.join('；');
+  }
+  return '请求失败，请稍后重试';
+}
 
 client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('adminToken');
@@ -54,7 +75,7 @@ client.interceptors.response.use(
     const apiError: AdminApiError = {
       name: 'AdminApiError',
       status,
-      message: error.response?.data?.detail || '请求失败，请稍后重试',
+      message: getApiErrorMessage(error.response?.data?.detail),
     };
     return Promise.reject(apiError);
   }
@@ -70,7 +91,11 @@ export const adminApi = {
   users: (params: { skip?: number; limit?: number; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<UserWithModeration>>('/users/', { params }),
   updateUserModeration: (userId: number, request: UserModerationUpdateRequest) =>
-    client.put<unknown, UserWithModeration>(`/users/${userId}/moderation`, request),
+    client.put<unknown, UserModerationResponse>(`/users/${userId}/moderation`, request),
+  updateUsersModeration: (request: UserModerationBatchUpdateRequest) =>
+    client.put<unknown, UserModerationBatchUpdateResponse>('/users/moderation/batch', request),
+  publishAnnouncement: (request: AdminAnnouncementRequest) =>
+    client.post<unknown, AdminAnnouncementResponse>('/announcements/', request),
   content: (params: { skip?: number; limit?: number; type?: string; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<ContentItem>>('/content/', { params }),
   deletePost: (postId: number, request: ContentDeleteRequest) =>

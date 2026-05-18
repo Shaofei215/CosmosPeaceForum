@@ -54,7 +54,9 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
   const sender = notification.sender;
   const targetPath = getTargetPath(notification);
   const isArticle = notification.source_post_type === 'article';
-  const senderName = sender?.username ?? (notification.type === 'moderation' ? '平台系统' : '有人');
+  const senderName =
+    sender?.username ??
+    (notification.type === 'moderation' || notification.type === 'announcement' ? '平台系统' : '有人');
 
   const handleOpen = () => {
     navigate(targetPath);
@@ -365,6 +367,7 @@ function getTypeInfo(type: string) {
     comment_reply: { label: '回复了你', icon: MessageCircle, color: 'text-primary' },
     follow: { label: '关注了你', icon: UserPlus, color: 'text-emerald-600' },
     moderation: { label: '发来一条管理通知', icon: ShieldAlert, color: 'text-destructive' },
+    announcement: { label: '发布了一条公告', icon: Bell, color: 'text-primary' },
   };
 
   return (

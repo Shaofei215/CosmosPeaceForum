@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserModerationRequest(BaseModel):
@@ -19,6 +19,34 @@ class UserModerationUpdateRequest(BaseModel):
     interaction_banned_until: Optional[datetime] = None
     interaction_ban_reason: Optional[str] = Field(default=None, max_length=1000)
 
+    @field_validator(
+        "publish_banned_until",
+        "comment_banned_until",
+        "interaction_banned_until",
+    )
+    @classmethod
+    def validate_future_until(cls, value: Optional[datetime]) -> Optional[datetime]:
+        if value is None:
+            return None
+        if value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        if value <= datetime.utcnow():
+            raise ValueError("封禁结束时间必须晚于当前时间")
+        return value
+
+
+class UserModerationBatchUpdateRequest(BaseModel):
+    user_ids: list[int] = Field(min_length=1, max_length=500)
+    moderation: UserModerationUpdateRequest
+
+    @field_validator("user_ids")
+    @classmethod
+    def validate_user_ids(cls, value: list[int]) -> list[int]:
+        unique_ids = list(dict.fromkeys(value))
+        if any(user_id <= 0 for user_id in unique_ids):
+            raise ValueError("用户 ID 必须为正整数")
+        return unique_ids
+
 
 class UserModerationStatusResponse(BaseModel):
     account_banned: bool = False
@@ -35,6 +63,11 @@ class UserModerationStatusResponse(BaseModel):
 
 class UserModerationResponse(UserModerationStatusResponse):
     user_id: int
+
+
+class UserModerationBatchUpdateResponse(BaseModel):
+    updated_count: int
+    items: list[UserModerationResponse]
 
 
 class UserWithModerationResponse(BaseModel):
@@ -59,3 +92,10 @@ class ContentDeleteRequest(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=1000)
     notify_author: bool = True
 
+
+class AdminAnnouncementRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=1000)
+
+
+class AdminAnnouncementResponse(BaseModel):
+    recipient_count: int

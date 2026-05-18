@@ -5,6 +5,8 @@ from app_platform.app.admin.api.deps import require_permission
 from app_platform.app.admin.models.admin_user import PlatformAdminUser
 from app_platform.app.admin.schemas import (
     PaginatedResponse,
+    UserModerationBatchUpdateRequest,
+    UserModerationBatchUpdateResponse,
     UserModerationResponse,
     UserModerationUpdateRequest,
     UserWithModerationResponse,
@@ -13,6 +15,7 @@ from app_platform.app.admin.services.moderation_service import (
     list_users,
     moderation_to_status,
     update_user_moderation,
+    update_users_moderation,
 )
 from app_platform.app.admin.services.permissions import PERMISSION_MANAGE_USERS
 from app_platform.app.api.deps import get_db
@@ -32,6 +35,18 @@ async def users(
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
 
 
+@router.put("/moderation/batch", response_model=UserModerationBatchUpdateResponse)
+async def update_moderation_batch(
+    request: UserModerationBatchUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+):
+    try:
+        return update_users_moderation(db, request, current_admin)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 @router.put("/{user_id}/moderation", response_model=UserModerationResponse)
 async def update_moderation(
     user_id: int,
@@ -45,4 +60,3 @@ async def update_moderation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     status_data = moderation_to_status(moderation)
     return UserModerationResponse(user_id=user_id, **status_data.model_dump())
-

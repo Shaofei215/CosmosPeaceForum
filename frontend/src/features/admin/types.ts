@@ -111,6 +111,28 @@ export interface UserModerationUpdateRequest {
   interaction_ban_reason?: string;
 }
 
+export interface UserModerationResponse extends UserModerationStatus {
+  user_id: number;
+}
+
+export interface UserModerationBatchUpdateRequest {
+  user_ids: number[];
+  moderation: UserModerationUpdateRequest;
+}
+
+export interface UserModerationBatchUpdateResponse {
+  updated_count: number;
+  items: UserModerationResponse[];
+}
+
+export interface AdminAnnouncementRequest {
+  content: string;
+}
+
+export interface AdminAnnouncementResponse {
+  recipient_count: number;
+}
+
 export interface ContentItem {
   id: number;
   type: string;
@@ -150,4 +172,3 @@ export interface TerminalLogList {
   items: TerminalLog[];
   total: number;
 }
-

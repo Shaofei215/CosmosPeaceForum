@@ -14,7 +14,11 @@ from app_platform.app.admin.schemas.admin import (
 )
 from app_platform.app.admin.schemas.content import ContentItemResponse
 from app_platform.app.admin.schemas.moderation import (
+    AdminAnnouncementRequest,
+    AdminAnnouncementResponse,
     ContentDeleteRequest,
+    UserModerationBatchUpdateRequest,
+    UserModerationBatchUpdateResponse,
     UserModerationRequest,
     UserModerationResponse,
     UserModerationStatusResponse,
@@ -24,6 +28,8 @@ from app_platform.app.admin.schemas.moderation import (
 
 __all__ = [
     "AdminCreateRequest",
+    "AdminAnnouncementRequest",
+    "AdminAnnouncementResponse",
     "AdminLoginRequest",
     "AdminLoginResponse",
     "AdminProfileUpdateRequest",
@@ -38,9 +44,10 @@ __all__ = [
     "TerminalLogListResponse",
     "TerminalLogResponse",
     "UserModerationRequest",
+    "UserModerationBatchUpdateRequest",
+    "UserModerationBatchUpdateResponse",
     "UserModerationResponse",
     "UserModerationStatusResponse",
     "UserModerationUpdateRequest",
     "UserWithModerationResponse",
 ]
-

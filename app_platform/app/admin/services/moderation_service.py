@@ -12,15 +12,18 @@ from app_platform.app.admin.models.user_moderation import UserModeration
 from app_platform.app.admin.schemas import (
     ContentItemResponse,
     DashboardStatsResponse,
+    UserModerationBatchUpdateRequest,
+    UserModerationBatchUpdateResponse,
+    UserModerationResponse,
     UserModerationStatusResponse,
     UserModerationUpdateRequest,
     UserWithModerationResponse,
 )
+from app_platform.app.admin.services.announcement_service import create_user_moderation_notice
 from app_platform.app.admin.services.log_service import create_operation_log
 from app_platform.app.models.comment import Comment, CommentLike
 from app_platform.app.models.follow import Follow
 from app_platform.app.models.like import Like
-from app_platform.app.models.notification import Notification
 from app_platform.app.models.post import Post
 from app_platform.app.models.user import User
 from app_platform.app.services import heat_service, notification_service, search_service
@@ -70,6 +73,67 @@ def update_user_moderation(
     request: UserModerationUpdateRequest,
     admin: PlatformAdminUser,
 ) -> UserModeration:
+    moderation = _apply_user_moderation_update(db, user_id, request, admin)
+    create_operation_log(
+        db,
+        admin,
+        action="update_user_moderation",
+        target_type="user",
+        target_id=user_id,
+        details=request.model_dump(mode="json", exclude_unset=True),
+    )
+    db.commit()
+    db.refresh(moderation)
+    return moderation
+
+
+def update_users_moderation(
+    db: Session,
+    request: UserModerationBatchUpdateRequest,
+    admin: PlatformAdminUser,
+) -> UserModerationBatchUpdateResponse:
+    existing_user_ids = {
+        row[0]
+        for row in db.query(User.id).filter(User.id.in_(request.user_ids)).all()
+    }
+    missing_user_ids = sorted(set(request.user_ids) - existing_user_ids)
+    if missing_user_ids:
+        raise ValueError(f"用户不存在：{', '.join(str(user_id) for user_id in missing_user_ids)}")
+
+    moderations = [
+        _apply_user_moderation_update(db, user_id, request.moderation, admin)
+        for user_id in request.user_ids
+    ]
+    details = request.moderation.model_dump(mode="json", exclude_unset=True)
+    create_operation_log(
+        db,
+        admin,
+        action="batch_update_user_moderation",
+        target_type="user",
+        target_id=None,
+        details={"user_ids": request.user_ids, "moderation": details},
+    )
+    db.commit()
+    for moderation in moderations:
+        db.refresh(moderation)
+    return UserModerationBatchUpdateResponse(
+        updated_count=len(moderations),
+        items=[
+            UserModerationResponse(
+                user_id=moderation.user_id,
+                **moderation_to_status(moderation).model_dump(),
+            )
+            for moderation in moderations
+        ],
+    )
+
+
+def _apply_user_moderation_update(
+    db: Session,
+    user_id: int,
+    request: UserModerationUpdateRequest,
+    admin: PlatformAdminUser,
+) -> UserModeration:
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise ValueError("用户不存在")
@@ -84,7 +148,9 @@ def update_user_moderation(
     }
     if request.account_banned is not None:
         moderation.account_banned_at = datetime.utcnow() if request.account_banned else None
-        moderation.account_ban_reason = request.account_ban_reason if request.account_banned else None
+        moderation.account_ban_reason = (
+            request.account_ban_reason if request.account_banned else None
+        )
     fields_set = request.model_fields_set
     if "publish_banned_until" in fields_set:
         moderation.publish_banned_until = request.publish_banned_until
@@ -106,16 +172,6 @@ def update_user_moderation(
         previous_account_reason=previous_account_reason,
         previous_restrictions=previous_restrictions,
     )
-    create_operation_log(
-        db,
-        admin,
-        action="update_user_moderation",
-        target_type="user",
-        target_id=user_id,
-        details=request.model_dump(mode="json", exclude_unset=True),
-    )
-    db.commit()
-    db.refresh(moderation)
     return moderation
 
 
@@ -134,15 +190,7 @@ def _create_user_moderation_notification(
     user_id: int,
     content: str,
 ) -> None:
-    notification_service.create_notification(
-        db=db,
-        recipient_id=user_id,
-        sender_id=None,
-        notification_type="moderation",
-        resource_type="user",
-        resource_id=user_id,
-        source_content=content,
-    )
+    create_user_moderation_notice(db, user_id, content)
 
 
 def _notify_user_moderation_changes(
@@ -182,6 +230,9 @@ def _notify_user_moderation_changes(
         if current_until is None:
             if previous_until is not None:
                 _create_user_moderation_notification(db, user_id, f"你的{label}限制已解除。")
+            continue
+
+        if current_until <= datetime.utcnow():
             continue
 
         content = f"你的{label}已被限制至 {_format_until(current_until)}。"
@@ -432,7 +483,11 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
         active_user_ids.update(row[0] for row in rows)
 
     now = datetime.utcnow()
-    banned_users = db.query(UserModeration).filter(UserModeration.account_banned_at.isnot(None)).count()
+    banned_users = (
+        db.query(UserModeration)
+        .filter(UserModeration.account_banned_at.isnot(None))
+        .count()
+    )
     active_restrictions = db.query(UserModeration).filter(
         or_(
             UserModeration.publish_banned_until > now,
