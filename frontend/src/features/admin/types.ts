@@ -62,13 +62,8 @@ export interface PaginatedResponse<T> {
 export interface DashboardStats {
   total_users: number;
   daily_active_users: number;
-  total_posts: number;
-  total_comments: number;
-  banned_users: number;
-  active_restrictions: number;
-  active_threads: number;
-  process_memory_mb: number;
-  load_average_1m: number;
+  cpu_usage_percent: number;
+  memory_usage_percent: number;
 }
 
 export interface UserModerationStatus {
@@ -136,6 +131,7 @@ export interface AdminAnnouncementResponse {
 export interface ContentItem {
   id: number;
   type: string;
+  post_id: number | null;
   author_id: number;
   author_username: string | null;
   title: string | null;

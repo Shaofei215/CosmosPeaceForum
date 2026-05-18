@@ -19,6 +19,7 @@ export default function AdminDashboardPage() {
   const { data: stats } = useQuery({
     queryKey: adminKeys.stats,
     queryFn: adminApi.dashboardStats,
+    refetchInterval: 3000,
   });
 
   const { data: logs, refetch } = useQuery({
@@ -39,13 +40,34 @@ export default function AdminDashboardPage() {
     setAutoScroll(scrollHeight - scrollTop - clientHeight < 50);
   };
 
+  const formatPercent = (value?: number) => {
+    if (value === undefined || value === null) return '0%';
+    if (value > 0 && value < 0.1) return '<0.1%';
+    if (value < 10) return `${value.toFixed(1)}%`;
+    return `${Math.round(value)}%`;
+  };
+
   const statCards = [
-    { label: '总用户数', value: stats?.total_users ?? 0, tone: 'bg-emerald-100 text-emerald-950' },
-    { label: 'DAU', value: stats?.daily_active_users ?? 0, tone: 'bg-amber-100 text-amber-950' },
     {
-      label: '线程性能占用',
-      value: `${stats?.active_threads ?? 0} / ${stats?.process_memory_mb ?? 0}MB`,
-      tone: 'bg-sky-100 text-sky-950',
+      label: '总用户数',
+      value: stats?.total_users ?? 0,
+      bg: 'bg-emerald-100',
+      text: 'text-emerald-950',
+    },
+    {
+      label: 'DAU',
+      value: stats?.daily_active_users ?? 0,
+      bg: 'bg-amber-100',
+      text: 'text-amber-950',
+    },
+    {
+      label: '性能占用',
+      bg: 'bg-sky-100',
+      text: 'text-sky-950',
+      metrics: [
+        { label: 'CPU', value: formatPercent(stats?.cpu_usage_percent) },
+        { label: '内存', value: formatPercent(stats?.memory_usage_percent) },
+      ],
     },
   ];
 
@@ -54,42 +76,42 @@ export default function AdminDashboardPage() {
       <h1 className="mb-6 text-2xl font-bold">仪表盘</h1>
       <div className="mb-4 flex flex-wrap gap-4">
         {statCards.map((stat) => (
-          <Card key={stat.label} className="aspect-[2/1] w-64 max-w-full overflow-hidden rounded-lg">
+          <Card
+            key={stat.label}
+            className="aspect-[2/1] w-64 max-w-full overflow-hidden rounded-lg"
+          >
             <div className="grid h-full grid-cols-2">
-              <div className="flex items-center p-5">
-                <CardTitle className="text-base font-medium leading-6 text-muted-foreground">
+              <div className="flex items-center justify-center p-5 text-center">
+                <CardTitle className={`text-xl font-semibold leading-7 ${stat.text}`}>
                   {stat.label}
                 </CardTitle>
               </div>
-              <div className={`flex h-full items-center justify-center px-4 text-center ${stat.tone}`}>
-                <span className="break-words text-4xl font-semibold tabular-nums">{stat.value}</span>
+              <div
+                className={`flex h-full items-center justify-center text-center ${stat.bg} ${stat.text}`}
+              >
+                {'metrics' in stat ? (
+                  <div className="grid h-full w-full grid-rows-2 divide-y divide-white/60">
+                    {stat.metrics.map((metric) => (
+                      <div
+                        key={metric.label}
+                        className="flex min-w-0 items-center justify-between gap-2 px-3"
+                      >
+                        <span className="shrink-0 text-xs font-medium">{metric.label}</span>
+                        <span className="min-w-0 whitespace-nowrap text-right text-2xl font-semibold tabular-nums">
+                          {metric.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="break-words px-4 text-5xl font-semibold tabular-nums">
+                    {stat.value}
+                  </span>
+                )}
               </div>
             </div>
           </Card>
         ))}
-      </div>
-
-      <div className="mb-4 grid gap-4 md:grid-cols-3">
-        <Card className="rounded-lg">
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">帖子</p>
-            <p className="mt-2 text-3xl font-semibold">{stats?.total_posts ?? 0}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-lg">
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">评论</p>
-            <p className="mt-2 text-3xl font-semibold">{stats?.total_comments ?? 0}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-lg">
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">生效处罚</p>
-            <p className="mt-2 text-3xl font-semibold">
-              {(stats?.banned_users ?? 0) + (stats?.active_restrictions ?? 0)}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       <Card className="rounded-lg">

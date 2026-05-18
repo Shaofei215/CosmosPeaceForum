@@ -63,13 +63,8 @@ class AdminUpdateRequest(BaseModel):
 class DashboardStatsResponse(BaseModel):
     total_users: int
     daily_active_users: int
-    total_posts: int
-    total_comments: int
-    banned_users: int
-    active_restrictions: int
-    active_threads: int
-    process_memory_mb: float
-    load_average_1m: float
+    cpu_usage_percent: float
+    memory_usage_percent: float
 
 
 class OperationLogResponse(BaseModel):
@@ -98,4 +93,3 @@ class TerminalLogResponse(BaseModel):
 class TerminalLogListResponse(BaseModel):
     items: List[TerminalLogResponse]
     total: int
-

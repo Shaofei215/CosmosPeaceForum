@@ -1,7 +1,4 @@
 from datetime import datetime, timedelta
-import os
-import resource
-import threading
 from typing import Literal, Optional
 
 from sqlalchemy import func, or_
@@ -36,6 +33,8 @@ _RESTRICTION_LABELS = {
     "comment": "评论功能",
     "interaction": "互动功能",
 }
+
+_last_cpu_snapshot: tuple[int, int] | None = None
 
 
 def moderation_to_status(
@@ -437,6 +436,7 @@ def list_content(
             ContentItemResponse(
                 id=post.id,
                 type=post.type,
+                post_id=post.id,
                 author_id=post.author_id,
                 author_username=post.author.username if post.author else None,
                 title=post.title,
@@ -448,7 +448,9 @@ def list_content(
             for post in posts
         )
     if content_type in (None, "comment"):
-        query = db.query(Comment).options(joinedload(Comment.owner))
+        query = db.query(Comment).join(Post, Comment.post_id == Post.id).options(
+            joinedload(Comment.owner)
+        )
         if keyword:
             query = query.filter(Comment.content.like(f"%{keyword.strip()}%"))
         comments = query.order_by(Comment.created_at.desc()).all()
@@ -456,6 +458,7 @@ def list_content(
             ContentItemResponse(
                 id=comment.id,
                 type="comment",
+                post_id=comment.post_id,
                 author_id=comment.owner_id,
                 author_username=comment.owner.username if comment.owner else None,
                 content=comment.content,
@@ -482,29 +485,95 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
     ):
         active_user_ids.update(row[0] for row in rows)
 
-    now = datetime.utcnow()
-    banned_users = (
-        db.query(UserModeration)
-        .filter(UserModeration.account_banned_at.isnot(None))
-        .count()
-    )
-    active_restrictions = db.query(UserModeration).filter(
-        or_(
-            UserModeration.publish_banned_until > now,
-            UserModeration.comment_banned_until > now,
-            UserModeration.interaction_banned_until > now,
-        )
-    ).count()
-    load_average = os.getloadavg()[0] if hasattr(os, "getloadavg") else 0.0
-    memory_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
     return DashboardStatsResponse(
         total_users=db.query(User).count(),
         daily_active_users=len(active_user_ids),
-        total_posts=db.query(Post).count(),
-        total_comments=db.query(Comment).count(),
-        banned_users=banned_users,
-        active_restrictions=active_restrictions,
-        active_threads=threading.active_count(),
-        process_memory_mb=round(memory_mb, 2),
-        load_average_1m=round(load_average, 2),
+        cpu_usage_percent=_read_process_cpu_usage_percent(),
+        memory_usage_percent=_read_process_memory_usage_percent(),
     )
+
+
+def _read_process_cpu_usage_percent() -> float:
+    """读取当前进程 CPU 占用百分比。"""
+    global _last_cpu_snapshot
+    try:
+        process_ticks = _read_process_cpu_ticks()
+        system_ticks = _read_system_cpu_ticks()
+        cpu_count = _cpu_count()
+
+        if _last_cpu_snapshot is not None:
+            last_process_ticks, last_system_ticks = _last_cpu_snapshot
+            _last_cpu_snapshot = (process_ticks, system_ticks)
+            process_delta = process_ticks - last_process_ticks
+            system_delta = system_ticks - last_system_ticks
+            if system_delta <= 0:
+                return 0.0
+            return round(max(0.0, min(process_delta / system_delta * cpu_count * 100, 100.0)), 2)
+
+        _last_cpu_snapshot = (process_ticks, system_ticks)
+        return _read_process_average_cpu_usage_percent(process_ticks, cpu_count)
+    except (OSError, ValueError, IndexError):
+        return 0.0
+
+
+def _read_process_cpu_ticks() -> int:
+    with open("/proc/self/stat", "r", encoding="utf-8") as f:
+        content = f.read()
+    fields = content.rsplit(")", 1)[1].split()
+    return int(fields[11]) + int(fields[12])
+
+
+def _read_system_cpu_ticks() -> int:
+    with open("/proc/stat", "r", encoding="utf-8") as f:
+        return sum(int(value) for value in f.readline().split()[1:])
+
+
+def _read_process_average_cpu_usage_percent(process_ticks: int, cpu_count: int) -> float:
+    clock_ticks = _clock_ticks()
+    with open("/proc/self/stat", "r", encoding="utf-8") as f:
+        fields = f.read().rsplit(")", 1)[1].split()
+    process_start_ticks = int(fields[19])
+    with open("/proc/uptime", "r", encoding="utf-8") as f:
+        uptime_seconds = float(f.readline().split()[0])
+
+    elapsed_seconds = uptime_seconds - process_start_ticks / clock_ticks
+    if elapsed_seconds <= 0:
+        return 0.0
+    cpu_seconds = process_ticks / clock_ticks
+    return round(max(0.0, min(cpu_seconds / elapsed_seconds / cpu_count * 100, 100.0)), 2)
+
+
+def _read_process_memory_usage_percent() -> float:
+    """读取当前进程常驻内存占系统总内存的百分比。"""
+    try:
+        process_rss_kb = 0
+        with open("/proc/self/status", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    process_rss_kb = int(line.split()[1])
+                    break
+
+        total_kb = 0
+        with open("/proc/meminfo", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    total_kb = int(line.split()[1])
+                    break
+
+        if total_kb <= 0:
+            return 0.0
+        return round(max(0.0, min(process_rss_kb / total_kb * 100, 100.0)), 2)
+    except (OSError, ValueError):
+        return 0.0
+
+
+def _clock_ticks() -> int:
+    import os
+
+    return int(os.sysconf(os.sysconf_names["SC_CLK_TCK"]))
+
+
+def _cpu_count() -> int:
+    import os
+
+    return os.cpu_count() or 1

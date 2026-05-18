@@ -1,6 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Megaphone, Search, ShieldAlert, UsersRound } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {
+  Ban,
+  FileText,
+  Heart,
+  Megaphone,
+  MessageCircle,
+  Search,
+  ShieldAlert,
+  UserPlus,
+  UsersRound,
+} from 'lucide-react';
 import {
   adminApi,
   adminKeys,
@@ -107,15 +118,12 @@ export default function AdminUsersPage() {
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <h1 className="text-2xl font-bold">用户管理</h1>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Button
-            variant="outline"
-            className="rounded-md"
-            disabled={selectedIds.length === 0}
-            onClick={() => setBatchOpen(true)}
-          >
-            <UsersRound size={14} className="mr-1" />
-            批量封禁
-          </Button>
+          {selectedIds.length > 0 && (
+            <Button variant="outline" className="rounded-md" onClick={() => setBatchOpen(true)}>
+              <UsersRound size={14} className="mr-1" />
+              批量封禁
+            </Button>
+          )}
           <Button
             variant="outline"
             className="rounded-md"
@@ -161,7 +169,7 @@ export default function AdminUsersPage() {
                   <th className="px-4 py-3 font-medium">内容</th>
                   <th className="px-4 py-3 font-medium">关系</th>
                   <th className="px-4 py-3 font-medium">状态</th>
-                  <th className="px-4 py-3 font-medium">操作</th>
+                  <th className="px-4 py-3 text-center font-medium">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,30 +184,78 @@ export default function AdminUsersPage() {
                       />
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-medium">@{user.username || `user_${user.id}`}</p>
+                      <Link
+                        to={`/user/${user.id}`}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        @{user.username || `user_${user.id}`}
+                      </Link>
                       <p className="text-xs text-muted-foreground">
                         {user.email || `ID ${user.id}`}
                       </p>
                     </td>
-                    <td className="px-4 py-3">{user.is_ai_agent ? 'AI Agent' : '人类用户'}</td>
+                    <td className="px-4 py-3">{user.is_ai_agent ? '角色' : '人类'}</td>
                     <td className="px-4 py-3">
-                      {user.post_count} 帖 / {user.comment_count} 评
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="inline-flex items-center gap-1 text-muted-foreground"
+                          title="帖子数"
+                          aria-label={`帖子数 ${user.post_count}`}
+                        >
+                          <FileText size={15} />
+                          <span className="font-medium tabular-nums text-foreground">
+                            {user.post_count}
+                          </span>
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-1 text-muted-foreground"
+                          title="评论数"
+                          aria-label={`评论数 ${user.comment_count}`}
+                        >
+                          <MessageCircle size={15} />
+                          <span className="font-medium tabular-nums text-foreground">
+                            {user.comment_count}
+                          </span>
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
-                      {user.followers_count} 粉 / {user.following_count} 关注
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="inline-flex items-center gap-1 text-muted-foreground"
+                          title="粉丝数"
+                          aria-label={`粉丝数 ${user.followers_count}`}
+                        >
+                          <UsersRound size={15} />
+                          <span className="font-medium tabular-nums text-foreground">
+                            {user.followers_count}
+                          </span>
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-1 text-muted-foreground"
+                          title="关注数"
+                          aria-label={`关注数 ${user.following_count}`}
+                        >
+                          <UserPlus size={15} />
+                          <span className="font-medium tabular-nums text-foreground">
+                            {user.following_count}
+                          </span>
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <UserStatus user={user} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-center">
                       <Button
                         variant="outline"
-                        size="sm"
-                        className="rounded-md"
+                        size="icon"
+                        className="mx-auto rounded-md"
                         onClick={() => setSelectedUser(user)}
+                        title="管理"
+                        aria-label={`管理用户 ${user.username || user.id}`}
                       >
-                        <ShieldAlert size={14} className="mr-1" />
-                        管理
+                        <ShieldAlert size={16} />
                       </Button>
                     </td>
                   </tr>
@@ -247,20 +303,55 @@ export default function AdminUsersPage() {
   );
 }
 
+const statusIconMap = {
+  account: { icon: Ban, label: '账号封禁' },
+  publish: { icon: FileText, label: '禁止发布' },
+  comment: { icon: MessageCircle, label: '禁止评论' },
+  interaction: { icon: Heart, label: '禁止互动' },
+};
+
+type StatusIconKey = keyof typeof statusIconMap;
+
 function UserStatus({ user }: { user: UserWithModeration }) {
   const active = useMemo(() => {
     const now = Date.now();
     const m = user.moderation;
-    return [
-      m.account_banned && '封禁',
-      m.publish_banned_until && new Date(m.publish_banned_until).getTime() > now && '禁发帖',
-      m.comment_banned_until && new Date(m.comment_banned_until).getTime() > now && '禁评论',
-      m.interaction_banned_until && new Date(m.interaction_banned_until).getTime() > now && '禁互动',
-    ].filter(Boolean);
+    const items: StatusIconKey[] = [];
+    if (m.account_banned) items.push('account');
+    if (m.publish_banned_until && new Date(m.publish_banned_until).getTime() > now) {
+      items.push('publish');
+    }
+    if (m.comment_banned_until && new Date(m.comment_banned_until).getTime() > now) {
+      items.push('comment');
+    }
+    if (m.interaction_banned_until && new Date(m.interaction_banned_until).getTime() > now) {
+      items.push('interaction');
+    }
+    return items;
   }, [user]);
 
   if (active.length === 0) return <span className="text-muted-foreground">正常</span>;
-  return <span className="font-medium text-destructive">{active.join(' / ')}</span>;
+  return (
+    <span className="inline-flex items-center gap-2">
+      {active.map((key) => {
+        const item = statusIconMap[key];
+        const Icon = item.icon;
+        return (
+          <span
+            key={key}
+            className={
+              'inline-flex h-7 w-7 items-center justify-center rounded-full ' +
+              'bg-destructive/10 text-destructive'
+            }
+            title={item.label}
+            aria-label={item.label}
+          >
+            <Icon size={15} />
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 function ModerationEditor({

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 class ContentItemResponse(BaseModel):
     id: int
     type: str
+    post_id: Optional[int] = None
     author_id: int
     author_username: Optional[str]
     title: Optional[str] = None
