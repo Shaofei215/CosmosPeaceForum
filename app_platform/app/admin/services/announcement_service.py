@@ -27,6 +27,7 @@ def create_system_notifications(
             resource_type=resource_type,
             resource_id=resource_id,
             source_content=content,
+            truncate_source_content=False,
         )
     return len(unique_recipient_ids)
 

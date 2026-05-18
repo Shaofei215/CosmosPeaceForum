@@ -163,7 +163,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="auth-form space-y-4">
             {/* 错误提示 */}
             {error && (
-              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
+              <div className="auth-alert whitespace-pre-wrap break-words p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
                 {error}
               </div>
             )}

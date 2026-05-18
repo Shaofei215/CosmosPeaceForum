@@ -30,6 +30,7 @@ def admin_to_response(admin: PlatformAdminUser) -> AdminResponse:
     return AdminResponse(
         id=admin.id,
         username=admin.username,
+        email=admin.email,
         permissions=permissions,
         is_active=admin.is_active,
         is_super_admin=admin.is_super_admin,

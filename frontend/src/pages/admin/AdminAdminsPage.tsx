@@ -68,6 +68,9 @@ export default function AdminAdminsPage() {
                     <p className="text-xs text-muted-foreground">
                       {admin.is_super_admin ? '超级管理员' : `ID ${admin.id}`}
                     </p>
+                    {admin.email && (
+                      <p className="text-xs text-muted-foreground">{admin.email}</p>
+                    )}
                   </td>
                   <td className="max-w-md px-4 py-3">
                     {admin.is_super_admin ? '全部权限' : admin.permissions.map((p) => permissionLabels[p]).join('、')}
@@ -116,6 +119,7 @@ function CreateAdminDialog({
   onSubmit: (payload: AdminCreateRequest) => void;
 }) {
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [permissions, setPermissions] = useState<AdminPermission[]>(['view_dashboard']);
   const [superAdmin, setSuperAdmin] = useState(false);
@@ -135,7 +139,17 @@ function CreateAdminDialog({
           <CardTitle>添加管理员</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名" />
+          <Input
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="用户名"
+          />
+          <Input
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="申诉邮箱（可选）"
+            type="email"
+          />
           <Input
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -174,6 +188,7 @@ function CreateAdminDialog({
               onClick={() =>
                 onSubmit({
                   username,
+                  email: email.trim() || undefined,
                   password,
                   permissions: superAdmin ? [...ADMIN_PERMISSIONS] : permissions,
                   is_active: true,

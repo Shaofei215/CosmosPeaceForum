@@ -48,6 +48,7 @@ async def create_admin(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
     admin = PlatformAdminUser(
         username=request.username,
+        email=str(request.email).lower() if request.email else None,
         password_hash=get_password_hash(request.password),
         permissions=auth_service.dump_permissions(request.permissions),
         is_active=request.is_active,
@@ -74,6 +75,8 @@ async def update_admin(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="管理员不存在")
     if request.permissions is not None:
         admin.permissions = auth_service.dump_permissions(request.permissions)
+    if "email" in request.model_fields_set:
+        admin.email = str(request.email).lower() if request.email else None
     if request.is_active is not None:
         if admin.id == current_admin.id and not request.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能停用当前账号")

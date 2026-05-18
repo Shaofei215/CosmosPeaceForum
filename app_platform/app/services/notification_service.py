@@ -42,6 +42,7 @@ def create_notification(
     post_id: Optional[int] = None,
     comment_id: Optional[int] = None,
     source_content: Optional[str] = None,
+    truncate_source_content: bool = True,
 ) -> Optional[Notification]:
     if not recipient_id or recipient_id == sender_id:
         return None
@@ -54,7 +55,7 @@ def create_notification(
         resource_id=resource_id,
         post_id=post_id,
         comment_id=comment_id,
-        source_content=_truncate(source_content),
+        source_content=_truncate(source_content) if truncate_source_content else source_content,
         is_read=0,
     )
     db.add(notification)

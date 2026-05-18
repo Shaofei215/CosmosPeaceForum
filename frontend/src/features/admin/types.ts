@@ -11,6 +11,7 @@ export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 export interface AdminUser {
   id: number;
   username: string;
+  email: string | null;
   permissions: AdminPermission[];
   is_active: boolean;
   is_super_admin: boolean;
@@ -39,6 +40,7 @@ export interface AdminProfileUpdateRequest {
 
 export interface AdminCreateRequest {
   username: string;
+  email?: string;
   password: string;
   permissions: AdminPermission[];
   is_active: boolean;
@@ -46,6 +48,7 @@ export interface AdminCreateRequest {
 }
 
 export interface AdminUpdateRequest {
+  email?: string | null;
   permissions?: AdminPermission[];
   is_active?: boolean;
   is_super_admin?: boolean;

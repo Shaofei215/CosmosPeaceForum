@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Generic, List, Optional, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 T = TypeVar("T")
@@ -24,6 +24,7 @@ class AdminResponse(BaseModel):
 
     id: int
     username: str
+    email: Optional[EmailStr] = None
     permissions: List[str]
     is_active: bool
     is_super_admin: bool
@@ -47,6 +48,7 @@ class AdminProfileUpdateRequest(BaseModel):
 
 class AdminCreateRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50)
+    email: Optional[EmailStr] = None
     password: str = Field(min_length=8, max_length=128)
     permissions: List[str] = Field(default_factory=list)
     is_active: bool = True
@@ -54,6 +56,7 @@ class AdminCreateRequest(BaseModel):
 
 
 class AdminUpdateRequest(BaseModel):
+    email: Optional[EmailStr] = None
     permissions: Optional[List[str]] = None
     is_active: Optional[bool] = None
     is_super_admin: Optional[bool] = None

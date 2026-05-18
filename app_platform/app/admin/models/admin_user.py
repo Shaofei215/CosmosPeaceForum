@@ -12,6 +12,7 @@ class PlatformAdminUser(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(255), nullable=True)
     password_hash = Column(String(255), nullable=False)
     permissions = Column(Text, nullable=False, default="[]")
     is_active = Column(Boolean, default=True, nullable=False)
@@ -20,4 +21,3 @@ class PlatformAdminUser(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     last_login = Column(DateTime, nullable=True)
-

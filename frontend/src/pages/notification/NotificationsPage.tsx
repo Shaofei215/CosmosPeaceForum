@@ -57,6 +57,8 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
   const senderName =
     sender?.username ??
     (notification.type === 'moderation' || notification.type === 'announcement' ? '平台系统' : '有人');
+  const shouldShowFullContent =
+    notification.type === 'moderation' || notification.type === 'announcement';
 
   const handleOpen = () => {
     navigate(targetPath);
@@ -89,12 +91,12 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
             </div>
 
             {notification.source_content && (
-              <div className="mt-2 flex gap-2 rounded-md bg-muted/30 px-3 py-2">
+              <div className="mt-2 flex min-w-0 gap-2 rounded-md bg-muted/30 px-3 py-2">
                 {isArticle && <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />}
                 <p
-                  className={`text-sm line-clamp-2 whitespace-pre-wrap break-words ${
-                    isArticle ? 'text-muted-foreground' : 'text-foreground/85'
-                  }`}
+                  className={`min-w-0 max-w-full text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${
+                    shouldShowFullContent ? '' : 'line-clamp-2'
+                  } ${isArticle ? 'text-muted-foreground' : 'text-foreground/85'}`}
                 >
                   {notification.source_content}
                 </p>

@@ -170,6 +170,7 @@ def _apply_user_moderation_update(
         previous_account_banned=previous_account_banned,
         previous_account_reason=previous_account_reason,
         previous_restrictions=previous_restrictions,
+        admin=admin,
     )
     return moderation
 
@@ -181,6 +182,12 @@ def _format_until(value: datetime) -> str:
 def _append_reason(content: str, reason: Optional[str]) -> str:
     if reason:
         return f"{content}\n原因：{reason}"
+    return content
+
+
+def _append_appeal_email(content: str, admin: PlatformAdminUser) -> str:
+    if admin.email:
+        return f"{content}\n如有异议，请向{admin.email}申诉。"
     return content
 
 
@@ -199,6 +206,7 @@ def _notify_user_moderation_changes(
     previous_account_banned: bool,
     previous_account_reason: Optional[str],
     previous_restrictions: dict[str, tuple[Optional[datetime], Optional[str]]],
+    admin: PlatformAdminUser,
 ) -> None:
     if request.account_banned is not None:
         current_reason = request.account_ban_reason if request.account_banned else None
@@ -208,7 +216,10 @@ def _notify_user_moderation_changes(
             _create_user_moderation_notification(
                 db,
                 user_id,
-                _append_reason("你的账号已被永久封禁。", current_reason),
+                _append_appeal_email(
+                    _append_reason("你的账号已被永久封禁。", current_reason),
+                    admin,
+                ),
             )
         elif previous_account_banned and not request.account_banned:
             _create_user_moderation_notification(db, user_id, "你的账号封禁已解除。")
@@ -238,7 +249,7 @@ def _notify_user_moderation_changes(
         _create_user_moderation_notification(
             db,
             user_id,
-            _append_reason(content, current_reason),
+            _append_appeal_email(_append_reason(content, current_reason), admin),
         )
 
 
@@ -297,13 +308,10 @@ def _notify_moderation_action(
     resource_type: str,
     resource_id: int,
     reason: Optional[str],
-    source_content: Optional[str] = None,
 ) -> None:
     content = "你的内容因违反社区规则已被管理端处理。"
     if reason:
         content = f"{content}\n原因：{reason}"
-    if source_content:
-        content = f"{content}\n原内容：{source_content}"
     notification_service.create_notification(
         db=db,
         recipient_id=recipient_id,
@@ -312,6 +320,7 @@ def _notify_moderation_action(
         resource_type=resource_type,
         resource_id=resource_id,
         source_content=content,
+        truncate_source_content=False,
     )
 
 
@@ -327,7 +336,6 @@ def delete_post_as_admin(
         raise ValueError("帖子不存在")
 
     author_id = post.author_id
-    source_content = post.content
     db.query(Post).filter(Post.repost_root_post_id == post_id).update(
         {Post.repost_root_post_id: None},
         synchronize_session=False,
@@ -335,7 +343,7 @@ def delete_post_as_admin(
     db.query(Like).filter(Like.post_id == post_id).delete(synchronize_session=False)
     db.query(Comment).filter(Comment.post_id == post_id).delete(synchronize_session=False)
     if notify_author:
-        _notify_moderation_action(db, author_id, "post", post_id, reason, source_content)
+        _notify_moderation_action(db, author_id, "post", post_id, reason)
     create_operation_log(
         db,
         admin,
@@ -376,7 +384,6 @@ def delete_comment_as_admin(
     post_id = comment.post_id
     parent_id = comment.parent_id
     owner_id = comment.owner_id
-    source_content = comment.content
     if parent_id is None:
         count_to_subtract = 1 + len(_get_descendant_comment_ids(db, comment_id))
     else:
@@ -405,7 +412,7 @@ def delete_comment_as_admin(
             current_id = ancestor.parent_id
 
     if notify_author:
-        _notify_moderation_action(db, owner_id, "comment", comment_id, reason, source_content)
+        _notify_moderation_action(db, owner_id, "comment", comment_id, reason)
     create_operation_log(
         db,
         admin,
