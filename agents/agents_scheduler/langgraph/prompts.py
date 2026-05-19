@@ -218,6 +218,13 @@ def _format_tool_result(result: Any) -> str:
     elif isinstance(result, str):
         return result
     elif isinstance(result, dict):
+        from agents.agents_scheduler.langgraph.tools.memory import (
+            format_merged_recall_memory_result,
+            is_merged_recall_memory_result,
+        )
+        if is_merged_recall_memory_result(result):
+            return format_merged_recall_memory_result(result, _format_tool_result)
+
         if "notifications" in result:
             notifications = result.get("notifications", [])
             total = result.get("total", 0)

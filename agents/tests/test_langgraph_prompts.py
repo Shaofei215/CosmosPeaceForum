@@ -264,6 +264,35 @@ class TestFormatToolResult:
         formatted = _format_tool_result(result)
         assert len(formatted) <= 500
 
+    def test_format_last_result_with_explicit_recall(self):
+        result = {
+            "current_view": {
+                "post": {
+                    "id": 1,
+                    "author_username": "test_user",
+                    "content": "test content",
+                }
+            },
+            "explicit_recalls": [
+                {
+                    "query": "test content",
+                    "total": 1,
+                    "memories": [
+                        {
+                            "content": "我以前见过类似内容。",
+                            "time_description": "刚刚",
+                        }
+                    ],
+                }
+            ],
+        }
+
+        formatted = _format_tool_result(result)
+
+        assert "上一步页面内容" in formatted
+        assert "主动回想" in formatted
+        assert "我以前见过类似内容" in formatted
+
     def test_format_post_result_includes_repost_count(self):
         result = {
             "post": {

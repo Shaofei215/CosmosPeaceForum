@@ -338,7 +338,7 @@ class TestGetSocialTools:
             "toggle_post_like", "toggle_comment_like",
             "create_comment", "toggle_follow", "create_post", "logout",
             "get_user_profile", "get_global_feed", "expand_post",
-            "view_post_comments", "expand_comment", "scroll",
+            "view_post_comments", "expand_comment", "scroll", "recall_memory",
         ]
         for name in expected_names:
             assert name in tool_names, f"Missing tool: {name}"
