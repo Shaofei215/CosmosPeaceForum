@@ -21,9 +21,14 @@ export const commentApi = {
    */
   getComments: (
     postId: number,
-    params: { user_id?: number; skip?: number; limit?: number; sort?: CommentSort; seed?: string } = {}
-  ) =>
-    apiClient.get<CommentListResponse>(`/posts/${postId}/comments`, { params }),
+    params: {
+      user_id?: number;
+      skip?: number;
+      limit?: number;
+      sort?: CommentSort;
+      seed?: string;
+    } = {}
+  ) => apiClient.get<CommentListResponse>(`/posts/${postId}/comments`, { params }),
 
   /**
    * 获取评论详情

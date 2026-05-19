@@ -33,7 +33,8 @@ import { useFollowStatus, useToggleFollow } from '@/features/follow';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
-import { MarkdownRenderer, stripMarkdown } from '@/shared/components/markdown/MarkdownRenderer';
+import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer';
+import { stripMarkdown } from '@/shared/components/markdown/markdownUtils';
 
 interface PostCardProps {
   post: PostFeedItem | PostWithLikeStatus;
@@ -63,17 +64,14 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const [repostContent, setRepostContent] = useState('');
   const contentRef = useRef<HTMLParagraphElement>(null);
 
-  const authorName = 'author_name' in post
-    ? post.author_name
-    : (post.author?.username || `用户${post.author_id}`);
-  const authorAvatar = 'author_avatar' in post
-    ? post.author_avatar
-    : (post.author?.avatar_url || null);
-  const authorBio = 'author_bio' in post ? post.author_bio : (post.author?.bio || null);
+  const authorName =
+    'author_name' in post ? post.author_name : post.author?.username || `用户${post.author_id}`;
+  const authorAvatar =
+    'author_avatar' in post ? post.author_avatar : post.author?.avatar_url || null;
+  const authorBio = 'author_bio' in post ? post.author_bio : post.author?.bio || null;
   const isLiked = 'is_liked' in post ? post.is_liked : post.is_liked_by_current_user;
-  const isAuthorAiAgent = 'author_is_ai_agent' in post
-    ? post.author_is_ai_agent
-    : Boolean(post.author?.is_ai_agent);
+  const isAuthorAiAgent =
+    'author_is_ai_agent' in post ? post.author_is_ai_agent : Boolean(post.author?.is_ai_agent);
   const isCurrentUser = user?.id === post.author_id;
   const isArticle = post.type === 'article';
   const { data: followStatus } = useFollowStatus(post.author_id);
@@ -88,12 +86,10 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const { data: commentsData, isLoading: isCommentsLoading } = useComments(
     post.id,
     user?.id,
-    commentSort,
+    commentSort
   );
   const topLevelComments = commentsData?.items || [];
-  const previewComments = expanded
-    ? topLevelComments
-    : topLevelComments.slice(0, 5);
+  const previewComments = expanded ? topLevelComments : topLevelComments.slice(0, 5);
   const hasMoreComments = !expanded && topLevelComments.length > 5;
 
   const requireLogin = () => {
@@ -114,7 +110,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           setNewCommentContent('');
           setCommentShouldRepost(false);
         },
-      },
+      }
     );
   };
 
@@ -134,7 +130,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           setRepostContent('');
           setIsRepostOpen(false);
         },
-      },
+      }
     );
   };
 
@@ -193,7 +189,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           <Button
             variant="outline"
             size="sm"
-            onClick={(event) => {
+            onClick={event => {
               event.preventDefault();
               event.stopPropagation();
               if (!requireLogin()) return;
@@ -221,7 +217,10 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               <MarkdownRenderer content={post.content} />
             </div>
           ) : (
-            <Link to={`/post/${post.id}`} className="block rounded-md transition-colors hover:bg-muted/20">
+            <Link
+              to={`/post/${post.id}`}
+              className="block rounded-md transition-colors hover:bg-muted/20"
+            >
               <h3 className="mb-2 line-clamp-2 text-xl font-semibold leading-7 text-foreground sm:text-2xl sm:leading-8">
                 {post.title || 'Untitled'}
               </h3>
@@ -243,10 +242,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                 isContentExpanded ? '' : 'line-clamp-3'
               }`}
             >
-              <LinkedMentions
-                text={post.content}
-                authors={post.repost_chain_authors || []}
-              />
+              <LinkedMentions text={post.content} authors={post.repost_chain_authors || []} />
             </p>
           </>
         )}
@@ -254,7 +250,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         {!post.repost_origin && post.repost_origin_missing && <MissingRepostOriginBlock />}
         {!isArticle && isContentTruncated && (
           <button
-            onClick={(event) => {
+            onClick={event => {
               event.preventDefault();
               event.stopPropagation();
               setIsContentExpanded(!isContentExpanded);
@@ -281,7 +277,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           className={`flex items-center gap-1.5 text-sm transition-colors ${
             isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
           }`}
-          onClick={(event) => {
+          onClick={event => {
             event.preventDefault();
             event.stopPropagation();
             toggleLike.mutate(post.id);
@@ -295,7 +291,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           className={`flex items-center gap-1.5 text-sm transition-colors ${
             isCommentsExpanded ? 'text-primary' : 'text-muted-foreground hover:text-primary'
           }`}
-          onClick={(event) => {
+          onClick={event => {
             event.preventDefault();
             event.stopPropagation();
             setIsCommentsExpanded(!isCommentsExpanded);
@@ -308,7 +304,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           className={`flex items-center gap-1.5 text-sm transition-colors ${
             isRepostOpen ? 'text-primary' : 'text-muted-foreground hover:text-primary'
           }`}
-          onClick={(event) => {
+          onClick={event => {
             event.preventDefault();
             event.stopPropagation();
             if (!requireLogin()) return;
@@ -323,10 +319,10 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             className={`flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${
               isMoreOpen ? 'bg-muted text-foreground' : ''
             }`}
-            onClick={(event) => {
+            onClick={event => {
               event.preventDefault();
               event.stopPropagation();
-              setIsMoreOpen((value) => !value);
+              setIsMoreOpen(value => !value);
             }}
             aria-label="更多操作"
           >
@@ -335,7 +331,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           {isMoreOpen && (
             <div
               className="absolute bottom-8 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
-              onClick={(event) => event.stopPropagation()}
+              onClick={event => event.stopPropagation()}
             >
               {isCurrentUser && (
                 <button
@@ -357,9 +353,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           <Textarea
             placeholder="写点什么再转发..."
             value={repostContent}
-            onChange={(event) => setRepostContent(event.target.value)}
+            onChange={event => setRepostContent(event.target.value)}
             className="min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
-            onClick={(event) => event.stopPropagation()}
+            onClick={event => event.stopPropagation()}
           />
           <div className="mt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={() => setIsRepostOpen(false)}>
@@ -379,7 +375,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
               <button
                 type="button"
-                onClick={(event) => {
+                onClick={event => {
                   event.preventDefault();
                   event.stopPropagation();
                   setCommentSort('default');
@@ -395,7 +391,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               </button>
               <button
                 type="button"
-                onClick={(event) => {
+                onClick={event => {
                   event.preventDefault();
                   event.stopPropagation();
                   setCommentSort('latest');
@@ -420,16 +416,16 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   <Textarea
                     placeholder="写下你的评论..."
                     value={newCommentContent}
-                    onChange={(event) => setNewCommentContent(event.target.value)}
+                    onChange={event => setNewCommentContent(event.target.value)}
                     className="min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
-                    onClick={(event) => event.stopPropagation()}
+                    onClick={event => event.stopPropagation()}
                   />
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
                       <input
                         type="checkbox"
                         checked={commentShouldRepost}
-                        onChange={(event) => setCommentShouldRepost(event.target.checked)}
+                        onChange={event => setCommentShouldRepost(event.target.checked)}
                         className="h-3.5 w-3.5"
                       />
                       同时转发
@@ -454,7 +450,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             </div>
           ) : previewComments.length > 0 ? (
             <div className="space-y-3">
-              {previewComments.map((comment) => (
+              {previewComments.map(comment => (
                 <CommentItem
                   key={comment.id}
                   comment={comment}
@@ -474,7 +470,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               ))}
               {hasMoreComments && (
                 <button
-                  onClick={(event) => {
+                  onClick={event => {
                     event.preventDefault();
                     event.stopPropagation();
                     navigate(`/post/${post.id}`);
@@ -487,7 +483,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             </div>
           ) : (
             <p className="py-4 text-center text-sm text-muted-foreground">
-              {isAuthenticated ? '暂无评论，快来发表第一条评论吧。' : '暂无评论，登录后发表你的看法。'}
+              {isAuthenticated
+                ? '暂无评论，快来发表第一条评论吧。'
+                : '暂无评论，登录后发表你的看法。'}
             </p>
           )}
         </div>
@@ -509,14 +507,14 @@ function RepostOriginBlock({
       <Link
         to={`/user/${origin.author_id}`}
         className="text-xs font-medium text-foreground/70 hover:text-primary"
-        onClick={(event) => event.stopPropagation()}
+        onClick={event => event.stopPropagation()}
       >
         @{authorName}
       </Link>
       <Link
         to={`/post/${origin.id}`}
         className="mt-1 block break-words text-sm text-foreground/75 hover:text-foreground"
-        onClick={(event) => event.stopPropagation()}
+        onClick={event => event.stopPropagation()}
       >
         {isArticle ? (
           <>
@@ -554,7 +552,7 @@ function LinkedMentions({
     return <>{text}</>;
   }
 
-  const authorByName = new Map(authors.map((author) => [author.username, author]));
+  const authorByName = new Map(authors.map(author => [author.username, author]));
   const parts = text.split(/(@[^:\s/]+)/g);
 
   return (
@@ -575,7 +573,7 @@ function LinkedMentions({
             key={`${part}-${index}`}
             to={`/user/${author.user_id}`}
             className="font-medium text-primary hover:text-primary/80"
-            onClick={(event) => event.stopPropagation()}
+            onClick={event => event.stopPropagation()}
           >
             {part}
           </Link>
@@ -631,9 +629,13 @@ function CommentItem({
   renderReplies = true,
   visibleReplyLimit,
 }: CommentItemProps) {
-  const shouldShowFocusedReply = focusedCommentId ? containsComment(comment, focusedCommentId) : false;
+  const shouldShowFocusedReply = focusedCommentId
+    ? containsComment(comment, focusedCommentId)
+    : false;
   const totalReplies = renderReplies ? getReplyCount(comment) : 0;
-  const initialVisibleReplyCount = renderReplies ? getInitialVisibleReplyCount(comment, focusedCommentId) : 0;
+  const initialVisibleReplyCount = renderReplies
+    ? getInitialVisibleReplyCount(comment, focusedCommentId)
+    : 0;
   const [showReplies, setShowReplies] = useState(depth === 0 ? shouldShowFocusedReply : true);
   const [visibleReplyCount, setVisibleReplyCount] = useState(initialVisibleReplyCount);
   const toggleCommentLike = useToggleCommentLike(postId, currentUserId, commentSort);
@@ -664,7 +666,7 @@ function CommentItem({
   useEffect(() => {
     if (focusedCommentId && shouldShowFocusedReply) {
       setShowReplies(true);
-      setVisibleReplyCount((count) => Math.max(count, initialVisibleReplyCount));
+      setVisibleReplyCount(count => Math.max(count, initialVisibleReplyCount));
     }
   }, [focusedCommentId, initialVisibleReplyCount, shouldShowFocusedReply]);
 
@@ -695,7 +697,11 @@ function CommentItem({
         ref={itemRef}
         className={`flex gap-2 rounded-md transition-colors ${!isTopLevel ? 'mt-3' : ''}`}
       >
-        <Avatar src={comment.owner?.avatar_url} alt={comment.owner?.username || `用户${comment.owner_id}`} size="sm" />
+        <Avatar
+          src={comment.owner?.avatar_url}
+          alt={comment.owner?.username || `用户${comment.owner_id}`}
+          size="sm"
+        />
         <div className="min-w-0 flex-1">
           {isTopLevel || isSecondLevel ? (
             <Link
@@ -706,23 +712,31 @@ function CommentItem({
             </Link>
           ) : (
             <div className="flex items-center gap-1 text-sm">
-              <Link to={`/user/${comment.owner_id}`} className="font-medium text-foreground/70 hover:text-primary">
+              <Link
+                to={`/user/${comment.owner_id}`}
+                className="font-medium text-foreground/70 hover:text-primary"
+              >
                 {comment.owner?.username || `用户${comment.owner_id}`}
               </Link>
               <span className="text-muted-foreground">回复</span>
-              <Link to={`/user/${parentOwner?.id || comment.owner_id}`} className="text-muted-foreground hover:text-primary">
+              <Link
+                to={`/user/${parentOwner?.id || comment.owner_id}`}
+                className="text-muted-foreground hover:text-primary"
+              >
                 @{parentOwner?.username || comment.owner?.username}
               </Link>
             </div>
           )}
-          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/85">{comment.content}</p>
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/85">
+            {comment.content}
+          </p>
 
           <div className="comment-action-row ml-1 mt-1 flex items-center gap-4">
             <span className="comment-action-label text-xs text-muted-foreground">
               {formatDate(comment.created_at)}
             </span>
             <button
-              onClick={(event) => {
+              onClick={event => {
                 event.preventDefault();
                 event.stopPropagation();
                 toggleCommentLike.mutate({ commentId: comment.id });
@@ -737,7 +751,7 @@ function CommentItem({
             </button>
             {isAuthenticated && !isReplying && (
               <button
-                onClick={(event) => {
+                onClick={event => {
                   event.preventDefault();
                   event.stopPropagation();
                   onReply(comment.id, comment.owner?.username || `用户${comment.owner_id}`);
@@ -749,10 +763,10 @@ function CommentItem({
             )}
             {isAuthenticated && (
               <button
-                onClick={(event) => {
+                onClick={event => {
                   event.preventDefault();
                   event.stopPropagation();
-                  setIsRepostOpen((value) => !value);
+                  setIsRepostOpen(value => !value);
                 }}
                 className={`comment-icon-action flex items-center gap-1 text-xs transition-colors ${
                   isRepostOpen ? 'text-primary' : 'text-muted-foreground hover:text-primary'
@@ -769,10 +783,10 @@ function CommentItem({
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${
                   isMoreOpen ? 'bg-muted text-foreground' : ''
                 }`}
-                onClick={(event) => {
+                onClick={event => {
                   event.preventDefault();
                   event.stopPropagation();
-                  setIsMoreOpen((value) => !value);
+                  setIsMoreOpen(value => !value);
                 }}
                 aria-label="更多操作"
               >
@@ -781,7 +795,7 @@ function CommentItem({
               {isMoreOpen && (
                 <div
                   className="absolute bottom-7 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
-                  onClick={(event) => event.stopPropagation()}
+                  onClick={event => event.stopPropagation()}
                 >
                   {isCurrentUserComment && (
                     <button
@@ -798,7 +812,7 @@ function CommentItem({
             </div>
             {isTopLevel && hasReplies && (
               <button
-                onClick={(event) => {
+                onClick={event => {
                   event.preventDefault();
                   event.stopPropagation();
                   setShowReplies(!showReplies);
@@ -828,7 +842,7 @@ function CommentItem({
 
           {isRepostOpen && (
             <form
-              onSubmit={(event) => {
+              onSubmit={event => {
                 event.preventDefault();
                 event.stopPropagation();
                 if (repost.isPending) return;
@@ -844,7 +858,7 @@ function CommentItem({
                       setRepostContent('');
                       setIsRepostOpen(false);
                     },
-                  },
+                  }
                 );
               }}
               className="mt-3 space-y-2"
@@ -852,16 +866,16 @@ function CommentItem({
               <Textarea
                 placeholder="写点什么再转发..."
                 value={repostContent}
-                onChange={(event) => setRepostContent(event.target.value)}
+                onChange={event => setRepostContent(event.target.value)}
                 className="min-h-[56px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
-                onClick={(event) => event.stopPropagation()}
+                onClick={event => event.stopPropagation()}
               />
               <div className="flex justify-end gap-2">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={(event) => {
+                  onClick={event => {
                     event.stopPropagation();
                     setIsRepostOpen(false);
                   }}
@@ -882,7 +896,7 @@ function CommentItem({
           {(() => {
             let remainingReplyCount = displayedReplyCount;
 
-            return comment.children.map((child) => {
+            return comment.children.map(child => {
               if (remainingReplyCount <= 0) return null;
 
               const childReplyCount = getReplyCount(child);
@@ -903,7 +917,10 @@ function CommentItem({
                   onCancelReply={onCancelReply}
                   onReplySuccess={onReplySuccess}
                   depth={depth + 1}
-                  parentOwner={{ id: comment.owner_id, username: comment.owner?.username || `用户${comment.owner_id}` }}
+                  parentOwner={{
+                    id: comment.owner_id,
+                    username: comment.owner?.username || `用户${comment.owner_id}`,
+                  }}
                   focusedCommentId={focusedCommentId}
                   visibleReplyLimit={childVisibleReplyLimit}
                 />
@@ -913,10 +930,10 @@ function CommentItem({
           {hasMoreRepliesToShow && (
             <button
               type="button"
-              onClick={(event) => {
+              onClick={event => {
                 event.preventDefault();
                 event.stopPropagation();
-                setVisibleReplyCount((count) => getNextVisibleReplyCount(count, totalReplies));
+                setVisibleReplyCount(count => getNextVisibleReplyCount(count, totalReplies));
               }}
               className="mt-3 text-xs text-primary transition-colors hover:text-primary/80"
             >
@@ -963,7 +980,7 @@ function ReplyInput({
           setShouldRepost(false);
           onSuccess();
         },
-      },
+      }
     );
   };
 
@@ -974,7 +991,7 @@ function ReplyInput({
           <span>回复 @{replyToUsername}</span>
           <button
             type="button"
-            onClick={(event) => {
+            onClick={event => {
               event.stopPropagation();
               onCancel();
             }}
@@ -986,9 +1003,9 @@ function ReplyInput({
         <Textarea
           placeholder="写下你的回复..."
           value={content}
-          onChange={(event) => setContent(event.target.value)}
+          onChange={event => setContent(event.target.value)}
           className="min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
-          onClick={(event) => event.stopPropagation()}
+          onClick={event => event.stopPropagation()}
           autoFocus
         />
         <div className="flex items-center justify-between">
@@ -996,7 +1013,7 @@ function ReplyInput({
             <input
               type="checkbox"
               checked={shouldRepost}
-              onChange={(event) => setShouldRepost(event.target.checked)}
+              onChange={event => setShouldRepost(event.target.checked)}
               className="h-3.5 w-3.5"
             />
             同时转发

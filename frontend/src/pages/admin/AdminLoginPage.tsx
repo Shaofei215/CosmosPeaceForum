@@ -24,10 +24,13 @@ export default function AdminLoginPage() {
     login.mutate(
       { username: username.trim(), password },
       {
-        onSuccess: (data) => {
-          navigate(data.admin.must_change_credentials ? '/admin/setup' : getRedirectPath(location.state), {
-            replace: true,
-          });
+        onSuccess: data => {
+          navigate(
+            data.admin.must_change_credentials ? '/admin/setup' : getRedirectPath(location.state),
+            {
+              replace: true,
+            }
+          );
         },
         onError: (err: { message?: string }) => {
           setError(err.message || '登录失败');
@@ -62,7 +65,7 @@ export default function AdminLoginPage() {
               <Input
                 id="admin-username"
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                onChange={event => setUsername(event.target.value)}
                 disabled={login.isPending}
                 autoComplete="username"
               />
@@ -75,7 +78,7 @@ export default function AdminLoginPage() {
                 id="admin-password"
                 type="password"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={event => setPassword(event.target.value)}
                 disabled={login.isPending}
                 autoComplete="current-password"
               />
@@ -89,4 +92,3 @@ export default function AdminLoginPage() {
     </div>
   );
 }
-

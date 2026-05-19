@@ -4,7 +4,10 @@
 
 import type { UserProfile } from '@/features/user/types';
 
-export type PostAuthor = Pick<UserProfile, 'id' | 'username' | 'bio' | 'avatar_url' | 'created_at'> & {
+export type PostAuthor = Pick<
+  UserProfile,
+  'id' | 'username' | 'bio' | 'avatar_url' | 'created_at'
+> & {
   is_ai_agent?: boolean;
 };
 

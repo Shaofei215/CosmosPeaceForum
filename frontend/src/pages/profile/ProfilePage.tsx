@@ -59,7 +59,7 @@ export default function ProfilePage() {
       observerRef.current.disconnect();
     }
 
-    observerRef.current = new IntersectionObserver((entries) => {
+    observerRef.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
         fetchNextPage();
       }
@@ -73,7 +73,7 @@ export default function ProfilePage() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // 合并所有页面的帖子
-  const posts = data?.pages.flatMap((page) => page.data) || [];
+  const posts = data?.pages.flatMap(page => page.data) || [];
 
   if (isUserLoading) {
     return <ProfileSkeleton />;
@@ -97,17 +97,13 @@ export default function ProfilePage() {
       {/* 用户资料卡片 */}
       <div className="rounded-lg bg-white p-4 shadow-sm sm:p-5">
         <div className="flex items-start gap-3 sm:items-center sm:gap-4">
-          <Avatar
-            src={user.avatar_url}
-            alt={user.username}
-            size="xl"
-          />
+          <Avatar src={user.avatar_url} alt={user.username} size="xl" />
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2 sm:items-center">
               <h1 className="min-w-0 truncate text-xl font-bold sm:text-2xl">{user.username}</h1>
               {!isCurrentUser && (
                 <Button
-                  variant={followStatus?.is_following ? "outline" : "default"}
+                  variant={followStatus?.is_following ? 'outline' : 'default'}
                   size="sm"
                   onClick={handleFollow}
                   disabled={toggleFollow.isPending}
@@ -116,32 +112,32 @@ export default function ProfilePage() {
                   {toggleFollow.isPending ? (
                     <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   ) : followStatus?.is_mutual ? (
-                    "互相关注"
+                    '互相关注'
                   ) : followStatus?.is_following ? (
-                    "已关注"
+                    '已关注'
                   ) : (
-                    "关注"
+                    '关注'
                   )}
                 </Button>
               )}
             </div>
             {user.bio && (
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                {user.bio}
-              </p>
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{user.bio}</p>
             )}
             <div className="mt-3 flex items-center gap-4">
               <Link
                 to={`/user/${user.id}/following`}
                 className="text-sm text-muted-foreground hover:text-primary transition-colors"
               >
-                <span className="font-medium text-foreground">{user.following_count ?? 0}</span> 关注
+                <span className="font-medium text-foreground">{user.following_count ?? 0}</span>{' '}
+                关注
               </Link>
               <Link
                 to={`/user/${user.id}/followers`}
                 className="text-sm text-muted-foreground hover:text-primary transition-colors"
               >
-                <span className="font-medium text-foreground">{user.followers_count ?? 0}</span> 粉丝
+                <span className="font-medium text-foreground">{user.followers_count ?? 0}</span>{' '}
+                粉丝
               </Link>
             </div>
           </div>
@@ -174,14 +170,12 @@ export default function ProfilePage() {
           </div>
         ) : posts.length > 0 ? (
           <div className="divide-y divide-border/50">
-            {posts.map((post) => (
+            {posts.map(post => (
               <PostCard key={post.id} post={post} />
             ))}
           </div>
         ) : (
-          <div className="text-center py-10 text-muted-foreground">
-            暂无帖子
-          </div>
+          <div className="text-center py-10 text-muted-foreground">暂无帖子</div>
         )}
 
         {/* 加载更多 */}

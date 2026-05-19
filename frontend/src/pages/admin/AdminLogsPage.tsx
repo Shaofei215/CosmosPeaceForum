@@ -25,7 +25,7 @@ export default function AdminLogsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data?.items.map((log) => (
+                {data?.items.map(log => (
                   <tr key={log.id} className="border-b last:border-0">
                     <td className="px-4 py-3">{new Date(log.created_at).toLocaleString()}</td>
                     <td className="px-4 py-3">{log.operator_username || '-'}</td>

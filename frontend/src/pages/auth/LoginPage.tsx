@@ -82,7 +82,7 @@ export default function LoginPage() {
     sendCode(
       { email: email.trim() },
       {
-        onSuccess: (data) => {
+        onSuccess: data => {
           setCountdown(60);
           setSuccessMessage(`${data.message}，有效期10分钟`);
           setTimeout(() => setSuccessMessage(''), 5000);
@@ -185,7 +185,7 @@ export default function LoginPage() {
                 type="email"
                 placeholder="请输入邮箱地址"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 disabled={isPending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
@@ -228,7 +228,7 @@ export default function LoginPage() {
                   type="password"
                   placeholder="请输入密码"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={e => setPassword(e.target.value)}
                   disabled={isPending}
                   className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
                 />
@@ -247,7 +247,7 @@ export default function LoginPage() {
                     type="text"
                     placeholder="请输入6位验证码"
                     value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     disabled={isPending}
                     className="auth-input flex-1 bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
                     maxLength={6}
@@ -267,20 +267,13 @@ export default function LoginPage() {
 
             {/* 忘记密码链接 */}
             <div className="flex justify-end">
-              <Link
-                to="/forgot-password"
-                className="text-sm text-primary hover:underline"
-              >
+              <Link to="/forgot-password" className="text-sm text-primary hover:underline">
                 忘记密码？
               </Link>
             </div>
 
             {/* 登录按钮 */}
-            <Button
-              type="submit"
-              className="auth-submit w-full rounded-lg"
-              disabled={isPending}
-            >
+            <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
               {isLoginPending ? '登录中...' : '登录'}
             </Button>
           </form>

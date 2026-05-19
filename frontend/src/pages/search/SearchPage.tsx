@@ -1,10 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import {
-  useInfiniteSearch,
-  type ContentSearchItem,
-  type SearchType,
-} from '@/features/search';
+import { useInfiniteSearch, type ContentSearchItem, type SearchType } from '@/features/search';
 import type { UserSearchItem } from '@/features/search';
 import { PostCard } from '@/widgets/post-card';
 import { UserListItem, UserListItemSkeleton } from '@/widgets/user-list-item';
@@ -16,13 +12,10 @@ export default function SearchPage() {
   const requestedType = searchParams.get('type');
   const type: SearchType = requestedType === 'user' ? 'user' : 'content';
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-  } = useInfiniteSearch(type, query);
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteSearch(
+    type,
+    query
+  );
 
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -32,7 +25,7 @@ export default function SearchPage() {
       observerRef.current.disconnect();
     }
 
-    observerRef.current = new IntersectionObserver((entries) => {
+    observerRef.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
         fetchNextPage();
       }
@@ -45,7 +38,7 @@ export default function SearchPage() {
     return () => observerRef.current?.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const items = data?.pages.flatMap((page) => page.data) || [];
+  const items = data?.pages.flatMap(page => page.data) || [];
   const contentItems = items as ContentSearchItem[];
   const userItems = items as UserSearchItem[];
 
@@ -60,8 +53,8 @@ export default function SearchPage() {
       ) : items.length > 0 ? (
         <div className="divide-y divide-border/50">
           {type === 'content'
-            ? contentItems.map((post) => <PostCard key={post.id} post={post} />)
-            : userItems.map((user) => <UserListItem key={user.id} user={user} />)}
+            ? contentItems.map(post => <PostCard key={post.id} post={post} />)
+            : userItems.map(user => <UserListItem key={user.id} user={user} />)}
         </div>
       ) : (
         <div className="py-10 text-center text-muted-foreground">

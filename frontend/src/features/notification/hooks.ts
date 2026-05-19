@@ -56,7 +56,7 @@ export const useNotificationEvents = (enabled = true) => {
           NotificationSummaryResponse;
         queryClient.setQueryData<NotificationUnreadCountResponse>(
           ['notifications', 'unread-count'],
-          { unread_count: data.unread_count },
+          { unread_count: data.unread_count }
         );
         queryClient.setQueryData<NotificationSummaryResponse>(['notifications', 'summary'], {
           following_count: data.following_count,

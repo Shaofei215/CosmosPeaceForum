@@ -30,8 +30,9 @@ export default function ManagementLoginPage() {
     localStorage.setItem('token', token);
     window.history.replaceState(null, '', '/management-login');
 
-    authApi.getCurrentUser()
-      .then((user) => {
+    authApi
+      .getCurrentUser()
+      .then(user => {
         setAuth(token, user);
         navigate(redirect, { replace: true });
       })

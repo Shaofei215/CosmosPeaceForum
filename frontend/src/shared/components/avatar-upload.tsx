@@ -137,10 +137,7 @@ export function AvatarUpload({
             src={displayUrl}
             alt={username}
             size={size}
-            className={cn(
-              'transition-all duration-200',
-              !disabled && 'group-hover:opacity-70'
-            )}
+            className={cn('transition-all duration-200', !disabled && 'group-hover:opacity-70')}
           />
         ) : (
           <div
@@ -187,13 +184,9 @@ export function AvatarUpload({
         />
       </div>
 
-      {error && (
-        <p className="text-xs text-destructive">{error}</p>
-      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
 
-      <p className="text-xs text-muted-foreground">
-        点击上传或拖拽图片（最大5MB）
-      </p>
+      <p className="text-xs text-muted-foreground">点击上传或拖拽图片（最大5MB）</p>
     </div>
   );
 }

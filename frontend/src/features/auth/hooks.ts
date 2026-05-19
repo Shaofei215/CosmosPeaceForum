@@ -24,7 +24,7 @@ export const useLogin = () => {
 
   return useMutation({
     mutationFn: authApi.login,
-    onSuccess: async (data) => {
+    onSuccess: async data => {
       try {
         // 先保存token到localStorage，以便后续请求使用
         localStorage.setItem('token', data.access_token);
@@ -98,7 +98,7 @@ export const useRegisterWithVerification = () => {
 
   return useMutation({
     mutationFn: authApi.registerWithVerification,
-    onSuccess: (data) => {
+    onSuccess: data => {
       // 注册成功后保存token和临时用户信息
       // 用户详细信息（如下用户名）将在资料完善页面更新
       const tempUser = {

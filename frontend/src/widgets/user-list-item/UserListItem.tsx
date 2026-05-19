@@ -1,9 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  useFollowStatus,
-  useToggleFollow,
-  type FollowStatusResponse,
-} from '@/features/follow';
+import { useFollowStatus, useToggleFollow, type FollowStatusResponse } from '@/features/follow';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Skeleton } from '@/shared/components/ui';
 
@@ -26,8 +22,7 @@ export function UserListItem({ user }: UserListItemProps) {
   const toggleFollow = useToggleFollow();
   const isCurrentUser = currentUser?.id === user.id;
   const hasInitialStatus =
-    typeof user.is_following === 'boolean' ||
-    typeof user.is_followed_by === 'boolean';
+    typeof user.is_following === 'boolean' || typeof user.is_followed_by === 'boolean';
   const initialStatus: FollowStatusResponse | undefined = hasInitialStatus
     ? {
         user_id: user.id,
@@ -52,20 +47,11 @@ export function UserListItem({ user }: UserListItemProps) {
 
   return (
     <div className="flex items-center gap-3 px-3 py-2">
-      <Link
-        to={`/user/${user.id}`}
-        className="flex min-w-0 flex-1 items-center gap-3"
-      >
+      <Link to={`/user/${user.id}`} className="flex min-w-0 flex-1 items-center gap-3">
         <Avatar src={user.avatar_url} alt={user.username} size="md" />
         <div className="min-w-0 flex-1">
-          <div className="truncate font-medium text-foreground">
-            {user.username}
-          </div>
-          {user.bio && (
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">
-              {user.bio}
-            </p>
-          )}
+          <div className="truncate font-medium text-foreground">{user.username}</div>
+          {user.bio && <p className="mt-0.5 truncate text-sm text-muted-foreground">{user.bio}</p>}
         </div>
       </Link>
 

@@ -12,14 +12,8 @@ export default function FollowingListPage() {
   const { userId } = useParams<{ userId: string }>();
   const userIdNum = Number(userId);
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isError,
-  } = useInfiniteFollowingList(userIdNum);
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError } =
+    useInfiniteFollowingList(userIdNum);
 
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -29,7 +23,7 @@ export default function FollowingListPage() {
       observerRef.current.disconnect();
     }
 
-    observerRef.current = new IntersectionObserver((entries) => {
+    observerRef.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
         fetchNextPage();
       }
@@ -42,7 +36,7 @@ export default function FollowingListPage() {
     return () => observerRef.current?.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const followingList = data?.pages.flatMap((page) => page.data) || [];
+  const followingList = data?.pages.flatMap(page => page.data) || [];
 
   if (isError) {
     return (
@@ -64,14 +58,12 @@ export default function FollowingListPage() {
         </div>
       ) : followingList.length > 0 ? (
         <div className="divide-y divide-border/50">
-          {followingList.map((item) => (
+          {followingList.map(item => (
             <UserListItem key={item.id} user={item} />
           ))}
         </div>
       ) : (
-        <div className="text-center py-10 text-muted-foreground">
-          暂无关注
-        </div>
+        <div className="text-center py-10 text-muted-foreground">暂无关注</div>
       )}
 
       <div ref={loadMoreRef} className="py-3 text-center border-t border-border/50">

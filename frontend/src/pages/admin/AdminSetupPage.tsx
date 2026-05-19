@@ -45,20 +45,20 @@ export default function AdminSetupPage() {
               type="password"
               placeholder="当前初始密码"
               value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
+              onChange={event => setCurrentPassword(event.target.value)}
               disabled={updateProfile.isPending}
             />
             <Input
               placeholder="新的管理员用户名"
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={event => setUsername(event.target.value)}
               disabled={updateProfile.isPending}
             />
             <Input
               type="password"
               placeholder="新的管理员密码，至少 8 位"
               value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
+              onChange={event => setNewPassword(event.target.value)}
               disabled={updateProfile.isPending}
             />
             <Button type="submit" className="w-full rounded-md" disabled={updateProfile.isPending}>

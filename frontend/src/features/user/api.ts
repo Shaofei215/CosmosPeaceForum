@@ -27,8 +27,7 @@ export const userApi = {
    * @param userId - 用户ID
    * @returns 用户详情
    */
-  getUser: (userId: number) =>
-    apiClient.get<UserProfile>(`/users/${userId}`),
+  getUser: (userId: number) => apiClient.get<UserProfile>(`/users/${userId}`),
 
   /**
    * 通过用户名获取用户
@@ -85,8 +84,7 @@ export const userApi = {
    *
    * @returns 更新后的用户信息
    */
-  deleteAvatar: () =>
-    apiClient.delete<UserProfile>('/users/avatar'),
+  deleteAvatar: () => apiClient.delete<UserProfile>('/users/avatar'),
 
   /**
    * 删除用户
@@ -94,6 +92,5 @@ export const userApi = {
    *
    * @param userId - 用户ID
    */
-  deleteUser: (userId: number) =>
-    apiClient.delete<void>(`/users/${userId}`),
+  deleteUser: (userId: number) => apiClient.delete<void>(`/users/${userId}`),
 };

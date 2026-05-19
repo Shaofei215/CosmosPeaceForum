@@ -7,14 +7,11 @@ export function containsComment(comment: Comment, commentId: number): boolean {
     return true;
   }
 
-  return Boolean(comment.children?.some((child) => containsComment(child, commentId)));
+  return Boolean(comment.children?.some(child => containsComment(child, commentId)));
 }
 
 export function getReplyCount(comment: Comment): number {
-  return comment.children.reduce(
-    (total, child) => total + 1 + getReplyCount(child),
-    0,
-  );
+  return comment.children.reduce((total, child) => total + 1 + getReplyCount(child), 0);
 }
 
 function getReplyRenderIndex(comment: Comment, commentId: number, offset = 0): number {
@@ -56,6 +53,9 @@ export function getInitialVisibleReplyCount(comment: Comment, focusedCommentId?:
   return Math.min(totalReplies, Math.max(REPLIES_BATCH_SIZE, focusedChildIndex + 1));
 }
 
-export function getNextVisibleReplyCount(currentVisibleCount: number, totalReplies: number): number {
+export function getNextVisibleReplyCount(
+  currentVisibleCount: number,
+  totalReplies: number
+): number {
   return Math.min(totalReplies, currentVisibleCount + REPLIES_BATCH_SIZE);
 }

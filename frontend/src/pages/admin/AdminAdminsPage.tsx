@@ -61,19 +61,19 @@ export default function AdminAdminsPage() {
               </tr>
             </thead>
             <tbody>
-              {data?.items.map((admin) => (
+              {data?.items.map(admin => (
                 <tr key={admin.id} className="border-b last:border-0">
                   <td className="px-4 py-3">
                     <p className="font-medium">{admin.username}</p>
                     <p className="text-xs text-muted-foreground">
                       {admin.is_super_admin ? '超级管理员' : `ID ${admin.id}`}
                     </p>
-                    {admin.email && (
-                      <p className="text-xs text-muted-foreground">{admin.email}</p>
-                    )}
+                    {admin.email && <p className="text-xs text-muted-foreground">{admin.email}</p>}
                   </td>
                   <td className="max-w-md px-4 py-3">
-                    {admin.is_super_admin ? '全部权限' : admin.permissions.map((p) => permissionLabels[p]).join('、')}
+                    {admin.is_super_admin
+                      ? '全部权限'
+                      : admin.permissions.map(p => permissionLabels[p]).join('、')}
                   </td>
                   <td className="px-4 py-3">{admin.is_active ? '启用' : '停用'}</td>
                   <td className="px-4 py-3">
@@ -102,7 +102,7 @@ export default function AdminAdminsPage() {
         <CreateAdminDialog
           saving={createMutation.isPending}
           onClose={() => setCreating(false)}
-          onSubmit={(payload) => createMutation.mutate(payload)}
+          onSubmit={payload => createMutation.mutate(payload)}
         />
       )}
     </div>
@@ -125,9 +125,9 @@ function CreateAdminDialog({
   const [superAdmin, setSuperAdmin] = useState(false);
 
   const togglePermission = (permission: AdminPermission) => {
-    setPermissions((value) =>
+    setPermissions(value =>
       value.includes(permission)
-        ? value.filter((item) => item !== permission)
+        ? value.filter(item => item !== permission)
         : [...value, permission]
     );
   };
@@ -141,18 +141,18 @@ function CreateAdminDialog({
         <CardContent className="space-y-4">
           <Input
             value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={event => setUsername(event.target.value)}
             placeholder="用户名"
           />
           <Input
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={event => setEmail(event.target.value)}
             placeholder="申诉邮箱（可选）"
             type="email"
           />
           <Input
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={event => setPassword(event.target.value)}
             placeholder="初始密码，至少 8 位"
             type="password"
           />
@@ -160,13 +160,13 @@ function CreateAdminDialog({
             <input
               type="checkbox"
               checked={superAdmin}
-              onChange={(event) => setSuperAdmin(event.target.checked)}
+              onChange={event => setSuperAdmin(event.target.checked)}
             />
             超级管理员
           </label>
           {!superAdmin && (
             <div className="grid gap-2 sm:grid-cols-2">
-              {ADMIN_PERMISSIONS.map((permission) => (
+              {ADMIN_PERMISSIONS.map(permission => (
                 <label key={permission} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"

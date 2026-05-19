@@ -23,13 +23,10 @@ export default function FeedPage() {
     requestedFeedType === 'latest' || requestedFeedType === 'following'
       ? requestedFeedType
       : 'recommended';
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-  } = useInfiniteGlobalFeed(user?.id, feedType);
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteGlobalFeed(
+    user?.id,
+    feedType
+  );
 
   // 无限滚动监听
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -40,7 +37,7 @@ export default function FeedPage() {
       observerRef.current.disconnect();
     }
 
-    observerRef.current = new IntersectionObserver((entries) => {
+    observerRef.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
         fetchNextPage();
       }
@@ -54,7 +51,7 @@ export default function FeedPage() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // 合并所有页面的帖子
-  const posts = data?.pages.flatMap((page) => page.data) || [];
+  const posts = data?.pages.flatMap(page => page.data) || [];
 
   return (
     <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
@@ -68,7 +65,7 @@ export default function FeedPage() {
         </div>
       ) : posts.length > 0 ? (
         <div className="divide-y divide-border/50">
-          {posts.map((post) => (
+          {posts.map(post => (
             <PostCard key={post.id} post={post} />
           ))}
         </div>

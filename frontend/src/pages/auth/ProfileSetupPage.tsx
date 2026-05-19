@@ -18,7 +18,7 @@ function extractErrorMessage(err: unknown): string | null {
     }
     if (Array.isArray(e.message)) {
       return (e.message as Array<Record<string, unknown>>)
-        .map((item) => (typeof item.msg === 'string' ? item.msg : JSON.stringify(item)))
+        .map(item => (typeof item.msg === 'string' ? item.msg : JSON.stringify(item)))
         .join(', ');
     }
   }
@@ -143,16 +143,14 @@ export default function ProfileSetupPage() {
                 <label htmlFor="username" className="text-sm font-medium">
                   用户名 <span className="text-destructive">*</span>
                 </label>
-                <span className="text-xs text-muted-foreground">
-                  {username.length}/30
-                </span>
+                <span className="text-xs text-muted-foreground">{username.length}/30</span>
               </div>
               <Input
                 id="username"
                 type="text"
                 placeholder="用户名设置后暂不可更改，请仔细思考哦~"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={e => setUsername(e.target.value)}
                 disabled={isPending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
                 maxLength={30}
@@ -164,27 +162,21 @@ export default function ProfileSetupPage() {
                 <label htmlFor="bio" className="text-sm font-medium">
                   个人签名
                 </label>
-                <span className="text-xs text-muted-foreground">
-                  {bio.length}/20
-                </span>
+                <span className="text-xs text-muted-foreground">{bio.length}/20</span>
               </div>
               <Input
                 id="bio"
                 type="text"
                 placeholder="签名也暂不可更改，三思而后行哦~"
                 value={bio}
-                onChange={(e) => setBio(e.target.value)}
+                onChange={e => setBio(e.target.value)}
                 disabled={isPending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
                 maxLength={20}
               />
             </div>
 
-            <Button
-              type="submit"
-              className="auth-submit w-full rounded-lg"
-              disabled={isPending}
-            >
+            <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
               {isCompleting ? '保存中...' : '完成设置'}
             </Button>
           </form>

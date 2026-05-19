@@ -13,19 +13,19 @@ export const adminKeys = {
 };
 
 export function useAdminLogin() {
-  const setAuth = useAdminAuthStore((state) => state.setAuth);
+  const setAuth = useAdminAuthStore(state => state.setAuth);
 
   return useMutation({
     mutationFn: adminApi.login,
-    onSuccess: (data) => {
+    onSuccess: data => {
       setAuth(data.access_token, data.admin);
     },
   });
 }
 
 export function useCurrentAdmin() {
-  const isAuthenticated = useAdminAuthStore((state) => state.isAuthenticated);
-  const setAdmin = useAdminAuthStore((state) => state.setAdmin);
+  const isAuthenticated = useAdminAuthStore(state => state.isAuthenticated);
+  const setAdmin = useAdminAuthStore(state => state.setAdmin);
 
   return useQuery({
     queryKey: adminKeys.me,
@@ -40,7 +40,7 @@ export function useCurrentAdmin() {
 }
 
 export function useAdminLogout() {
-  const logout = useAdminAuthStore((state) => state.logout);
+  const logout = useAdminAuthStore(state => state.logout);
   const queryClient = useQueryClient();
 
   return () => {
@@ -50,15 +50,14 @@ export function useAdminLogout() {
 }
 
 export function useAdminProfileUpdate() {
-  const setAdmin = useAdminAuthStore((state) => state.setAdmin);
+  const setAdmin = useAdminAuthStore(state => state.setAdmin);
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: adminApi.updateProfile,
-    onSuccess: (admin) => {
+    onSuccess: admin => {
       setAdmin(admin);
       queryClient.setQueryData(adminKeys.me, admin);
     },
   });
 }
-

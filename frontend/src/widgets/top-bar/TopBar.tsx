@@ -119,7 +119,7 @@ export function TopBar() {
         {/* 搜索框 */}
         <form
           className="relative min-w-0 flex-1"
-          onSubmit={(event) => {
+          onSubmit={event => {
             event.preventDefault();
             navigateToSearch();
           }}
@@ -135,7 +135,7 @@ export function TopBar() {
             type="text"
             placeholder="搜索内容..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={e => setSearchQuery(e.target.value)}
             className="mobile-top-input h-9 rounded-[1.5rem] border-0 bg-muted/50 pl-10 shadow-none focus-visible:ring-1 sm:h-10"
           />
         </form>
@@ -143,7 +143,7 @@ export function TopBar() {
         {/* 信息流页面显示筛选按钮，搜索页面显示搜索类型和返回，其他页面显示返回按钮 */}
         {isFeedPage ? (
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            {filters.map((filter) => {
+            {filters.map(filter => {
               const Icon = filter.icon;
               return (
                 <button
@@ -173,7 +173,7 @@ export function TopBar() {
           </div>
         ) : isSearchPage ? (
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            {searchFilters.map((filter) => {
+            {searchFilters.map(filter => {
               const Icon = filter.icon;
               return (
                 <button

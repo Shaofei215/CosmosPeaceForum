@@ -27,7 +27,7 @@ export function ProfileDialog({ open, onOpenChange, currentAdmin }: ProfileDialo
 
   const updateMutation = useMutation({
     mutationFn: authApi.updateProfile,
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin'] });
       onOpenChange(false);
       setUsername('');
@@ -36,8 +36,8 @@ export function ProfileDialog({ open, onOpenChange, currentAdmin }: ProfileDialo
       setConfirmPassword('');
       setError('');
     },
-    onError: (err: any) => {
-      setError(err.message || '修改失败，请重试');
+    onError: (err: unknown) => {
+      setError(err instanceof Error ? err.message : '修改失败，请重试');
     },
   });
 

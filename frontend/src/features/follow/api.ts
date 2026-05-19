@@ -11,24 +11,17 @@ import type {
 } from './types';
 
 export const followApi = {
-  toggleFollow: (userId: number) =>
-    apiClient.post<FollowToggleResponse>(`/users/${userId}/follow`),
+  toggleFollow: (userId: number) => apiClient.post<FollowToggleResponse>(`/users/${userId}/follow`),
 
   getFollowStatus: (userId: number) =>
     apiClient.get<FollowStatusResponse>(`/users/${userId}/follow-status`),
 
-  getFollowing: (
-    userId: number,
-    params?: { page?: number; page_size?: number }
-  ) =>
+  getFollowing: (userId: number, params?: { page?: number; page_size?: number }) =>
     apiClient.get<FollowListResponse>(`/users/${userId}/following`, {
       params,
     }),
 
-  getFollowers: (
-    userId: number,
-    params?: { page?: number; page_size?: number }
-  ) =>
+  getFollowers: (userId: number, params?: { page?: number; page_size?: number }) =>
     apiClient.get<FollowerListResponse>(`/users/${userId}/followers`, {
       params,
     }),
