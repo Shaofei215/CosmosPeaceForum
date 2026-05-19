@@ -1,5 +1,6 @@
 import { apiClient } from '@/shared/api/client';
 import type {
+  AdminCreateRequest, AdminUpdateRequest, AdminUser,
   AgentConfig, AgentCreate, AgentUpdate, AgentListResponse, AgentRelationUpdate,
   AgentRuntimeStatusResponse, PromptInjectionRequest, AgentAppLoginResponse,
   DashboardStats,
@@ -10,6 +11,24 @@ import type {
   MemoryListResponse, MemoryOwnerListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
   TerminalLog, TerminalLogListResponse,
 } from '@/shared/types/api';
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export const adminApi = {
+  list: (skip = 0, limit = 100) =>
+    apiClient.get<PaginatedResponse<AdminUser>>(`/admins/?skip=${skip}&limit=${limit}`),
+
+  create: (data: AdminCreateRequest) =>
+    apiClient.post<AdminUser>('/admins/', data),
+
+  update: (id: number, data: AdminUpdateRequest) =>
+    apiClient.put<AdminUser>(`/admins/${id}`, data),
+};
 
 export const agentApi = {
   list: (skip = 0, limit = 100) =>

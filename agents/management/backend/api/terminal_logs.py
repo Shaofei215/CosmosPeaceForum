@@ -7,9 +7,10 @@ import asyncio
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
-from agents.management.backend.api.deps import get_current_admin
+from agents.management.backend.api.deps import require_permission
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.schemas import TerminalLogListResponse
+from agents.management.backend.services.permissions import PERMISSION_VIEW_LOGS
 from agents.management.backend.services.terminal_log_service import terminal_log_capture
 
 router = APIRouter()
@@ -22,7 +23,7 @@ def get_terminal_logs(
     level: str = Query(None),
     keyword: str = Query(None),
     role: str = Query(None),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_VIEW_LOGS)),
 ):
     """获取终端日志列表"""
     logs, total = terminal_log_capture.get_logs(
@@ -39,7 +40,7 @@ def get_terminal_logs(
 def get_recent_terminal_logs(
     count: int = 50,
     role: str = Query(None),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_VIEW_LOGS)),
 ):
     """获取最近的终端日志"""
     logs = terminal_log_capture.get_recent_logs(count=count, role=role)
@@ -48,7 +49,7 @@ def get_recent_terminal_logs(
 
 @router.get("/stream")
 def stream_terminal_logs(
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_VIEW_LOGS)),
 ):
     """SSE 流式推送终端日志"""
 
@@ -72,7 +73,7 @@ def stream_terminal_logs(
 
 @router.post("/clear")
 def clear_terminal_logs(
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_VIEW_LOGS)),
 ):
     """清空终端日志"""
     terminal_log_capture.clear()

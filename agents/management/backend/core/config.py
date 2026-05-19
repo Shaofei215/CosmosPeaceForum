@@ -1,14 +1,51 @@
 """
 Management Backend - 核心配置模块
-所有配置均使用代码默认值，弃用 .env 文件
 """
 
 import logging
 import os
 import secrets
+from functools import lru_cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def find_env_file() -> Path | None:
+    """查找 agents 自己的 .env 文件，不读取其他 .env。"""
+    repo_root = Path(__file__).resolve().parents[4]
+    candidates = [
+        Path.cwd() / "agents" / ".env",
+        repo_root / "agents" / ".env",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+@lru_cache(maxsize=1)
+def _read_env_file() -> dict[str, str]:
+    env_file = find_env_file()
+    if env_file is None:
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        values[key] = value
+    return values
+
+
+def _get_env(name: str, default: str = "") -> str:
+    if name in os.environ:
+        return os.environ[name]
+    return _read_env_file().get(name, default)
 
 
 def _get_or_generate_jwt_secret() -> str:
@@ -21,7 +58,7 @@ def _get_or_generate_jwt_secret() -> str:
     3. 自动生成并保存到 .jwt_secret 文件
     """
     # 1. 优先使用环境变量（生产环境可配置）
-    env_key = os.environ.get("MANAGEMENT_JWT_SECRET_KEY", "")
+    env_key = _get_env("MANAGEMENT_JWT_SECRET_KEY", "")
     if env_key:
         return env_key
     
@@ -50,19 +87,28 @@ MANAGEMENT_JWT_SECRET_KEY = _get_or_generate_jwt_secret()
 MANAGEMENT_JWT_ALGORITHM = "HS256"
 MANAGEMENT_ACCESS_TOKEN_EXPIRE_HOURS = 720
 
-# 管理员初始账号（首次启动使用）
-MANAGEMENT_ADMIN_USERNAME = "sliverwolf"
-MANAGEMENT_ADMIN_PASSWORD = "Level999"
+# 管理员初始账号（首次启动使用）。优先读取环境变量，其次读取 agents/.env。
+MANAGEMENT_ADMIN_USERNAME = _get_env(
+    "MANAGEMENT_ADMIN_INITIAL_USERNAME",
+    _get_env("MANAGEMENT_ADMIN_USERNAME", "sliverwolf"),
+)
+MANAGEMENT_ADMIN_PASSWORD = _get_env(
+    "MANAGEMENT_ADMIN_INITIAL_PASSWORD",
+    _get_env("MANAGEMENT_ADMIN_PASSWORD", "Level999"),
+)
 
 # 服务器配置
-MANAGEMENT_SERVER_HOST = "0.0.0.0"
-MANAGEMENT_SERVER_PORT = 8001
+MANAGEMENT_SERVER_HOST = _get_env("MANAGEMENT_SERVER_HOST", "0.0.0.0")
+MANAGEMENT_SERVER_PORT = int(_get_env("MANAGEMENT_SERVER_PORT", "8001"))
 
 # 数据库路径
-MANAGEMENT_DB_PATH = str(Path(__file__).parent.parent.parent / "data" / "management.db")
+MANAGEMENT_DB_PATH = _get_env(
+    "MANAGEMENT_DB_PATH",
+    str(Path(__file__).parent.parent.parent / "data" / "management.db"),
+)
 
 # Scheduler 内部接口端口
-SCHEDULER_INTERNAL_PORT = 8002
+SCHEDULER_INTERNAL_PORT = int(_get_env("SCHEDULER_INTERNAL_PORT", "8002"))
 
 
 class Settings:

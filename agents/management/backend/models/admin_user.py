@@ -6,6 +6,7 @@ Management Backend - 管理员用户模型
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
 
 
@@ -16,6 +17,12 @@ class AdminUser(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(unique=True, index=True, max_length=50)
+    email: Optional[str] = Field(default=None, max_length=255)
     password_hash: str = Field(max_length=255)
+    permissions: str = Field(default="[]", sa_column=Column(Text, nullable=False, default="[]"))
+    is_active: bool = Field(default=True)
+    is_super_admin: bool = Field(default=False)
+    must_change_credentials: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = Field(default=None)

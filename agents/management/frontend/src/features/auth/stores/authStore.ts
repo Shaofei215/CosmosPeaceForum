@@ -6,6 +6,7 @@ interface AuthStore {
   user: AuthUser | null;
   isAuthenticated: boolean;
   setAuth: (token: string, user: AuthUser) => void;
+  setUser: (user: AuthUser) => void;
   logout: () => void;
 }
 
@@ -21,6 +22,10 @@ export const useAuthStore = create<AuthStore>()(
           user,
           isAuthenticated: true,
         });
+      },
+
+      setUser: (user: AuthUser) => {
+        set({ user });
       },
 
       logout: () => {

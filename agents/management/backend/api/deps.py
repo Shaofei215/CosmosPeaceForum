@@ -1,7 +1,6 @@
-"""
-Management Backend - API 依赖注入
-"""
+"""Management Backend - API 依赖注入"""
 
+from collections.abc import Callable
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -11,8 +10,8 @@ from sqlmodel import Session
 from agents.management.backend.core.database import get_db
 from agents.management.backend.core.security import decode_access_token
 from agents.management.backend.models.admin_user import AdminUser
-from agents.management.backend.models.operation_log import OperationLog
-from agents.management.backend.services.auth_service import get_admin_by_username
+from agents.management.backend.services import auth_service
+from agents.management.backend.services.permissions import ALL_PERMISSIONS
 from agents.management.backend.services.log_service import create_log
 
 security = HTTPBearer()
@@ -31,21 +30,43 @@ def get_current_admin(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    username: Optional[str] = payload.get("username")
-    if username is None:
+    scope = payload.get("scope")
+    if scope not in (None, "management_admin"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的认证凭证",
         )
 
-    admin = get_admin_by_username(db, username)
-    if admin is None:
+    admin: Optional[AdminUser] = None
+    try:
+        admin_id = int(payload.get("sub"))
+        admin = auth_service.get_admin_by_id(db, admin_id)
+    except (TypeError, ValueError):
+        username: Optional[str] = payload.get("username")
+        if username:
+            admin = auth_service.get_admin_by_username(db, username)
+
+    if admin is None or not admin.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户不存在",
+            detail="管理员不存在或已停用",
         )
 
     return admin
+
+
+def require_permission(permission: str) -> Callable:
+    def _require(admin: AdminUser = Depends(get_current_admin)) -> AdminUser:
+        permissions = (
+            ALL_PERMISSIONS
+            if admin.is_super_admin
+            else auth_service.parse_permissions(admin.permissions)
+        )
+        if permission not in permissions:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="缺少管理员权限")
+        return admin
+
+    return _require
 
 
 def log_action(
@@ -68,7 +89,7 @@ def log_action(
     ):
         create_log(
             db=db,
-            operator_id=current_admin.id,
+            admin=current_admin,
             action=action,
             target_type=target_type,
             target_id=target_id,

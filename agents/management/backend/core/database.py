@@ -61,22 +61,59 @@ def init_db():
 def _ensure_lightweight_migrations(engine):
     """补齐 SQLModel create_all 不会更新的旧 SQLite 表字段。"""
     inspector = inspect(engine)
-    if "agent_configs" not in inspector.get_table_names():
-        return
+    table_names = inspector.get_table_names()
+    if "agent_configs" in table_names:
+        columns = {column["name"] for column in inspector.get_columns("agent_configs")}
+        if "last_login_at" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE agent_configs ADD COLUMN last_login_at DATETIME"))
+            logger.info("已为 agent_configs 添加 last_login_at 字段")
+        if "last_login_timestamp" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE agent_configs ADD COLUMN last_login_timestamp REAL"))
+            logger.info("已为 agent_configs 添加 last_login_timestamp 字段")
+        if "total_login_count" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE agent_configs ADD COLUMN total_login_count INTEGER DEFAULT 0"))
+            logger.info("已为 agent_configs 添加 total_login_count 字段")
 
-    columns = {column["name"] for column in inspector.get_columns("agent_configs")}
-    if "last_login_at" not in columns:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE agent_configs ADD COLUMN last_login_at DATETIME"))
-        logger.info("已为 agent_configs 添加 last_login_at 字段")
-    if "last_login_timestamp" not in columns:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE agent_configs ADD COLUMN last_login_timestamp REAL"))
-        logger.info("已为 agent_configs 添加 last_login_timestamp 字段")
-    if "total_login_count" not in columns:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE agent_configs ADD COLUMN total_login_count INTEGER DEFAULT 0"))
-        logger.info("已为 agent_configs 添加 total_login_count 字段")
+    if "admin_users" in table_names:
+        admin_columns = {column["name"] for column in inspector.get_columns("admin_users")}
+        admin_migrations = [
+            ("email", "ALTER TABLE admin_users ADD COLUMN email VARCHAR(255)"),
+            (
+                "permissions",
+                "ALTER TABLE admin_users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'",
+            ),
+            (
+                "is_active",
+                "ALTER TABLE admin_users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1",
+            ),
+            (
+                "is_super_admin",
+                "ALTER TABLE admin_users ADD COLUMN is_super_admin BOOLEAN NOT NULL DEFAULT 1",
+            ),
+            (
+                "must_change_credentials",
+                "ALTER TABLE admin_users ADD COLUMN must_change_credentials BOOLEAN NOT NULL DEFAULT 0",
+            ),
+            ("updated_at", "ALTER TABLE admin_users ADD COLUMN updated_at DATETIME"),
+        ]
+        for column_name, sql in admin_migrations:
+            if column_name not in admin_columns:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                logger.info("已为 admin_users 添加 %s 字段", column_name)
+        if "updated_at" not in admin_columns:
+            with engine.begin() as conn:
+                conn.execute(text("UPDATE admin_users SET updated_at = created_at WHERE updated_at IS NULL"))
+
+    if "operation_logs" in table_names:
+        log_columns = {column["name"] for column in inspector.get_columns("operation_logs")}
+        if "operator_username" not in log_columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE operation_logs ADD COLUMN operator_username VARCHAR(50)"))
+            logger.info("已为 operation_logs 添加 operator_username 字段")
 
 
 def get_db():

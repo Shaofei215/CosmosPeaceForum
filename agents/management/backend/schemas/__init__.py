@@ -3,21 +3,31 @@ Management Backend - 请求/响应模型
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Generic, List, Optional, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+T = TypeVar("T")
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: List[T]
+    total: int
+    skip: int = 0
+    limit: int = 100
 
 
 # ==================== Auth ====================
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=50)
+    password: str = Field(min_length=1)
 
 
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    admin: "AdminUserResponse"
 
 
 class AgentAppLoginResponse(BaseModel):
@@ -28,19 +38,38 @@ class AgentAppLoginResponse(BaseModel):
 
 
 class AdminUserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
+    email: Optional[EmailStr] = None
+    permissions: List[str]
+    is_active: bool
+    is_super_admin: bool
+    must_change_credentials: bool
     created_at: datetime
+    updated_at: datetime
     last_login: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+
+class AdminCreateRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    email: Optional[EmailStr] = None
+    password: str = Field(min_length=8, max_length=128)
+    permissions: List[str] = Field(default_factory=list)
+    is_active: bool = True
+    is_super_admin: bool = False
 
 
-class UpdateProfileRequest(BaseModel):
-    username: Optional[str] = None
-    current_password: str
-    new_password: Optional[str] = None
+class AdminUpdateRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    permissions: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+    is_super_admin: Optional[bool] = None
+
+
+class AdminListResponse(PaginatedResponse[AdminUserResponse]):
+    pass
 
 
 # ==================== Agent ====================
@@ -244,7 +273,8 @@ class SystemConfigUpdate(BaseModel):
 
 class OperationLogResponse(BaseModel):
     id: int
-    operator_id: int
+    operator_id: Optional[int]
+    operator_username: Optional[str] = None
     action: str
     target_type: str
     target_id: Optional[int] = None

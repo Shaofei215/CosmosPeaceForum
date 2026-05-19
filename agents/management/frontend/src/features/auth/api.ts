@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/api/client';
-import type { LoginRequest, LoginResponse, AdminUser, UpdateProfileRequest } from '@/shared/types/api';
+import type { LoginRequest, LoginResponse, AdminUser } from '@/shared/types/api';
 
 export const authApi = {
   login: (credentials: LoginRequest) =>
@@ -7,7 +7,4 @@ export const authApi = {
 
   getCurrentAdmin: () =>
     apiClient.get<AdminUser>('/auth/me'),
-
-  updateProfile: (data: UpdateProfileRequest) =>
-    apiClient.put<AdminUser>('/auth/profile', data),
 };

@@ -4,6 +4,7 @@ import { AppLayout } from '@/widgets/layout/AppLayout';
 
 import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
+import AdminListPage from '@/pages/AdminListPage';
 import AgentListPage from '@/pages/AgentListPage';
 import AgentCreatePage from '@/pages/AgentCreatePage';
 import AgentDetailPage from '@/pages/AgentDetailPage';
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
       { path: 'memories', element: <MemoryListPage /> },
       { path: 'memories/:ownerId', element: <MemoryDetailPage /> },
       { path: 'system', element: <SystemConfigPage /> },
+      { path: 'admins', element: <AdminListPage /> },
       { path: 'logs', element: <LogPage /> },
     ],
   },

@@ -15,7 +15,8 @@ class OperationLog(SQLModel, table=True):
     __tablename__ = "operation_logs"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    operator_id: int = Field(index=True)
+    operator_id: Optional[int] = Field(default=None, index=True)
+    operator_username: Optional[str] = Field(default=None, max_length=50)
     action: str = Field(max_length=100)
     target_type: str = Field(max_length=50)  # agent / model / system
     target_id: Optional[int] = Field(default=None)
