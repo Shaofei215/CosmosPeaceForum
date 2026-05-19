@@ -87,7 +87,8 @@ export default function LogPage() {
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">操作</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">目标类型</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">目标 ID</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">操作用户</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">管理员</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">详情</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">时间</th>
                   </tr>
                 </thead>
@@ -108,7 +109,12 @@ export default function LogPage() {
                       <td className="py-3 px-4 text-sm text-muted-foreground">
                         {log.target_id ?? '-'}
                       </td>
-                      <td className="py-3 px-4 text-sm">操作员 #{log.operator_id}</td>
+                      <td className="py-3 px-4 text-sm">
+                        {log.operator_username || (log.operator_id ? `#${log.operator_id}` : '-')}
+                      </td>
+                      <td className="max-w-xs py-3 px-4 text-sm text-muted-foreground">
+                        <span className="line-clamp-2">{log.details || '{}'}</span>
+                      </td>
                       <td className="py-3 px-4 text-sm text-muted-foreground">
                         {formatDate(log.created_at)}
                       </td>

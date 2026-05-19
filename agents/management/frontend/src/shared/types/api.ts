@@ -1,7 +1,25 @@
+export const ADMIN_PERMISSIONS = [
+  'view_dashboard',
+  'manage_agents',
+  'manage_models',
+  'manage_memories',
+  'manage_system',
+  'manage_admins',
+  'view_logs',
+] as const;
+
+export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
+
 export interface AdminUser {
   id: number;
   username: string;
+  email: string | null;
+  permissions: AdminPermission[];
+  is_active: boolean;
+  is_super_admin: boolean;
+  must_change_credentials: boolean;
   created_at: string;
+  updated_at: string;
   last_login: string | null;
 }
 
@@ -13,12 +31,23 @@ export interface LoginRequest {
 export interface LoginResponse {
   access_token: string;
   token_type: string;
+  admin: AdminUser;
 }
 
-export interface UpdateProfileRequest {
-  username?: string;
-  current_password: string;
-  new_password?: string;
+export interface AdminCreateRequest {
+  username: string;
+  email?: string;
+  password: string;
+  permissions: AdminPermission[];
+  is_active: boolean;
+  is_super_admin: boolean;
+}
+
+export interface AdminUpdateRequest {
+  email?: string | null;
+  permissions?: AdminPermission[];
+  is_active?: boolean;
+  is_super_admin?: boolean;
 }
 
 export interface AgentConfig {
@@ -147,7 +176,8 @@ export interface SystemConfig {
 
 export interface OperationLog {
   id: number;
-  operator_id: number;
+  operator_id: number | null;
+  operator_username: string | null;
   action: string;
   target_type: string;
   target_id: number | null;

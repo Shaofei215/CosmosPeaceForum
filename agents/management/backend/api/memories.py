@@ -16,11 +16,12 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
 from agents.management.backend.core.database import get_db
-from agents.management.backend.api.deps import get_current_admin
+from agents.management.backend.api.deps import require_permission
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.agent_config import AgentConfig
 from agents.management.backend.services.log_service import create_log
 from agents.management.backend.services.chunk_model_service import get_active_chunk_model_config
+from agents.management.backend.services.permissions import PERMISSION_MANAGE_MEMORIES
 
 logger = logging.getLogger(__name__)
 
@@ -288,7 +289,7 @@ def list_memories(
     limit: int = 100,
     owner_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MEMORIES)),
 ):
     """获取记忆列表"""
     _, memory_db = _get_memory_service()
@@ -325,7 +326,7 @@ def list_memories(
 @router.get("/owners", response_model=dict)
 def list_memory_owners(
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MEMORIES)),
 ):
     """获取记忆库中的 owner 汇总，直接以 memory DB 为数据源。"""
     _, memory_db = _get_memory_service()
@@ -369,7 +370,7 @@ def list_memory_owners(
 async def upload_memory(
     request: dict,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MEMORIES)),
 ):
     """
     上传记忆（单角色，支持自动分块、LLM 智能分块与不分块）
@@ -469,7 +470,14 @@ async def upload_memory(
         )
         memory_ids.append(memory_id)
 
-    create_log(db, current_admin.id, "upload_memory", "memory", owner_id)
+    create_log(
+        db,
+        current_admin,
+        "upload_memory",
+        "memory",
+        owner_id,
+        details={"count": len(memory_ids), "chunk_mode": chunk_mode, "memory_type": memory_type},
+    )
 
     chunk_mode_text = {"auto": "自动分块", "llm": "LLM 智能分块", "none": "不分块"}.get(chunk_mode, chunk_mode)
     memory_type_text = {"normal": "普通记忆", "static": "静态记忆"}.get(memory_type, memory_type)
@@ -484,14 +492,14 @@ async def upload_memory(
 def delete_memory(
     memory_id: str,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MEMORIES)),
 ):
     """删除单条记忆"""
     service, _ = _get_memory_service()
 
     asyncio.run(service.delete_memory(memory_id))
 
-    create_log(db, current_admin.id, "delete_memory", "memory", None)
+    create_log(db, current_admin, "delete_memory", "memory", None, details={"memory_id": memory_id})
     return {"message": "记忆已删除"}
 
 
@@ -499,12 +507,12 @@ def delete_memory(
 def clear_user_memories(
     owner_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MEMORIES)),
 ):
     """清除指定用户的所有记忆"""
     service, _ = _get_memory_service()
 
     count = asyncio.run(service.clear_user_memories(owner_id))
 
-    create_log(db, current_admin.id, "clear_user_memories", "memory", owner_id)
+    create_log(db, current_admin, "clear_user_memories", "memory", owner_id, details={"count": count})
     return {"message": f"已清除 {count} 条记忆"}

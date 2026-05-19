@@ -1,21 +1,16 @@
-"""
-Management Backend - 认证路由
-"""
-
-from datetime import datetime
+"""Management Backend - 认证路由"""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from agents.management.backend.core.database import get_db
-from agents.management.backend.core.security import get_password_hash
-from agents.management.backend.schemas import LoginRequest, LoginResponse, AdminUserResponse, UpdateProfileRequest
+from agents.management.backend.schemas import LoginRequest, LoginResponse, AdminUserResponse
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.services.auth_service import (
     authenticate_admin,
+    admin_to_response,
     create_admin_token,
     update_last_login,
-    update_admin_profile,
 )
 from agents.management.backend.api.deps import get_current_admin
 
@@ -33,9 +28,10 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         )
 
     update_last_login(db, admin.id)
+    db.refresh(admin)
     token = create_admin_token(admin.id, admin.username)
 
-    return LoginResponse(access_token=token)
+    return LoginResponse(access_token=token, admin=admin_to_response(admin))
 
 
 @router.post("/logout")
@@ -47,31 +43,4 @@ def logout(current_admin: AdminUser = Depends(get_current_admin)):
 @router.get("/me", response_model=AdminUserResponse)
 def get_me(current_admin: AdminUser = Depends(get_current_admin)):
     """获取当前管理员信息"""
-    return AdminUserResponse(
-        id=current_admin.id,
-        username=current_admin.username,
-        created_at=current_admin.created_at,
-        last_login=current_admin.last_login,
-    )
-
-
-@router.put("/profile", response_model=AdminUserResponse)
-def update_profile(
-    request: UpdateProfileRequest,
-    db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
-):
-    """修改管理员用户名/密码"""
-    try:
-        admin = update_admin_profile(db, current_admin, request)
-        return AdminUserResponse(
-            id=admin.id,
-            username=admin.username,
-            created_at=admin.created_at,
-            last_login=admin.last_login,
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
+    return admin_to_response(current_admin)

@@ -6,7 +6,6 @@ from agents.management.backend.schemas import (
     LoginRequest,
     LoginResponse,
     AdminUserResponse,
-    UpdateProfileRequest,
     AgentCreate,
     AgentUpdate,
     AgentResponse,
@@ -30,33 +29,39 @@ class TestAuthSchemas:
         assert req.password == "password"
 
     def test_login_response(self):
-        resp = LoginResponse(access_token="token")
+        now = datetime.now()
+        admin = AdminUserResponse(
+            id=1,
+            username="admin",
+            permissions=["view_dashboard"],
+            is_active=True,
+            is_super_admin=False,
+            must_change_credentials=False,
+            created_at=now,
+            updated_at=now,
+            last_login=now,
+        )
+        resp = LoginResponse(access_token="token", admin=admin)
         assert resp.access_token == "token"
         assert resp.token_type == "bearer"
+        assert resp.admin.username == "admin"
 
     def test_admin_user_response(self):
+        now = datetime.now()
         resp = AdminUserResponse(
             id=1,
             username="admin",
-            created_at=datetime.now(),
-            last_login=datetime.now(),
+            permissions=["view_dashboard"],
+            is_active=True,
+            is_super_admin=False,
+            must_change_credentials=False,
+            created_at=now,
+            updated_at=now,
+            last_login=now,
         )
         assert resp.id == 1
         assert resp.username == "admin"
-
-    def test_update_profile_request(self):
-        req = UpdateProfileRequest(current_password="old")
-        assert req.current_password == "old"
-        assert req.username is None
-
-        req2 = UpdateProfileRequest(
-            username="newname",
-            current_password="old",
-            new_password="new",
-        )
-        assert req2.username == "newname"
-        assert req2.new_password == "new"
-
+        assert resp.permissions == ["view_dashboard"]
 
 class TestAgentSchemas:
     def test_agent_create(self):
@@ -173,6 +178,7 @@ class TestOperationLogSchemas:
         resp = OperationLogResponse(
             id=1,
             operator_id=1,
+            operator_username="admin",
             action="create_agent",
             target_type="agent",
             target_id=1,
@@ -187,6 +193,7 @@ class TestOperationLogSchemas:
             OperationLogResponse(
                 id=1,
                 operator_id=1,
+                operator_username="admin",
                 action="test",
                 target_type="test",
                 target_id=None,

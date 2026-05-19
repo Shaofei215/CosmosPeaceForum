@@ -6,13 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from agents.management.backend.core.database import get_db
-from agents.management.backend.api.deps import get_current_admin
+from agents.management.backend.api.deps import require_permission
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.schemas import (
     ModelConfigCreate, ModelConfigUpdate, ModelConfigResponse, MessageResponse
 )
 from agents.management.backend.services import model_service
 from agents.management.backend.services.log_service import create_log
+from agents.management.backend.services.permissions import PERMISSION_MANAGE_MODELS
 from agents.management.backend.services.registrar import notify_scheduler_reload
 
 router = APIRouter()
@@ -21,7 +22,7 @@ router = APIRouter()
 @router.get("/", response_model=list[ModelConfigResponse])
 def list_model_configs(
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MODELS)),
 ):
     """获取模型配置列表"""
     items = model_service.list_model_configs(db)
@@ -32,7 +33,7 @@ def list_model_configs(
 def create_model_config(
     config_in: ModelConfigCreate,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MODELS)),
 ):
     """创建模型配置"""
     config = model_service.create_model_config(db, config_in)
@@ -40,7 +41,7 @@ def create_model_config(
     if config.is_active:
         notify_scheduler_reload("model", config.id)
 
-    create_log(db, current_admin.id, "create_model_config", "model", config.id)
+    create_log(db, current_admin, "create_model_config", "model", config.id)
 
     return model_service.model_config_to_response(config)
 
@@ -49,7 +50,7 @@ def create_model_config(
 def get_model_config(
     config_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MODELS)),
 ):
     """获取单个模型配置详情"""
     config = model_service.get_model_config(db, config_id)
@@ -63,7 +64,7 @@ def update_model_config(
     config_id: int,
     config_in: ModelConfigUpdate,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MODELS)),
 ):
     """更新模型配置"""
     config = model_service.get_model_config(db, config_id)
@@ -76,7 +77,7 @@ def update_model_config(
     notify_scheduler_reload("model", config_id)
 
     # 记录操作日志
-    create_log(db, current_admin.id, "update_model_config", "model", config_id)
+    create_log(db, current_admin, "update_model_config", "model", config_id)
 
     return model_service.model_config_to_response(updated)
 
@@ -85,7 +86,7 @@ def update_model_config(
 def delete_model_config(
     config_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MODELS)),
 ):
     """删除模型配置"""
     config = model_service.get_model_config(db, config_id)
@@ -98,7 +99,7 @@ def delete_model_config(
     if was_active:
         notify_scheduler_reload("model")
 
-    create_log(db, current_admin.id, "delete_model_config", "model", config_id)
+    create_log(db, current_admin, "delete_model_config", "model", config_id)
 
     return MessageResponse(message="模型配置已删除")
 
@@ -107,7 +108,7 @@ def delete_model_config(
 def toggle_model_config(
     config_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MODELS)),
 ):
     """切换模型启用/停用状态"""
     config = model_service.get_model_config(db, config_id)
@@ -120,6 +121,6 @@ def toggle_model_config(
     updated = model_service.update_model_config(db, config_id, update_data)
 
     notify_scheduler_reload("model", config_id)
-    create_log(db, current_admin.id, "toggle_model_config", "model", config_id)
+    create_log(db, current_admin, "toggle_model_config", "model", config_id)
 
     return model_service.model_config_to_response(updated)

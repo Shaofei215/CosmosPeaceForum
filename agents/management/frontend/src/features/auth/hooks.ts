@@ -8,26 +8,24 @@ export const useLogin = () => {
 
   return useMutation({
     mutationFn: authApi.login,
-    onSuccess: async (data) => {
-      try {
-        localStorage.setItem('token', data.access_token);
-        const user = await authApi.getCurrentAdmin();
-        setAuth(data.access_token, user);
-        queryClient.setQueryData(['auth', 'me'], user);
-      } catch {
-        localStorage.removeItem('token');
-        throw new Error('获取管理员信息失败');
-      }
+    onSuccess: (data) => {
+      setAuth(data.access_token, data.admin);
+      queryClient.setQueryData(['auth', 'me'], data.admin);
     },
   });
 };
 
 export const useCurrentAdmin = () => {
   const { isAuthenticated } = useAuthStore();
+  const setUser = useAuthStore((state) => state.setUser);
 
   return useQuery({
     queryKey: ['auth', 'me'],
-    queryFn: authApi.getCurrentAdmin,
+    queryFn: async () => {
+      const user = await authApi.getCurrentAdmin();
+      setUser(user);
+      return user;
+    },
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
   });

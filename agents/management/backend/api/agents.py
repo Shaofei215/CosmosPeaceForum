@@ -19,7 +19,7 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from agents.management.backend.core.database import get_db
-from agents.management.backend.api.deps import get_current_admin
+from agents.management.backend.api.deps import require_permission
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.agent_config import AgentConfig
 from agents.management.backend.schemas import (
@@ -29,6 +29,10 @@ from agents.management.backend.schemas import (
 )
 from agents.management.backend.services import agent_service
 from agents.management.backend.services.log_service import create_log
+from agents.management.backend.services.permissions import (
+    PERMISSION_MANAGE_AGENTS,
+    PERMISSION_VIEW_DASHBOARD,
+)
 from agents.management.backend.services.registrar import (
     register_agent,
     find_avatar_file,
@@ -187,7 +191,7 @@ def list_agents(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """获取 Agent 列表"""
     items, total = agent_service.list_agents(db, skip, limit)
@@ -198,7 +202,7 @@ def list_agents(
 @router.get("/dashboard-stats", response_model=DashboardStatsResponse)
 def get_dashboard_stats(
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_VIEW_DASHBOARD)),
 ):
     """获取管理仪表盘统计。"""
     today_start = datetime.combine(datetime.utcnow().date(), datetime_time.min)
@@ -224,7 +228,7 @@ def get_dashboard_stats(
 
 @router.get("/runtime-status")
 def get_agents_runtime_status(
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """获取 scheduler 中 Agent 线程运行状态。"""
     status_data = get_scheduler_status()
@@ -236,7 +240,7 @@ def get_agents_runtime_status(
 
 @router.get("/status-stream")
 def stream_agents_runtime_status(
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """SSE 推送 Agent 线程运行状态。"""
 
@@ -272,7 +276,7 @@ def stream_agents_runtime_status(
 def inject_prompt_for_next_session(
     request: PromptInjectionRequest,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """为选中的 Agent 设置下一次登录会话的一次性提示词注入。"""
     content = request.content.strip()
@@ -300,10 +304,10 @@ def inject_prompt_for_next_session(
 
     create_log(
         db,
-        current_admin.id,
+        current_admin,
         "inject_prompt",
         "agent",
-        details=json.dumps({"count": len(valid_ids), "agent_ids": valid_ids}, ensure_ascii=False),
+        details={"count": len(valid_ids), "agent_ids": valid_ids},
     )
 
     return MessageResponse(message=f"已为 {len(valid_ids)} 个 Agent 设置提示词注入，将在下一次登录会话生效")
@@ -313,7 +317,7 @@ def inject_prompt_for_next_session(
 def create_agent(
     agent_in: AgentCreate,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """创建单个 Agent"""
     existing = agent_service.get_agent_by_username(db, agent_in.username)
@@ -345,7 +349,7 @@ def create_agent(
     if agent.is_active:
         notify_scheduler_reload("agent", agent.id, action="start")
 
-    create_log(db, current_admin.id, "create_agent", "agent", agent.id)
+    create_log(db, current_admin, "create_agent", "agent", agent.id)
 
     return agent_service.agent_to_response(agent)
 
@@ -354,7 +358,7 @@ def create_agent(
 def get_agent(
     agent_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """获取 Agent 详情"""
     agent = agent_service.get_agent(db, agent_id)
@@ -367,7 +371,7 @@ def get_agent(
 def login_agent_app_platform_account(
     agent_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """为管理员生成指定 Agent 的 app_platform 登录令牌。"""
     agent = agent_service.get_agent(db, agent_id)
@@ -387,7 +391,7 @@ def login_agent_app_platform_account(
     if platform_user_id != agent.app_platform_user_id:
         raise HTTPException(status_code=502, detail="app_platform 账号映射不一致")
 
-    create_log(db, current_admin.id, "login_agent_app_platform", "agent", agent.id)
+    create_log(db, current_admin, "login_agent_app_platform", "agent", agent.id)
 
     return AgentAppLoginResponse(
         access_token=token,
@@ -401,7 +405,7 @@ def update_agent(
     agent_id: int,
     agent_in: AgentUpdate,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """更新 Agent"""
     agent = agent_service.get_agent(db, agent_id)
@@ -419,7 +423,7 @@ def update_agent(
     else:
         notify_scheduler_reload("agent", agent_id)
 
-    create_log(db, current_admin.id, "update_agent", "agent", agent_id)
+    create_log(db, current_admin, "update_agent", "agent", agent_id)
 
     return agent_service.agent_to_response(updated)
 
@@ -428,7 +432,7 @@ def update_agent(
 def delete_agent(
     agent_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """删除 Agent"""
     agent = agent_service.get_agent(db, agent_id)
@@ -439,7 +443,7 @@ def delete_agent(
 
     agent_service.delete_agent(db, agent_id)
 
-    create_log(db, current_admin.id, "delete_agent", "agent", agent_id)
+    create_log(db, current_admin, "delete_agent", "agent", agent_id)
 
     return MessageResponse(message="Agent 已删除")
 
@@ -448,7 +452,7 @@ def delete_agent(
 def restart_agent(
     agent_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """重启单个 Agent"""
     agent = agent_service.get_agent(db, agent_id)
@@ -459,7 +463,7 @@ def restart_agent(
     if not success:
         raise HTTPException(status_code=502, detail="无法连接 scheduler 服务")
 
-    create_log(db, current_admin.id, "restart_agent", "agent", agent_id)
+    create_log(db, current_admin, "restart_agent", "agent", agent_id)
 
     return MessageResponse(message="Agent 重启请求已发送")
 
@@ -468,7 +472,7 @@ def restart_agent(
 def start_agent(
     agent_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """启动单个 Agent"""
     agent = agent_service.get_agent(db, agent_id)
@@ -478,7 +482,7 @@ def start_agent(
     agent_service.update_agent(db, agent_id, AgentUpdate(is_active=True))
     notify_scheduler_reload("agent", agent_id, action="start")
 
-    create_log(db, current_admin.id, "start_agent", "agent", agent_id)
+    create_log(db, current_admin, "start_agent", "agent", agent_id)
 
     return MessageResponse(message="Agent 启动请求已发送")
 
@@ -487,7 +491,7 @@ def start_agent(
 def stop_agent(
     agent_id: int,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """停止单个 Agent"""
     agent = agent_service.get_agent(db, agent_id)
@@ -497,7 +501,7 @@ def stop_agent(
     agent_service.update_agent(db, agent_id, AgentUpdate(is_active=False))
     notify_scheduler_reload("agent", agent_id, action="stop")
 
-    create_log(db, current_admin.id, "stop_agent", "agent", agent_id)
+    create_log(db, current_admin, "stop_agent", "agent", agent_id)
 
     return MessageResponse(message="Agent 停止请求已发送")
 
@@ -506,7 +510,7 @@ def stop_agent(
 def batch_start_agents(
     agent_ids: list[int],
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """批量启动 Agent"""
     started = 0
@@ -523,7 +527,7 @@ def batch_start_agents(
     if valid_ids:
         notify_scheduler_reload("agents", valid_ids, action="start")
 
-    create_log(db, current_admin.id, "batch_start_agents", "agent", details=json.dumps({"count": started}))
+    create_log(db, current_admin, "batch_start_agents", "agent", details={"count": started})
 
     return MessageResponse(message=f"已批量启动 {started} 个 Agent")
 
@@ -532,7 +536,7 @@ def batch_start_agents(
 def batch_stop_agents(
     agent_ids: list[int],
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """批量停止 Agent"""
     stopped = 0
@@ -549,7 +553,7 @@ def batch_stop_agents(
     if valid_ids:
         notify_scheduler_reload("agents", valid_ids, action="stop")
 
-    create_log(db, current_admin.id, "batch_stop_agents", "agent", details=json.dumps({"count": stopped}))
+    create_log(db, current_admin, "batch_stop_agents", "agent", details={"count": stopped})
 
     return MessageResponse(message=f"已批量停止 {stopped} 个 Agent")
 
@@ -558,7 +562,7 @@ def batch_stop_agents(
 def batch_delete_agents(
     agent_ids: list[int],
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """批量删除 Agent"""
     deleted = 0
@@ -571,7 +575,7 @@ def batch_delete_agents(
         agent_service.delete_agent(db, agent_id)
         deleted += 1
 
-    create_log(db, current_admin.id, "batch_delete_agents", "agent", details=json.dumps({"count": deleted}))
+    create_log(db, current_admin, "batch_delete_agents", "agent", details={"count": deleted})
 
     return MessageResponse(message=f"已批量删除 {deleted} 个 Agent")
 
@@ -580,7 +584,7 @@ def batch_delete_agents(
 async def import_agents(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """批量导入 Agent（上传压缩包）"""
     if not file.filename.endswith('.zip'):
@@ -667,7 +671,7 @@ async def import_agents(
 
         notify_scheduler_reload("all")
 
-        create_log(db, current_admin.id, "import_agents", "agent", details=json.dumps({"count": len(imported)}))
+        create_log(db, current_admin, "import_agents", "agent", details={"count": len(imported)})
 
         responses = [agent_service.agent_to_response(a) for a in imported]
         return AgentListResponse(items=responses, total=len(imported))
@@ -684,7 +688,7 @@ async def import_agents(
 async def import_agents_stream(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """批量导入 Agent（SSE 流式推送）"""
     if not file.filename.endswith('.zip'):
@@ -815,9 +819,18 @@ async def import_agents_stream(
                 time.sleep(0.5)
 
             notify_scheduler_reload("all")
-            create_log(db, current_admin.id, "import_agents", "agent", details=json.dumps({
-                "total": total, "success": success_count, "exists": exists_count, "failed": failed_count
-            }))
+            create_log(
+                db,
+                current_admin,
+                "import_agents",
+                "agent",
+                details={
+                    "total": total,
+                    "success": success_count,
+                    "exists": exists_count,
+                    "failed": failed_count,
+                },
+            )
 
             done_data = {
                 'total': total,
@@ -840,7 +853,7 @@ async def upload_agent_avatar(
     agent_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """上传 Agent 头像"""
     from agents.management.backend.services.registrar import (
@@ -893,7 +906,7 @@ async def upload_agent_avatar(
     if response.status_code != 200:
         raise HTTPException(status_code=502, detail=f"头像上传失败: HTTP {response.status_code}")
 
-    create_log(db, current_admin.id, "upload_avatar", "agent", agent_id)
+    create_log(db, current_admin, "upload_avatar", "agent", agent_id)
 
     return MessageResponse(message="头像上传成功")
 
@@ -903,7 +916,7 @@ def update_agent_relation(
     agent_id: int,
     relation_in: AgentRelationUpdate,
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(get_current_admin),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """更新 Agent 相识关系"""
     agent = agent_service.get_agent(db, agent_id)
@@ -914,6 +927,6 @@ def update_agent_relation(
 
     notify_scheduler_reload("all")
 
-    create_log(db, current_admin.id, "update_agent_relation", "agent", agent_id)
+    create_log(db, current_admin, "update_agent_relation", "agent", agent_id)
 
     return agent_service.agent_to_response(updated)
