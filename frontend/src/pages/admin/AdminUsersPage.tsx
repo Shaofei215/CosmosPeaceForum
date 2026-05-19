@@ -49,6 +49,20 @@ function isPastDateTimeLocal(value: string) {
   return value ? new Date(value).getTime() <= Date.now() : false;
 }
 
+function isFutureIsoDateTime(value: string | null) {
+  return value ? new Date(value).getTime() > Date.now() : false;
+}
+
+function getInitialModerationReason(user: UserWithModeration) {
+  return (
+    user.moderation.account_ban_reason ||
+    user.moderation.publish_ban_reason ||
+    user.moderation.comment_ban_reason ||
+    user.moderation.interaction_ban_reason ||
+    ''
+  );
+}
+
 function getErrorMessage(error: unknown) {
   if (error && typeof error === 'object' && 'message' in error) {
     return String((error as { message?: unknown }).message);
@@ -70,8 +84,8 @@ export default function AdminUsersPage() {
   });
 
   const users = data?.items ?? [];
-  const selectedUsers = users.filter((user) => selectedIds.includes(user.id));
-  const allPageSelected = users.length > 0 && users.every((user) => selectedIds.includes(user.id));
+  const selectedUsers = users.filter(user => selectedIds.includes(user.id));
+  const allPageSelected = users.length > 0 && users.every(user => selectedIds.includes(user.id));
 
   const updateMutation = useMutation({
     mutationFn: ({ userId, payload }: { userId: number; payload: UserModerationUpdateRequest }) =>
@@ -98,16 +112,16 @@ export default function AdminUsersPage() {
   });
 
   const toggleSelected = (userId: number) => {
-    setSelectedIds((current) =>
-      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]
+    setSelectedIds(current =>
+      current.includes(userId) ? current.filter(id => id !== userId) : [...current, userId]
     );
   };
 
   const toggleAllPage = () => {
-    setSelectedIds((current) => {
-      const pageIds = users.map((user) => user.id);
-      if (users.every((user) => current.includes(user.id))) {
-        return current.filter((id) => !pageIds.includes(id));
+    setSelectedIds(current => {
+      const pageIds = users.map(user => user.id);
+      if (users.every(user => current.includes(user.id))) {
+        return current.filter(id => !pageIds.includes(id));
       }
       return Array.from(new Set([...current, ...pageIds]));
     });
@@ -139,7 +153,7 @@ export default function AdminUsersPage() {
             />
             <Input
               value={keyword}
-              onChange={(event) => {
+              onChange={event => {
                 setKeyword(event.target.value);
                 setSelectedIds([]);
               }}
@@ -173,7 +187,7 @@ export default function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {users.map(user => (
                   <tr key={user.id} className="border-b last:border-0">
                     <td className="px-4 py-3">
                       <input
@@ -279,7 +293,7 @@ export default function AdminUsersPage() {
           saving={updateMutation.isPending}
           error={getErrorMessage(updateMutation.error)}
           onClose={() => setSelectedUser(null)}
-          onSubmit={(payload) => updateMutation.mutate({ userId: selectedUser.id, payload })}
+          onSubmit={payload => updateMutation.mutate({ userId: selectedUser.id, payload })}
         />
       )}
       {batchOpen && (
@@ -288,7 +302,7 @@ export default function AdminUsersPage() {
           saving={batchMutation.isPending}
           error={getErrorMessage(batchMutation.error)}
           onClose={() => setBatchOpen(false)}
-          onSubmit={(payload) => batchMutation.mutate(payload)}
+          onSubmit={payload => batchMutation.mutate(payload)}
         />
       )}
       {announcementOpen && (
@@ -296,7 +310,7 @@ export default function AdminUsersPage() {
           saving={announcementMutation.isPending}
           error={getErrorMessage(announcementMutation.error)}
           onClose={() => setAnnouncementOpen(false)}
-          onSubmit={(content) => announcementMutation.mutate({ content })}
+          onSubmit={content => announcementMutation.mutate({ content })}
         />
       )}
     </div>
@@ -333,7 +347,7 @@ function UserStatus({ user }: { user: UserWithModeration }) {
   if (active.length === 0) return <span className="text-muted-foreground">正常</span>;
   return (
     <span className="inline-flex items-center gap-2">
-      {active.map((key) => {
+      {active.map(key => {
         const item = statusIconMap[key];
         const Icon = item.icon;
         return (
@@ -369,17 +383,53 @@ function ModerationEditor({
 }) {
   const minDateTime = useMemo(getMinDateTimeLocal, []);
   const [accountBanned, setAccountBanned] = useState(user.moderation.account_banned);
-  const [reason, setReason] = useState(user.moderation.account_ban_reason || '');
+  const [reason, setReason] = useState(getInitialModerationReason(user));
+  const [publishEnabled, setPublishEnabled] = useState(
+    isFutureIsoDateTime(user.moderation.publish_banned_until)
+  );
+  const [commentEnabled, setCommentEnabled] = useState(
+    isFutureIsoDateTime(user.moderation.comment_banned_until)
+  );
+  const [interactionEnabled, setInteractionEnabled] = useState(
+    isFutureIsoDateTime(user.moderation.interaction_banned_until)
+  );
   const [publishUntil, setPublishUntil] = useState(
-    toDateTimeLocal(user.moderation.publish_banned_until)
+    isFutureIsoDateTime(user.moderation.publish_banned_until)
+      ? toDateTimeLocal(user.moderation.publish_banned_until)
+      : ''
   );
   const [commentUntil, setCommentUntil] = useState(
-    toDateTimeLocal(user.moderation.comment_banned_until)
+    isFutureIsoDateTime(user.moderation.comment_banned_until)
+      ? toDateTimeLocal(user.moderation.comment_banned_until)
+      : ''
   );
   const [interactionUntil, setInteractionUntil] = useState(
-    toDateTimeLocal(user.moderation.interaction_banned_until)
+    isFutureIsoDateTime(user.moderation.interaction_banned_until)
+      ? toDateTimeLocal(user.moderation.interaction_banned_until)
+      : ''
   );
-  const hasPastTime = [publishUntil, commentUntil, interactionUntil].some(isPastDateTimeLocal);
+  const hasPastTime = [
+    publishEnabled ? publishUntil : '',
+    commentEnabled ? commentUntil : '',
+    interactionEnabled ? interactionUntil : '',
+  ].some(isPastDateTimeLocal);
+  const hasMissingTime =
+    (publishEnabled && !publishUntil) ||
+    (commentEnabled && !commentUntil) ||
+    (interactionEnabled && !interactionUntil);
+  const handleRestrictionToggle = (
+    enabled: boolean,
+    setEnabled: (value: boolean) => void,
+    value: string,
+    setValue: (value: string) => void
+  ) => {
+    setEnabled(enabled);
+    if (enabled && !value) {
+      setValue(minDateTime);
+    }
+  };
+  const buildRestrictionUntil = (enabled: boolean, value: string) =>
+    enabled ? fromDateTimeLocal(value) : null;
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
@@ -392,37 +442,59 @@ function ModerationEditor({
             <input
               type="checkbox"
               checked={accountBanned}
-              onChange={(event) => setAccountBanned(event.target.checked)}
+              onChange={event => setAccountBanned(event.target.checked)}
             />
             永久封禁账号
           </label>
           <Textarea
             value={reason}
-            onChange={(event) => setReason(event.target.value)}
+            onChange={event => setReason(event.target.value)}
             placeholder="处罚原因"
             rows={3}
           />
           <div className="grid gap-3 md:grid-cols-3">
-            <DateField
+            <RestrictionDateField
               label="禁止发布到"
+              checked={publishEnabled}
               value={publishUntil}
               min={minDateTime}
+              onCheckedChange={checked =>
+                handleRestrictionToggle(checked, setPublishEnabled, publishUntil, setPublishUntil)
+              }
               onChange={setPublishUntil}
             />
-            <DateField
+            <RestrictionDateField
               label="禁止评论到"
+              checked={commentEnabled}
               value={commentUntil}
               min={minDateTime}
+              onCheckedChange={checked =>
+                handleRestrictionToggle(checked, setCommentEnabled, commentUntil, setCommentUntil)
+              }
               onChange={setCommentUntil}
             />
-            <DateField
+            <RestrictionDateField
               label="禁止互动到"
+              checked={interactionEnabled}
               value={interactionUntil}
               min={minDateTime}
+              onCheckedChange={checked =>
+                handleRestrictionToggle(
+                  checked,
+                  setInteractionEnabled,
+                  interactionUntil,
+                  setInteractionUntil
+                )
+              }
               onChange={setInteractionUntil}
             />
           </div>
-          {hasPastTime && <p className="text-sm text-destructive">封禁结束时间必须晚于当前时间。</p>}
+          {hasPastTime && (
+            <p className="text-sm text-destructive">封禁结束时间必须晚于当前时间。</p>
+          )}
+          {hasMissingTime && (
+            <p className="text-sm text-destructive">已启用的限制需要填写结束时间。</p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="outline" className="rounded-md" onClick={onClose} disabled={saving}>
@@ -430,16 +502,19 @@ function ModerationEditor({
             </Button>
             <Button
               className="rounded-md"
-              disabled={saving || hasPastTime}
+              disabled={saving || hasPastTime || hasMissingTime}
               onClick={() =>
                 onSubmit({
                   account_banned: accountBanned,
                   account_ban_reason: reason || undefined,
-                  publish_banned_until: fromDateTimeLocal(publishUntil),
+                  publish_banned_until: buildRestrictionUntil(publishEnabled, publishUntil),
                   publish_ban_reason: reason || undefined,
-                  comment_banned_until: fromDateTimeLocal(commentUntil),
+                  comment_banned_until: buildRestrictionUntil(commentEnabled, commentUntil),
                   comment_ban_reason: reason || undefined,
-                  interaction_banned_until: fromDateTimeLocal(interactionUntil),
+                  interaction_banned_until: buildRestrictionUntil(
+                    interactionEnabled,
+                    interactionUntil
+                  ),
                   interaction_ban_reason: reason || undefined,
                 })
               }
@@ -451,6 +526,42 @@ function ModerationEditor({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function RestrictionDateField({
+  label,
+  checked,
+  value,
+  min,
+  onCheckedChange,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  value: string;
+  min: string;
+  onCheckedChange: (checked: boolean) => void;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="space-y-2 text-sm">
+      <span className="flex items-center gap-2 font-medium">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={event => onCheckedChange(event.target.checked)}
+        />
+        {label}
+      </span>
+      <Input
+        type="datetime-local"
+        value={value}
+        min={min}
+        disabled={!checked}
+        onChange={event => onChange(event.target.value)}
+      />
+    </label>
   );
 }
 
@@ -508,13 +619,13 @@ function BatchModerationEditor({
             <input
               type="checkbox"
               checked={accountBanned}
-              onChange={(event) => setAccountBanned(event.target.checked)}
+              onChange={event => setAccountBanned(event.target.checked)}
             />
             永久封禁账号
           </label>
           <Textarea
             value={reason}
-            onChange={(event) => setReason(event.target.value)}
+            onChange={event => setReason(event.target.value)}
             placeholder="处罚原因"
             rows={3}
           />
@@ -538,7 +649,9 @@ function BatchModerationEditor({
               onChange={setInteractionUntil}
             />
           </div>
-          {hasPastTime && <p className="text-sm text-destructive">封禁结束时间必须晚于当前时间。</p>}
+          {hasPastTime && (
+            <p className="text-sm text-destructive">封禁结束时间必须晚于当前时间。</p>
+          )}
           {!hasAction && <p className="text-sm text-destructive">至少选择一种封禁操作。</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
@@ -582,7 +695,7 @@ function AnnouncementEditor({
         <CardContent className="space-y-4">
           <Textarea
             value={content}
-            onChange={(event) => setContent(event.target.value)}
+            onChange={event => setContent(event.target.value)}
             placeholder="公告内容"
             rows={5}
           />
@@ -624,7 +737,7 @@ function DateField({
         type="datetime-local"
         value={value}
         min={min}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={event => onChange(event.target.value)}
       />
     </label>
   );

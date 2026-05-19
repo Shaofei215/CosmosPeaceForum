@@ -86,6 +86,54 @@ def test_repeated_same_moderation_save_does_not_duplicate_notifications(db_sessi
     assert notifications[0].source_content.endswith("如有异议，请向appeal@example.com申诉。")
 
 
+def test_action_restrictions_can_be_removed_with_explicit_null(db_session):
+    user, admin = _seed_user_and_admin(db_session)
+    until = datetime.utcnow() + timedelta(days=3)
+
+    update_user_moderation(
+        db_session,
+        user.id,
+        UserModerationUpdateRequest(
+            publish_banned_until=until,
+            publish_ban_reason="刷屏",
+            comment_banned_until=until,
+            comment_ban_reason="刷屏",
+            interaction_banned_until=until,
+            interaction_ban_reason="刷屏",
+        ),
+        admin,
+    )
+    db_session.query(Notification).delete()
+    db_session.commit()
+
+    moderation = update_user_moderation(
+        db_session,
+        user.id,
+        UserModerationUpdateRequest(
+            publish_banned_until=None,
+            comment_banned_until=None,
+            interaction_banned_until=None,
+        ),
+        admin,
+    )
+
+    assert moderation.publish_banned_until is None
+    assert moderation.publish_ban_reason is None
+    assert moderation.comment_banned_until is None
+    assert moderation.comment_ban_reason is None
+    assert moderation.interaction_banned_until is None
+    assert moderation.interaction_ban_reason is None
+
+    notice_contents = [
+        notification.source_content for notification in db_session.query(Notification).all()
+    ]
+    assert notice_contents == [
+        "你的发帖功能限制已解除。",
+        "你的评论功能限制已解除。",
+        "你的互动功能限制已解除。",
+    ]
+
+
 def test_account_ban_login_detail_includes_admin_appeal_email(db_session):
     user, admin = _seed_user_and_admin(db_session)
 
