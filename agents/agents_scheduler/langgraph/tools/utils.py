@@ -804,9 +804,10 @@ _relation_map_override = None
 
 def get_social_tools(relation_map=None) -> List:
     """
-    获取所有社交平台工具的列表（不包含 write_memory）
+    获取所有决策节点可用工具的列表（不包含 write_memory）
 
-    write_memory 工具应仅在总结节点中单独绑定给 LLM。
+    write_memory 工具应仅在总结节点中单独绑定给 LLM。recall_memory 是决策节点可用的
+    主动回想工具，会在工具执行节点中合并进 last_tool_result。
 
     Args:
         relation_map: 关系映射服务（可选），用于 @mention 拓展
@@ -841,6 +842,7 @@ def get_social_tools(relation_map=None) -> List:
             expand_comment,
             scroll,
         )
+        from agents.agents_scheduler.langgraph.tools.memory import recall_memory
 
         _social_tools = [
             search_platform,
@@ -860,6 +862,7 @@ def get_social_tools(relation_map=None) -> List:
             view_post_comments,
             expand_comment,
             scroll,
+            recall_memory,
         ]
 
     return _social_tools

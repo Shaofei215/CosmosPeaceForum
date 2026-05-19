@@ -41,6 +41,7 @@ TOOL_TO_LOCATION = {
     "repost": None,
     "create_post": None,
     "scroll": None,
+    "recall_memory": None,
     "logout": None,
 }
 
@@ -54,6 +55,7 @@ TOOLS_WITH_RETURN_VALUE = {
     "view_post_comments",
     "expand_comment",
     "scroll",
+    "recall_memory",
 }
 
 TOOL_NO_RETURN_VALUE = {
@@ -496,6 +498,12 @@ def tool_execution_node(state: SessionState) -> SessionState:
     }
 
     last_tool_result = result.get("data", {}) if isinstance(result, dict) else result
+    if tool_name == "recall_memory" and isinstance(last_tool_result, dict):
+        from agents.agents_scheduler.langgraph.tools.memory import merge_recall_memory_result
+        last_tool_result = merge_recall_memory_result(
+            state.get("last_tool_result"),
+            last_tool_result,
+        )
 
     new_location = _get_location_after_tool(tool_name)
     current_location = new_location if new_location is not None else state.get("current_location", "主页（信息流）")
