@@ -48,46 +48,74 @@ _last_cpu_snapshot: tuple[int, int] | None = None
 
 
 def _read_cpu_usage_percent() -> float:
-    """读取 Linux /proc/stat 计算 CPU 使用率，首次调用用 load average 兜底。"""
+    """读取当前管理后端进程的 CPU 占用百分比。"""
     global _last_cpu_snapshot
     try:
-        with open("/proc/stat", "r", encoding="utf-8") as f:
-            fields = f.readline().split()[1:]
-        values = [int(v) for v in fields[:8]]
-        idle = values[3] + values[4]
-        total = sum(values)
+        process_ticks = _read_process_cpu_ticks()
+        system_ticks = _read_system_cpu_ticks()
+        cpu_count = os.cpu_count() or 1
 
-        if _last_cpu_snapshot is None:
-            _last_cpu_snapshot = (idle, total)
-            load_1m = os.getloadavg()[0]
-            cpu_count = os.cpu_count() or 1
-            return round(min(load_1m / cpu_count * 100, 100), 1)
+        if _last_cpu_snapshot is not None:
+            last_process_ticks, last_system_ticks = _last_cpu_snapshot
+            _last_cpu_snapshot = (process_ticks, system_ticks)
+            process_delta = process_ticks - last_process_ticks
+            system_delta = system_ticks - last_system_ticks
+            if system_delta <= 0:
+                return 0.0
+            return round(max(0.0, min(process_delta / system_delta * cpu_count * 100, 100.0)), 2)
 
-        last_idle, last_total = _last_cpu_snapshot
-        _last_cpu_snapshot = (idle, total)
-        total_delta = total - last_total
-        idle_delta = idle - last_idle
-        if total_delta <= 0:
-            return 0.0
-        return round(max(0, min((1 - idle_delta / total_delta) * 100, 100)), 1)
-    except OSError:
+        _last_cpu_snapshot = (process_ticks, system_ticks)
+        return _read_process_average_cpu_usage_percent(process_ticks, cpu_count)
+    except (OSError, ValueError, IndexError):
         return 0.0
 
 
+def _read_process_cpu_ticks() -> int:
+    with open("/proc/self/stat", "r", encoding="utf-8") as f:
+        fields = f.read().rsplit(")", 1)[1].split()
+    return int(fields[11]) + int(fields[12])
+
+
+def _read_system_cpu_ticks() -> int:
+    with open("/proc/stat", "r", encoding="utf-8") as f:
+        return sum(int(value) for value in f.readline().split()[1:])
+
+
+def _read_process_average_cpu_usage_percent(process_ticks: int, cpu_count: int) -> float:
+    clock_ticks = int(os.sysconf(os.sysconf_names["SC_CLK_TCK"]))
+    with open("/proc/self/stat", "r", encoding="utf-8") as f:
+        fields = f.read().rsplit(")", 1)[1].split()
+    process_start_ticks = int(fields[19])
+    with open("/proc/uptime", "r", encoding="utf-8") as f:
+        uptime_seconds = float(f.readline().split()[0])
+
+    elapsed_seconds = uptime_seconds - process_start_ticks / clock_ticks
+    if elapsed_seconds <= 0:
+        return 0.0
+    cpu_seconds = process_ticks / clock_ticks
+    return round(max(0.0, min(cpu_seconds / elapsed_seconds / cpu_count * 100, 100.0)), 2)
+
+
 def _read_memory_usage_percent() -> float:
-    """读取 Linux /proc/meminfo 计算内存使用率。"""
+    """读取当前管理后端进程常驻内存占系统总内存的百分比。"""
     try:
-        meminfo: dict[str, int] = {}
+        process_rss_kb = 0
+        with open("/proc/self/status", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    process_rss_kb = int(line.split()[1])
+                    break
+
+        total_kb = 0
         with open("/proc/meminfo", "r", encoding="utf-8") as f:
             for line in f:
-                key, value = line.split(":", 1)
-                meminfo[key] = int(value.strip().split()[0])
+                if line.startswith("MemTotal:"):
+                    total_kb = int(line.split()[1])
+                    break
 
-        total = meminfo.get("MemTotal", 0)
-        available = meminfo.get("MemAvailable", 0)
-        if total <= 0:
+        if total_kb <= 0:
             return 0.0
-        return round(max(0, min((1 - available / total) * 100, 100)), 1)
+        return round(max(0.0, min(process_rss_kb / total_kb * 100, 100.0)), 2)
     except (OSError, ValueError):
         return 0.0
 

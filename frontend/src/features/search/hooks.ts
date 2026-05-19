@@ -1,15 +1,18 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
+import type { PaginatedResponse } from '@/shared/types/api';
 import { searchApi } from './api';
-import type { SearchType } from './types';
+import type { ContentSearchItem, SearchType, UserSearchItem } from './types';
 
 const DEFAULT_PAGE_SIZE = 20;
+type SearchItem = ContentSearchItem | UserSearchItem;
+type SearchResult = PaginatedResponse<SearchItem>;
 
 export const useInfiniteSearch = (type: SearchType, query: string) => {
   const normalizedQuery = query.trim();
 
   return useInfiniteQuery({
     queryKey: ['search', type, normalizedQuery],
-    queryFn: ({ pageParam = 1 }) => {
+    queryFn: async ({ pageParam = 1 }): Promise<SearchResult> => {
       const params = {
         type,
         q: normalizedQuery,
@@ -17,11 +20,9 @@ export const useInfiniteSearch = (type: SearchType, query: string) => {
         page_size: DEFAULT_PAGE_SIZE,
       };
 
-      return type === 'content'
-        ? searchApi.searchContent(params)
-        : searchApi.searchUsers(params);
+      return type === 'content' ? searchApi.searchContent(params) : searchApi.searchUsers(params);
     },
-    getNextPageParam: (lastPage) => {
+    getNextPageParam: lastPage => {
       if (lastPage.pagination.has_next) {
         return lastPage.pagination.page + 1;
       }

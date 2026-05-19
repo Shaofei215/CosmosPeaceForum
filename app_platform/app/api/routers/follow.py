@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import Optional
 
+from app_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from app_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
 from app_platform.app.models.user import User
 from app_platform.app.models.follow import Follow
@@ -202,6 +203,7 @@ def toggle_follow(
     - 400：不能关注自己
     - 404：用户不存在
     """
+    ensure_action_allowed(db, current_user, "interaction")
     try:
         is_following, followers_count, following_count = follow_service.toggle_follow(
             db=db,

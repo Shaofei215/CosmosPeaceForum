@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app_platform.app.db.session import Base
 from app_platform.app.models import Comment, Notification, Post, User
+from app_platform.app.admin.services.announcement_service import create_system_notifications
 from app_platform.app.services import notification_service
 
 
@@ -100,3 +101,21 @@ def test_top_level_comment_notifies_post_author(db_session):
     assert notifications[0].recipient_id == post_author.id
     assert notifications[0].type == "comment"
     assert notifications[0].comment_id == comment.id
+
+
+def test_system_notification_keeps_full_content(db_session):
+    user = User(username="recipient")
+    db_session.add(user)
+    db_session.flush()
+
+    content = "公告内容" + "很长" * 260
+    create_system_notifications(
+        db=db_session,
+        recipient_ids=[user.id],
+        content=content,
+        notification_type="announcement",
+    )
+    db_session.flush()
+
+    notification = db_session.query(Notification).one()
+    assert notification.source_content == content

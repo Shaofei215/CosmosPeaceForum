@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const { data: dashboardStats } = useQuery({
     queryKey: ['agents', 'dashboard-stats'],
     queryFn: agentApi.dashboardStats,
+    refetchInterval: 3000,
   });
 
   const { data: logsData, refetch } = useQuery({
@@ -60,7 +61,12 @@ export default function DashboardPage() {
     refetch();
   };
 
-  const formatPercent = (value?: number) => `${Math.round(value ?? 0)}%`;
+  const formatPercent = (value?: number) => {
+    if (value === undefined || value === null) return '0%';
+    if (value > 0 && value < 0.1) return '<0.1%';
+    if (value < 10) return `${value.toFixed(1)}%`;
+    return `${Math.round(value)}%`;
+  };
 
   const stats = [
     {
@@ -76,7 +82,7 @@ export default function DashboardPage() {
       text: 'text-amber-950',
     },
     {
-      label: '系统情况',
+      label: '性能占用',
       bg: 'bg-sky-100',
       text: 'text-sky-950',
       metrics: [
@@ -94,8 +100,8 @@ export default function DashboardPage() {
         {stats.map((stat) => (
           <Card key={stat.label} className="aspect-[2/1] w-64 max-w-full overflow-hidden">
             <div className="grid h-full grid-cols-2">
-              <div className="flex items-center p-5">
-                <CardTitle className="text-base font-medium leading-6 text-muted-foreground">
+              <div className="flex items-center justify-center p-5 text-center">
+                <CardTitle className={`text-xl font-semibold leading-7 ${stat.text}`}>
                   {stat.label}
                 </CardTitle>
               </div>
@@ -103,9 +109,14 @@ export default function DashboardPage() {
                 {'metrics' in stat ? (
                   <div className="grid h-full w-full grid-rows-2 divide-y divide-white/60">
                     {stat.metrics.map((metric) => (
-                      <div key={metric.label} className="flex items-center justify-between px-4">
-                        <span className="text-sm font-medium">{metric.label}</span>
-                        <span className="text-3xl font-semibold tabular-nums">{metric.value}</span>
+                      <div
+                        key={metric.label}
+                        className="flex min-w-0 items-center justify-between gap-2 px-3"
+                      >
+                        <span className="shrink-0 text-xs font-medium">{metric.label}</span>
+                        <span className="min-w-0 whitespace-nowrap text-right text-2xl font-semibold tabular-nums">
+                          {metric.value}
+                        </span>
                       </div>
                     ))}
                   </div>
