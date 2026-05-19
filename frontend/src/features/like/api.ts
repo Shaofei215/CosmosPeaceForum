@@ -13,8 +13,7 @@ export const likeApi = {
    * 点赞/取消点赞帖子
    * POST /api/v1/posts/{post_id}/like
    */
-  toggleLike: (postId: number) =>
-    apiClient.post<LikeResponse>(`/posts/${postId}/like`),
+  toggleLike: (postId: number) => apiClient.post<LikeResponse>(`/posts/${postId}/like`),
 
   /**
    * 获取点赞状态

@@ -1,15 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import {
-  FileText,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  Shield,
-  UserCog,
-  Users,
-  X,
-} from 'lucide-react';
+import { FileText, LayoutDashboard, LogOut, Menu, Shield, UserCog, Users, X } from 'lucide-react';
 import { useAdminAuthStore, useAdminLogout } from '@/features/admin';
 
 const navItems = [
@@ -24,7 +15,7 @@ export function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
   const navigate = useNavigate();
-  const admin = useAdminAuthStore((state) => state.admin);
+  const admin = useAdminAuthStore(state => state.admin);
   const logout = useAdminLogout();
 
   const handleLogout = () => {
@@ -43,7 +34,7 @@ export function AdminLayout() {
           {sidebarOpen && <span className="truncate text-base font-bold">平台管理后台</span>}
           <button
             type="button"
-            onClick={() => setSidebarOpen((value) => !value)}
+            onClick={() => setSidebarOpen(value => !value)}
             className="rounded-md p-1 transition-colors hover:bg-muted"
             title={sidebarOpen ? '收起导航' : '展开导航'}
           >
@@ -52,7 +43,7 @@ export function AdminLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 px-2 py-2">
-          {navItems.map((item) => {
+          {navItems.map(item => {
             const active =
               location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (
@@ -93,7 +84,9 @@ export function AdminLayout() {
         </div>
       </aside>
 
-      <main className={`flex-1 overflow-auto ${sidebarOpen ? 'ml-56' : 'ml-14'} transition-all duration-300`}>
+      <main
+        className={`flex-1 overflow-auto ${sidebarOpen ? 'ml-56' : 'ml-14'} transition-all duration-300`}
+      >
         <div className="p-5">
           <Outlet />
         </div>
@@ -101,4 +94,3 @@ export function AdminLayout() {
     </div>
   );
 }
-

@@ -40,12 +40,12 @@ class ApiClient {
         }
         return config;
       },
-      (error) => Promise.reject(error)
+      error => Promise.reject(error)
     );
 
     // 响应拦截器：统一错误处理
     this.client.interceptors.response.use(
-      (response) => response.data,
+      response => response.data,
       (error: AxiosError<ApiError>) => {
         const status = error.response?.status;
         const message = error.response?.data?.detail || '请求失败，请稍后重试';

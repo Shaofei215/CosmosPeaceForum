@@ -100,7 +100,7 @@ export const useCompleteProfile = () => {
   return useMutation({
     mutationFn: ({ userId, data }: { userId: number; data: CompleteProfileData }) =>
       userApi.completeProfile(userId, data),
-    onSuccess: (updatedUser) => {
+    onSuccess: updatedUser => {
       queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       const token = localStorage.getItem('token');
@@ -124,7 +124,7 @@ export const useUploadAvatar = () => {
 
   return useMutation({
     mutationFn: (file: File) => userApi.uploadAvatar(file),
-    onSuccess: (updatedUser) => {
+    onSuccess: updatedUser => {
       queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       const token = localStorage.getItem('token');
@@ -148,7 +148,7 @@ export const useDeleteAvatar = () => {
 
   return useMutation({
     mutationFn: () => userApi.deleteAvatar(),
-    onSuccess: (updatedUser) => {
+    onSuccess: updatedUser => {
       queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       const token = localStorage.getItem('token');

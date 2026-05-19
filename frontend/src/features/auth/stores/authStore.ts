@@ -37,7 +37,7 @@ interface AuthStore extends AuthState {
  */
 export const useAuthStore = create<AuthStore>()(
   persist(
-    (set) => ({
+    set => ({
       // 初始状态
       user: null,
       token: null,
@@ -80,7 +80,7 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({
+      partialize: state => ({
         token: state.token,
         user: state.user,
         isAuthenticated: state.isAuthenticated,

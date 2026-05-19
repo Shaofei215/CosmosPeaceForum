@@ -520,7 +520,7 @@ function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDi
   const [modelName, setModelName] = useState('');
   const [temperature, setTemperature] = useState(1.2);
   const [maxToken, setMaxToken] = useState(4096);
-  const [isActive, setIsActive] = useState(true);
+  const [isActive] = useState(true);
   const [error, setError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -629,7 +629,7 @@ function EditModelDialog({ open, onOpenChange, onSubmit, isPending, model }: Edi
   const [modelName, setModelName] = useState(model?.model_name ?? '');
   const [temperature, setTemperature] = useState(model?.temperature ?? 1.2);
   const [maxToken, setMaxToken] = useState(model?.max_token ?? 4096);
-  const [isActive, setIsActive] = useState(model?.is_active ?? true);
+  const [isActive] = useState(model?.is_active ?? true);
   const [error, setError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -747,7 +747,7 @@ function CreateChunkModelDialog({ open, onOpenChange, onSubmit, isPending }: {
   const [modelName, setModelName] = useState('');
   const [temperature, setTemperature] = useState(0.7);
   const [maxToken, setMaxToken] = useState(4096);
-  const [isActive, setIsActive] = useState(true);
+  const [isActive] = useState(true);
   const [error, setError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -862,7 +862,7 @@ function EditChunkModelDialog({ open, onOpenChange, onSubmit, isPending, model }
   const [modelName, setModelName] = useState(model?.model_name ?? '');
   const [temperature, setTemperature] = useState(model?.temperature ?? 0.7);
   const [maxToken, setMaxToken] = useState(model?.max_token ?? 4096);
-  const [isActive, setIsActive] = useState(model?.is_active ?? true);
+  const [isActive] = useState(model?.is_active ?? true);
   const [error, setError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
 

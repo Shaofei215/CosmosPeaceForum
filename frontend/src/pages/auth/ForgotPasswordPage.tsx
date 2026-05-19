@@ -124,7 +124,7 @@ export default function ForgotPasswordPage() {
                 type="email"
                 placeholder="请输入注册时使用的邮箱地址"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 disabled={isSending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
@@ -141,7 +141,7 @@ export default function ForgotPasswordPage() {
                   type="text"
                   placeholder="请输入6位验证码"
                   value={code}
-                  onChange={(e) => setCode(e.target.value)}
+                  onChange={e => setCode(e.target.value)}
                   maxLength={6}
                   className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1 flex-1"
                 />

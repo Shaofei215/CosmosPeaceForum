@@ -13,7 +13,7 @@ interface AdminAuthState {
 
 export const useAdminAuthStore = create<AdminAuthState>()(
   persist(
-    (set) => ({
+    set => ({
       admin: null,
       token: null,
       isAuthenticated: false,
@@ -21,7 +21,7 @@ export const useAdminAuthStore = create<AdminAuthState>()(
         localStorage.setItem('adminToken', token);
         set({ token, admin, isAuthenticated: true });
       },
-      setAdmin: (admin) => set({ admin }),
+      setAdmin: admin => set({ admin }),
       logout: () => {
         localStorage.removeItem('adminToken');
         set({ token: null, admin: null, isAuthenticated: false });
@@ -29,7 +29,7 @@ export const useAdminAuthStore = create<AdminAuthState>()(
     }),
     {
       name: 'platform-admin-auth',
-      partialize: (state) => ({
+      partialize: state => ({
         token: state.token,
         admin: state.admin,
         isAuthenticated: state.isAuthenticated,
@@ -37,4 +37,3 @@ export const useAdminAuthStore = create<AdminAuthState>()(
     }
   )
 );
-

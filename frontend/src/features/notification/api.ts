@@ -13,11 +13,9 @@ export const notificationApi = {
   getUnreadCount: () =>
     apiClient.get<NotificationUnreadCountResponse>('/notifications/unread-count'),
 
-  getSummary: () =>
-    apiClient.get<NotificationSummaryResponse>('/notifications/summary'),
+  getSummary: () => apiClient.get<NotificationSummaryResponse>('/notifications/summary'),
 
-  markRead: () =>
-    apiClient.post<{ updated_count: number }>('/notifications/mark-read'),
+  markRead: () => apiClient.post<{ updated_count: number }>('/notifications/mark-read'),
 
   getEventsUrl: (token: string) =>
     `${API_CONFIG.BASE_URL}/notifications/events?token=${encodeURIComponent(token)}`,

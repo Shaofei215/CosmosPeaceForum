@@ -18,8 +18,8 @@ import type {
  */
 export const useComments = (postId: number, userId?: number, sort: CommentSort = 'default') => {
   const seed = useMemo(
-    () => `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    [postId, sort],
+    () => `${postId}-${sort}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    [postId, sort]
   );
 
   return useQuery({
@@ -82,7 +82,7 @@ export const useDeleteComment = (postId: number) => {
 export const useToggleCommentLike = (
   postId: number,
   userId?: number,
-  sort: CommentSort = 'default',
+  sort: CommentSort = 'default'
 ) => {
   const queryClient = useQueryClient();
 

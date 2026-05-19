@@ -30,16 +30,12 @@ interface CommentListProps {
  */
 export function CommentList({ comments, postId }: CommentListProps) {
   if (comments.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        暂无评论，快来抢沙发吧！
-      </div>
-    );
+    return <div className="text-center py-8 text-muted-foreground">暂无评论，快来抢沙发吧！</div>;
   }
 
   return (
     <div className="space-y-4">
-      {comments.map((comment) => (
+      {comments.map(comment => (
         <CommentItem
           key={comment.id}
           comment={comment}
@@ -188,9 +184,7 @@ function CommentItem({
                 comment.is_liked ? 'text-red-500' : 'hover:text-red-500'
               }`}
             >
-              <Heart
-                className={`h-3.5 w-3.5 ${comment.is_liked ? 'fill-current' : ''}`}
-              />
+              <Heart className={`h-3.5 w-3.5 ${comment.is_liked ? 'fill-current' : ''}`} />
               <span>{comment.like_count}</span>
             </button>
             {user && (
@@ -206,7 +200,7 @@ function CommentItem({
             )}
             {user && (
               <button
-                onClick={() => setIsReposting((value) => !value)}
+                onClick={() => setIsReposting(value => !value)}
                 className={`flex items-center gap-1 transition-colors ${
                   isReposting ? 'text-primary' : 'hover:text-primary'
                 }`}
@@ -215,9 +209,7 @@ function CommentItem({
                 <span>转发</span>
               </button>
             )}
-            {comment.owner?.is_ai_agent && (
-              <span>AI生成</span>
-            )}
+            {comment.owner?.is_ai_agent && <span>AI生成</span>}
             {isTopLevel && hasReplies && (
               <button
                 onClick={() => setShowReplies(!showReplies)}
@@ -238,7 +230,7 @@ function CommentItem({
               <Textarea
                 placeholder="写下你的回复..."
                 value={replyContent}
-                onChange={(e) => setReplyContent(e.target.value)}
+                onChange={e => setReplyContent(e.target.value)}
                 rows={2}
                 disabled={isPending}
                 className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
@@ -252,11 +244,7 @@ function CommentItem({
                 >
                   取消
                 </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={!replyContent.trim() || isPending}
-                >
+                <Button type="submit" size="sm" disabled={!replyContent.trim() || isPending}>
                   评论
                 </Button>
               </div>
@@ -265,7 +253,7 @@ function CommentItem({
 
           {isReposting && (
             <form
-              onSubmit={(e) => {
+              onSubmit={e => {
                 e.preventDefault();
                 if (repost.isPending) return;
 
@@ -280,7 +268,7 @@ function CommentItem({
                       setRepostContent('');
                       setIsReposting(false);
                     },
-                  },
+                  }
                 );
               }}
               className="mt-3 space-y-2"
@@ -288,7 +276,7 @@ function CommentItem({
               <Textarea
                 placeholder="写点什么再转发..."
                 value={repostContent}
-                onChange={(e) => setRepostContent(e.target.value)}
+                onChange={e => setRepostContent(e.target.value)}
                 rows={2}
                 disabled={repost.isPending}
                 className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
@@ -317,7 +305,7 @@ function CommentItem({
           {(() => {
             let remainingReplyCount = displayedReplyCount;
 
-            return comment.children.map((child) => {
+            return comment.children.map(child => {
               if (remainingReplyCount <= 0) return null;
 
               const childReplyCount = getReplyCount(child);
@@ -330,7 +318,10 @@ function CommentItem({
                   comment={child}
                   postId={postId}
                   depth={depth + 1}
-                  parentOwner={{ id: comment.owner_id, username: comment.owner?.username || `用户${comment.owner_id}` }}
+                  parentOwner={{
+                    id: comment.owner_id,
+                    username: comment.owner?.username || `用户${comment.owner_id}`,
+                  }}
                   visibleReplyLimit={childVisibleReplyLimit}
                 />
               );
@@ -340,7 +331,7 @@ function CommentItem({
             <button
               type="button"
               onClick={() =>
-                setVisibleReplyCount((count) => getNextVisibleReplyCount(count, totalReplies))
+                setVisibleReplyCount(count => getNextVisibleReplyCount(count, totalReplies))
               }
               className="mt-3 text-sm text-primary transition-colors hover:text-primary/80"
             >

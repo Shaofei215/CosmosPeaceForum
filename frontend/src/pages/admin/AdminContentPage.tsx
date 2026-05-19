@@ -24,9 +24,7 @@ function ContentPreview({ item }: { item: ContentItem }) {
   const content = (
     <>
       {item.title && <p className="mb-1 font-medium">{item.title}</p>}
-      <p className="line-clamp-2 text-muted-foreground group-hover:text-primary">
-        {item.content}
-      </p>
+      <p className="line-clamp-2 text-muted-foreground group-hover:text-primary">{item.content}</p>
     </>
   );
 
@@ -61,9 +59,9 @@ export default function AdminContentPage() {
   });
 
   const items = data?.items ?? [];
-  const selectedItems = items.filter((item) => selectedKeys.includes(getContentKey(item)));
+  const selectedItems = items.filter(item => selectedKeys.includes(getContentKey(item)));
   const allPageSelected =
-    items.length > 0 && items.every((item) => selectedKeys.includes(getContentKey(item)));
+    items.length > 0 && items.every(item => selectedKeys.includes(getContentKey(item)));
 
   const deleteMutation = useMutation({
     mutationFn: ({ item, reason }: { item: ContentItem; reason: string }) => {
@@ -75,7 +73,7 @@ export default function AdminContentPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'content'] });
       if (deleting) {
-        setSelectedKeys((current) => current.filter((key) => key !== getContentKey(deleting)));
+        setSelectedKeys(current => current.filter(key => key !== getContentKey(deleting)));
       }
       setDeleting(null);
     },
@@ -111,16 +109,16 @@ export default function AdminContentPage() {
 
   const toggleSelected = (item: ContentItem) => {
     const key = getContentKey(item);
-    setSelectedKeys((current) =>
-      current.includes(key) ? current.filter((itemKey) => itemKey !== key) : [...current, key]
+    setSelectedKeys(current =>
+      current.includes(key) ? current.filter(itemKey => itemKey !== key) : [...current, key]
     );
   };
 
   const toggleAllPage = () => {
-    setSelectedKeys((current) => {
+    setSelectedKeys(current => {
       const pageKeys = items.map(getContentKey);
-      if (items.every((item) => current.includes(getContentKey(item)))) {
-        return current.filter((key) => !pageKeys.includes(key));
+      if (items.every(item => current.includes(getContentKey(item)))) {
+        return current.filter(key => !pageKeys.includes(key));
       }
       return Array.from(new Set([...current, ...pageKeys]));
     });
@@ -143,7 +141,7 @@ export default function AdminContentPage() {
           )}
           <select
             value={type}
-            onChange={(event) => {
+            onChange={event => {
               setType(event.target.value);
               setSelectedKeys([]);
             }}
@@ -160,7 +158,7 @@ export default function AdminContentPage() {
             />
             <Input
               value={keyword}
-              onChange={(event) => {
+              onChange={event => {
                 setKeyword(event.target.value);
                 setSelectedKeys([]);
               }}
@@ -194,7 +192,7 @@ export default function AdminContentPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {items.map(item => (
                   <tr key={`${item.type}-${item.id}`} className="border-b last:border-0">
                     <td className="px-4 py-3">
                       <input
@@ -287,7 +285,7 @@ export default function AdminContentPage() {
           item={deleting}
           saving={deleteMutation.isPending}
           onClose={() => setDeleting(null)}
-          onConfirm={(reason) => deleteMutation.mutate({ item: deleting, reason })}
+          onConfirm={reason => deleteMutation.mutate({ item: deleting, reason })}
         />
       )}
       {batchDeleting && (
@@ -295,7 +293,7 @@ export default function AdminContentPage() {
           items={selectedItems}
           saving={batchDeleteMutation.isPending}
           onClose={() => setBatchDeleting(false)}
-          onConfirm={(reason) => batchDeleteMutation.mutate({ items: selectedItems, reason })}
+          onConfirm={reason => batchDeleteMutation.mutate({ items: selectedItems, reason })}
         />
       )}
     </div>
@@ -327,7 +325,7 @@ function DeleteContentDialog({
           </div>
           <Textarea
             value={reason}
-            onChange={(event) => setReason(event.target.value)}
+            onChange={event => setReason(event.target.value)}
             placeholder="删除原因，会通过通知发送给作者"
             rows={4}
           />
@@ -362,7 +360,7 @@ function BatchDeleteContentDialog({
   onConfirm: (reason: string) => void;
 }) {
   const [reason, setReason] = useState('');
-  const commentCount = items.filter((item) => item.type === 'comment').length;
+  const commentCount = items.filter(item => item.type === 'comment').length;
   const postCount = items.length - commentCount;
 
   return (
@@ -384,7 +382,7 @@ function BatchDeleteContentDialog({
           </div>
           <Textarea
             value={reason}
-            onChange={(event) => setReason(event.target.value)}
+            onChange={event => setReason(event.target.value)}
             placeholder="删除原因，会通过通知发送给作者"
             rows={4}
           />

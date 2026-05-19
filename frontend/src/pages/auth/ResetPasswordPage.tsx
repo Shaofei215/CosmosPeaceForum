@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
         onSuccess: () => {
           // 密码重置成功，跳转到登录页
           navigate('/login', {
-            state: { message: '密码重置成功，请使用新密码登录' }
+            state: { message: '密码重置成功，请使用新密码登录' },
           });
         },
         onError: (err: { message?: string }) => {
@@ -115,7 +115,7 @@ export default function ResetPasswordPage() {
                 type="password"
                 placeholder="请输入新密码（至少6个字符）"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
                 disabled={isPending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
@@ -131,17 +131,13 @@ export default function ResetPasswordPage() {
                 type="password"
                 placeholder="请再次输入新密码"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={e => setConfirmPassword(e.target.value)}
                 disabled={isPending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
 
-            <Button
-              type="submit"
-              className="auth-submit w-full rounded-lg"
-              disabled={isPending}
-            >
+            <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
               {isPending ? '重置中...' : '确认重置'}
             </Button>
 

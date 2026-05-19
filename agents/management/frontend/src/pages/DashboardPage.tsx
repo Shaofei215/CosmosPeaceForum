@@ -12,6 +12,22 @@ const levelColors: Record<string, string> = {
   DEBUG: 'text-blue-400',
 };
 
+type DashboardStat =
+  | {
+      type: 'value';
+      label: string;
+      value: number;
+      bg: string;
+      text: string;
+    }
+  | {
+      type: 'metrics';
+      label: string;
+      metrics: Array<{ label: string; value: string }>;
+      bg: string;
+      text: string;
+    };
+
 export default function DashboardPage() {
   const [selectedLogRole, setSelectedLogRole] = useState('');
   const [logSearch, setLogSearch] = useState('');
@@ -68,20 +84,23 @@ export default function DashboardPage() {
     return `${Math.round(value)}%`;
   };
 
-  const stats = [
+  const stats: DashboardStat[] = [
     {
+      type: 'value',
       label: '启用角色数',
       value: dashboardStats?.enabled_roles ?? 0,
       bg: 'bg-emerald-100',
       text: 'text-emerald-950',
     },
     {
+      type: 'value',
       label: '日活跃角色数',
       value: dashboardStats?.daily_active_roles ?? 0,
       bg: 'bg-amber-100',
       text: 'text-amber-950',
     },
     {
+      type: 'metrics',
       label: '性能占用',
       bg: 'bg-sky-100',
       text: 'text-sky-950',
@@ -106,7 +125,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </div>
               <div className={`flex h-full items-center justify-center ${stat.bg} ${stat.text}`}>
-                {'metrics' in stat ? (
+                {stat.type === 'metrics' ? (
                   <div className="grid h-full w-full grid-rows-2 divide-y divide-white/60">
                     {stat.metrics.map((metric) => (
                       <div

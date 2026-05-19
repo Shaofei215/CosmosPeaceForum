@@ -7,7 +7,7 @@ import type {
   SystemConfig, OperationLogListResponse, MessageResponse,
   EmbeddingConfig, EmbeddingConfigCreate, EmbeddingConfigUpdate,
   ChunkModelConfig, ChunkModelConfigCreate, ChunkModelConfigUpdate,
-  MemoryChunk, MemoryListResponse, MemoryOwnerListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
+  MemoryListResponse, MemoryOwnerListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
   TerminalLog, TerminalLogListResponse,
 } from '@/shared/types/api';
 

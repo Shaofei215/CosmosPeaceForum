@@ -29,11 +29,9 @@ export const postApi = {
    * 创建帖子
    * POST /api/v1/posts/
    */
-  createPost: (data: CreatePostData) =>
-    apiClient.post<Post>('/posts/', data),
+  createPost: (data: CreatePostData) => apiClient.post<Post>('/posts/', data),
 
-  repost: (data: RepostData) =>
-    apiClient.post<Post>('/posts/repost', data),
+  repost: (data: RepostData) => apiClient.post<Post>('/posts/repost', data),
 
   /**
    * 更新帖子
@@ -46,8 +44,7 @@ export const postApi = {
    * 删除帖子
    * DELETE /api/v1/posts/{post_id}
    */
-  deletePost: (postId: number) =>
-    apiClient.delete<void>(`/posts/${postId}`),
+  deletePost: (postId: number) => apiClient.delete<void>(`/posts/${postId}`),
 
   /**
    * 获取用户的帖子

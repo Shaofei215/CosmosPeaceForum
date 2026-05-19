@@ -103,7 +103,7 @@ export default function RegisterPage() {
         code: code.trim(),
       },
       {
-        onSuccess: (data) => {
+        onSuccess: data => {
           navigate('/profile-setup', { state: { userId: data.id } });
         },
         onError: (err: { message?: string }) => {
@@ -140,7 +140,7 @@ export default function RegisterPage() {
                 type="email"
                 placeholder="请输入邮箱地址"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 disabled={isPending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
@@ -157,7 +157,7 @@ export default function RegisterPage() {
                   type="text"
                   placeholder="请输入6位验证码"
                   value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   disabled={isPending}
                   maxLength={6}
                   className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1 flex-1"
@@ -184,7 +184,7 @@ export default function RegisterPage() {
                 type="password"
                 placeholder="请输入密码（至少6个字符）"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
                 disabled={isPending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
@@ -200,17 +200,13 @@ export default function RegisterPage() {
                 type="password"
                 placeholder="请再次输入密码"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={e => setConfirmPassword(e.target.value)}
                 disabled={isPending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
 
-            <Button
-              type="submit"
-              className="auth-submit w-full rounded-lg"
-              disabled={isPending}
-            >
+            <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
               {isRegistering ? '注册中...' : '注册'}
             </Button>
           </form>

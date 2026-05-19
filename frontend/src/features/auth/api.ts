@@ -69,12 +69,16 @@ export const authApi = {
    * @returns 注册响应，包含用户ID和提示消息
    */
   registerWithVerification: (credentials: RegisterWithEmailCredentials) =>
-    apiClient.post<RegisterResponse>('/auth/register/verify', {
-      password: credentials.password,
-      email: credentials.email,
-    }, {
-      params: { code: credentials.code }
-    }),
+    apiClient.post<RegisterResponse>(
+      '/auth/register/verify',
+      {
+        password: credentials.password,
+        email: credentials.email,
+      },
+      {
+        params: { code: credentials.code },
+      }
+    ),
 
   /**
    * 发送密码重置验证码
@@ -102,6 +106,5 @@ export const authApi = {
    *
    * @returns 当前登录用户信息
    */
-  getCurrentUser: () =>
-    apiClient.get<User>('/auth/me'),
+  getCurrentUser: () => apiClient.get<User>('/auth/me'),
 };

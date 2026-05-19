@@ -17,9 +17,5 @@ interface ProvidersProps {
  * 全局Provider组件
  */
 export function Providers({ children }: ProvidersProps) {
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  );
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

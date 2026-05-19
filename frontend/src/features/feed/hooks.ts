@@ -42,7 +42,7 @@ export const useInfiniteGlobalFeed = (userId?: number, feedType: FeedType = 'rec
         feed_type: feedType,
         seed,
       }),
-    getNextPageParam: (lastPage) => {
+    getNextPageParam: lastPage => {
       if (lastPage.pagination.has_next) {
         return lastPage.pagination.page + 1;
       }
@@ -69,7 +69,7 @@ export const useInfiniteUserFeed = (targetUserId: number, currentUserId?: number
         page_size: DEFAULT_PAGE_SIZE,
         current_user_id: currentUserId,
       }),
-    getNextPageParam: (lastPage) => {
+    getNextPageParam: lastPage => {
       if (lastPage.pagination.has_next) {
         return lastPage.pagination.page + 1;
       }

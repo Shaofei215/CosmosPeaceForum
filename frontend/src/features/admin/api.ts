@@ -45,7 +45,7 @@ function getApiErrorMessage(detail: unknown) {
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail)) {
     const messages = detail
-      .map((item) => {
+      .map(item => {
         if (item && typeof item === 'object' && 'msg' in item) {
           return String((item as { msg?: unknown }).msg);
         }
@@ -66,7 +66,7 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 client.interceptors.response.use(
-  (response) => response.data,
+  response => response.data,
   (error: AxiosError<ApiErrorPayload>) => {
     const status = error.response?.status ?? 0;
     if (status === 401) {

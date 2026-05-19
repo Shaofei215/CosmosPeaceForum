@@ -73,6 +73,9 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
     }
   };
 
+  const getErrorMessage = (err: unknown) =>
+    err instanceof Error ? err.message : '导入失败，请重试';
+
   const handleImport = async () => {
     if (!file) return;
 
@@ -105,9 +108,13 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
+      let isReading = true;
+      while (isReading) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          isReading = false;
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split('\n\n');
@@ -140,8 +147,8 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
           }
         }
       }
-    } catch (err: any) {
-      setError(err.message || '导入失败，请重试');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
     } finally {
       setImporting(false);
     }

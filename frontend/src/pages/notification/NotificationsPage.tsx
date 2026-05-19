@@ -56,7 +56,9 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
   const isArticle = notification.source_post_type === 'article';
   const senderName =
     sender?.username ??
-    (notification.type === 'moderation' || notification.type === 'announcement' ? '平台系统' : '有人');
+    (notification.type === 'moderation' || notification.type === 'announcement'
+      ? '平台系统'
+      : '有人');
   const shouldShowFullContent =
     notification.type === 'moderation' || notification.type === 'announcement';
 
