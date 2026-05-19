@@ -75,7 +75,7 @@ export default function AdminDashboardPage() {
     <div>
       <h1 className="mb-6 text-2xl font-bold">仪表盘</h1>
       <div className="mb-4 flex flex-wrap gap-4">
-        {statCards.map((stat) => (
+        {statCards.map(stat => (
           <Card
             key={stat.label}
             className="aspect-[2/1] w-64 max-w-full overflow-hidden rounded-lg"
@@ -89,9 +89,9 @@ export default function AdminDashboardPage() {
               <div
                 className={`flex h-full items-center justify-center text-center ${stat.bg} ${stat.text}`}
               >
-                {'metrics' in stat ? (
+                {stat.metrics ? (
                   <div className="grid h-full w-full grid-rows-2 divide-y divide-white/60">
-                    {stat.metrics.map((metric) => (
+                    {stat.metrics.map(metric => (
                       <div
                         key={metric.label}
                         className="flex min-w-0 items-center justify-between gap-2 px-3"
@@ -128,7 +128,7 @@ export default function AdminDashboardPage() {
               />
               <input
                 value={keyword}
-                onChange={(event) => setKeyword(event.target.value)}
+                onChange={event => setKeyword(event.target.value)}
                 placeholder="搜索日志内容..."
                 className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm sm:w-56"
               />
