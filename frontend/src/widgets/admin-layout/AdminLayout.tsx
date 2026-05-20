@@ -1,12 +1,23 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { FileText, LayoutDashboard, LogOut, Menu, Shield, UserCog, Users, X } from 'lucide-react';
+import {
+  FileText,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Palette,
+  Shield,
+  UserCog,
+  Users,
+  X,
+} from 'lucide-react';
 import { useAdminAuthStore, useAdminLogout } from '@/features/admin';
 
 const navItems = [
   { path: '/admin/dashboard', label: '仪表盘', icon: LayoutDashboard },
   { path: '/admin/users', label: '用户管理', icon: Users },
   { path: '/admin/content', label: '内容管理', icon: FileText },
+  { path: '/admin/theme', label: '主题管理', icon: Palette },
   { path: '/admin/admins', label: '管理员', icon: Shield },
   { path: '/admin/logs', label: '日志', icon: UserCog },
 ];
@@ -31,7 +42,19 @@ export function AdminLayout() {
         } fixed z-10 flex h-full flex-col border-r border-border bg-card transition-all duration-300`}
       >
         <div className="flex h-12 items-center justify-between border-b border-border px-3">
-          {sidebarOpen && <span className="truncate text-base font-bold">平台管理后台</span>}
+          {sidebarOpen && (
+            <img
+              src="/biglogo.png"
+              alt="平台管理后台"
+              className="h-8 max-w-36 object-contain"
+              onError={event => {
+                if (event.currentTarget.dataset.fallback !== 'true') {
+                  event.currentTarget.dataset.fallback = 'true';
+                  event.currentTarget.src = '/logo.png';
+                }
+              }}
+            />
+          )}
           <button
             type="button"
             onClick={() => setSidebarOpen(value => !value)}

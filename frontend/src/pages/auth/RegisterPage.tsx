@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSendVerificationCode, useRegisterWithVerification } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
+import { BigLogo } from '@/shared/components/auth/BigLogo';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -114,16 +115,14 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="auth-page min-h-screen flex items-center justify-center p-4">
+    <div className="auth-page" data-auth-word="Register">
+      <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
-        <CardHeader className="auth-card-header space-y-1">
+        <CardHeader className="auth-card-header space-y-1 pb-4">
           <CardTitle className="auth-title text-2xl font-bold text-center">注册</CardTitle>
-          <p className="auth-subtitle text-sm text-muted-foreground text-center mt-2">
-            注册后需完善个人资料
-          </p>
         </CardHeader>
         <CardContent className="auth-card-content">
-          <form onSubmit={handleSubmit} className="auth-form space-y-4">
+          <form onSubmit={handleSubmit} className="auth-form space-y-3.5">
             {error && (
               <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
                 {error}
@@ -167,7 +166,7 @@ export default function RegisterPage() {
                   variant="outline"
                   onClick={handleSendCode}
                   disabled={isSendingCode || countdown > 0 || !email.trim()}
-                  className="auth-code-button whitespace-nowrap rounded-lg shadow-none"
+                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-none hover:opacity-90"
                 >
                   {countdown > 0 ? `${countdown}秒后重试` : '获取验证码'}
                 </Button>
@@ -210,7 +209,7 @@ export default function RegisterPage() {
               {isRegistering ? '注册中...' : '注册'}
             </Button>
           </form>
-          <div className="auth-footer mt-4 text-center text-sm">
+          <div className="auth-footer mt-3 text-center text-sm">
             已有账号？{' '}
             <Link to="/login" className="text-primary hover:underline">
               立即登录

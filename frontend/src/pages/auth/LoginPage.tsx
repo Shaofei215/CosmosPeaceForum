@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useLogin, useSendLoginCode } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
+import { BigLogo } from '@/shared/components/auth/BigLogo';
 
 type LoginMethod = 'password' | 'code';
 
@@ -154,7 +155,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="auth-page min-h-screen flex items-center justify-center p-4">
+    <div className="auth-page" data-auth-word="Login">
+      <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
           <CardTitle className="auth-title text-2xl font-bold text-center">登录</CardTitle>
@@ -192,14 +194,14 @@ export default function LoginPage() {
             </div>
 
             {/* 登录方式切换 */}
-            <div className="auth-segmented flex gap-2 p-1 bg-muted/50 rounded-lg">
+            <div className="auth-segmented flex gap-2 rounded-lg bg-[var(--theme-subtle-bg)] p-1">
               <button
                 type="button"
                 onClick={() => setLoginMethod('password')}
-                className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
                   loginMethod === 'password'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground/70 hover:text-foreground'
+                    ? 'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)]'
+                    : 'text-[var(--theme-subtle-fg)] hover:text-foreground'
                 }`}
               >
                 密码登录
@@ -207,10 +209,10 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setLoginMethod('code')}
-                className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
                   loginMethod === 'code'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground/70 hover:text-foreground'
+                    ? 'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)]'
+                    : 'text-[var(--theme-subtle-fg)] hover:text-foreground'
                 }`}
               >
                 验证码登录
@@ -257,7 +259,7 @@ export default function LoginPage() {
                     variant="outline"
                     onClick={handleSendCode}
                     disabled={isPending || countdown > 0 || !email.trim()}
-                    className="auth-code-button whitespace-nowrap"
+                    className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-none hover:opacity-90"
                   >
                     {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
                   </Button>

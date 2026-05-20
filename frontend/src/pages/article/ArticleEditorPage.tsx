@@ -301,8 +301,8 @@ export default function ArticleEditorPage() {
 
       <div
         className={cn(
-          'sticky top-[4.5rem] z-10 flex flex-wrap items-center gap-1 sm:top-24',
-          'border-b border-border/60 bg-white px-2 py-2 sm:px-3'
+          'article-editor-toolbar flex h-10 max-h-10 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden',
+          'border-b border-border/60 bg-white px-2 py-1 sm:px-3'
         )}
       >
         <ToolbarButton
@@ -376,12 +376,12 @@ export default function ArticleEditorPage() {
           <LinkIcon className="h-4 w-4" />
         </ToolbarButton>
 
-        <div className="ml-auto flex rounded-full bg-muted p-1">
+        <div className="ml-auto flex shrink-0 rounded-full bg-muted p-0.5">
           <button
             type="button"
             onClick={() => setEditorMode('rich')}
             className={cn(
-              'flex h-8 w-8 items-center justify-center rounded-full',
+              'flex h-7 w-7 items-center justify-center rounded-full',
               mode === 'rich' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground'
             )}
             title={text.richMode}
@@ -392,7 +392,7 @@ export default function ArticleEditorPage() {
             type="button"
             onClick={() => setEditorMode('markdown')}
             className={cn(
-              'flex h-8 w-8 items-center justify-center rounded-full',
+              'flex h-7 w-7 items-center justify-center rounded-full',
               mode === 'markdown' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground'
             )}
             title={text.markdownMode}
@@ -459,10 +459,10 @@ function ToolbarButton({
       onMouseDown={event => event.preventDefault()}
       onClick={onClick}
       className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground',
-        'transition-colors hover:bg-muted hover:text-foreground',
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent text-muted-foreground',
+        'transition-colors hover:bg-[var(--theme-subtle-bg)] hover:text-[var(--theme-accent-bg)]',
         active &&
-          'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground'
+          'border-[var(--theme-accent-bg)] bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-sm hover:bg-[var(--theme-accent-bg)] hover:text-[var(--theme-accent-fg)] hover:opacity-90'
       )}
       aria-pressed={Boolean(active)}
       title={label}

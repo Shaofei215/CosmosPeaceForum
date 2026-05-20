@@ -24,8 +24,11 @@
    ============================================ */
 :root {
   /* 字体 */
-  --font-family-base: 'HYWH65S', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-family-mono: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+  --font-family-base:
+    'HYWH65S', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-family-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
 
   /* 圆角 */
   --radius: 0.5rem;
@@ -55,6 +58,16 @@
   --theme-primary: 262 83% 58%;
   --theme-primary-light: 262 83% 65%;
   --theme-primary-dark: 262 83% 45%;
+  --theme-accent-bg: #111827;
+  --theme-accent-fg: #ffffff;
+  --theme-subtle-bg: rgba(243, 244, 246, 0.82);
+  --theme-subtle-fg: #4b5563;
+  --theme-topbar-bg: #ffffff;
+  --theme-topbar-scrolled-bg: rgba(255, 255, 255, 0.45);
+  --theme-topbar-action-active-bg: var(--theme-accent-bg);
+  --theme-topbar-action-active-fg: var(--theme-accent-fg);
+  --theme-topbar-action-inactive-bg: var(--theme-subtle-bg);
+  --theme-topbar-action-inactive-fg: var(--theme-subtle-fg);
 }
 
 /* 深色主题 */
@@ -102,7 +115,9 @@ html {
 
 body {
   font-family: var(--font-family-base);
-  font-feature-settings: 'rlig' 1, 'calt' 1;
+  font-feature-settings:
+    'rlig' 1,
+    'calt' 1;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   min-height: 100vh;
@@ -181,6 +196,79 @@ textarea {
 input:focus,
 textarea:focus {
   outline: none;
+}
+
+.auth-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+  padding: clamp(1.25rem, 4.5vh, 3rem) 1rem 1rem;
+}
+
+.auth-page::before {
+  content: attr(data-auth-word);
+  position: fixed;
+  z-index: -1;
+  right: max(-18vw, -9rem);
+  bottom: max(-10vh, -7rem);
+  max-width: 120vw;
+  color: var(--auth-word-color, var(--theme-accent-bg));
+  font-size: clamp(12rem, 34vw, 34rem);
+  font-weight: 800;
+  line-height: 0.8;
+  letter-spacing: 0;
+  opacity: 0.72;
+  white-space: nowrap;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.auth-big-logo {
+  position: relative;
+  z-index: 1;
+  width: min(74vw, 34rem);
+  max-height: min(22vh, 10rem);
+  object-fit: contain;
+  margin-bottom: clamp(1rem, 3vh, 2rem);
+}
+
+.auth-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 23rem);
+  margin-top: clamp(0.75rem, 2.25vh, 1.75rem);
+}
+
+@media (max-width: 640px) {
+  .auth-page {
+    padding-top: clamp(1rem, 3vh, 1.75rem);
+  }
+
+  .auth-page::before {
+    right: -3.5rem;
+    bottom: -2rem;
+    font-size: clamp(7rem, 42vw, 13rem);
+  }
+
+  .auth-big-logo {
+    width: min(78vw, 20rem);
+    max-height: 7rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .auth-card-header {
+    padding-top: 1rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .auth-card-content {
+    padding-bottom: 1rem;
+  }
 }
 
 /* ============================================
@@ -349,6 +437,14 @@ img {
   font-weight: 500;
 }
 
+.article-editor-toolbar {
+  scrollbar-width: none;
+}
+
+.article-editor-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
 .reply-toggle-short {
   display: none;
 }
@@ -443,6 +539,10 @@ img {
 .mobile-device .mobile-top-action svg {
   width: 0.95rem;
   height: 0.95rem;
+}
+
+.mobile-device .feed-filter-action {
+  width: 3rem;
 }
 
 .mobile-device .mobile-composer-panel {

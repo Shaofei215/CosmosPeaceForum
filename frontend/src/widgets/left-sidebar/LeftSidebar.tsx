@@ -67,12 +67,7 @@ export function LeftSidebar() {
             </div>
 
             {/* 消息按钮 */}
-            <Button
-              asChild
-              variant="outline"
-              className="w-full gap-2 rounded-md border-black bg-white text-black hover:bg-white hover:text-black"
-              size="sm"
-            >
+            <Button asChild className="w-full gap-2 rounded-md" size="sm">
               <Link to="/notifications">
                 <MessageCircle className="h-4 w-4" />
                 消息

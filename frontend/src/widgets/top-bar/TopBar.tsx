@@ -13,6 +13,7 @@ import { Search, Flame, Clock, Users, ArrowLeft, FileText, User } from 'lucide-r
 import { Input } from '@/shared/components/ui';
 import { cn } from '@/shared/lib/utils';
 import type { SearchType } from '@/features/search';
+import { usePublicTheme } from '@/features/theme';
 
 /**
  * 筛选类型
@@ -28,6 +29,7 @@ export function TopBar() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [isScrolled, setIsScrolled] = useState(false);
+  const { data: theme } = usePublicTheme();
 
   useEffect(() => {
     const updateScrolled = () => {
@@ -100,20 +102,28 @@ export function TopBar() {
   return (
     <div
       className={cn(
-        'mobile-top-bar rounded-[2rem] border border-transparent p-2 transition-all duration-200 sm:p-4',
+        'mobile-top-bar relative isolate overflow-visible rounded-[2rem] border border-transparent p-2 transition-all duration-200 sm:p-4',
         isScrolled
-          ? 'border-white/40 bg-white/45 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-white/35'
-          : 'bg-white shadow-sm'
+          ? 'border-white/40 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-white/35'
+          : 'shadow-sm'
       )}
     >
-      <div className="flex items-center gap-2 sm:gap-4">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-px z-0 rounded-[inherit]"
+        style={{
+          background: isScrolled ? 'var(--theme-topbar-scrolled-bg)' : 'var(--theme-topbar-bg)',
+        }}
+      />
+      <TopBarDecorations theme={theme} />
+      <div className="relative z-10 flex items-center gap-2 sm:gap-4">
         <button
           type="button"
           onClick={handleLogoClick}
           aria-label="回到主页并刷新"
-          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[1.5rem] transition-opacity hover:opacity-85 sm:h-10 sm:w-10"
+          className="flex h-9 min-w-9 max-w-36 shrink-0 items-center justify-start overflow-hidden rounded-[1.5rem] transition-opacity hover:opacity-85 sm:h-10 sm:max-w-48"
         >
-          <img src="/logo.png" alt="Imaginary Tree" className="h-full w-full object-contain" />
+          <img src="/logo.png" alt="Imaginary Tree" className="h-full w-auto object-contain" />
         </button>
 
         {/* 搜索框 */}
@@ -159,13 +169,13 @@ export function TopBar() {
                     navigate({ pathname: '/feed', search: search ? `?${search}` : '' });
                   }}
                   aria-label={filter.label}
-                  className={`mobile-top-action flex h-9 w-9 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:w-auto sm:gap-2 sm:px-3 sm:py-2 ${
+                  className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     activeFilter === filter.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted/80 text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                      ? 'bg-[var(--theme-topbar-action-active-bg)] text-[var(--theme-topbar-action-active-fg)]'
+                      : 'bg-[var(--theme-topbar-action-inactive-bg)] text-[var(--theme-topbar-action-inactive-fg)] hover:opacity-85'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-4 w-4 sm:hidden" />
                   <span className="hidden sm:inline">{filter.label}</span>
                 </button>
               );
@@ -181,13 +191,13 @@ export function TopBar() {
                   type="button"
                   onClick={() => setSearchType(filter.id)}
                   aria-label={filter.label}
-                  className={`mobile-top-action flex h-9 w-9 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:w-auto sm:gap-2 sm:px-3 sm:py-2 ${
+                  className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     urlSearchType === filter.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted/80 text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                      ? 'bg-[var(--theme-topbar-action-active-bg)] text-[var(--theme-topbar-action-active-fg)]'
+                      : 'bg-[var(--theme-topbar-action-inactive-bg)] text-[var(--theme-topbar-action-inactive-fg)] hover:opacity-85'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-4 w-4 sm:hidden" />
                   <span className="hidden sm:inline">{filter.label}</span>
                 </button>
               );
@@ -195,7 +205,7 @@ export function TopBar() {
             <button
               onClick={handleBack}
               aria-label="返回"
-              className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-muted/80 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+              className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-[var(--theme-topbar-action-inactive-bg)] text-sm font-medium text-[var(--theme-topbar-action-inactive-fg)] transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">返回</span>
@@ -205,7 +215,7 @@ export function TopBar() {
           <button
             onClick={handleBack}
             aria-label="返回"
-            className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-muted/80 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+            className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-[var(--theme-topbar-action-inactive-bg)] text-sm font-medium text-[var(--theme-topbar-action-inactive-fg)] transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">返回</span>
@@ -213,5 +223,42 @@ export function TopBar() {
         )}
       </div>
     </div>
+  );
+}
+
+function TopBarDecorations({ theme }: { theme: ReturnType<typeof usePublicTheme>['data'] }) {
+  const decorations = [
+    { src: theme?.topbar_decoration_top, className: 'inset-x-6 -top-5 mx-auto h-10 max-w-[72%]' },
+    {
+      src: theme?.topbar_decoration_bottom,
+      className: 'inset-x-6 -bottom-5 mx-auto h-10 max-w-[72%]',
+    },
+    {
+      src: theme?.topbar_decoration_left,
+      className: '-left-6 top-1/2 h-[118%] max-w-16 -translate-y-1/2',
+    },
+    {
+      src: theme?.topbar_decoration_right,
+      className: '-right-6 top-1/2 h-[118%] max-w-16 -translate-y-1/2',
+    },
+  ];
+
+  return (
+    <>
+      {decorations.map(({ src, className }, index) =>
+        src ? (
+          <img
+            key={index}
+            src={src}
+            alt=""
+            aria-hidden="true"
+            className={cn(
+              'pointer-events-none absolute z-[1] object-contain opacity-95',
+              className
+            )}
+          />
+        ) : null
+      )}
+    </>
   );
 }

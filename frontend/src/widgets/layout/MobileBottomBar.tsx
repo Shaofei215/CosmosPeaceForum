@@ -87,7 +87,7 @@ export function MobileBottomBar() {
               'flex min-w-0 flex-col items-center gap-1 rounded-2xl px-2 py-1.5 text-xs font-medium',
               'text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground',
               isComposerOpen &&
-                'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] hover:opacity-90'
             )}
             onClick={openComposer}
           >

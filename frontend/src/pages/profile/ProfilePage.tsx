@@ -96,31 +96,10 @@ export default function ProfilePage() {
     <div className="space-y-3">
       {/* 用户资料卡片 */}
       <div className="rounded-lg bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex items-start gap-3 sm:items-center sm:gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <Avatar src={user.avatar_url} alt={user.username} size="xl" />
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2 sm:items-center">
-              <h1 className="min-w-0 truncate text-xl font-bold sm:text-2xl">{user.username}</h1>
-              {!isCurrentUser && (
-                <Button
-                  variant={followStatus?.is_following ? 'outline' : 'default'}
-                  size="sm"
-                  onClick={handleFollow}
-                  disabled={toggleFollow.isPending}
-                  className="shrink-0 px-4"
-                >
-                  {toggleFollow.isPending ? (
-                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : followStatus?.is_mutual ? (
-                    '互相关注'
-                  ) : followStatus?.is_following ? (
-                    '已关注'
-                  ) : (
-                    '关注'
-                  )}
-                </Button>
-              )}
-            </div>
+            <h1 className="min-w-0 truncate text-xl font-bold sm:text-2xl">{user.username}</h1>
             {user.bio && (
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{user.bio}</p>
             )}
@@ -141,6 +120,29 @@ export default function ProfilePage() {
               </Link>
             </div>
           </div>
+          {!isCurrentUser && (
+            <Button
+              variant={followStatus?.is_following ? 'outline' : 'default'}
+              size="sm"
+              onClick={handleFollow}
+              disabled={toggleFollow.isPending}
+              className={
+                followStatus?.is_following
+                  ? 'shrink-0 self-center border-[var(--theme-accent-bg)] px-4 text-[var(--theme-accent-bg)] hover:bg-[var(--theme-subtle-bg)]'
+                  : 'shrink-0 self-center px-4'
+              }
+            >
+              {toggleFollow.isPending ? (
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : followStatus?.is_mutual ? (
+                '互相关注'
+              ) : followStatus?.is_following ? (
+                '已关注'
+              ) : (
+                '关注'
+              )}
+            </Button>
+          )}
           {/* 登出按钮 - 仅当前用户可见 */}
           {isCurrentUser && (
             <Button

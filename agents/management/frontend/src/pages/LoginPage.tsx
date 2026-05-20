@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLogin } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
-import { Shield } from 'lucide-react';
+import { BigLogo } from '@/shared/components/auth/BigLogo';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -41,16 +41,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <Card className="w-full max-w-md shadow-xl">
+    <div className="auth-page" data-auth-word="Login">
+      <BigLogo />
+      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="space-y-2 text-center">
-          <div className="flex justify-center mb-2">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Shield size={24} className="text-primary" />
-            </div>
-          </div>
-          <CardTitle className="text-2xl font-bold">角色管理后台</CardTitle>
-          <p className="text-sm text-muted-foreground">管理员登录</p>
+          <CardTitle className="text-2xl font-bold">登录</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

@@ -38,7 +38,7 @@ export function CreatePostForm() {
           to="/article/new"
           title="写文章"
           aria-label="写文章"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--theme-subtle-bg)] text-[var(--theme-subtle-fg)] transition-colors hover:opacity-85"
         >
           <FilePenLine className="h-[18px] w-[18px]" />
         </Link>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/features/auth/api';
 import { useAuthStore } from '@/features/auth';
 import { Card, CardContent } from '@/shared/components/ui';
+import { BigLogo } from '@/shared/components/auth/BigLogo';
 
 function getSafeRedirect(value: string | null): string {
   if (!value || !value.startsWith('/') || value.startsWith('//')) {
@@ -43,7 +44,8 @@ export default function ManagementLoginPage() {
   }, [logout, navigate, setAuth]);
 
   return (
-    <div className="auth-page min-h-[60vh] flex items-center justify-center p-4">
+    <div className="auth-page" data-auth-word="Login">
+      <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardContent className="auth-card-content p-6 text-center text-sm text-muted-foreground">
           {error || '正在登录角色账号...'}
