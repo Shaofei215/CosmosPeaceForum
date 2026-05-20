@@ -460,7 +460,7 @@ function ToolbarButton({
       onClick={onClick}
       className={cn(
         'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent text-muted-foreground',
-        'transition-colors hover:border-[var(--theme-accent-bg)] hover:bg-[var(--theme-subtle-bg)] hover:text-[var(--theme-accent-bg)]',
+        'transition-colors hover:bg-[var(--theme-subtle-bg)] hover:text-[var(--theme-accent-bg)]',
         active &&
           'border-[var(--theme-accent-bg)] bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-sm hover:bg-[var(--theme-accent-bg)] hover:text-[var(--theme-accent-fg)] hover:opacity-90'
       )}

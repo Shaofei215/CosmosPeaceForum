@@ -102,15 +102,19 @@ export function TopBar() {
   return (
     <div
       className={cn(
-        'mobile-top-bar relative overflow-hidden rounded-[2rem] border border-transparent p-2 transition-all duration-200 sm:p-4',
+        'mobile-top-bar relative isolate overflow-visible rounded-[2rem] border border-transparent p-2 transition-all duration-200 sm:p-4',
         isScrolled
           ? 'border-white/40 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-white/35'
           : 'shadow-sm'
       )}
-      style={{
-        background: isScrolled ? 'var(--theme-topbar-scrolled-bg)' : 'var(--theme-topbar-bg)',
-      }}
     >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-px z-0 rounded-[inherit]"
+        style={{
+          background: isScrolled ? 'var(--theme-topbar-scrolled-bg)' : 'var(--theme-topbar-bg)',
+        }}
+      />
       <TopBarDecorations theme={theme} />
       <div className="relative z-10 flex items-center gap-2 sm:gap-4">
         <button
@@ -224,18 +228,18 @@ export function TopBar() {
 
 function TopBarDecorations({ theme }: { theme: ReturnType<typeof usePublicTheme>['data'] }) {
   const decorations = [
-    { src: theme?.topbar_decoration_top, className: 'inset-x-8 top-1 mx-auto h-3 max-w-[55%]' },
+    { src: theme?.topbar_decoration_top, className: 'inset-x-6 -top-5 mx-auto h-10 max-w-[72%]' },
     {
       src: theme?.topbar_decoration_bottom,
-      className: 'inset-x-8 bottom-1 mx-auto h-3 max-w-[55%]',
+      className: 'inset-x-6 -bottom-5 mx-auto h-10 max-w-[72%]',
     },
     {
       src: theme?.topbar_decoration_left,
-      className: 'left-2 top-1/2 h-[72%] max-w-10 -translate-y-1/2',
+      className: '-left-6 top-1/2 h-[118%] max-w-16 -translate-y-1/2',
     },
     {
       src: theme?.topbar_decoration_right,
-      className: 'right-2 top-1/2 h-[72%] max-w-10 -translate-y-1/2',
+      className: '-right-6 top-1/2 h-[118%] max-w-16 -translate-y-1/2',
     },
   ];
 
@@ -248,7 +252,10 @@ function TopBarDecorations({ theme }: { theme: ReturnType<typeof usePublicTheme>
             src={src}
             alt=""
             aria-hidden="true"
-            className={cn('pointer-events-none absolute z-0 object-contain opacity-95', className)}
+            className={cn(
+              'pointer-events-none absolute z-[1] object-contain opacity-95',
+              className
+            )}
           />
         ) : null
       )}
