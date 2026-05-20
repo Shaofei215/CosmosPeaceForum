@@ -15,6 +15,7 @@ const defaultTheme: ThemeSettingsUpdate = {
   topbar_gradient_to: '#f3f4f6',
   topbar_gradient_direction: '90deg',
   topbar_scrolled_background: 'rgba(255, 255, 255, 0.45)',
+  topbar_background_image: null,
   topbar_decoration_top: null,
   topbar_decoration_bottom: null,
   topbar_decoration_left: null,
@@ -149,7 +150,7 @@ export default function AdminThemePage() {
               <div className="grid gap-4 md:grid-cols-3">
                 <ColorField
                   label="渐变起点"
-                  description="顶部不透明，滚动后自动半透明毛玻璃。"
+                  description="可填 rgba/transparent 与桌布叠加，滚动后自动半透明毛玻璃。"
                   value={form.topbar_gradient_from}
                   onChange={value => setField('topbar_gradient_from', value)}
                 />
@@ -170,11 +171,17 @@ export default function AdminThemePage() {
             ) : (
               <ColorField
                 label="顶栏背景色"
-                description="顶部不透明，滚动后自动半透明毛玻璃。"
+                description="可填 rgba/transparent 与桌布叠加，滚动后自动半透明毛玻璃。"
                 value={form.topbar_solid_color}
                 onChange={value => setField('topbar_solid_color', value)}
               />
             )}
+            <ImageField
+              label="顶栏桌布图片"
+              description="叠在颜色层上方、组件下方，滚动时保持清晰，只会自动降低透明度。"
+              value={form.topbar_background_image}
+              onChange={value => setField('topbar_background_image', value)}
+            />
           </CardContent>
         </Card>
 
@@ -313,10 +320,12 @@ function OptionalColorField({
 
 function ImageField({
   label,
+  description,
   value,
   onChange,
 }: {
   label: string;
+  description?: string;
   value: string | null;
   onChange: (value: string | null) => void;
 }) {
@@ -340,6 +349,7 @@ function ImageField({
         onChange={event => onChange(event.target.value || null)}
         placeholder="图片 URL 或 data URL"
       />
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
       <div className="flex items-center gap-2">
         <input type="file" accept="image/*" onChange={handleFileChange} className="text-xs" />
         <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>

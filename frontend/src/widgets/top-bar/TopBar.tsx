@@ -110,11 +110,22 @@ export function TopBar() {
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -inset-px z-0 rounded-[inherit]"
-        style={{
-          background: isScrolled ? 'var(--theme-topbar-scrolled-bg)' : 'var(--theme-topbar-bg)',
-        }}
-      />
+        className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-[inherit]"
+      >
+        <div
+          className="absolute inset-0"
+          style={{
+            background: isScrolled ? 'var(--theme-topbar-scrolled-bg)' : 'var(--theme-topbar-bg)',
+          }}
+        />
+        <div
+          className="absolute inset-0 bg-cover bg-center transition-opacity duration-200"
+          style={{
+            backgroundImage: 'var(--theme-topbar-bg-image)',
+            opacity: isScrolled ? 0.62 : 0.82,
+          }}
+        />
+      </div>
       <TopBarDecorations theme={theme} />
       <div className="relative z-10 flex items-center gap-2 sm:gap-4">
         <button
@@ -252,10 +263,7 @@ function TopBarDecorations({ theme }: { theme: ReturnType<typeof usePublicTheme>
             src={src}
             alt=""
             aria-hidden="true"
-            className={cn(
-              'pointer-events-none absolute z-[1] object-contain opacity-95',
-              className
-            )}
+            className={cn('pointer-events-none absolute z-20 object-contain opacity-95', className)}
           />
         ) : null
       )}

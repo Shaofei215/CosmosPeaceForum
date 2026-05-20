@@ -99,6 +99,10 @@ def ensure_runtime_schema():
                 "ALTER TABLE platform_theme_settings "
                 "ADD COLUMN topbar_action_inactive_foreground_color TEXT"
             )
+        if "topbar_background_image" not in theme_columns:
+            statements.append(
+                "ALTER TABLE platform_theme_settings ADD COLUMN topbar_background_image TEXT"
+            )
 
     if not statements:
         return

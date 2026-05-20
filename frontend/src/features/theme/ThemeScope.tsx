@@ -36,22 +36,31 @@ function toColorWithAlpha(color: string, alpha: number, fallback: string): strin
   return rgb ? `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})` : fallback;
 }
 
-function toOpaqueColor(color: string): string {
-  return toColorWithAlpha(color, 1, color);
-}
-
 function toGlassColor(color: string): string {
   return toColorWithAlpha(color, 0.45, 'rgba(255, 255, 255, 0.45)');
+}
+
+function toLayerColor(color: string): string {
+  return color.trim() || 'transparent';
+}
+
+function toCssUrl(value?: string | null): string {
+  if (!value) return 'none';
+  const escaped = value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/[\n\r\f]/g, '');
+  return `url("${escaped}")`;
 }
 
 function getTopbarBackground(theme: ReturnType<typeof usePublicTheme>['data']) {
   if (!theme) return '#ffffff';
   if (theme.topbar_background_mode === 'gradient') {
-    return `linear-gradient(${theme.topbar_gradient_direction}, ${toOpaqueColor(
+    return `linear-gradient(${theme.topbar_gradient_direction}, ${toLayerColor(
       theme.topbar_gradient_from
-    )}, ${toOpaqueColor(theme.topbar_gradient_to)})`;
+    )}, ${toLayerColor(theme.topbar_gradient_to)})`;
   }
-  return toOpaqueColor(theme.topbar_solid_color);
+  return toLayerColor(theme.topbar_solid_color);
 }
 
 function getTopbarGlassBackground(theme: ReturnType<typeof usePublicTheme>['data']) {
@@ -74,6 +83,7 @@ export function useThemeScopeStyle(): ThemeStyle {
     '--theme-subtle-fg': theme?.subtle_foreground_color ?? '#4b5563',
     '--theme-topbar-bg': getTopbarBackground(theme),
     '--theme-topbar-scrolled-bg': getTopbarGlassBackground(theme),
+    '--theme-topbar-bg-image': toCssUrl(theme?.topbar_background_image),
     '--theme-topbar-action-active-bg':
       theme?.topbar_action_active_color ?? theme?.accent_color ?? '#111827',
     '--theme-topbar-action-active-fg':

@@ -23,6 +23,7 @@ class PlatformThemeSettings(Base):
     topbar_gradient_to = Column(Text, nullable=False, default="#f3f4f6")
     topbar_gradient_direction = Column(Text, nullable=False, default="90deg")
     topbar_scrolled_background = Column(Text, nullable=False, default="rgba(255, 255, 255, 0.45)")
+    topbar_background_image = Column(Text, nullable=True)
 
     topbar_decoration_top = Column(Text, nullable=True)
     topbar_decoration_bottom = Column(Text, nullable=True)
