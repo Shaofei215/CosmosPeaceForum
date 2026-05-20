@@ -5,6 +5,7 @@ import { RightSidebar } from '@/widgets/right-sidebar';
 import { TopBar } from '@/widgets/top-bar';
 import { cn } from '@/shared/lib/utils';
 import { MobileBottomBar } from './MobileBottomBar';
+import { useThemeScopeStyle } from '@/features/theme/ThemeScope';
 
 const AUTH_PATHS = [
   '/login',
@@ -23,6 +24,7 @@ export function RootLayout() {
   const previousLocationKeyRef = useRef(location.key);
   const pathname = location.pathname;
   const isMobileDevice = isMobileUserAgent();
+  const themeStyle = useThemeScopeStyle();
 
   useEffect(() => {
     if (!('scrollRestoration' in window.history)) {
@@ -62,6 +64,7 @@ export function RootLayout() {
     <div
       className={cn('min-h-screen bg-background/80', isMobileDevice && 'mobile-device')}
       data-mobile-device={isMobileDevice ? 'true' : undefined}
+      style={themeStyle}
     >
       <main
         className={cn(

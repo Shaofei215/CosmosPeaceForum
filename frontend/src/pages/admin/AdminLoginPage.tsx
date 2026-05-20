@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Shield } from 'lucide-react';
 import { useAdminLogin } from '@/features/admin';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/shared/components/ui';
+import { BigLogo } from '@/shared/components/auth/BigLogo';
 
 function getRedirectPath(state: unknown): string {
   const value = state as { from?: { pathname?: string } };
@@ -40,16 +40,11 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md rounded-lg shadow-xl">
+    <div className="auth-page bg-background" data-auth-word="Login">
+      <BigLogo />
+      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="space-y-2 text-center">
-          <div className="mb-2 flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Shield size={24} className="text-primary" />
-            </div>
-          </div>
-          <CardTitle className="text-2xl font-bold">平台管理后台</CardTitle>
-          <p className="text-sm text-muted-foreground">管理员登录</p>
+          <CardTitle className="text-2xl font-bold">登录</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

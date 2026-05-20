@@ -462,7 +462,7 @@ function ToolbarButton({
         'flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground',
         'transition-colors hover:bg-muted hover:text-foreground',
         active &&
-          'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground'
+          'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-sm hover:opacity-90'
       )}
       aria-pressed={Boolean(active)}
       title={label}

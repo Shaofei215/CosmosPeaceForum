@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useConfirmPasswordReset } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
+import { BigLogo } from '@/shared/components/auth/BigLogo';
 
 /**
  * 重置密码页面组件 - Step 2
@@ -78,7 +79,8 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="auth-page min-h-screen flex items-center justify-center p-4">
+    <div className="auth-page" data-auth-word="Reset">
+      <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
           <CardTitle className="auth-title text-2xl font-bold text-center">设置新密码</CardTitle>

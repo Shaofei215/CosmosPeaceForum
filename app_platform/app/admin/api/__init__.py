@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app_platform.app.admin.api import announcements, admins, auth, content, dashboard, logs, users
+from app_platform.app.admin.api import announcements, admins, auth, content, dashboard, logs, theme, users
 
 admin_router = APIRouter(prefix="/admin")
 
@@ -11,5 +11,6 @@ admin_router.include_router(content.router)
 admin_router.include_router(announcements.router)
 admin_router.include_router(admins.router)
 admin_router.include_router(logs.router)
+admin_router.include_router(theme.router)
 
 __all__ = ["admin_router"]

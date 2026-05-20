@@ -18,10 +18,19 @@ from app_platform.app.admin.services.terminal_log_service import terminal_log_ca
 
 # 导入所有模型以确保 SQLAlchemy 正确注册关系
 # 必须在创建表之前导入所有模型
-from app_platform.app.models import User, Post, Like, Comment, CommentLike, Follow, Notification
+from app_platform.app.models import (
+    User,
+    Post,
+    Like,
+    Comment,
+    CommentLike,
+    Follow,
+    Notification,
+    PlatformThemeSettings,
+)
 from app_platform.app.admin.models import PlatformAdminUser, PlatformAdminOperationLog, UserModeration
 
-from app_platform.app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow, notifications, search
+from app_platform.app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow, notifications, search, theme
 
 
 settings = get_settings()
@@ -194,6 +203,7 @@ app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["
 app.include_router(follow.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["follows"])
 app.include_router(notifications.router, prefix=f"{settings.API_V1_PREFIX}/notifications", tags=["notifications"])
 app.include_router(search.router, prefix=f"{settings.API_V1_PREFIX}/search", tags=["search"])
+app.include_router(theme.router, prefix=f"{settings.API_V1_PREFIX}/theme", tags=["theme"])
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 
 

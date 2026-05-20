@@ -61,7 +61,7 @@ export function UserListItem({ user }: UserListItemProps) {
           size="sm"
           onClick={handleFollow}
           disabled={toggleFollow.isPending}
-          className="h-7 shrink-0 border-black bg-white px-3 text-xs text-black hover:bg-gray-100"
+          className="h-7 shrink-0 border-[var(--theme-accent-bg)] bg-white px-3 text-xs text-[var(--theme-accent-bg)] hover:bg-[var(--theme-subtle-bg)]"
         >
           {toggleFollow.isPending ? (
             <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />

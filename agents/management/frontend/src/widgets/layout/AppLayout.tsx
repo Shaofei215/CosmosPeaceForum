@@ -35,7 +35,19 @@ export function AppLayout() {
         } fixed z-10 flex h-full flex-col border-r border-border bg-card transition-all duration-300`}
       >
         <div className="flex h-12 items-center justify-between border-b border-border px-3">
-          {sidebarOpen && <span className="truncate text-base font-bold">角色管理后台</span>}
+          {sidebarOpen && (
+            <img
+              src="/biglogo.png"
+              alt="角色管理后台"
+              className="h-8 max-w-36 object-contain"
+              onError={event => {
+                if (event.currentTarget.dataset.fallback !== 'true') {
+                  event.currentTarget.dataset.fallback = 'true';
+                  event.currentTarget.src = '/logo.png';
+                }
+              }}
+            />
+          )}
           <button
             type="button"
             onClick={() => setSidebarOpen((value) => !value)}

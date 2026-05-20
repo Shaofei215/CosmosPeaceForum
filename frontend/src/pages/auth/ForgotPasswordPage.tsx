@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSendPasswordResetCode } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
+import { BigLogo } from '@/shared/components/auth/BigLogo';
 
 /**
  * 忘记密码页面组件
@@ -96,7 +97,8 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="auth-page min-h-screen flex items-center justify-center p-4">
+    <div className="auth-page" data-auth-word="Reset">
+      <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
           <CardTitle className="auth-title text-2xl font-bold text-center">忘记密码</CardTitle>
@@ -150,7 +152,7 @@ export default function ForgotPasswordPage() {
                   variant="outline"
                   onClick={handleSendCode}
                   disabled={countdown > 0 || isSending || !email.trim()}
-                  className="auth-code-button whitespace-nowrap rounded-lg shadow-none"
+                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-none hover:opacity-90"
                 >
                   {countdown > 0 ? `${countdown}秒后重试` : isSending ? '发送中...' : '获取验证码'}
                 </Button>

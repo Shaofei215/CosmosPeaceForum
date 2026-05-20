@@ -31,6 +31,7 @@ import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import AdminContentPage from '@/pages/admin/AdminContentPage';
 import AdminAdminsPage from '@/pages/admin/AdminAdminsPage';
 import AdminLogsPage from '@/pages/admin/AdminLogsPage';
+import AdminThemePage from '@/pages/admin/AdminThemePage';
 
 /**
  * 应用路由配置
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
           { path: 'dashboard', element: <AdminDashboardPage /> },
           { path: 'users', element: <AdminUsersPage /> },
           { path: 'content', element: <AdminContentPage /> },
+          { path: 'theme', element: <AdminThemePage /> },
           { path: 'admins', element: <AdminAdminsPage /> },
           { path: 'logs', element: <AdminLogsPage /> },
         ],

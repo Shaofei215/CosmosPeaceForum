@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSendVerificationCode, useRegisterWithVerification } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
+import { BigLogo } from '@/shared/components/auth/BigLogo';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -114,7 +115,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="auth-page min-h-screen flex items-center justify-center p-4">
+    <div className="auth-page" data-auth-word="Register">
+      <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
           <CardTitle className="auth-title text-2xl font-bold text-center">注册</CardTitle>
@@ -167,7 +169,7 @@ export default function RegisterPage() {
                   variant="outline"
                   onClick={handleSendCode}
                   disabled={isSendingCode || countdown > 0 || !email.trim()}
-                  className="auth-code-button whitespace-nowrap rounded-lg shadow-none"
+                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-none hover:opacity-90"
                 >
                   {countdown > 0 ? `${countdown}秒后重试` : '获取验证码'}
                 </Button>

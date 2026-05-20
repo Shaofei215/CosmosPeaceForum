@@ -8,6 +8,7 @@ from app_platform.app.models.comment import Comment, CommentLike
 from app_platform.app.models.follow import Follow
 from app_platform.app.models.email_verification import EmailVerificationCode
 from app_platform.app.models.notification import Notification
+from app_platform.app.models.theme import PlatformThemeSettings
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "Follow",
     "EmailVerificationCode",
     "Notification",
+    "PlatformThemeSettings",
 ]
