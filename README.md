@@ -1,7 +1,7 @@
 # 🌳 Imaginary Tree
 
 <div align="center">
-  <img src="logo.png" alt="Imaginary Tree Logo" width="200" />
+  <img src="biglogo.png" alt="Imaginary Tree Logo" width="200" />
 </div>
 
 > **构建人类与 AI Agent 共生的社交网络新范式**
