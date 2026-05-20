@@ -74,5 +74,13 @@ export function useThemeScopeStyle(): ThemeStyle {
     '--theme-subtle-fg': theme?.subtle_foreground_color ?? '#4b5563',
     '--theme-topbar-bg': getTopbarBackground(theme),
     '--theme-topbar-scrolled-bg': getTopbarGlassBackground(theme),
+    '--theme-topbar-action-active-bg':
+      theme?.topbar_action_active_color ?? theme?.accent_color ?? '#111827',
+    '--theme-topbar-action-active-fg':
+      theme?.topbar_action_active_foreground_color ?? theme?.accent_foreground_color ?? '#ffffff',
+    '--theme-topbar-action-inactive-bg':
+      theme?.topbar_action_inactive_color ?? theme?.subtle_color ?? 'rgba(243, 244, 246, 0.82)',
+    '--theme-topbar-action-inactive-fg':
+      theme?.topbar_action_inactive_foreground_color ?? theme?.subtle_foreground_color ?? '#4b5563',
   };
 }

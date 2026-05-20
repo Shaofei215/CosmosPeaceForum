@@ -19,6 +19,10 @@ const defaultTheme: ThemeSettingsUpdate = {
   topbar_decoration_bottom: null,
   topbar_decoration_left: null,
   topbar_decoration_right: null,
+  topbar_action_active_color: null,
+  topbar_action_active_foreground_color: null,
+  topbar_action_inactive_color: null,
+  topbar_action_inactive_foreground_color: null,
 };
 
 type ThemeField = keyof ThemeSettingsUpdate;
@@ -34,7 +38,7 @@ export default function AdminThemePage() {
       const editable = Object.fromEntries(
         Object.entries(data).filter(([key]) => key !== 'id' && key !== 'updated_at')
       ) as ThemeSettingsUpdate;
-      setForm(editable);
+      setForm({ ...defaultTheme, ...editable });
     }
   }, [data]);
 
@@ -175,6 +179,38 @@ export default function AdminThemePage() {
         </Card>
 
         <Card className="rounded-lg">
+          <CardHeader>
+            <CardTitle>顶栏按钮颜色</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <OptionalColorField
+              label="按钮强调色"
+              description="留空时使用颜色系统里的强调色。"
+              value={form.topbar_action_active_color}
+              onChange={value => setField('topbar_action_active_color', value)}
+            />
+            <OptionalColorField
+              label="按钮强调色文字"
+              description="留空时使用颜色系统里的强调色文字。"
+              value={form.topbar_action_active_foreground_color}
+              onChange={value => setField('topbar_action_active_foreground_color', value)}
+            />
+            <OptionalColorField
+              label="按钮非强调色"
+              description="留空时使用颜色系统里的非强调色，可填 transparent。"
+              value={form.topbar_action_inactive_color}
+              onChange={value => setField('topbar_action_inactive_color', value)}
+            />
+            <OptionalColorField
+              label="按钮非强调色文字"
+              description="留空时使用颜色系统里的非强调色文字。"
+              value={form.topbar_action_inactive_foreground_color}
+              onChange={value => setField('topbar_action_inactive_foreground_color', value)}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-lg">
           <CardHeader className="flex flex-row items-center gap-2 space-y-0">
             <ImagePlus size={18} className="text-muted-foreground" />
             <CardTitle>顶栏图片装饰</CardTitle>
@@ -231,6 +267,44 @@ function ColorField({
           className="h-9 w-10 shrink-0 rounded-md border border-input bg-background"
         />
         <Input value={value} onChange={event => onChange(event.target.value)} />
+      </div>
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+    </label>
+  );
+}
+
+function OptionalColorField({
+  label,
+  description,
+  value,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  const textValue = value ?? '';
+  const colorValue = /^#[0-9a-fA-F]{6}$/.test(textValue) ? textValue : '#ffffff';
+
+  return (
+    <label className="space-y-2">
+      <span className="text-sm font-medium">{label}</span>
+      <div className="flex gap-2">
+        <input
+          type="color"
+          value={colorValue}
+          onChange={event => onChange(event.target.value)}
+          className="h-9 w-10 shrink-0 rounded-md border border-input bg-background"
+        />
+        <Input
+          value={textValue}
+          onChange={event => onChange(event.target.value || null)}
+          placeholder="留空则跟随颜色系统"
+        />
+        <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
+          清除
+        </Button>
       </div>
       {description && <p className="text-xs text-muted-foreground">{description}</p>}
     </label>

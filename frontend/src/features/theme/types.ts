@@ -16,6 +16,10 @@ export interface ThemeSettings {
   topbar_decoration_bottom: string | null;
   topbar_decoration_left: string | null;
   topbar_decoration_right: string | null;
+  topbar_action_active_color: string | null;
+  topbar_action_active_foreground_color: string | null;
+  topbar_action_inactive_color: string | null;
+  topbar_action_inactive_foreground_color: string | null;
   updated_at: string;
 }
 

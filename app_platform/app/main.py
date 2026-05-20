@@ -77,6 +77,29 @@ def ensure_runtime_schema():
         if "email" not in admin_columns:
             statements.append("ALTER TABLE platform_admin_users ADD COLUMN email VARCHAR(255)")
 
+    if "platform_theme_settings" in table_names:
+        theme_columns = {
+            column["name"] for column in inspector.get_columns("platform_theme_settings")
+        }
+        if "topbar_action_active_color" not in theme_columns:
+            statements.append(
+                "ALTER TABLE platform_theme_settings ADD COLUMN topbar_action_active_color TEXT"
+            )
+        if "topbar_action_active_foreground_color" not in theme_columns:
+            statements.append(
+                "ALTER TABLE platform_theme_settings "
+                "ADD COLUMN topbar_action_active_foreground_color TEXT"
+            )
+        if "topbar_action_inactive_color" not in theme_columns:
+            statements.append(
+                "ALTER TABLE platform_theme_settings ADD COLUMN topbar_action_inactive_color TEXT"
+            )
+        if "topbar_action_inactive_foreground_color" not in theme_columns:
+            statements.append(
+                "ALTER TABLE platform_theme_settings "
+                "ADD COLUMN topbar_action_inactive_foreground_color TEXT"
+            )
+
     if not statements:
         return
 

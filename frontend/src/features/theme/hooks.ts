@@ -27,9 +27,10 @@ export function useUpdateAdminTheme() {
 
   return useMutation({
     mutationFn: adminApi.updateTheme,
-    onSuccess: theme => {
-      queryClient.setQueryData(themeKeys.admin, theme);
-      queryClient.setQueryData(themeKeys.public, theme);
+    onSuccess: (theme, request) => {
+      const nextTheme = { ...request, ...theme };
+      queryClient.setQueryData(themeKeys.admin, nextTheme);
+      queryClient.setQueryData(themeKeys.public, nextTheme);
     },
   });
 }

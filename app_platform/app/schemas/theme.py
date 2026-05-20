@@ -8,6 +8,8 @@ ColorValue = str
 
 
 class ThemeSettingsBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     accent_color: ColorValue = Field(default="#111827", min_length=1, max_length=120)
     accent_foreground_color: ColorValue = Field(default="#ffffff", min_length=1, max_length=120)
     subtle_color: ColorValue = Field(
@@ -29,6 +31,13 @@ class ThemeSettingsBase(BaseModel):
     topbar_decoration_left: Optional[str] = Field(default=None, max_length=6000000)
     topbar_decoration_right: Optional[str] = Field(default=None, max_length=6000000)
 
+    topbar_action_active_color: Optional[ColorValue] = Field(default=None, max_length=120)
+    topbar_action_active_foreground_color: Optional[ColorValue] = Field(default=None, max_length=120)
+    topbar_action_inactive_color: Optional[ColorValue] = Field(default=None, max_length=120)
+    topbar_action_inactive_foreground_color: Optional[ColorValue] = Field(
+        default=None, max_length=120
+    )
+
     @field_validator(
         "accent_color",
         "accent_foreground_color",
@@ -49,6 +58,10 @@ class ThemeSettingsBase(BaseModel):
         "topbar_decoration_bottom",
         "topbar_decoration_left",
         "topbar_decoration_right",
+        "topbar_action_active_color",
+        "topbar_action_active_foreground_color",
+        "topbar_action_inactive_color",
+        "topbar_action_inactive_foreground_color",
     )
     @classmethod
     def normalize_optional_text(cls, value: Optional[str]) -> Optional[str]:

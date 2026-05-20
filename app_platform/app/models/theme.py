@@ -29,4 +29,9 @@ class PlatformThemeSettings(Base):
     topbar_decoration_left = Column(Text, nullable=True)
     topbar_decoration_right = Column(Text, nullable=True)
 
+    topbar_action_active_color = Column(Text, nullable=True)
+    topbar_action_active_foreground_color = Column(Text, nullable=True)
+    topbar_action_inactive_color = Column(Text, nullable=True)
+    topbar_action_inactive_foreground_color = Column(Text, nullable=True)
+
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

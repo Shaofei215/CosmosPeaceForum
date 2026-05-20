@@ -64,6 +64,10 @@
   --theme-subtle-fg: #4b5563;
   --theme-topbar-bg: #ffffff;
   --theme-topbar-scrolled-bg: rgba(255, 255, 255, 0.45);
+  --theme-topbar-action-active-bg: var(--theme-accent-bg);
+  --theme-topbar-action-active-fg: var(--theme-accent-fg);
+  --theme-topbar-action-inactive-bg: var(--theme-subtle-bg);
+  --theme-topbar-action-inactive-fg: var(--theme-subtle-fg);
 }
 
 /* 深色主题 */

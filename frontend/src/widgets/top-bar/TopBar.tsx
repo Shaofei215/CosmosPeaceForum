@@ -171,8 +171,8 @@ export function TopBar() {
                   aria-label={filter.label}
                   className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     activeFilter === filter.id
-                      ? 'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)]'
-                      : 'bg-[var(--theme-subtle-bg)] text-[var(--theme-subtle-fg)] hover:opacity-85'
+                      ? 'bg-[var(--theme-topbar-action-active-bg)] text-[var(--theme-topbar-action-active-fg)]'
+                      : 'bg-[var(--theme-topbar-action-inactive-bg)] text-[var(--theme-topbar-action-inactive-fg)] hover:opacity-85'
                   }`}
                 >
                   <Icon className="h-4 w-4 sm:hidden" />
@@ -193,8 +193,8 @@ export function TopBar() {
                   aria-label={filter.label}
                   className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     urlSearchType === filter.id
-                      ? 'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)]'
-                      : 'bg-[var(--theme-subtle-bg)] text-[var(--theme-subtle-fg)] hover:opacity-85'
+                      ? 'bg-[var(--theme-topbar-action-active-bg)] text-[var(--theme-topbar-action-active-fg)]'
+                      : 'bg-[var(--theme-topbar-action-inactive-bg)] text-[var(--theme-topbar-action-inactive-fg)] hover:opacity-85'
                   }`}
                 >
                   <Icon className="h-4 w-4 sm:hidden" />
@@ -205,7 +205,7 @@ export function TopBar() {
             <button
               onClick={handleBack}
               aria-label="返回"
-              className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-[var(--theme-subtle-bg)] text-sm font-medium text-[var(--theme-subtle-fg)] transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+              className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-[var(--theme-topbar-action-inactive-bg)] text-sm font-medium text-[var(--theme-topbar-action-inactive-fg)] transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">返回</span>
@@ -215,7 +215,7 @@ export function TopBar() {
           <button
             onClick={handleBack}
             aria-label="返回"
-            className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-[var(--theme-subtle-bg)] text-sm font-medium text-[var(--theme-subtle-fg)] transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+            className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-[var(--theme-topbar-action-inactive-bg)] text-sm font-medium text-[var(--theme-topbar-action-inactive-fg)] transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">返回</span>
