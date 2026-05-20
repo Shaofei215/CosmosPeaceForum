@@ -255,7 +255,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               event.stopPropagation();
               setIsContentExpanded(!isContentExpanded);
             }}
-            className="mt-2 flex items-center gap-1 text-sm text-primary transition-colors hover:text-primary/80"
+            className="mt-2 flex items-center gap-1 text-sm text-[var(--theme-accent-bg)] transition-colors hover:opacity-80"
           >
             {isContentExpanded ? (
               <>

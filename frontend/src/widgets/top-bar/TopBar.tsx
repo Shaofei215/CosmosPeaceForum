@@ -165,7 +165,7 @@ export function TopBar() {
                     navigate({ pathname: '/feed', search: search ? `?${search}` : '' });
                   }}
                   aria-label={filter.label}
-                  className={`mobile-top-action flex h-9 w-9 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:w-auto sm:gap-2 sm:px-3 sm:py-2 ${
+                  className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     activeFilter === filter.id
                       ? 'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)]'
                       : 'bg-[var(--theme-subtle-bg)] text-[var(--theme-subtle-fg)] hover:opacity-85'
@@ -187,7 +187,7 @@ export function TopBar() {
                   type="button"
                   onClick={() => setSearchType(filter.id)}
                   aria-label={filter.label}
-                  className={`mobile-top-action flex h-9 w-9 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:w-auto sm:gap-2 sm:px-3 sm:py-2 ${
+                  className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     urlSearchType === filter.id
                       ? 'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)]'
                       : 'bg-[var(--theme-subtle-bg)] text-[var(--theme-subtle-fg)] hover:opacity-85'

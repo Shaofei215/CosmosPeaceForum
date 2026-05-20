@@ -213,7 +213,7 @@ textarea:focus {
   right: max(-18vw, -9rem);
   bottom: max(-10vh, -7rem);
   max-width: 120vw;
-  color: var(--auth-word-color, var(--theme-subtle-bg));
+  color: var(--auth-word-color, var(--theme-accent-bg));
   font-size: clamp(12rem, 34vw, 34rem);
   font-weight: 800;
   line-height: 0.8;
@@ -433,6 +433,14 @@ img {
   font-weight: 500;
 }
 
+.article-editor-toolbar {
+  scrollbar-width: none;
+}
+
+.article-editor-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
 .reply-toggle-short {
   display: none;
 }
@@ -527,6 +535,10 @@ img {
 .mobile-device .mobile-top-action svg {
   width: 0.95rem;
   height: 0.95rem;
+}
+
+.mobile-device .feed-filter-action {
+  width: 3rem;
 }
 
 .mobile-device .mobile-composer-panel {

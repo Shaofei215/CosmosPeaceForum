@@ -85,7 +85,7 @@ export function MobileBottomBar() {
             type="button"
             className={cn(
               'flex min-w-0 flex-col items-center gap-1 rounded-2xl px-2 py-1.5 text-xs font-medium',
-              'text-[var(--theme-subtle-fg)] transition-colors hover:bg-[var(--theme-subtle-bg)] hover:text-foreground',
+              'text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground',
               isComposerOpen &&
                 'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] hover:opacity-90'
             )}
@@ -119,8 +119,8 @@ function MobileNavLink({
       to={to}
       className={cn(
         'flex min-w-0 flex-col items-center gap-1 rounded-2xl px-2 py-1.5 text-xs font-medium',
-        'text-[var(--theme-subtle-fg)] transition-colors hover:bg-[var(--theme-subtle-bg)] hover:text-foreground',
-        active && 'bg-[var(--theme-subtle-bg)] text-foreground'
+        'text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground',
+        active && 'bg-muted text-foreground'
       )}
     >
       {children}
