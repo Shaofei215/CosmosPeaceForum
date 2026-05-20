@@ -12,6 +12,7 @@ export interface ThemeSettings {
   topbar_gradient_to: string;
   topbar_gradient_direction: string;
   topbar_scrolled_background: string;
+  topbar_background_image: string | null;
   topbar_decoration_top: string | null;
   topbar_decoration_bottom: string | null;
   topbar_decoration_left: string | null;

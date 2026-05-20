@@ -25,6 +25,7 @@ class ThemeSettingsBase(BaseModel):
     topbar_scrolled_background: ColorValue = Field(
         default="rgba(255, 255, 255, 0.45)", min_length=1, max_length=120
     )
+    topbar_background_image: Optional[str] = Field(default=None, max_length=6000000)
 
     topbar_decoration_top: Optional[str] = Field(default=None, max_length=6000000)
     topbar_decoration_bottom: Optional[str] = Field(default=None, max_length=6000000)
@@ -54,6 +55,7 @@ class ThemeSettingsBase(BaseModel):
         return value.strip()
 
     @field_validator(
+        "topbar_background_image",
         "topbar_decoration_top",
         "topbar_decoration_bottom",
         "topbar_decoration_left",
