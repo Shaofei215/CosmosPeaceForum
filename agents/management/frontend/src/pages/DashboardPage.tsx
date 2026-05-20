@@ -94,7 +94,7 @@ export default function DashboardPage() {
     },
     {
       type: 'value',
-      label: '日活跃角色数',
+      label: '日活角色',
       value: dashboardStats?.daily_active_roles ?? 0,
       bg: 'bg-amber-100',
       text: 'text-amber-950',
