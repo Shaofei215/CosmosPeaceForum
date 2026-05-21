@@ -8,11 +8,17 @@ from app_platform.app.core.config import get_settings
 # 获取应用配置
 settings = get_settings()
 
+def _connect_args(database_url: str) -> dict:
+    """Return driver-specific SQLAlchemy connect args."""
+    if database_url.startswith("sqlite"):
+        return {"check_same_thread": False}
+    return {}
+
+
 # 创建数据库引擎
-# SQLite 需要设置 check_same_thread=False 以支持多线程访问
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args={"check_same_thread": False}
+    connect_args=_connect_args(settings.DATABASE_URL),
 )
 
 # 创建数据库会话工厂

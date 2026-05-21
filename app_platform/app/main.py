@@ -6,113 +6,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
-from sqlalchemy import inspect, text
 
 from app_platform.app.core.config import get_settings
 from app_platform.app.core.paths import get_avatar_upload_dir
 from app_platform.app.core.static_files import RaceSafeStaticFiles
-from app_platform.app.db.session import engine, Base, SessionLocal
+from app_platform.app.db.session import SessionLocal
 from app_platform.app.admin.api import admin_router
 from app_platform.app.admin.services.auth_service import ensure_initial_admin
 from app_platform.app.admin.services.terminal_log_service import terminal_log_capture
-
-# 导入所有模型以确保 SQLAlchemy 正确注册关系
-# 必须在创建表之前导入所有模型
-from app_platform.app.models import (
-    User,
-    Post,
-    Like,
-    Comment,
-    CommentLike,
-    Follow,
-    Notification,
-    PlatformThemeSettings,
-)
-from app_platform.app.admin.models import PlatformAdminUser, PlatformAdminOperationLog, UserModeration
 
 from app_platform.app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow, notifications, search, theme
 
 
 settings = get_settings()
-
-# 创建数据库表
-# Base.metadata.create_all 会根据模型定义自动创建所有表
-Base.metadata.create_all(bind=engine)
-
-
-def ensure_runtime_schema():
-    # 项目当前没有正式迁移系统，新增运行期字段沿用启动时补列策略。
-    inspector = inspect(engine)
-    table_names = set(inspector.get_table_names())
-    statements = []
-
-    if "posts" in table_names:
-        post_columns = {column["name"] for column in inspector.get_columns("posts")}
-        if "repost_count" not in post_columns:
-            statements.append("ALTER TABLE posts ADD COLUMN repost_count INTEGER NOT NULL DEFAULT 0")
-        if "repost_source_type" not in post_columns:
-            statements.append("ALTER TABLE posts ADD COLUMN repost_source_type VARCHAR(20)")
-        if "repost_source_id" not in post_columns:
-            statements.append("ALTER TABLE posts ADD COLUMN repost_source_id INTEGER")
-        if "repost_root_post_id" not in post_columns:
-            statements.append("ALTER TABLE posts ADD COLUMN repost_root_post_id INTEGER")
-        if "repost_chain" not in post_columns:
-            statements.append("ALTER TABLE posts ADD COLUMN repost_chain TEXT")
-        if "type" not in post_columns:
-            statements.append("ALTER TABLE posts ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'post'")
-        if "heat_score" not in post_columns:
-            statements.append("ALTER TABLE posts ADD COLUMN heat_score FLOAT NOT NULL DEFAULT 0")
-        if "heat_score_updated_at" not in post_columns:
-            statements.append("ALTER TABLE posts ADD COLUMN heat_score_updated_at DATETIME")
-
-    if "comments" in table_names:
-        comment_columns = {column["name"] for column in inspector.get_columns("comments")}
-        if "heat_score" not in comment_columns:
-            statements.append("ALTER TABLE comments ADD COLUMN heat_score FLOAT NOT NULL DEFAULT 0")
-        if "heat_score_updated_at" not in comment_columns:
-            statements.append("ALTER TABLE comments ADD COLUMN heat_score_updated_at DATETIME")
-
-    if "platform_admin_users" in table_names:
-        admin_columns = {column["name"] for column in inspector.get_columns("platform_admin_users")}
-        if "email" not in admin_columns:
-            statements.append("ALTER TABLE platform_admin_users ADD COLUMN email VARCHAR(255)")
-
-    if "platform_theme_settings" in table_names:
-        theme_columns = {
-            column["name"] for column in inspector.get_columns("platform_theme_settings")
-        }
-        if "topbar_action_active_color" not in theme_columns:
-            statements.append(
-                "ALTER TABLE platform_theme_settings ADD COLUMN topbar_action_active_color TEXT"
-            )
-        if "topbar_action_active_foreground_color" not in theme_columns:
-            statements.append(
-                "ALTER TABLE platform_theme_settings "
-                "ADD COLUMN topbar_action_active_foreground_color TEXT"
-            )
-        if "topbar_action_inactive_color" not in theme_columns:
-            statements.append(
-                "ALTER TABLE platform_theme_settings ADD COLUMN topbar_action_inactive_color TEXT"
-            )
-        if "topbar_action_inactive_foreground_color" not in theme_columns:
-            statements.append(
-                "ALTER TABLE platform_theme_settings "
-                "ADD COLUMN topbar_action_inactive_foreground_color TEXT"
-            )
-        if "topbar_background_image" not in theme_columns:
-            statements.append(
-                "ALTER TABLE platform_theme_settings ADD COLUMN topbar_background_image TEXT"
-            )
-
-    if not statements:
-        return
-
-    with engine.begin() as connection:
-        for statement in statements:
-            connection.execute(text(statement))
-
-
-ensure_runtime_schema()
 
 # 创建定时任务调度器
 scheduler = BackgroundScheduler()

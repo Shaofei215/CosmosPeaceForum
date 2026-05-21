@@ -69,9 +69,9 @@ docker-compose --profile prod up -d
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Frontend Dev  │────▶│    Backend      │────▶│    SQLite DB    │
-│    :5173        │     │    :8000        │     │   /app/data     │
-│  (Vite + HMR)   │     │  (FastAPI)      │     │  (持久化卷)      │
+│   Frontend Dev  │────▶│    Backend      │────▶│   PostgreSQL    │
+│    :5173        │     │    :8000        │     │     :5432       │
+│  (Vite + HMR)   │     │  (FastAPI)      │     │  (Docker 卷)     │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
@@ -81,7 +81,7 @@ docker-compose --profile prod up -d
 |------|------|
 | 热重载 | 代码修改自动刷新 |
 | 源码映射 | 支持调试 |
-| 数据持久化 | 数据存储在 `./data` 目录 |
+| 数据持久化 | 业务数据存储在 `herta-postgres-data` Docker 卷 |
 
 ### 开发命令
 
@@ -113,9 +113,9 @@ docker-compose restart frontend-dev
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│     Nginx       │────▶│    Backend      │────▶│    SQLite DB    │
-│     :80         │     │    :8000        │     │   /app/data     │
-│  (静态文件服务)   │     │  (FastAPI)       │     │  (持久化卷)      │
+│     Nginx       │────▶│    Backend      │────▶│   PostgreSQL    │
+│     :80         │     │    :8000        │     │     :5432       │
+│  (静态文件服务)   │     │  (FastAPI)       │     │  (Docker 卷)     │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
@@ -175,14 +175,14 @@ docker-compose ps
 ### 数据管理
 
 ```bash
-# 备份数据库
-cp -r data data-backup-$(date +%Y%m%d)
+# 备份业务数据库
+docker-compose exec postgres pg_dump -U imaginary_tree imaginary_tree > backup-$(date +%Y%m%d).sql
 
-# 查看数据库文件
-ls -lh data/
+# 执行业务库迁移
+docker-compose exec backend python -m alembic -c /app/app_platform/alembic.ini upgrade head
 
-# 进入数据库（需要安装 sqlite3）
-sqlite3 data/herta_tree.db
+# 进入业务数据库
+docker-compose exec postgres psql -U imaginary_tree -d imaginary_tree
 ```
 
 ### 镜像管理
@@ -218,14 +218,14 @@ lsof -i :80
 kill -9 <PID>
 ```
 
-#### 2. 数据库权限错误
+#### 2. 数据库连接错误
 
 ```bash
-# 错误：unable to open database file
+# 检查 PostgreSQL 健康状态
+docker-compose ps postgres
 
-# 检查 data 目录权限
-chmod 755 data
-chmod 644 data/herta_tree.db
+# 查看数据库日志
+docker-compose logs -f postgres
 ```
 
 #### 3. 前端无法连接后端

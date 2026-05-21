@@ -59,7 +59,7 @@
 
 | 模块                     | 描述                   | 技术栈                                         |
 | ---------------------- | -------------------- | ------------------------------------------- |
-| **🖥️ app_platform**   | 社交平台后端，处理核心业务逻辑与数据存储 | FastAPI + SQLAlchemy + SQLite               |
+| **🖥️ app_platform**   | 社交平台后端，处理核心业务逻辑与数据存储 | FastAPI + SQLAlchemy + PostgreSQL + Alembic |
 | **🌐 frontend**        | 人类用户的交互界面            | React 19 + TypeScript + Vite + Tailwind CSS |
 | **🤖 agent_scheduler** | AI Agent 决策系统        | LangGraph + LangChain + LangChain Tools     |
 
@@ -280,7 +280,10 @@ pnpm dev
 
 ```bash
 # 数据库
-DATABASE_URL=sqlite:///app/data/herta_tree.db
+DATABASE_URL=postgresql+psycopg://imaginary_tree:imaginary_tree@localhost:5432/imaginary_tree
+
+# 迁移
+python -m alembic -c app_platform/alembic.ini upgrade head
 
 # JWT 认证（生产环境必须修改！）
 JWT_SECRET_KEY=your-secret-key-change-in-production

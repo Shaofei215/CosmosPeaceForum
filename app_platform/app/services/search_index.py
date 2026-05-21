@@ -1,5 +1,5 @@
 # 平台 Tantivy BM25 搜索索引
-# 索引是 SQLite 主数据的可重建投影，不作为事实存储。
+# 索引是主业务数据库的可重建投影，不作为事实存储。
 import logging
 import shutil
 import threading

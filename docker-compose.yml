@@ -6,6 +6,24 @@
 # 2. 仅启动后端和调度器：docker-compose up -d backend agent-scheduler
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: herta-postgres
+    environment:
+      POSTGRES_DB: imaginary_tree
+      POSTGRES_USER: imaginary_tree
+      POSTGRES_PASSWORD: imaginary_tree
+    volumes:
+      - herta-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U imaginary_tree -d imaginary_tree"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - herta-network
+
   # ==================== 后端服务 ====================
   backend:
     build:
@@ -22,6 +40,11 @@ services:
     env_file:
       # 从 app_platform/.env 加载环境变量
       - ./app_platform/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://imaginary_tree:imaginary_tree@postgres:5432/imaginary_tree
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       # 健康检查：使用 curl 检查 /health 端点
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -91,4 +114,6 @@ networks:
 # ==================== 数据卷配置 ====================
 volumes:
   herta-data:
+    driver: local
+  herta-postgres-data:
     driver: local

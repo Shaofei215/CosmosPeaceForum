@@ -7,6 +7,7 @@ from typing import Optional, List
 from pathlib import Path
 
 from agents.agents_scheduler.memory.config import MemoryConfig
+from agents.agents_scheduler.memory.migrations import run_memory_migrations
 from agents.agents_scheduler.memory.models import MemoryChunk
 
 
@@ -50,41 +51,7 @@ class MemoryDB:
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
 
-        cursor = self._conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS memories (
-                id TEXT PRIMARY KEY,
-                owner_id INTEGER NOT NULL,
-                content TEXT NOT NULL,
-                timestamp REAL NOT NULL,
-                semantic_timestamp REAL NOT NULL DEFAULT 0,
-                memory_coefficient REAL NOT NULL,
-                memory_type TEXT NOT NULL DEFAULT 'normal'
-            )
-        """)
-
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_owner_id
-            ON memories(owner_id)
-        """)
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_memory_coefficient
-            ON memories(memory_coefficient)
-        """)
-
-        try:
-            cursor.execute("ALTER TABLE memories ADD COLUMN semantic_timestamp REAL NOT NULL DEFAULT 0")
-            self._conn.commit()
-        except sqlite3.OperationalError:
-            pass
-
-        try:
-            cursor.execute("ALTER TABLE memories ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'normal'")
-            self._conn.commit()
-        except sqlite3.OperationalError:
-            pass
-
-        self._conn.commit()
+        run_memory_migrations(self._conn)
 
     async def add_memory(self, chunk: MemoryChunk) -> None:
         """

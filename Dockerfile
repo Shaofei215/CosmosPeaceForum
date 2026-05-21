@@ -43,4 +43,4 @@ RUN chmod +x /app/agents/entrypoint.sh /app/app_platform/entrypoint.sh
 EXPOSE 8000
 
 # 启动命令（默认启动后端服务）
-CMD ["uvicorn", "app_platform.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/app_platform/entrypoint.sh"]

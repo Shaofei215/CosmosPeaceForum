@@ -1,5 +1,5 @@
 # Imaginary Tree 后端 Dockerfile
-# FastAPI + SQLite 应用
+# FastAPI + PostgreSQL 应用
 
 FROM m.daocloud.io/docker.io/library/python:3.11-slim
 
@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 创建数据目录并设置权限
-RUN mkdir -p /app/data && chmod 777 /app/data
+# 创建应用目录
+RUN mkdir -p /app/app_platform
 
 # 复制依赖文件
 COPY requirements.txt .
@@ -26,11 +26,15 @@ COPY requirements.txt .
 # 安装 Python 依赖
 RUN pip install --no-cache-dir -r requirements.txt --only-binary :all:
 
-# 复制应用代码
-COPY app/ ./app/
+# 复制应用代码和迁移配置（保持 app_platform 包路径）
+COPY app/ ./app_platform/app/
+COPY alembic/ ./app_platform/alembic/
+COPY alembic.ini ./app_platform/alembic.ini
+COPY entrypoint.sh ./app_platform/entrypoint.sh
+RUN chmod +x /app/app_platform/entrypoint.sh
 
 # 暴露端口
 EXPOSE 8000
 
 # 启动命令
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/app_platform/entrypoint.sh"]
