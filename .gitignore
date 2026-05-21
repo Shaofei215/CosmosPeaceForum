@@ -224,6 +224,10 @@ __marimo__/
 *-wal
 *-shm
 
+# Local database backups
+backups/
+*.sql.gz
+
 # Uploaded files (user avatars, etc.)
 uploads/
 .gitignore

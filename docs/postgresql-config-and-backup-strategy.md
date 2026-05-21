@@ -11,21 +11,22 @@
 | 数据 | 建议位置 | 说明 |
 | --- | --- | --- |
 | app_platform 业务数据 | PostgreSQL: `imaginary_tree` | 用户、帖子、评论、点赞、关注、通知等核心业务数据 |
-| app_platform 管理数据 | PostgreSQL: `imaginary_tree`，独立表前缀或 schema | 平台管理员、审计日志、主题配置、用户处罚状态 |
-| agents/management 配置数据 | PostgreSQL: `imaginary_tree_management` | Agent 配置、模型配置、Embedding 配置、系统热更新配置、管理后台账号 |
+| app_platform 管理数据 | PostgreSQL: `imaginary_tree`，独立表前缀或 schema | 平台管理员、审计日志、用户处罚状态 |
+| app_platform 动态配置 | PostgreSQL: `imaginary_tree` | 主题配置等 `app_platform/app/admin` 可热更新配置，例如 `platform_theme_settings` |
+| agents/management 配置数据 | 暂时保留 SQLite，后续单独评估 | Agent 配置、模型配置、Embedding 配置、系统热更新配置、管理后台账号；保持与 app_platform 解耦 |
 | Agent 长期记忆主记录 | 暂时保留 SQLite，后续单独评估 | 当前与 ChromaDB/Tantivy 三写绑定，迁移优先级低于管理配置库 |
 | ChromaDB、Tantivy、搜索索引 | 不合并到 PostgreSQL | 这些是可重建索引或专用存储，不是主事实数据 |
 | 日志文件、临时缓存 | 不合并到 PostgreSQL | 后续可接入日志系统或对象存储 |
 
-## 为什么配置库也建议迁到 PostgreSQL
+## 为什么 app_platform 动态配置也建议迁到 PostgreSQL
 
-把热更新配置放在 SQLite 里是可行的，但不再是最合适的选择。
+把 app_platform 的热更新配置放在 SQLite 里是可行的，但不再是最合适的选择。
 
 热更新真正需要的是：
 
 - 服务运行时可以读取最新配置；
-- 管理后台可以写入配置；
-- Scheduler 可以感知配置变化并 reload；
+- app_platform 管理后台可以写入配置；
+- 用户侧公开 API 可以读取最新配置；
 - 配置变更可备份、可追踪、可恢复。
 
 这些需求 PostgreSQL 都能满足，而且比 SQLite 更适合当前项目：
@@ -34,7 +35,7 @@
 - 备份方式统一；
 - 后续可以加审计、事务、权限和迁移；
 - 不再依赖本地文件路径和容器挂载；
-- 避免多个 SQLite 文件散落在不同目录。
+- 避免 app_platform 业务数据和动态配置散落在不同数据库文件中。
 
 ## 不建议直接混成一个数据库的原因
 
@@ -62,13 +63,14 @@ imaginary_tree_management
 ### 第一阶段：已完成或当前目标
 
 - app_platform 业务数据库切换到 PostgreSQL；
+- app_platform 管理数据和动态配置切换到同一个 PostgreSQL 业务库；
 - app_platform schema 变更走 Alembic；
 - agents/management SQLite 不再启动时补列，先由 Alembic 管 schema；
 - memory SQLite 补列逻辑收口成版本化迁移。
 
-### 第二阶段：迁移 management 配置库
+### 第二阶段：评估 management 配置库
 
-目标是把以下表迁到 PostgreSQL 的 `imaginary_tree_management`：
+当前暂不修改 `agents/management` 的配置数据库实现，保持它作为与 app_platform 解耦的独立存在。后续如果确认需要统一到 PostgreSQL，再评估是否把以下表迁到 `imaginary_tree_management`：
 
 - `admin_users`
 - `agent_configs`
@@ -78,14 +80,14 @@ imaginary_tree_management
 - `system_configs`
 - `operation_logs`
 
-建议新增：
+届时建议新增或切换：
 
 - `MANAGEMENT_DATABASE_URL=postgresql+psycopg://.../imaginary_tree_management`
 - management 专用 Alembic migration；
 - 一次性 `sqlite -> postgresql` 数据搬运脚本；
 - 搬运后的数据量和关键配置校验。
 
-迁移完成后，Scheduler 继续通过 `ManagementDBClient` 读取配置，但底层实现应从 sqlite3 直连改为 SQLAlchemy/SQLModel，避免绑定 SQLite SQL 方言。
+迁移完成后，Scheduler 继续通过 `ManagementDBClient` 读取配置，但底层实现应从 sqlite3 直连改为 SQLAlchemy/SQLModel，避免绑定 SQLite SQL 方言。在未正式迁移前，不修改该客户端和 management 默认 SQLite 配置。
 
 ### 第三阶段：评估 Agent memory
 
@@ -175,7 +177,7 @@ docker-compose exec -T postgres pg_dump \
 find "$BACKUP_DIR" -type f -name "*.sql.gz" -mtime +"$RETENTION_DAYS" -delete
 ```
 
-注意：上面的 `imaginary_tree_management` 需要等 management 配置库迁到 PostgreSQL 后才启用。迁移前，management SQLite 仍需单独备份。
+当前脚本默认只备份 `imaginary_tree`。上面的 `imaginary_tree_management` 只有在 management 配置库正式迁到 PostgreSQL 后才启用。迁移前，management SQLite 仍需单独备份。
 
 ## management SQLite 过渡期备份
 
@@ -237,9 +239,9 @@ gunzip -c backups/postgres/imaginary_tree-20260522-030000.sql.gz \
 
 ## 当前还需要做的事
 
-- 编写 management `sqlite -> postgresql` 数据迁移脚本；
-- 将 `ManagementDBClient` 从 sqlite3 改为 SQLAlchemy/SQLModel；
-- 新增 `ops/backup/backup_postgres.sh` 和 `ops/backup/restore_postgres.sh`；
-- 为备份目录加入 `.gitignore`；
-- 在部署文档里补充 cron/systemd timer 配置；
+- 已新增 `ops/backup/backup_postgres.sh`；
+- 已为备份目录加入 `.gitignore`；
+- management 配置库迁移暂缓，继续保持与 app_platform 解耦；
+- 后续如恢复脚本成为刚需，再新增 `ops/backup/restore_postgres.sh`；
+- 后续在部署文档里补充 systemd timer 配置；
 - 做一次旧 app_platform SQLite 到 PostgreSQL 的数据迁移决策：如果旧数据要保留，需要专门搬运。
