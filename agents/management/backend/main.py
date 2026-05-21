@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 50)
     logger.info("数据库路径: %s", config.get_db_path())
     logger.info("服务器: %s:%d", config.server_host, config.server_port)
-    logger.info("Scheduler 内部端口: %d", config.scheduler_internal_port)
+    logger.info("Scheduler 内部接口: %s", config.scheduler_internal_base_url)
 
     init_db()
     initialize_database()

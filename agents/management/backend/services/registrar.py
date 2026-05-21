@@ -32,32 +32,29 @@ from typing import Any, Optional, Sequence, Tuple, Union
 
 import requests
 
-from agents.management.backend.core.config import (
-    SCHEDULER_INTERNAL_PORT,
-)
-from agents.management.backend.services.system_service import get_config_value
+from agents.management.backend.core.config import get_config
 
 logger = logging.getLogger(__name__)
 
 
 def _get_admin_key(db) -> str:
     """获取管理员密钥"""
-    return get_config_value(db, "ADMIN_KEY", "")
+    return get_config().admin_key
 
 
 def _get_ai_user_password(db) -> str:
     """获取 AI 用户默认密码"""
-    return get_config_value(db, "AI_USER_PASSWORD", "ai123456")
+    return get_config().ai_user_password
 
 
 def _get_api_base_url(db) -> str:
     """获取 app_platform API 地址"""
-    return get_config_value(db, "API_BASE_URL", "http://localhost:8000/api/v1")
+    return get_config().app_platform_api_base_url
 
 
 def _get_scheduler_internal_url() -> str:
     """获取 scheduler 内部接口地址"""
-    return f"http://localhost:{SCHEDULER_INTERNAL_PORT}"
+    return get_config().scheduler_internal_base_url
 
 
 def register_agent(
@@ -89,7 +86,7 @@ def register_agent(
     admin_key = _get_admin_key(db)
 
     if not admin_key:
-        return False, None, "未配置 ADMIN_KEY，请先在系统配置中设置"
+        return False, None, "未配置 ADMIN_KEY，请先在 agents/.env 中设置"
 
     url = f"{api_base_url}/auth/register"
     headers = {

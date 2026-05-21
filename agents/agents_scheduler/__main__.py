@@ -3,7 +3,7 @@ Agent Scheduler 主入口
 
 启动流程：
 1. 初始化内部 HTTP 服务器（供 management 调用）
-2. 从管理数据库加载启用的 Agent 配置
+2. 从 agents/.env 和管理数据库加载配置
 3. 构建角色关系映射（从数据库）
 4. 为每个 Agent 创建独立调度线程
 5. 启动所有调度线程
@@ -36,7 +36,7 @@ def main():
     """
     Scheduler 主函数
 
-    从管理数据库加载配置并启动调度器。
+    从 agents/.env 和管理数据库加载配置并启动调度器。
     """
     setup_logging()
 
@@ -59,11 +59,14 @@ def main():
 
     scheduler_manager = AgentSchedulerManager()
 
-    internal_port = 8002
-    internal_server = SchedulerInternalServer(port=internal_port, scheduler_manager=scheduler_manager)
+    internal_server = SchedulerInternalServer(
+        host=config.internal_host,
+        port=config.internal_port,
+        scheduler_manager=scheduler_manager,
+    )
     internal_server.start()
 
-    logger.info("内部接口服务器启动在 http://127.0.0.1:%d", internal_port)
+    logger.info("内部接口服务器启动在 %s", config.internal_base_url)
 
     logger.info("从数据库构建关系映射...")
     relation_map = build_relation_maps_from_db()

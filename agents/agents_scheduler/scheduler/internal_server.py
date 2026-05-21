@@ -291,7 +291,8 @@ class SchedulerInternalServer:
     接收 management 后端的热更新通知。
     """
 
-    def __init__(self, port: int = 8002, scheduler_manager=None):
+    def __init__(self, host: str = "127.0.0.1", port: int = 8002, scheduler_manager=None):
+        self.host = host
         self.port = port
         self.scheduler_manager = scheduler_manager
         self._server: Optional[ThreadingHTTPServer] = None
@@ -301,7 +302,7 @@ class SchedulerInternalServer:
         """启动内部 HTTP 服务器"""
         SchedulerInternalHandler.scheduler_manager = self.scheduler_manager
 
-        self._server = ThreadingHTTPServer(('127.0.0.1', self.port), SchedulerInternalHandler)
+        self._server = ThreadingHTTPServer((self.host, self.port), SchedulerInternalHandler)
         self._server.daemon_threads = True
 
         self._thread = threading.Thread(
@@ -311,7 +312,7 @@ class SchedulerInternalServer:
         )
         self._thread.start()
 
-        logger.info(f"[内部接口] 服务器启动在 http://127.0.0.1:{self.port}")
+        logger.info("[内部接口] 服务器启动在 http://%s:%d", self.host, self.port)
 
     def stop(self, wait: bool = True):
         """停止内部 HTTP 服务器"""

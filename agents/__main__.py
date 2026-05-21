@@ -15,6 +15,7 @@ import time as time_module
 import uvicorn
 
 from agents.agents_scheduler.__main__ import main as scheduler_main
+from agents.management.backend.core.config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +34,14 @@ def setup_logging(log_level: str = "INFO"):
 
 def start_management_backend():
     """在独立线程中启动 Management Backend"""
+    config = get_config()
     logger.info("=" * 60)
     logger.info("Management Backend 启动中...")
     logger.info("=" * 60)
     uvicorn.run(
         "agents.management.backend.main:app",
-        host="0.0.0.0",
-        port=8001,
+        host=config.server_host,
+        port=config.server_port,
         log_level="warning",
         access_log=False,
     )
@@ -51,7 +53,8 @@ def main():
 
     先启动 Management Backend，再启动 Agent Scheduler。
     """
-    setup_logging()
+    config = get_config()
+    setup_logging(config.log_level)
 
     logger.info("=" * 60)
     logger.info(" Agents 启动中...")
