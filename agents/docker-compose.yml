@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8001"
+    env_file:
+      - ./.env
     volumes:
-      # 持久化数据目录（数据库 + JWT 密钥）
+      # 持久化管理数据库
       - ./data:/app/agents/management/data

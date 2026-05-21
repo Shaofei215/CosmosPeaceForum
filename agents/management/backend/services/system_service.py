@@ -1,26 +1,29 @@
 """
 Management Backend - 系统配置服务
-所有业务配置通过数据库存储，环境变量仅保留基础设施参数
 
-配置加载优先级：
-1. 数据库（主存储）
-2. 代码默认值（数据库未配置时的 fallback）
+system_configs 只保存运行期可调的非敏感配置。基础设施和敏感配置
+（JWT、数据库、平台地址、ADMIN_KEY、AI 默认密码、初始管理员账号密码等）
+统一从 agents/.env 或环境变量读取。
 """
 
-import os
 from datetime import datetime
 from typing import List, Optional
 
 from sqlmodel import Session, select
 
+from agents.management.backend.core.config import get_config
 from agents.management.backend.models.system_config import SystemConfig
 
 
+ENV_MANAGED_CONFIG_KEYS = {
+    "ADMIN_KEY",
+    "AI_USER_PASSWORD",
+    "API_BASE_URL",
+    "APP_PLATFORM_API_BASE_URL",
+    "LOG_LEVEL",
+}
+
 DEFAULT_SYSTEM_CONFIGS = [
-    ("ADMIN_KEY", "", "AI 用户注册管理员密钥"),
-    ("AI_USER_PASSWORD", "ai123456", "AI 用户默认密码"),
-    ("API_BASE_URL", "http://localhost:8000/api/v1", "app_platform API 地址"),
-    ("LOG_LEVEL", "INFO", "日志级别"),
     ("LANGGRAPH_MAX_STEPS", "20", "LangGraph 最大决策步数"),
     ("LANGGRAPH_MAX_CONSECUTIVE_ERRORS", "3", "最大连续错误次数"),
     ("LANGGRAPH_TOOL_TIMEOUT", "30", "工具调用超时时间（秒）"),
@@ -48,6 +51,9 @@ def get_system_config(db: Session, key: str) -> Optional[SystemConfig]:
 
 def update_system_config(db: Session, key: str, value: str) -> Optional[SystemConfig]:
     """更新系统配置"""
+    if key in ENV_MANAGED_CONFIG_KEYS:
+        return None
+
     db_config = get_system_config(db, key)
     if not db_config:
         return None
@@ -63,6 +69,7 @@ def update_system_config(db: Session, key: str, value: str) -> Optional[SystemCo
 def init_default_configs(db: Session) -> int:
     """初始化默认系统配置，返回创建的记录数"""
     count = 0
+    purged_count = purge_env_managed_configs(db)
     for key, value, description in DEFAULT_SYSTEM_CONFIGS:
         existing = get_system_config(db, key)
         if not existing:
@@ -73,22 +80,40 @@ def init_default_configs(db: Session) -> int:
             )
             db.add(config)
             count += 1
-    if count > 0:
+    if count > 0 or purged_count > 0:
         db.commit()
     return count
 
 
+def purge_env_managed_configs(db: Session) -> int:
+    """删除旧库里仍保存的环境变量托管配置，避免敏感值继续留在 SQLite。"""
+    count = 0
+    for key in ENV_MANAGED_CONFIG_KEYS:
+        existing = get_system_config(db, key)
+        if existing:
+            db.delete(existing)
+            count += 1
+    return count
+
+
 def get_config_value(db: Session, key: str, default: str = "") -> str:
-    """获取配置值，数据库优先，不存在则 fallback 到代码默认值"""
+    """获取配置值。环境托管配置直接读 agents/.env，其余配置从数据库读取。"""
+    env_config = get_config()
+    env_value_map = {
+        "ADMIN_KEY": env_config.admin_key,
+        "AI_USER_PASSWORD": env_config.ai_user_password,
+        "API_BASE_URL": env_config.app_platform_api_base_url,
+        "APP_PLATFORM_API_BASE_URL": env_config.app_platform_api_base_url,
+        "LOG_LEVEL": env_config.log_level,
+    }
+    if key in env_value_map:
+        return env_value_map.get(key) or default
+
     config = get_system_config(db, key)
     if config:
         return config.value
 
     fallback_map = {
-        "ADMIN_KEY": "",
-        "AI_USER_PASSWORD": "ai123456",
-        "API_BASE_URL": "http://localhost:8000/api/v1",
-        "LOG_LEVEL": "INFO",
         "LANGGRAPH_MAX_STEPS": "20",
         "LANGGRAPH_MAX_CONSECUTIVE_ERRORS": "3",
         "LANGGRAPH_TOOL_TIMEOUT": "30",

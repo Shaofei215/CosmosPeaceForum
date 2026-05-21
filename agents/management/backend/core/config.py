@@ -1,14 +1,13 @@
 """
 Management Backend - 核心配置模块
+
+agents 侧的基础设施与敏感配置统一从环境变量或 agents/.env 读取，
+不写入 management SQLite 配置表。
 """
 
-import logging
 import os
-import secrets
 from functools import lru_cache
 from pathlib import Path
-
-logger = logging.getLogger(__name__)
 
 
 def find_env_file() -> Path | None:
@@ -48,67 +47,76 @@ def _get_env(name: str, default: str = "") -> str:
     return _read_env_file().get(name, default)
 
 
-def _get_or_generate_jwt_secret() -> str:
-    """
-    获取或自动生成 JWT 密钥
-    
-    优先级：
-    1. 环境变量 MANAGEMENT_JWT_SECRET_KEY（可选，允许生产环境覆盖）
-    2. 数据目录下的 .jwt_secret 文件
-    3. 自动生成并保存到 .jwt_secret 文件
-    """
-    # 1. 优先使用环境变量（生产环境可配置）
-    env_key = _get_env("MANAGEMENT_JWT_SECRET_KEY", "")
-    if env_key:
-        return env_key
-    
-    # 2. 读取或生成密钥文件
-    management_dir = Path(__file__).parent.parent.parent / "data"
-    management_dir.mkdir(parents=True, exist_ok=True)
-    secret_file = management_dir / ".jwt_secret"
-    
-    if secret_file.exists():
-        return secret_file.read_text().strip()
-    
-    # 3. 生成新密钥并保存
-    new_secret = secrets.token_hex(32)
-    secret_file.write_text(new_secret)
+def _get_int_env(name: str, default: int) -> int:
+    value = _get_env(name, str(default))
     try:
-        secret_file.chmod(0o600)  # 仅所有者可读写
-    except NotImplementedError:
-        # Windows 不支持 chmod
-        pass
-    logger.info("已自动生成 JWT 密钥并保存到: %s", secret_file)
-    return new_secret
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _sqlite_url_to_path(database_url: str) -> str:
+    prefix = "sqlite:///"
+    if database_url.startswith(prefix):
+        return database_url[len(prefix):]
+    return database_url
 
 
 # JWT 认证配置
-MANAGEMENT_JWT_SECRET_KEY = _get_or_generate_jwt_secret()
-MANAGEMENT_JWT_ALGORITHM = "HS256"
-MANAGEMENT_ACCESS_TOKEN_EXPIRE_HOURS = 720
+MANAGEMENT_JWT_SECRET_KEY = _get_env(
+    "MANAGEMENT_JWT_SECRET_KEY",
+    "change-this-local-management-jwt-secret",
+)
+MANAGEMENT_JWT_ALGORITHM = _get_env("MANAGEMENT_JWT_ALGORITHM", "HS256")
+MANAGEMENT_ACCESS_TOKEN_EXPIRE_HOURS = _get_int_env(
+    "MANAGEMENT_ACCESS_TOKEN_EXPIRE_HOURS",
+    720,
+)
 
 # 管理员初始账号（首次启动使用）。优先读取环境变量，其次读取 agents/.env。
 MANAGEMENT_ADMIN_USERNAME = _get_env(
     "MANAGEMENT_ADMIN_INITIAL_USERNAME",
-    _get_env("MANAGEMENT_ADMIN_USERNAME", "sliverwolf"),
+    _get_env("MANAGEMENT_ADMIN_USERNAME", "management_admin"),
 )
 MANAGEMENT_ADMIN_PASSWORD = _get_env(
     "MANAGEMENT_ADMIN_INITIAL_PASSWORD",
-    _get_env("MANAGEMENT_ADMIN_PASSWORD", "Level999"),
+    _get_env("MANAGEMENT_ADMIN_PASSWORD", "ChangeMe123!"),
 )
 
 # 服务器配置
 MANAGEMENT_SERVER_HOST = _get_env("MANAGEMENT_SERVER_HOST", "0.0.0.0")
-MANAGEMENT_SERVER_PORT = int(_get_env("MANAGEMENT_SERVER_PORT", "8001"))
+MANAGEMENT_SERVER_PORT = _get_int_env("MANAGEMENT_SERVER_PORT", 8001)
 
-# 数据库路径
-MANAGEMENT_DB_PATH = _get_env(
-    "MANAGEMENT_DB_PATH",
-    str(Path(__file__).parent.parent.parent / "data" / "management.db"),
-)
+# 数据库路径。当前 management 后端只支持 SQLite。
+_DEFAULT_MANAGEMENT_DB_PATH = str(Path(__file__).parent.parent.parent / "data" / "management.db")
+_MANAGEMENT_DB_PATH_ENV = _get_env("MANAGEMENT_DB_PATH", "")
+_MANAGEMENT_DATABASE_URL_ENV = _get_env("MANAGEMENT_DATABASE_URL", "")
+if _MANAGEMENT_DB_PATH_ENV:
+    MANAGEMENT_DB_PATH = _MANAGEMENT_DB_PATH_ENV
+    MANAGEMENT_DATABASE_URL = f"sqlite:///{MANAGEMENT_DB_PATH}"
+elif _MANAGEMENT_DATABASE_URL_ENV:
+    MANAGEMENT_DATABASE_URL = _MANAGEMENT_DATABASE_URL_ENV
+    MANAGEMENT_DB_PATH = _sqlite_url_to_path(MANAGEMENT_DATABASE_URL)
+else:
+    MANAGEMENT_DB_PATH = _DEFAULT_MANAGEMENT_DB_PATH
+    MANAGEMENT_DATABASE_URL = f"sqlite:///{MANAGEMENT_DB_PATH}"
+
+# app_platform 连接与 AI 用户基础配置
+APP_PLATFORM_API_BASE_URL = _get_env(
+    "APP_PLATFORM_API_BASE_URL",
+    _get_env("API_BASE_URL", "http://localhost:8000/api/v1"),
+).rstrip("/")
+ADMIN_KEY = _get_env("ADMIN_KEY", "")
+AI_USER_PASSWORD = _get_env("AI_USER_PASSWORD", "ChangeMe123!")
+LOG_LEVEL = _get_env("LOG_LEVEL", "INFO")
 
 # Scheduler 内部接口端口
-SCHEDULER_INTERNAL_PORT = int(_get_env("SCHEDULER_INTERNAL_PORT", "8002"))
+SCHEDULER_INTERNAL_HOST = _get_env("SCHEDULER_INTERNAL_HOST", "127.0.0.1")
+SCHEDULER_INTERNAL_PORT = _get_int_env("SCHEDULER_INTERNAL_PORT", 8002)
+SCHEDULER_INTERNAL_BASE_URL = _get_env(
+    "SCHEDULER_INTERNAL_BASE_URL",
+    f"http://{SCHEDULER_INTERNAL_HOST}:{SCHEDULER_INTERNAL_PORT}",
+).rstrip("/")
 
 
 class Settings:
@@ -129,13 +137,26 @@ class Settings:
     
     # 数据库路径
     db_path: str = MANAGEMENT_DB_PATH
+    database_url: str = MANAGEMENT_DATABASE_URL
+
+    # app_platform 连接与 AI 用户基础配置
+    app_platform_api_base_url: str = APP_PLATFORM_API_BASE_URL
+    admin_key: str = ADMIN_KEY
+    ai_user_password: str = AI_USER_PASSWORD
+    log_level: str = LOG_LEVEL
     
     # Scheduler 内部接口端口
+    scheduler_internal_host: str = SCHEDULER_INTERNAL_HOST
     scheduler_internal_port: int = SCHEDULER_INTERNAL_PORT
+    scheduler_internal_base_url: str = SCHEDULER_INTERNAL_BASE_URL
     
     def get_db_path(self) -> str:
         """获取 SQLite 数据库路径"""
         return self.db_path
+
+    def get_database_url(self) -> str:
+        """获取 SQLAlchemy 数据库 URL"""
+        return self.database_url
 
 
 def get_config() -> Settings:
