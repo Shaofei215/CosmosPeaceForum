@@ -1505,6 +1505,11 @@ Authorization: Bearer {token}
 
 **最大文件大小：** 5MB
 
+**存储策略：** 由 `app_platform/.env` 中的 `AVATAR_STORAGE_STRATEGY` 控制：
+
+- `local`：保存到本地 `app_platform/app/uploads/avatars/`，响应相对路径。
+- `object_storage`：上传到 S3 兼容对象存储，响应公开访问 URL。
+
 **响应示例（200 OK）：**
 
 ```json

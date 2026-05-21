@@ -209,14 +209,15 @@ app.add_middleware(
     allow_headers=["*"],  # 允许所有 HTTP 头
 )
 
-# 创建头像上传目录（如果不存在）
-avatar_dir = get_avatar_upload_dir()
-os.makedirs(avatar_dir, exist_ok=True)
+if settings.AVATAR_STORAGE_STRATEGY == "local":
+    # 创建头像上传目录（如果不存在）
+    avatar_dir = get_avatar_upload_dir()
+    os.makedirs(avatar_dir, exist_ok=True)
 
-# 挂载静态文件服务器，提供头像访问
-# 访问URL: /uploads/avatars/avatar_1_xxx.jpg
-# 实际目录: app_platform/uploads/avatars/
-app.mount("/uploads", RaceSafeStaticFiles(directory=os.path.dirname(avatar_dir)), name="uploads")
+    # 挂载静态文件服务器，提供头像访问
+    # 访问URL: /uploads/avatars/avatar_1_xxx.jpg
+    # 实际目录: app_platform/uploads/avatars/
+    app.mount("/uploads", RaceSafeStaticFiles(directory=os.path.dirname(avatar_dir)), name="uploads")
 
 # 注册路由
 # 将各个模块的路由器注册到应用中
