@@ -193,10 +193,10 @@ herta-tree/
 git clone <repository-url>
 cd Imaginary Tree
 
-# 2. 复制环境变量文件
-cp .env.example .env
+# 2. 复制后端环境变量文件
+cp .env.example app_platform/.env
 
-# 3. 编辑 .env 文件，修改必要的配置
+# 3. 编辑 app_platform/.env 文件，修改必要的配置
 # 特别是 JWT_SECRET_KEY 和 ADMIN_KEY
 
 # 4. 启动开发环境
@@ -224,11 +224,11 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 
 # 复制并编辑环境变量
-cp .env.example .env
-# 编辑 .env 文件
+cp .env.example app_platform/.env
+# 编辑 app_platform/.env 文件
 
 # 启动服务
-uvicorn app.main:app --reload --port 8000
+uvicorn app_platform.app.main:app --reload --port 8000
 ```
 
 **前端启动：**
@@ -276,7 +276,7 @@ pnpm dev
 
 ### 环境变量
 
-后端 `.env` 文件主要配置项：
+后端 `app_platform/.env` 文件主要配置项：
 
 ```bash
 # 数据库
@@ -296,6 +296,9 @@ SMTP_PORT=465
 SMTP_USER=your-email@example.com
 SMTP_PASSWORD=your-smtp-auth-code
 SMTP_USE_SSL=true
+
+# 头像存储策略：local 或 object_storage
+AVATAR_STORAGE_STRATEGY=local
 ```
 
 ### 常用端口

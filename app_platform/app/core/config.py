@@ -1,40 +1,32 @@
 # 应用配置模块
-# 管理应用的所有配置项，所有配置从环境变量/.env文件加载，无硬编码默认值
-import os
+# 管理应用的所有配置项，所有配置从环境变量/app_platform/.env文件加载
 from pathlib import Path
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Literal, Optional
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings
 
 
 def find_env_file() -> str:
     """
     查找 .env 文件的位置
-    优先查找项目根目录的 .env，如果不存在则查找 app_platform/.env
+    app_platform 独立读取 app_platform/.env，不再回退到项目根目录 .env。
     """
     current_dir = Path.cwd()
+    app_platform_dir = Path(__file__).resolve().parents[2]
 
-    # 首先检查当前目录下的 .env
-    env_in_current = current_dir / ".env"
-    if env_in_current.exists():
-        return str(env_in_current)
+    candidates = [
+        current_dir / "app_platform" / ".env",
+        current_dir / ".env" if current_dir.name == "app_platform" else None,
+        app_platform_dir / ".env",
+    ]
 
-    # 检查当前目录下的 app_platform/.env
-    env_in_app = current_dir / "app_platform" / ".env"
-    if env_in_app.exists():
-        return str(env_in_app)
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            return str(candidate)
 
-    # 检查模块所在目录的 app_platform/.env
-    module_env = Path(__file__).parent.parent / ".env"
-    if module_env.exists():
-        return str(module_env)
-
-    # 最后检查模块所在目录的 app_platform/.env
-    module_app_env = Path(__file__).parent.parent / "app_platform" / ".env"
-    if module_app_env.exists():
-        return str(module_app_env)
-
-    # 返回默认路径（pydantic 会报错如果没有找到）
-    return ".env"
+    return str(app_platform_dir / ".env")
 
 
 class Settings(BaseSettings):
@@ -69,8 +61,19 @@ class Settings(BaseSettings):
     EMAIL_CODE_MAX_ATTEMPTS: int
 
     AVATAR_UPLOAD_DIR: str = "uploads/avatars"
+    AVATAR_STORAGE_STRATEGY: Literal["local", "object_storage"] = "local"
     MAX_AVATAR_SIZE: int = 5 * 1024 * 1024
     ALLOWED_AVATAR_TYPES: list = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+
+    OBJECT_STORAGE_ENDPOINT_URL: Optional[str] = None
+    OBJECT_STORAGE_ACCESS_KEY_ID: Optional[str] = None
+    OBJECT_STORAGE_SECRET_ACCESS_KEY: Optional[str] = None
+    OBJECT_STORAGE_BUCKET: Optional[str] = None
+    OBJECT_STORAGE_REGION: str = "us-east-1"
+    OBJECT_STORAGE_PUBLIC_BASE_URL: Optional[str] = None
+    OBJECT_STORAGE_AVATAR_PREFIX: str = "avatars"
+    OBJECT_STORAGE_FORCE_PATH_STYLE: bool = True
+    OBJECT_STORAGE_PUBLIC_READ: bool = False
 
     SERVER_HOST: str = "0.0.0.0"
     SERVER_PORT: int = 8000
@@ -78,6 +81,31 @@ class Settings(BaseSettings):
     # 公开平台管理器初始管理员。首次启动会创建该账号，并强制登录后修改。
     PLATFORM_ADMIN_INITIAL_USERNAME: str = "platform_admin"
     PLATFORM_ADMIN_INITIAL_PASSWORD: str = "ChangeMe123!"
+
+    @model_validator(mode="after")
+    def validate_avatar_storage_settings(self):
+        if self.AVATAR_STORAGE_STRATEGY != "object_storage":
+            return self
+
+        required_fields = {
+            "OBJECT_STORAGE_ENDPOINT_URL": self.OBJECT_STORAGE_ENDPOINT_URL,
+            "OBJECT_STORAGE_ACCESS_KEY_ID": self.OBJECT_STORAGE_ACCESS_KEY_ID,
+            "OBJECT_STORAGE_SECRET_ACCESS_KEY": self.OBJECT_STORAGE_SECRET_ACCESS_KEY,
+            "OBJECT_STORAGE_BUCKET": self.OBJECT_STORAGE_BUCKET,
+        }
+        missing_fields = [field for field, value in required_fields.items() if not value]
+        if missing_fields:
+            raise ValueError(
+                "AVATAR_STORAGE_STRATEGY=object_storage 时必须配置："
+                + ", ".join(missing_fields)
+            )
+
+        self.OBJECT_STORAGE_AVATAR_PREFIX = self.OBJECT_STORAGE_AVATAR_PREFIX.strip("/")
+        if self.OBJECT_STORAGE_PUBLIC_BASE_URL:
+            self.OBJECT_STORAGE_PUBLIC_BASE_URL = self.OBJECT_STORAGE_PUBLIC_BASE_URL.rstrip("/")
+        if self.OBJECT_STORAGE_ENDPOINT_URL:
+            self.OBJECT_STORAGE_ENDPOINT_URL = self.OBJECT_STORAGE_ENDPOINT_URL.rstrip("/")
+        return self
 
     class Config:
         env_file = find_env_file()

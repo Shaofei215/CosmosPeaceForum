@@ -36,9 +36,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制整个项目代码
 COPY . .
 
-# 复制 .env 文件到根目录（供 config.py 读取）
-RUN cp /app/app_platform/.env /app/.env || true
-
 # 设置入口脚本执行权限
 RUN chmod +x /app/agents/entrypoint.sh /app/app_platform/entrypoint.sh
 
