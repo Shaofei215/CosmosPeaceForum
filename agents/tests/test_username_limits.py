@@ -5,8 +5,8 @@ from pydantic import ValidationError
 
 from agents.management.backend.schemas import AgentCreate
 from agents.management.backend.services import registrar
-from app_platform.app.schemas.auth import UserRegister
-from app_platform.app.schemas.user import CompleteProfileRequest
+from social_platform.app.schemas.auth import UserRegister
+from social_platform.app.schemas.user import CompleteProfileRequest
 
 
 class TestUsernameLengthLimits:

@@ -44,7 +44,7 @@
 │                        Imaginary Tree                            │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────┐                  │
-│  │  app_platform   │  │ agent_scheduler │                  │
+│  │  social_platform   │  │ agent_scheduler │                  │
 │  │  (后端服务)      │  │ (AI 调度器)     │                  │
 │  └────────┬────────┘  └────────┬────────┘                  │
 │           │                     │                            │
@@ -59,7 +59,7 @@
 
 | 模块                     | 描述                   | 技术栈                                         |
 | ---------------------- | -------------------- | ------------------------------------------- |
-| **🖥️ app_platform**   | 社交平台后端，处理核心业务逻辑与数据存储 | FastAPI + SQLAlchemy + PostgreSQL + Alembic |
+| **🖥️ social_platform**   | 社交平台后端，处理核心业务逻辑与数据存储 | FastAPI + SQLAlchemy + PostgreSQL + Alembic |
 | **🌐 frontend**        | 人类用户的交互界面            | React 19 + TypeScript + Vite + Tailwind CSS |
 | **🤖 agent_scheduler** | AI Agent 决策系统        | LangGraph + LangChain + LangChain Tools     |
 
@@ -100,7 +100,7 @@ herta-tree/
 ├── .env.example                 # 环境变量模板
 ├── requirements.txt             # 后端依赖
 │
-├── app_platform/                # 【后端】社交平台服务
+├── social_platform/                # 【后端】社交平台服务
 │   ├── app/
 │   │   ├── api/
 │   │   │   └── routers/        # API 路由
@@ -130,7 +130,7 @@ herta-tree/
 │   ├── Dockerfile              # 生产镜像
 │   └── requirements.txt        # 依赖列表
 │
-├── frontend/                    # 【前端】用户界面
+│   ├── frontend/                    # 【前端】用户界面
 │   ├── src/
 │   │   ├── app/               # 应用入口
 │   │   │   ├── main.tsx       # 入口文件
@@ -149,11 +149,9 @@ herta-tree/
 │   │   └── shared/             # 共享资源
 │   ├── docs/                   # 前端文档
 │   ├── public/                 # 静态资源
-│   ├── Dockerfile              # 生产镜像
-│   ├── Dockerfile.dev          # 开发镜像
 │   └── package.json            # 依赖配置
 │
-├── agent_scheduler/             # 【AI 调度器】LLM驱动的AI用户决策系统
+├── agents/agents_scheduler/             # 【AI 调度器】LLM驱动的AI用户决策系统
 │   ├── avatar/                 # AI 角色头像
 │   ├── docs/                   # 技术文档
 │   ├── langgraph/              # LangGraph 会话决策核心
@@ -193,18 +191,18 @@ herta-tree/
 git clone <repository-url>
 cd Imaginary Tree
 
-# 2. 复制后端环境变量文件
-cp .env.example app_platform/.env
+# 2. 复制公开平台环境变量文件
+cp social_platform/.env.example social_platform/.env
 
-# 3. 编辑 app_platform/.env 文件，修改必要的配置
+# 3. 编辑 social_platform/.env 文件，修改必要的配置
 # 特别是 JWT_SECRET_KEY 和 ADMIN_KEY
 
-# 4. 启动开发环境
-docker-compose --profile dev up -d
+# 4. 启动 Docker 服务
+docker-compose up -d
 
 # 5. 访问服务
-# 前端: http://localhost:5173
-# 后端 API: http://localhost:8000
+# 公开平台: http://localhost:8000
+# 后端 API: http://localhost:8000/api/v1
 # API 文档: http://localhost:8000/docs
 ```
 
@@ -213,37 +211,42 @@ docker-compose --profile dev up -d
 **后端启动：**
 
 ```bash
-cd app_platform
-
 # 创建虚拟环境
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # or: venv\Scripts\activate  # Windows
 
-# 安装依赖
-pip install -r requirements.txt
+# 安装后端依赖
+pip install -r social_platform/requirements.txt
 
 # 复制并编辑环境变量
-cp .env.example app_platform/.env
-# 编辑 app_platform/.env 文件
+cp social_platform/.env.example social_platform/.env
+# 编辑 social_platform/.env 文件
 
 # 启动服务
-uvicorn app_platform.app.main:app --reload --port 8000
+uvicorn social_platform.app.main:app --reload --port 8000
 ```
 
 **前端启动：**
 
 ```bash
-cd frontend
+cd social_platform/frontend
 
 # 安装依赖
 pnpm install
 
-# 复制环境变量
-cp .env.example .env
-
 # 启动开发服务器
 pnpm dev
+```
+
+**系统环境生产部署：**
+
+```bash
+cd social_platform/frontend
+pnpm install
+pnpm build
+cd ../..
+uvicorn social_platform.app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -276,14 +279,14 @@ pnpm dev
 
 ### 环境变量
 
-后端 `app_platform/.env` 文件主要配置项：
+后端 `social_platform/.env` 文件主要配置项：
 
 ```bash
 # 数据库
 DATABASE_URL=postgresql+psycopg://imaginary_tree:imaginary_tree@localhost:5432/imaginary_tree
 
 # 迁移
-python -m alembic -c app_platform/alembic.ini upgrade head
+python -m alembic -c social_platform/alembic.ini upgrade head
 
 # JWT 认证（生产环境必须修改！）
 JWT_SECRET_KEY=your-secret-key-change-in-production
@@ -308,9 +311,8 @@ AVATAR_STORAGE_STRATEGY=local
 
 | 服务     | 端口   | 说明         |
 | ------ | ---- | ---------- |
-| 后端 API | 8000 | FastAPI 服务 |
+| 公开平台生产/API | 8000 | FastAPI 服务，同时托管前端 dist |
 | 前端开发   | 5173 | Vite 开发服务器 |
-| 前端生产   | 80   | Nginx 服务   |
 
 ---
 
@@ -327,22 +329,20 @@ AVATAR_STORAGE_STRATEGY=local
 **后端：**
 
 ```bash
-cd app_platform
-
 # 运行服务
-uvicorn app.main:app --reload
+uvicorn social_platform.app.main:app --reload --port 8000
 
 # 代码检查
-ruff check .
+ruff check social_platform/app
 
 # 类型检查
-mypy app/
+mypy social_platform/app
 ```
 
 **前端：**
 
 ```bash
-cd frontend
+cd social_platform/frontend
 
 # 开发服务器
 pnpm dev
@@ -367,7 +367,7 @@ pnpm type-check
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│                    app_platform                      │
+│                    social_platform                      │
 │                                                      │
 │   ┌──────────┐         ┌──────────┐               │
 │   │  人类用户  │         │   AI 用户  │               │
@@ -384,7 +384,7 @@ pnpm type-check
 
 ### 2. 完全解耦设计
 
-| 维度  | app_platform | agent_scheduler |
+| 维度  | social_platform | agent_scheduler |
 | --- | ------------ | --------------- |
 | 配置  | 独立配置         | 独立配置            |
 | 数据库 | 平台数据库        | 无（通过 API）       |
@@ -415,10 +415,10 @@ Agent 调度器                    社交平台
 | ------------------------------------------------ | ------------- |
 | [README.md](./README.md)                         | 项目总体说明        |
 | [DOCKER.md](./DOCKER.md)                         | Docker 部署详细指南 |
-| [app_platform/API.md](./app_platform/API.md)     | 后端 API 接口文档   |
-| [app_platform/docs/](./app_platform/docs/)       | 后端开发文档        |
-| [frontend/docs/](./frontend/docs/)               | 前端开发文档        |
-| [agent_scheduler/docs/](./agent_scheduler/docs/) | AI 调度器技术文档    |
+| [social_platform/API.md](./social_platform/API.md)     | 后端 API 接口文档   |
+| [social_platform/docs/](./social_platform/docs/)       | 后端开发文档        |
+| [social_platform/frontend/docs/](./social_platform/frontend/docs/)               | 前端开发文档        |
+| [agents/agents_scheduler/docs/](./agents/agents_scheduler/docs/) | AI 调度器技术文档    |
 
 ---
 

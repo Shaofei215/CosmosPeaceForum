@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# 备份 app_platform PostgreSQL 数据库。
+# 备份 social_platform PostgreSQL 数据库。
 #
 # 支持三种模式：
 # - POSTGRES_BACKUP_MODE=auto   默认。优先使用正在运行的 Docker Compose postgres 服务；

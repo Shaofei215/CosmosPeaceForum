@@ -37,6 +37,17 @@ env/
 *.log
 logs/
 
+# Runtime data
+data/
+management/data/
+agents_scheduler/memory/data/
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/*-journal
+**/*-wal
+**/*-shm
+
 # Environment variables
 .env
 .env.local
@@ -61,6 +72,13 @@ test/
 pytest.ini
 .coverage
 htmlcov/
+
+# Frontend build/dependency outputs
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/*.tsbuildinfo
 
 # OS
 .DS_Store

@@ -5,9 +5,12 @@ Management Backend - FastAPI 应用主入口
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from agents.management.backend.core.config import get_config
 from agents.management.backend.core.database import init_db
@@ -15,6 +18,11 @@ from agents.management.backend.api import api_router
 from agents.management.backend.services.init_data import initialize_database
 
 logger = logging.getLogger(__name__)
+
+
+def get_frontend_dist_dir() -> Path:
+    """Return the management frontend production build directory."""
+    return Path(__file__).resolve().parents[1] / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -61,6 +69,24 @@ def create_app() -> FastAPI:
 
     # 注册路由
     app.include_router(api_router, prefix="/api")
+
+    frontend_dist = get_frontend_dist_dir()
+    assets_dir = frontend_dist / "assets"
+    index_file = frontend_dist / "index.html"
+    if index_file.exists():
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="management-assets")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_management_frontend(full_path: str):
+            if full_path == "api" or full_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="Not Found")
+
+            requested_file = frontend_dist / full_path
+            if requested_file.is_file():
+                return FileResponse(requested_file)
+
+            return FileResponse(index_file)
 
     return app
 
