@@ -212,6 +212,10 @@ __marimo__/
 # Project specific files
 *.log
 
+# TLS certificates for local production deployment
+certs/*
+!certs/.gitkeep
+
 # IDE settings
 .idea/
 .vscode/

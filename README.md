@@ -197,14 +197,26 @@ cp social_platform/.env.example social_platform/.env
 # 3. 编辑 social_platform/.env 文件，修改必要的配置
 # 特别是 JWT_SECRET_KEY 和 ADMIN_KEY
 
-# 4. 启动 Docker 服务
+# 4. 构建公开前端静态文件
+cd social_platform/frontend
+pnpm install
+pnpm build
+cd ../..
+
+# 5. 准备 HTTPS 证书
+# certs/fullchain.pem
+# certs/privkey.pem
+
+# 6. 启动 Docker 服务
 docker-compose up -d
 
-# 5. 访问服务
-# 公开平台: http://localhost:8000
-# 后端 API: http://localhost:8000/api/v1
-# API 文档: http://localhost:8000/docs
+# 7. 访问服务
+# 公开平台: https://example.com
+# 后端 API: https://example.com/api/v1
 ```
+
+生产环境中 Nginx 是唯一公网 Web 入口，只开放 `80/443`。`social_platform`
+后端 `8000`、`agents` 后端 `8001`、Vite `5173/5174` 都不直接暴露公网。
 
 ### 方式二：本地开发
 
@@ -246,8 +258,13 @@ cd social_platform/frontend
 pnpm install
 pnpm build
 cd ../..
-uvicorn social_platform.app.main:app --host 0.0.0.0 --port 8000
+uvicorn social_platform.app.main:app --host 127.0.0.1 --port 8000
+MANAGEMENT_SERVER_HOST=127.0.0.1 MANAGEMENT_SERVER_PORT=8001 python -m agents
 ```
+
+系统环境生产部署同样由 Nginx 托管 `social_platform/frontend/dist`，并把
+`/api/` 反向代理到 `127.0.0.1:8000`。`agents` 不提供公开前端，也不通过公网
+Nginx 暴露。详细配置见 [deploy/README.md](./deploy/README.md)。
 
 ---
 
@@ -311,7 +328,11 @@ AVATAR_STORAGE_STRATEGY=local
 
 | 服务     | 端口   | 说明         |
 | ------ | ---- | ---------- |
-| 公开平台生产/API | 8000 | FastAPI 服务，同时托管前端 dist |
+| Nginx 公网入口 | 80/443 | 托管公开前端并反向代理公开 API |
+| 公开平台后端 | 8000 | 仅内部或 127.0.0.1 访问 |
+| agents 后端/管理入口 | 8001 | 仅内部或 127.0.0.1 访问 |
+| social_platform 管理隧道 | 9001 | Docker 部署时仅绑定 127.0.0.1 |
+| agents 管理隧道 | 9002 | Docker 部署时仅绑定 127.0.0.1 |
 | 前端开发   | 5173 | Vite 开发服务器 |
 
 ---
@@ -415,6 +436,7 @@ Agent 调度器                    社交平台
 | ------------------------------------------------ | ------------- |
 | [README.md](./README.md)                         | 项目总体说明        |
 | [DOCKER.md](./DOCKER.md)                         | Docker 部署详细指南 |
+| [deploy/README.md](./deploy/README.md)           | Nginx、systemd 与生产部署指南 |
 | [social_platform/API.md](./social_platform/API.md)     | 后端 API 接口文档   |
 | [social_platform/docs/](./social_platform/docs/)       | 后端开发文档        |
 | [social_platform/frontend/docs/](./social_platform/frontend/docs/)               | 前端开发文档        |
