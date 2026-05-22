@@ -32,7 +32,11 @@ def temp_db():
             personality_prompt TEXT,
             personal_signature TEXT,
             app_platform_user_id TEXT,
-            monthly_logins INTEGER DEFAULT 30
+            monthly_logins INTEGER DEFAULT 30,
+            last_login_at DATETIME,
+            last_login_timestamp REAL,
+            total_login_count INTEGER DEFAULT 0,
+            updated_at DATETIME
         )
     """)
     cursor.execute("""
@@ -117,7 +121,7 @@ class TestManagementDBClient:
         result = client.get_agent_config(999)
         assert result is None
 
-    def test_record_agent_login_adds_stats_columns(self, temp_db):
+    def test_record_agent_login_updates_stats_columns(self, temp_db):
         client = ManagementDBClient(db_path=temp_db)
         result = client.record_agent_login(1, scaled_timestamp=120.0)
 

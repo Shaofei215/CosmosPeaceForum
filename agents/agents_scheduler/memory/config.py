@@ -31,6 +31,7 @@ class MemoryConfig:
     embedding_api_key: str = ""
     embedding_model_name: str = "text-embedding-3-small"
     embedding_dimension: int = 1536
+    memory_dir: str | None = None
 
     @classmethod
     def from_db(cls) -> "MemoryConfig":
@@ -76,20 +77,23 @@ class MemoryConfig:
 
     def get_memory_db_path(self) -> str:
         """获取 SQLite 数据库文件路径"""
-        MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-        return str(MEMORY_DIR / "memories.db")
+        memory_dir = Path(self.memory_dir) if self.memory_dir else MEMORY_DIR
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        return str(memory_dir / "memories.db")
 
     def get_chroma_db_path(self) -> str:
         """获取 ChromaDB 存储目录路径"""
-        MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-        chroma_dir = MEMORY_DIR / "chroma_db"
+        memory_dir = Path(self.memory_dir) if self.memory_dir else MEMORY_DIR
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        chroma_dir = memory_dir / "chroma_db"
         chroma_dir.mkdir(parents=True, exist_ok=True)
         return str(chroma_dir)
 
     def get_tantivy_index_path(self) -> str:
         """获取 Tantivy 索引存储目录路径"""
-        MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-        tantivy_dir = MEMORY_DIR / "tantivy_index"
+        memory_dir = Path(self.memory_dir) if self.memory_dir else MEMORY_DIR
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        tantivy_dir = memory_dir / "tantivy_index"
         tantivy_dir.mkdir(parents=True, exist_ok=True)
         return str(tantivy_dir)
 

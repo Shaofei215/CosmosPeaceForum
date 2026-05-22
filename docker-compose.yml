@@ -1,94 +1,87 @@
-# Imaginary Tree Docker Compose 配置文件
-# 统一支持 app_platform 后端、agents 调度器和前端
-#
-# 使用方法：
-# 1. 启动所有服务：docker-compose up -d
-# 2. 仅启动后端和调度器：docker-compose up -d backend agent-scheduler
+# Imaginary Tree Docker Compose
+# 公开社交平台的 API 与人类前端由同一个 social-platform 容器提供。
 
 services:
-  # ==================== 后端服务 ====================
-  backend:
+  postgres:
+    image: postgres:16-alpine
+    container_name: imaginary-tree-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: imaginary_tree
+      POSTGRES_USER: imaginary_tree
+      POSTGRES_PASSWORD: imaginary_tree
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U imaginary_tree -d imaginary_tree"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks:
+      - imaginary-tree
+
+  social-platform:
     build:
-      context: .
+      context: ./social_platform
       dockerfile: Dockerfile
-    container_name: herta-backend
+    container_name: imaginary-tree-social-platform
     ports:
       - "8000:8000"
-    volumes:
-      # 挂载 app_platform 目录以便开发时代码修改即时生效
-      - ./app_platform:/app/app_platform
-      # 数据持久化：将数据库文件挂载到宿主机，防止容器删除后数据丢失
-      - ./data:/app/data
     env_file:
-      # 从 app_platform/.env 加载环境变量
-      - ./app_platform/.env
+      - path: ./social_platform/.env
+        required: true
+    environment:
+      DATABASE_URL: postgresql+psycopg://imaginary_tree:imaginary_tree@postgres:5432/imaginary_tree
+    volumes:
+      - ./social_platform/app/data:/app/social_platform/app/data
+      - ./social_platform/app/uploads:/app/social_platform/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
-      # 健康检查：使用 curl 检查 /health 端点
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, urllib.request; data=json.load(urllib.request.urlopen('http://localhost:8000/health', timeout=5)); assert data.get('status') == 'healthy'",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 20s
     restart: unless-stopped
     networks:
-      - herta-network
+      - imaginary-tree
 
-  # ==================== AI Agent 调度器服务 ====================
   agent-scheduler:
     build:
-      context: .
+      context: ./agents
       dockerfile: Dockerfile
-    container_name: herta-agent-scheduler
-    volumes:
-      # 挂载 AI 用户配置文件为只读，确保配置更新时调度器使用最新配置
-      - ./agent_scheduler/ai_users_config.json:/app/agent_scheduler/ai_users_config.json:ro
+    container_name: imaginary-tree-agent-scheduler
+    ports:
+      - "8001:8001"
     env_file:
-      # 从 agent_scheduler/.env 加载环境变量
-      - ./agent_scheduler/.env
+      - path: ./agents/.env
+        required: true
+    environment:
+      APP_PLATFORM_API_BASE_URL: http://social-platform:8000/api/v1
+      API_BASE_URL: http://social-platform:8000/api/v1
+    volumes:
+      - ./agents/management/data:/app/agents/management/data
+      - ./agents/agents_scheduler/memory/data:/app/agents/agents_scheduler/memory/data
     depends_on:
-      # 等待后端服务健康检查通过后再启动
-      backend:
+      social-platform:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - herta-network
-    # 直接使用 python 命令运行调度器模块
-    command: python -u -m agent_scheduler
+      - imaginary-tree
 
-  # ==================== 前端服务（默认开发模式）====================
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    container_name: herta-frontend
-    ports:
-      - "5173:5173"
-    volumes:
-      # 开发热重载：挂载源代码目录
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-      - ./frontend/index.html:/app/index.html
-      # 挂载配置文件确保更新生效
-      - ./frontend/vite.config.ts:/app/vite.config.ts
-      - ./frontend/tsconfig.json:/app/tsconfig.json
-      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
-      - ./frontend/tailwind.config.js:/app/tailwind.config.js
-      - ./frontend/postcss.config.js:/app/postcss.config.js
-      - ./frontend/.env:/app/.env
-    env_file:
-      - ./frontend/.env
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - herta-network
-
-# ==================== 网络配置 ====================
 networks:
-  herta-network:
+  imaginary-tree:
     driver: bridge
 
-# ==================== 数据卷配置 ====================
 volumes:
-  herta-data:
-    driver: local
+  postgres-data:

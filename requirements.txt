@@ -7,6 +7,8 @@ python-multipart==0.0.21
 # 数据库
 sqlalchemy==2.0.45
 sqlmodel==0.0.31
+alembic>=1.16,<2.0
+psycopg[binary]>=3.2,<4.0
 
 # 数据校验
 pydantic==2.10.6

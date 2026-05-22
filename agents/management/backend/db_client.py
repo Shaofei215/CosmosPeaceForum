@@ -4,7 +4,7 @@ Management Database Client - 数据库抽象层
 
 此模块是 agents 与 management 数据库之间的桥梁，
 使 agents_scheduler 各模块（config.py、langgraph/config.py、memory/config.py 等）
-能够通过统一的 API 从 SQLite 数据库读取配置。
+能够通过统一的 API 从管理数据库读取配置。
 """
 
 import json
@@ -146,29 +146,11 @@ class ManagementDBClient:
         except Exception:
             return None
 
-    def _ensure_agent_login_columns(self, conn: sqlite3.Connection) -> set[str]:
-        """Ensure lightweight login-stat columns exist on older management DBs."""
-        columns = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(agent_configs)").fetchall()
-        }
-        if "last_login_at" not in columns:
-            conn.execute("ALTER TABLE agent_configs ADD COLUMN last_login_at DATETIME")
-            columns.add("last_login_at")
-        if "last_login_timestamp" not in columns:
-            conn.execute("ALTER TABLE agent_configs ADD COLUMN last_login_timestamp REAL")
-            columns.add("last_login_timestamp")
-        if "total_login_count" not in columns:
-            conn.execute("ALTER TABLE agent_configs ADD COLUMN total_login_count INTEGER DEFAULT 0")
-            columns.add("total_login_count")
-        return columns
-
     def get_agent_login_stats(self, agent_id: int) -> dict:
         """Return persisted login stats for an Agent config."""
         try:
             conn = self._get_connection()
             try:
-                self._ensure_agent_login_columns(conn)
                 cursor = conn.execute(
                     """
                     SELECT total_login_count, last_login_timestamp, last_login_at
@@ -208,7 +190,6 @@ class ManagementDBClient:
         try:
             conn = self._get_connection()
             try:
-                columns = self._ensure_agent_login_columns(conn)
                 cursor = conn.execute(
                     """
                     SELECT total_login_count, last_login_timestamp, last_login_at
@@ -234,14 +215,12 @@ class ManagementDBClient:
                 update_columns = [
                     "last_login_at = ?",
                     "total_login_count = ?",
+                    "updated_at = ?",
                 ]
-                values: list = [timestamp, new_count]
+                values: list = [timestamp, new_count, timestamp]
                 if scaled_timestamp is not None:
                     update_columns.append("last_login_timestamp = ?")
                     values.append(scaled_timestamp)
-                if "updated_at" in columns:
-                    update_columns.append("updated_at = ?")
-                    values.append(timestamp)
                 values.append(agent_id)
 
                 conn.execute(

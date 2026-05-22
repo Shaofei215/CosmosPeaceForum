@@ -6,26 +6,25 @@
 
 Imaginary Tree 是一个实验性社交网络项目，核心目标是让人类用户和 AI Agent 在同一套公开平台 API 与规则下共存互动。
 
-仓库主要由四个部分组成：
+仓库主要由三个部分组成：
 
-- `app_platform/`：公开社交平台后端，FastAPI + SQLite + SQLAlchemy/SQLModel 风格模型。
-- `frontend/`：人类用户使用的社交平台前端，React + Vite + TypeScript + Tailwind。
+- `social_platform/`：公开社交平台，包含 FastAPI 后端和人类用户前端。
 - `agents/agents_scheduler/`：AI Agent 运行与调度系统，包含调度线程、LangGraph 会话、平台 API 工具和长期记忆。
 - `agents/management/`：Agent 管理系统，包含独立的 FastAPI 管理后端和 React 管理前端。
 
-顶层 Docker 配置负责把后端、前端和 Agent 服务组合起来。数据库、上传文件、日志、记忆索引等属于运行期状态，除非任务明确要求，不要把它们当作源代码修改。
+顶层 Docker 配置负责把公开社交平台、PostgreSQL 和 Agent 服务组合起来。数据库、上传文件、日志、记忆索引等属于运行期状态，除非任务明确要求，不要把它们当作源代码修改。
 
 ## 重要目录
 
-- `app_platform/app/main.py`：公开平台后端入口。
-- `app_platform/app/api/routers/`：公开平台 API 路由。
-- `app_platform/app/models/`：用户、帖子、评论、点赞、关注、通知、邮箱验证等数据库模型。
-- `app_platform/app/schemas/`：Pydantic 请求和响应模型。
-- `app_platform/app/services/`：后端业务逻辑。
-- `frontend/src/app/`：前端入口、Provider、路由和全局样式。
-- `frontend/src/features/`：按业务域拆分的功能模块，如 auth、feed、post、comment、like、follow、notification、user。
-- `frontend/src/widgets/`：跨页面复用的业务组件。
-- `frontend/src/shared/`：共享 API 客户端、UI 原语、配置、工具函数和类型。
+- `social_platform/app/main.py`：公开平台后端入口。
+- `social_platform/app/api/routers/`：公开平台 API 路由。
+- `social_platform/app/models/`：用户、帖子、评论、点赞、关注、通知、邮箱验证等数据库模型。
+- `social_platform/app/schemas/`：Pydantic 请求和响应模型。
+- `social_platform/app/services/`：后端业务逻辑。
+- `social_platform/frontend/src/app/`：前端入口、Provider、路由和全局样式。
+- `social_platform/frontend/src/features/`：按业务域拆分的功能模块，如 auth、feed、post、comment、like、follow、notification、user。
+- `social_platform/frontend/src/widgets/`：跨页面复用的业务组件。
+- `social_platform/frontend/src/shared/`：共享 API 客户端、UI 原语、配置、工具函数和类型。
 - `agents/agents_scheduler/langgraph/`：LangGraph 状态、节点、工具、Prompt、执行器和图结构。
 - `agents/agents_scheduler/memory/`：SQLite + ChromaDB + Tantivy 的混合记忆系统。
 - `agents/agents_scheduler/scheduler/`：Agent 调度、时间缩放、内部服务、关系映射和上下文。
@@ -43,7 +42,7 @@ Imaginary Tree 是一个实验性社交网络项目，核心目标是让人类�
 python -m pytest agents/tests
 python -m pytest agents/tests/test_memory.py
 python -m pytest agents/tests/test_langgraph_nodes.py
-uvicorn app_platform.app.main:app --reload --port 8000
+uvicorn social_platform.app.main:app --reload --port 8000
 uvicorn agents.management.backend.main:app --reload --port 8001
 python -m agents
 python -m agents.agents_scheduler
@@ -52,7 +51,7 @@ python -m agents.agents_scheduler
 公开前端：
 
 ```bash
-cd frontend
+cd social_platform/frontend
 pnpm install
 pnpm dev
 pnpm build
@@ -75,14 +74,14 @@ Docker：
 
 ```bash
 docker-compose up -d
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker-compose logs -f social-platform
+docker-compose logs -f agent-scheduler
 ```
 
 常用端口：
 
-- 公开平台后端：`8000`，API 前缀 `/api/v1`。
-- 公开平台前端：`5173`。
+- 公开平台 Docker/生产：`8000`，同时提供页面和 API，API 前缀 `/api/v1`。
+- 公开平台前端本地开发：`5173`。
 - 管理后端：`8001`，API 前缀 `/api`。
 - Scheduler 内部服务：`8002`。
 
@@ -125,8 +124,9 @@ docker-compose logs -f frontend
 
 - `*.db`、`*.sqlite`、`*.sqlite3`
 - `data/`
-- `app_platform/app/data/`
-- `app_platform/app/uploads/`
+- `social_platform/app/data/`
+- `social_platform/app/uploads/`
+- `social_platform/frontend/dist/`
 - `agents/agents_scheduler/memory/data/`
 - `agents/management/data/`
 - 前端构建产物，如 `dist/`
@@ -143,7 +143,7 @@ docker-compose logs -f frontend
 - 改行为前先读本地代码；本项目的公开后端、Scheduler、管理系统存在概念重叠。
 - 保持改动归属于拥有该行为的服务或前端。
 - 不要静默修改端口、API 前缀、认证语义、数据库路径或调度时间行为。
-- 不要引入新的包管理器。`frontend/` 使用 `pnpm`；`agents/management/frontend/` 当前有 `package-lock.json` 和 npm scripts。
+- 不要引入新的包管理器。`social_platform/frontend/` 使用 `pnpm`；`agents/management/frontend/` 当前有 `package-lock.json` 和 npm scripts。
 - 如需新增依赖，更新最近的 manifest 和 lockfile。
 - 如果修改后端契约，同步更新对应前端类型、hooks 和相关文档。
 - 如果修改 Scheduler 或记忆行为，运行最相关的 `agents/tests` 子集。
