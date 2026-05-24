@@ -184,15 +184,54 @@ herta-tree/
 | pnpm    | 8.0+ (推荐)  |
 | Docker  | 20.0+ (可选) |
 
-### 方式一：Docker 部署（推荐）
+### 方式一：个人 Docker 部署（轻量）
+
+个人模式面向本机或可信局域网使用：HTTP、无 Nginx、无 PostgreSQL，公开平台使用
+SQLite，并由 FastAPI 同时提供页面、API 和上传文件。
 
 ```bash
 # 1. 克隆项目
 git clone <repository-url>
 cd Imaginary Tree
 
-# 2. 复制公开平台环境变量文件
+# 2. 复制个人模式环境变量文件
+cp social_platform/.env.personal.example social_platform/.env
+cp agents/.env.personal.example agents/.env
+
+# 3. 编辑密钥和初始密码
+# 至少修改 JWT_SECRET_KEY、ADMIN_KEY、MANAGEMENT_JWT_SECRET_KEY
+
+# 4. 启动个人模式
+docker compose -f docker-compose.personal.yml up -d --build
+
+# 5. 访问服务
+# 公开平台: http://localhost:8000
+# 后端 API: http://localhost:8000/api/v1
+# 公开平台管理后台: http://localhost:8000/admin/login
+# agents 管理后台: http://127.0.0.1:8001
+```
+
+个人模式下 `social_platform/.env` 的数据库配置使用相对 SQLite 路径：
+
+```bash
+DATABASE_URL=sqlite:///./social_platform/app/data/social_platform.sqlite3
+```
+
+Docker 容器的 `WORKDIR=/app`，系统环境从仓库根目录运行时也使用同一相对路径，因此
+不需要拆分 `.env.personal.docker` 和 `.env.personal.local`。
+
+四种部署路径的完整说明见 [部署模式说明](./docs/deployment-modes.md)。
+
+### 方式二：生产 Docker 部署
+
+```bash
+# 1. 克隆项目
+git clone <repository-url>
+cd Imaginary Tree
+
+# 2. 复制环境变量文件
 cp social_platform/.env.example social_platform/.env
+cp agents/.env.example agents/.env
 
 # 3. 编辑 social_platform/.env 文件，修改必要的配置
 # 特别是 JWT_SECRET_KEY 和 ADMIN_KEY
@@ -207,8 +246,8 @@ cd ../..
 # certs/fullchain.pem
 # certs/privkey.pem
 
-# 6. 启动 Docker 服务
-docker-compose up -d
+# 6. 启动生产 Docker 服务
+docker compose up -d
 
 # 7. 访问服务
 # 公开平台: https://example.com
@@ -217,8 +256,9 @@ docker-compose up -d
 
 生产环境中 Nginx 是唯一公网 Web 入口，只开放 `80/443`。`social_platform`
 后端 `8000`、`agents` 后端 `8001`、Vite `5173/5174` 都不直接暴露公网。
+生产模式使用 PostgreSQL；个人模式才使用 SQLite 并直接暴露 HTTP `8000`。
 
-### 方式二：本地开发
+### 方式三：本地开发
 
 **后端启动：**
 
@@ -266,6 +306,22 @@ MANAGEMENT_SERVER_HOST=127.0.0.1 MANAGEMENT_SERVER_PORT=8001 python -m agents
 `/api/` 反向代理到 `127.0.0.1:8000`。`agents` 不提供公开前端，也不通过公网
 Nginx 暴露。详细配置见 [deploy/README.md](./deploy/README.md)。
 
+**系统环境个人部署：**
+
+```bash
+cp social_platform/.env.personal.example social_platform/.env
+cp agents/.env.personal.example agents/.env
+
+python -m alembic -c social_platform/alembic.ini upgrade head
+uvicorn social_platform.app.main:app --host 0.0.0.0 --port 8000
+
+# 另一个终端
+python -m agents
+```
+
+系统环境个人部署不需要 Nginx 或 PostgreSQL，浏览器直接访问
+`http://localhost:8000`。
+
 ---
 
 ## 功能概览
@@ -299,8 +355,11 @@ Nginx 暴露。详细配置见 [deploy/README.md](./deploy/README.md)。
 后端 `social_platform/.env` 文件主要配置项：
 
 ```bash
-# 数据库
+# 生产模式数据库
 DATABASE_URL=postgresql+psycopg://imaginary_tree:imaginary_tree@localhost:5432/imaginary_tree
+
+# 个人模式数据库
+# DATABASE_URL=sqlite:///./social_platform/app/data/social_platform.sqlite3
 
 # 迁移
 python -m alembic -c social_platform/alembic.ini upgrade head
@@ -329,7 +388,7 @@ AVATAR_STORAGE_STRATEGY=local
 | 服务     | 端口   | 说明         |
 | ------ | ---- | ---------- |
 | Nginx 公网入口 | 80/443 | 托管公开前端并反向代理公开 API |
-| 公开平台后端 | 8000 | 仅内部或 127.0.0.1 访问 |
+| 公开平台后端 | 8000 | 生产模式仅内部或 127.0.0.1；个人模式直接 HTTP 访问 |
 | agents 后端/管理入口 | 8001 | 仅内部或 127.0.0.1 访问 |
 | social_platform 管理隧道 | 9001 | Docker 部署时仅绑定 127.0.0.1 |
 | agents 管理隧道 | 9002 | Docker 部署时仅绑定 127.0.0.1 |

@@ -3,6 +3,10 @@
 生产环境目标是让 Nginx 成为唯一公网 Web 入口。公网只开放 `80`、`443`、`22`；不要公开
 `5173`、`5174`、`8000`、`8001`、`9001`、`9002`。
 
+个人部署模式不属于本文的生产部署拓扑。个人模式使用
+[docker-compose.personal.yml](../docker-compose.personal.yml)，走 HTTP、SQLite、无 Nginx、
+无 PostgreSQL，并让公开平台直接暴露 `8000:8000`。
+
 ## Docker Compose
 
 1. 构建公开前端静态文件：

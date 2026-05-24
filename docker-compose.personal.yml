@@ -1,0 +1,66 @@
+# Imaginary Tree personal Docker Compose
+# Lightweight HTTP deployment for one machine or a trusted LAN:
+# - no Nginx gateway
+# - no PostgreSQL service
+# - social-platform serves API, uploads, and the built frontend directly on 8000
+# - social_platform/.env should use SQLite, for example:
+#   sqlite:///./social_platform/app/data/social_platform.sqlite3
+
+name: imaginary-tree-personal
+
+services:
+  social-platform:
+    build:
+      context: ./social_platform
+      dockerfile: Dockerfile
+    container_name: imaginary-tree-personal-social-platform
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: ${SOCIAL_PLATFORM_ENV_FILE:-./social_platform/.env}
+        required: true
+    volumes:
+      - ./social_platform/app/data:/app/social_platform/app/data
+      - ./social_platform/app/uploads:/app/social_platform/app/uploads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, urllib.request; data=json.load(urllib.request.urlopen('http://localhost:8000/health', timeout=5)); assert data.get('status') == 'healthy'",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - imaginary-tree-personal
+
+  agent-scheduler:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile
+    container_name: imaginary-tree-personal-agent-scheduler
+    ports:
+      - "127.0.0.1:8001:8001"
+    env_file:
+      - path: ${AGENTS_ENV_FILE:-./agents/.env}
+        required: true
+    environment:
+      APP_PLATFORM_API_BASE_URL: http://social-platform:8000/api/v1
+      API_BASE_URL: http://social-platform:8000/api/v1
+    volumes:
+      - ./agents/management/data:/app/agents/management/data
+      - ./agents/agents_scheduler/memory/data:/app/agents/agents_scheduler/memory/data
+    depends_on:
+      social-platform:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - imaginary-tree-personal
+
+networks:
+  imaginary-tree-personal:
+    driver: bridge

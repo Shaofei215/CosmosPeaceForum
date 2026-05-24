@@ -1,6 +1,18 @@
 # Imaginary Tree Docker 部署指南
 
-## 结构
+## 部署模式
+
+Imaginary Tree 现在保留两套 Compose 入口：
+
+- 个人模式：[docker-compose.personal.yml](./docker-compose.personal.yml)。
+  HTTP、本机或可信局域网、SQLite、无 Nginx 网关、无 PostgreSQL。
+- 生产模式：[docker-compose.yml](./docker-compose.yml)。
+  HTTPS、Nginx、PostgreSQL，公网只暴露 `80/443`。
+
+Docker 与系统环境下两种模式的完整步骤见
+[部署模式说明](./docs/deployment-modes.md)。
+
+## 生产模式结构
 
 生产环境使用 Nginx 作为唯一公网 Web 入口：
 
@@ -12,7 +24,45 @@
 `frontend` 不作为公开运行服务。生产前端先执行 `pnpm build`，生成的
 `social_platform/frontend/dist` 由 Nginx 静态托管。Vite 的 `5173/5174` 不应在生产环境开放。
 
-## 快速启动
+## 个人模式快速启动
+
+```bash
+cp social_platform/.env.personal.example social_platform/.env
+cp agents/.env.personal.example agents/.env
+
+# 修改 social_platform/.env 与 agents/.env 中的密钥和初始密码后启动
+docker compose -f docker-compose.personal.yml up -d --build
+```
+
+访问地址：
+
+| 服务 | 地址 |
+|------|------|
+| 公开平台页面 | http://localhost:8000 |
+| 公开平台 API | http://localhost:8000/api/v1 |
+| social_platform 管理后台 | http://localhost:8000/admin/login |
+| agents 管理后台 | http://127.0.0.1:8001 |
+
+个人模式不启动 `nginx` 和 `postgres`。`social-platform` 直接绑定
+`8000:8000`，由 FastAPI 提供 `/api/v1`、`/uploads` 和
+`social_platform/frontend/dist`。公开平台数据库使用：
+
+```bash
+DATABASE_URL=sqlite:///./social_platform/app/data/social_platform.sqlite3
+```
+
+这份 env 也可用于系统环境个人部署：从仓库根目录运行 Alembic 和 Uvicorn 即可保持
+相同路径语义。
+
+如需在不覆盖现有 `.env` 的情况下临时试跑个人模式，可以指定示例文件：
+
+```bash
+SOCIAL_PLATFORM_ENV_FILE=./social_platform/.env.personal.example \
+AGENTS_ENV_FILE=./agents/.env.personal.example \
+docker compose -f docker-compose.personal.yml config
+```
+
+## 生产模式快速启动
 
 ```bash
 cp social_platform/.env.example social_platform/.env
@@ -24,7 +74,7 @@ pnpm build
 cd ../..
 
 # 准备 certs/fullchain.pem 和 certs/privkey.pem 后启动
-docker-compose up -d
+docker compose up -d
 ```
 
 访问地址：
@@ -76,24 +126,33 @@ http://127.0.0.1:9002
 ## 常用命令
 
 ```bash
-docker-compose up -d
-docker-compose logs -f nginx
-docker-compose logs -f social-platform
-docker-compose logs -f agent-scheduler
-docker-compose exec social-platform bash
-docker-compose down
+docker compose up -d
+docker compose logs -f nginx
+docker compose logs -f social-platform
+docker compose logs -f agent-scheduler
+docker compose exec social-platform bash
+docker compose down
 ```
 
 重新构建公开平台镜像：
 
 ```bash
-docker-compose build social-platform
-docker-compose up -d social-platform
+docker compose build social-platform
+docker compose up -d social-platform
+```
+
+个人模式对应命令：
+
+```bash
+docker compose -f docker-compose.personal.yml up -d --build
+docker compose -f docker-compose.personal.yml logs -f social-platform
+docker compose -f docker-compose.personal.yml down
 ```
 
 ## 数据持久化
 
-- PostgreSQL：`postgres-data` Docker volume。
+- 生产模式 PostgreSQL：`postgres-data` Docker volume。
+- 个人模式 SQLite：`./social_platform/app/data/social_platform.sqlite3`。
 - 公开平台搜索索引：`./social_platform/app/data`。
 - 本地上传文件：`./social_platform/app/uploads`。
 - Agent 管理 SQLite：`./agents/management/data`。
@@ -101,8 +160,7 @@ docker-compose up -d social-platform
 
 ## 单独调试 Agent
 
-仓库只保留根目录 `docker-compose.yml` 作为 Docker 部署入口。需要单独调试
-Agent 时，优先在系统环境运行：
+需要单独调试 Agent 时，优先在系统环境运行：
 
 ```bash
 MANAGEMENT_SERVER_HOST=127.0.0.1 MANAGEMENT_SERVER_PORT=8001 python -m agents
