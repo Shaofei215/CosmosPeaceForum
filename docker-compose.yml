@@ -1,12 +1,33 @@
 # Imaginary Tree Docker Compose
-# 公开社交平台的 API 与人类前端由同一个 social-platform 容器提供。
+# Production layout:
+# - nginx is the only public web entrypoint on 80/443.
+# - social-platform serves API/uploads internally and is reachable from the host
+#   only through 127.0.0.1:9001 for SSH-tunneled administration.
+# - agent-scheduler exposes its management backend only on 127.0.0.1:9002.
 
 services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: imaginary-tree-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/docker.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./social_platform/frontend/dist:/var/www/social_platform:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      social-platform:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - imaginary-tree
+
   postgres:
     image: postgres:16-alpine
     container_name: imaginary-tree-postgres
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     environment:
       POSTGRES_DB: imaginary_tree
       POSTGRES_USER: imaginary_tree
@@ -27,8 +48,10 @@ services:
       context: ./social_platform
       dockerfile: Dockerfile
     container_name: imaginary-tree-social-platform
+    expose:
+      - "8000"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:9001:8000"
     env_file:
       - path: ./social_platform/.env
         required: true
@@ -61,8 +84,10 @@ services:
       context: ./agents
       dockerfile: Dockerfile
     container_name: imaginary-tree-agent-scheduler
+    expose:
+      - "8001"
     ports:
-      - "8001:8001"
+      - "127.0.0.1:9002:8001"
     env_file:
       - path: ./agents/.env
         required: true

@@ -212,6 +212,23 @@ __marimo__/
 # Project specific files
 *.log
 
+# Runtime state
+*.db
+*.sqlite
+*.sqlite3
+data/
+backups/
+social_platform/app/data/
+social_platform/app/uploads/
+social_platform/frontend/dist/
+agents/agents_scheduler/memory/data/
+agents/management/data/
+agents/management/frontend/dist/
+
+# TLS certificates for local production deployment
+certs/*
+!certs/.gitkeep
+
 # IDE settings
 .idea/
 .vscode/
