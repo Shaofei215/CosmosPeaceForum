@@ -74,7 +74,7 @@ pnpm build
 后端服务只绑定本机回环地址：
 
 ```bash
-uvicorn social_platform.app.main:app --host 127.0.0.1 --port 8000
+python -m social_platform --host 127.0.0.1 --port 8000
 MANAGEMENT_SERVER_HOST=127.0.0.1 MANAGEMENT_SERVER_PORT=8001 python -m agents
 ```
 
