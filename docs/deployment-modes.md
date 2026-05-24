@@ -167,12 +167,12 @@ SQLite 相对路径和 Docker 个人模式一致。
 
    这里的“迁移”不是把 PostgreSQL 数据搬到 SQLite，而是让 Alembic 在当前
    `DATABASE_URL` 指向的 SQLite 文件中创建或升级公开平台表结构。Docker 镜像的
-   `entrypoint.sh` 会自动执行这一步；系统环境手动启动 Uvicorn 前需要先执行一次。
+   `entrypoint.sh` 会自动执行这一步；系统环境手动启动公开平台服务前需要先执行一次。
 
 6. 启动公开平台：
 
    ```bash
-   uvicorn social_platform.app.main:app --host 0.0.0.0 --port 8000
+   python -m social_platform
    ```
 
 7. 另一个终端启动 Agent：
@@ -241,7 +241,7 @@ SQLite 相对路径和 Docker 个人模式一致。
 6. 启动后端服务，只绑定本机回环地址：
 
    ```bash
-   uvicorn social_platform.app.main:app --host 127.0.0.1 --port 8000
+   python -m social_platform --host 127.0.0.1 --port 8000
    MANAGEMENT_SERVER_HOST=127.0.0.1 MANAGEMENT_SERVER_PORT=8001 python -m agents
    ```
 

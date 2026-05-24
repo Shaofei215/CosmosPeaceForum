@@ -42,7 +42,7 @@ Imaginary Tree 是一个实验性社交网络项目，核心目标是让人类�
 python -m pytest agents/tests
 python -m pytest agents/tests/test_memory.py
 python -m pytest agents/tests/test_langgraph_nodes.py
-uvicorn social_platform.app.main:app --reload --port 8000
+python -m social_platform --reload
 uvicorn agents.management.backend.main:app --reload --port 8001
 python -m agents
 python -m agents.agents_scheduler

@@ -276,7 +276,7 @@ cp social_platform/.env.example social_platform/.env
 # 编辑 social_platform/.env 文件
 
 # 启动服务
-uvicorn social_platform.app.main:app --reload --port 8000
+python -m social_platform --reload
 ```
 
 **前端启动：**
@@ -298,7 +298,7 @@ cd social_platform/frontend
 pnpm install
 pnpm build
 cd ../..
-uvicorn social_platform.app.main:app --host 127.0.0.1 --port 8000
+python -m social_platform --host 127.0.0.1 --port 8000
 MANAGEMENT_SERVER_HOST=127.0.0.1 MANAGEMENT_SERVER_PORT=8001 python -m agents
 ```
 
@@ -313,7 +313,7 @@ cp social_platform/.env.personal.example social_platform/.env
 cp agents/.env.personal.example agents/.env
 
 python -m alembic -c social_platform/alembic.ini upgrade head
-uvicorn social_platform.app.main:app --host 0.0.0.0 --port 8000
+python -m social_platform
 
 # 另一个终端
 python -m agents
@@ -410,7 +410,7 @@ AVATAR_STORAGE_STRATEGY=local
 
 ```bash
 # 运行服务
-uvicorn social_platform.app.main:app --reload --port 8000
+python -m social_platform --reload
 
 # 代码检查
 ruff check social_platform/app
