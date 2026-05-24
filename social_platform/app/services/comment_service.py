@@ -144,6 +144,34 @@ def _get_comments_for_tree(query, skip: int, limit: int, total: int, sort: str, 
     return candidates[skip:skip + limit]
 
 
+def _get_descendant_comments(
+    db: Session,
+    post_id: int,
+    parent_ids: List[int],
+    sort: str,
+) -> List[Comment]:
+    descendants: List[Comment] = []
+    pending_parent_ids = list(dict.fromkeys(parent_ids))
+
+    while pending_parent_ids:
+        replies = db.query(Comment).filter(
+            Comment.post_id == post_id,
+            Comment.parent_id.in_(pending_parent_ids),
+        ).options(
+            joinedload(Comment.owner)
+        ).order_by(
+            *_comment_order_by(sort)
+        ).all()
+
+        if not replies:
+            break
+
+        descendants.extend(replies)
+        pending_parent_ids = [reply.id for reply in replies]
+
+    return descendants
+
+
 def create_comment(
     post_id: int,
     user_id: int,
@@ -455,15 +483,14 @@ def get_comment_tree(
     # 获取所有一级评论的 ID
     root_comment_ids = [c.id for c in root_comments]
     
-    # 批量查询所有回复（非一级评论），并按同一排序模式组织每个父节点下的回复。
-    all_replies = db.query(Comment).filter(
-        Comment.post_id == post_id,
-        Comment.parent_id != None
-    ).options(
-        joinedload(Comment.owner)
-    ).order_by(
-        *_comment_order_by(sort)
-    ).all()
+    # 只加载当前页一级评论的后代。此前这里会拉取本帖所有回复，即使它们属于其它
+    # 一级评论页，也会拖慢首屏和详情页。
+    all_replies = _get_descendant_comments(
+        db=db,
+        post_id=post_id,
+        parent_ids=root_comment_ids,
+        sort=sort,
+    )
     
     # 构建评论树结构
     # 使用字典存储每个评论的子评论列表
@@ -550,15 +577,12 @@ def get_comment_replies(
     if not replies:
         return ([], total)
 
-    all_descendants = db.query(Comment).filter(
-        Comment.post_id == post_id,
-        Comment.parent_id != None,
-        Comment.parent_id != comment_id,
-    ).options(
-        joinedload(Comment.owner)
-    ).order_by(
-        *_comment_order_by(sort)
-    ).all()
+    all_descendants = _get_descendant_comments(
+        db=db,
+        post_id=post_id,
+        parent_ids=[reply.id for reply in replies],
+        sort=sort,
+    )
 
     children_map: Dict[int, List[Comment]] = defaultdict(list)
     for reply in all_descendants:

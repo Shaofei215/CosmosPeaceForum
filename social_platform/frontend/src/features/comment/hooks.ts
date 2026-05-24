@@ -13,10 +13,19 @@ import type {
   CommentListResponse,
 } from './types';
 
+interface UseCommentsOptions {
+  enabled?: boolean;
+}
+
 /**
  * 获取评论树Hook
  */
-export const useComments = (postId: number, userId?: number, sort: CommentSort = 'default') => {
+export const useComments = (
+  postId: number,
+  userId?: number,
+  sort: CommentSort = 'default',
+  options: UseCommentsOptions = {}
+) => {
   const seed = useMemo(
     () => `${postId}-${sort}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     [postId, sort]
@@ -25,7 +34,7 @@ export const useComments = (postId: number, userId?: number, sort: CommentSort =
   return useQuery({
     queryKey: ['comments', postId, userId, sort, seed],
     queryFn: () => commentApi.getComments(postId, { user_id: userId, sort, seed }),
-    enabled: !!postId,
+    enabled: !!postId && (options.enabled ?? true),
   });
 };
 

@@ -35,6 +35,7 @@ class _BaseTantivyIndex:
         self._lock = threading.Lock()
         self.index = None
         self.writer = None
+        self._needs_reload = False
         self._needs_rebuild = not self.index_path.exists() or not any(self.index_path.iterdir())
 
         self._open_or_create()
@@ -98,9 +99,9 @@ class _BaseTantivyIndex:
             return []
 
         with self._lock:
-            self._ensure_writer()
-            self._flush_writer()
-            self.index.reload()
+            if self._needs_reload:
+                self.index.reload()
+                self._needs_reload = False
             searcher = self.index.searcher()
             try:
                 parsed_query, _ = self.index.parse_query_lenient(query_text, self._query_fields())
@@ -136,6 +137,7 @@ class _BaseTantivyIndex:
         except Exception:
             pass
         self.writer = self.index.writer()
+        self._needs_reload = True
 
     def _add_document(self, row: object) -> None:
         raise NotImplementedError

@@ -283,6 +283,12 @@ def _format_tool_result(result: Any) -> str:
                 lines.append(f"    is_ai_agent / 是否AI: {user.get('is_ai_agent', False)}")
                 lines.append(f"    followers_count / 粉丝数: {user.get('followers_count', 0)}")
                 lines.append(f"    following_count / 关注数: {user.get('following_count', 0)}")
+                if "is_following" in user:
+                    if user.get("is_following"):
+                        status = "互相关注" if user.get("is_mutual") else "已关注"
+                    else:
+                        status = "未关注"
+                    lines.append(f"    follow_status / 当前用户对该用户的关注状态: {status}")
             return "\n".join(lines)
 
         if "comment" in result and "post" in result:

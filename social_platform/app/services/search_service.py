@@ -9,8 +9,9 @@ from social_platform.app.models.post import Post
 from social_platform.app.models.user import User
 from social_platform.app.schemas.feed import PostFeedItem
 from social_platform.app.schemas.response import APIResponse, PaginationInfo
+from social_platform.app.schemas.search import UserSearchItem
 from social_platform.app.schemas.user import UserResponse
-from social_platform.app.services import feed_service
+from social_platform.app.services import feed_service, follow_service
 from social_platform.app.services.search_index import get_content_index, get_user_index
 
 
@@ -180,7 +181,8 @@ def search_users(
     query: str,
     page: int,
     page_size: int,
-) -> APIResponse[List[UserResponse]]:
+    current_user_id: int | None = None,
+) -> APIResponse[List[UserSearchItem]]:
     query = query.strip()
     if not query:
         return APIResponse(
@@ -225,10 +227,25 @@ def search_users(
 
     order_case = case({user_id: index for index, user_id in enumerate(page_ids)}, value=User.id)
     users = db.query(User).filter(User.id.in_(page_ids)).order_by(order_case).all()
+    follow_status = {}
+    if current_user_id is not None:
+        follow_status = follow_service.get_follow_status_batch(
+            db=db,
+            current_user_id=current_user_id,
+            target_user_ids=page_ids,
+        )
 
     return APIResponse(
         code=200,
         message="success",
-        data=[UserResponse.model_validate(user) for user in users],
+        data=[
+            UserSearchItem(
+                **UserResponse.model_validate(user).model_dump(),
+                is_following=follow_status.get(user.id, {}).get("is_following", False),
+                is_followed_by=follow_status.get(user.id, {}).get("is_followed_by", False),
+                is_mutual=follow_status.get(user.id, {}).get("is_mutual", False),
+            )
+            for user in users
+        ],
         pagination=_calculate_pagination(page, page_size, total),
     )

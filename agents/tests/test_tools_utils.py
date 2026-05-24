@@ -218,6 +218,33 @@ class TestStandardizePost:
             assert result["author_username"] == "nested_user"
             assert result["author_bio"] == "nested bio"
 
+    def test_standardize_post_uses_embedded_follow_status(self):
+        post_data = {
+            "id": 1,
+            "author_id": 10,
+            "author_name": "testuser",
+            "content": "hello world",
+            "created_at": "",
+            "like_count": 0,
+            "comment_count": 0,
+            "is_liked": False,
+            "author_is_following": True,
+            "author_is_mutual": False,
+        }
+        with patch(
+            "agents.agents_scheduler.langgraph.tools.utils._expand_username_by_relation",
+            return_value="testuser",
+        ), patch(
+            "agents.agents_scheduler.langgraph.tools.utils._expand_content_mentions_by_relation",
+            return_value="hello world",
+        ), patch(
+            "agents.agents_scheduler.langgraph.tools.utils._get_follow_status_text",
+            return_value="未关注",
+        ) as mock_follow_status:
+            result = _standardize_post(post_data, current_user_id=99)
+            assert result["follow_status"] == "已关注"
+            mock_follow_status.assert_not_called()
+
     def test_standardize_post_formats_repost_chain_with_user_ids(self):
         post_data = {
             "id": 2,

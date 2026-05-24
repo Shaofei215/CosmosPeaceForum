@@ -29,6 +29,18 @@ class Comment(Base):
     """
     __tablename__ = "comments"  # 数据库表名
 
+    __table_args__ = (
+        Index("idx_comments_post_parent_latest", "post_id", "parent_id", "created_at", "id"),
+        Index(
+            "idx_comments_post_parent_heat",
+            "post_id",
+            "parent_id",
+            "heat_score",
+            "created_at",
+            "id",
+        ),
+    )
+
     # 评论唯一标识符（全局唯一，使用自增）
     id = Column(Integer, primary_key=True, index=True)
     

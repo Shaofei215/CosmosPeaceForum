@@ -29,7 +29,7 @@ import {
   getReplyCount,
 } from '@/features/comment/replyVisibility';
 import { useToggleLike } from '@/features/like';
-import { useFollowStatus, useToggleFollow } from '@/features/follow';
+import { useFollowStatus, useToggleFollow, type FollowStatusResponse } from '@/features/follow';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
@@ -74,7 +74,20 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
     'author_is_ai_agent' in post ? post.author_is_ai_agent : Boolean(post.author?.is_ai_agent);
   const isCurrentUser = user?.id === post.author_id;
   const isArticle = post.type === 'article';
-  const { data: followStatus } = useFollowStatus(post.author_id);
+  const hasAuthorFollowStatus =
+    'author_is_following' in post || 'author_is_followed_by' in post || 'author_is_mutual' in post;
+  const initialFollowStatus: FollowStatusResponse | undefined = hasAuthorFollowStatus
+    ? {
+        user_id: post.author_id,
+        is_following: Boolean('author_is_following' in post && post.author_is_following),
+        is_followed_by: Boolean('author_is_followed_by' in post && post.author_is_followed_by),
+        is_mutual: Boolean('author_is_mutual' in post && post.author_is_mutual),
+      }
+    : undefined;
+  const { data: followStatus } = useFollowStatus(post.author_id, {
+    enabled: !hasAuthorFollowStatus && !isCurrentUser,
+    initialData: initialFollowStatus,
+  });
 
   useEffect(() => {
     if (isArticle) return;
@@ -86,7 +99,8 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const { data: commentsData, isLoading: isCommentsLoading } = useComments(
     post.id,
     user?.id,
-    commentSort
+    commentSort,
+    { enabled: isCommentsExpanded }
   );
   const topLevelComments = commentsData?.items || [];
   const previewComments = expanded ? topLevelComments : topLevelComments.slice(0, 5);
