@@ -11,7 +11,7 @@ set -Eeuo pipefail
 # - agents/agents_scheduler/memory/data/tantivy_index
 #
 # Cron example:
-# 30 3 * * * cd /path/to/imaginary-tree && BACKUP_DIR=/data/backups ./ops/backup/backup_agents.sh
+# 30 3 * * * cd /path/to/cosmos-peace-forum && BACKUP_DIR=/data/backups ./ops/backup/backup_agents.sh
 #
 # 注意：SQLite 使用 sqlite3 的在线备份接口（若可用）；目录型索引使用文件快照。
 # 如果 Scheduler 正在高频写入 memory，建议在维护窗口暂停写入后执行，确保 SQLite、
@@ -133,7 +133,7 @@ copy_dir_if_exists() {
 mkdir -p "$WORK_DIR"
 
 cat > "$MANIFEST" <<EOF
-Imaginary Tree agents backup
+CosmosPeaceForum agents backup
 timestamp=$TIMESTAMP
 repo_root=$REPO_ROOT
 backup_archive=$ARCHIVE_PATH

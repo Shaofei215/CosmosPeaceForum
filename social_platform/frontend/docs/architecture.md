@@ -345,7 +345,7 @@ export default {
 ```bash
 # .env.example
 VITE_API_BASE_URL=http://localhost:8000
-VITE_APP_NAME=Imaginary Tree
+VITE_APP_NAME=CosmosPeaceForum
 ```
 
 ### 使用方式

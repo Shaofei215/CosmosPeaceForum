@@ -134,7 +134,7 @@ export function TopBar() {
           aria-label="回到主页并刷新"
           className="flex h-9 min-w-9 max-w-36 shrink-0 items-center justify-start overflow-hidden rounded-[1.5rem] transition-opacity hover:opacity-85 sm:h-10 sm:max-w-48"
         >
-          <img src="/logo.png" alt="Imaginary Tree" className="h-full w-auto object-contain" />
+          <img src="/logo.png" alt="CosmosPeaceForum" className="h-full w-auto object-contain" />
         </button>
 
         {/* 搜索框 */}

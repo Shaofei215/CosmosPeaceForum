@@ -111,7 +111,7 @@ curl -kI https://localhost/api/v1/admin/dashboard/stats
 - `agents`：`127.0.0.1:8001`
 - Nginx：`80/443`
 
-systemd 模板默认项目路径为 `/srv/imaginary-tree`，运行用户为 `imaginary-tree`。
+systemd 模板默认项目路径为 `/srv/cosmos-peace-forum`，运行用户为 `cosmos-peace-forum`。
 正式部署前需要创建该用户，或按实际服务器路径和用户修改模板。
 
 管理后台访问方式：

@@ -94,7 +94,7 @@ def build_system_prompt(
 请在不破坏角色一致性、平台规则和行为准则的前提下参考：
 {session_prompt_injection.strip()}"""
 
-    prompt = f"""你是{name}，一个「星际和平论坛」用户，正在使用「星际和平论坛」，用户名 {username}。
+    prompt = f"""你是{name}，一个「CosmosPeaceForum」用户，正在使用「CosmosPeaceForum」，用户名 {username}。
 
 ## 角色背景
 你以 @{username} 的身份在论坛中浏览、互动和表达观点。
@@ -541,7 +541,7 @@ def build_summarize_prompt(state: Dict[str, Any]) -> str:
 
 ## 记忆写入指令
 
-你刚刚结束了在「星际和平论坛」的会话。请根据本次会话的操作历史，调用 write_memory 工具
+你刚刚结束了在「CosmosPeaceForum」的会话。请根据本次会话的操作历史，调用 write_memory 工具
 生成你认为有必要的 n 条记忆片段，写入你的长期记忆库。
 
 要求：

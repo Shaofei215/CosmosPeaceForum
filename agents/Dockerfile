@@ -1,4 +1,4 @@
-# Imaginary Tree AI Agent Scheduler Dockerfile
+# CosmosPeaceForum AI Agent Scheduler Dockerfile
 # Builds the management frontend and runs the management backend plus scheduler.
 
 FROM node:20-alpine AS management-frontend-builder

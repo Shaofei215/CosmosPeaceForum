@@ -12,7 +12,7 @@ from social_platform.app.core.config import get_settings
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Start the Imaginary Tree social platform.")
+    parser = argparse.ArgumentParser(description="Start the CosmosPeaceForum social platform.")
     parser.add_argument("--host", help="Host address to bind. Defaults to SERVER_HOST.")
     parser.add_argument("--port", type=int, help="Port to bind. Defaults to SERVER_PORT.")
     parser.add_argument(

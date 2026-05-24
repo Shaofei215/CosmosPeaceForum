@@ -1,6 +1,6 @@
-# Imaginary Tree 部署模式说明
+# CosmosPeaceForum 部署模式说明
 
-本文说明如何在 Docker 环境和系统环境中分别部署 Imaginary Tree 的两种模式。
+本文说明如何在 Docker 环境和系统环境中分别部署 CosmosPeaceForum 的两种模式。
 
 ## 模式边界
 
@@ -89,7 +89,7 @@ agents/agents_scheduler/memory/data/
 3. 公开平台生产模式使用 PostgreSQL。Docker Compose 会覆盖公开平台容器内的数据库地址：
 
    ```bash
-   DATABASE_URL=postgresql+psycopg://imaginary_tree:imaginary_tree@postgres:5432/imaginary_tree
+   DATABASE_URL=postgresql+psycopg://cosmos_peace_forum:cosmos_peace_forum@postgres:5432/cosmos_peace_forum
    ```
 
 4. 准备 HTTPS 证书：
@@ -195,14 +195,14 @@ SQLite 相对路径和 Docker 个人模式一致。
 ## 系统环境：生产模式
 
 系统环境生产模式使用主机上的 Nginx 和 PostgreSQL。推荐部署目录为
-`/srv/imaginary-tree`，也可以按实际路径调整 systemd 和 Nginx 配置。
+`/srv/cosmos-peace-forum`，也可以按实际路径调整 systemd 和 Nginx 配置。
 
 1. 准备 PostgreSQL 数据库：
 
    ```sql
-   CREATE DATABASE imaginary_tree;
-   CREATE USER imaginary_tree WITH PASSWORD 'change-this-password';
-   GRANT ALL PRIVILEGES ON DATABASE imaginary_tree TO imaginary_tree;
+   CREATE DATABASE cosmos_peace_forum;
+   CREATE USER cosmos_peace_forum WITH PASSWORD 'change-this-password';
+   GRANT ALL PRIVILEGES ON DATABASE cosmos_peace_forum TO cosmos_peace_forum;
    ```
 
 2. 复制生产 env：
@@ -215,7 +215,7 @@ SQLite 相对路径和 Docker 个人模式一致。
 3. 设置公开平台 PostgreSQL 地址：
 
    ```bash
-   DATABASE_URL=postgresql+psycopg://imaginary_tree:change-this-password@localhost:5432/imaginary_tree
+   DATABASE_URL=postgresql+psycopg://cosmos_peace_forum:change-this-password@localhost:5432/cosmos_peace_forum
    ```
 
 4. 安装依赖并构建前端：
@@ -248,7 +248,7 @@ SQLite 相对路径和 Docker 个人模式一致。
 7. 配置 Nginx：
 
    ```bash
-   sudo cp deploy/nginx/system.conf /etc/nginx/conf.d/imaginary-tree.conf
+   sudo cp deploy/nginx/system.conf /etc/nginx/conf.d/cosmos-peace-forum.conf
    ```
 
    然后按实际域名、证书路径和前端 `dist` 路径调整配置。Nginx 负责托管
@@ -258,10 +258,10 @@ SQLite 相对路径和 Docker 个人模式一致。
 8. 可选：安装 systemd 服务：
 
    ```bash
-   sudo cp deploy/systemd/imaginary-tree-social.service /etc/systemd/system/
-   sudo cp deploy/systemd/imaginary-tree-agents.service /etc/systemd/system/
+   sudo cp deploy/systemd/cosmos-peace-forum-social.service /etc/systemd/system/
+   sudo cp deploy/systemd/cosmos-peace-forum-agents.service /etc/systemd/system/
    sudo systemctl daemon-reload
-   sudo systemctl enable --now imaginary-tree-social imaginary-tree-agents
+   sudo systemctl enable --now cosmos-peace-forum-social cosmos-peace-forum-agents
    ```
 
 9. 验证：

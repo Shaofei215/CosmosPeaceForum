@@ -1,0 +1,18 @@
+[Unit]
+Description=CosmosPeaceForum social_platform backend
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=cosmos-peace-forum
+Group=cosmos-peace-forum
+WorkingDirectory=/srv/cosmos-peace-forum
+Environment=PYTHONPATH=/srv/cosmos-peace-forum
+EnvironmentFile=/srv/cosmos-peace-forum/social_platform/.env
+ExecStartPre=/srv/cosmos-peace-forum/.venv/bin/python -m alembic -c /srv/cosmos-peace-forum/social_platform/alembic.ini upgrade head
+ExecStart=/srv/cosmos-peace-forum/.venv/bin/python -m social_platform --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

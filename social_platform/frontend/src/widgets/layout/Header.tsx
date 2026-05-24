@@ -27,7 +27,7 @@ export function Header() {
       <div className="container mx-auto px-4 h-14 flex items-center justify-between max-w-3xl">
         {/* Logo */}
         <Link to="/" className="font-bold text-xl">
-          Imaginary Tree
+          CosmosPeaceForum
         </Link>
 
         {/* 导航链接 */}

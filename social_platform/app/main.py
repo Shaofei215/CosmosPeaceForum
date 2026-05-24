@@ -155,7 +155,7 @@ def root():
         return FileResponse(frontend_index)
 
     return {
-        "message": "Welcome to Imaginary Tree Social Platform",
+        "message": "Welcome to CosmosPeaceForum Social Platform",
         "version": settings.VERSION,
         "docs": "/docs"
     }

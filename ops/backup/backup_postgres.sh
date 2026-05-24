@@ -10,18 +10,18 @@ set -Eeuo pipefail
 # - POSTGRES_BACKUP_MODE=local  强制使用宿主机 pg_dump，可连接本机或远程 PostgreSQL。
 #
 # Cron example:
-# 15 3 * * * cd /path/to/imaginary-tree && BACKUP_DIR=/data/backups ./ops/backup/backup_postgres.sh
+# 15 3 * * * cd /path/to/cosmos-peace-forum && BACKUP_DIR=/data/backups ./ops/backup/backup_postgres.sh
 #
 # Local/system PostgreSQL example:
-# POSTGRES_BACKUP_MODE=local PGHOST=127.0.0.1 PGPORT=5432 PGUSER=imaginary_tree \
-#   PGPASSWORD=imaginary_tree ./ops/backup/backup_postgres.sh
+# POSTGRES_BACKUP_MODE=local PGHOST=127.0.0.1 PGPORT=5432 PGUSER=cosmos_peace_forum \
+#   PGPASSWORD=cosmos_peace_forum ./ops/backup/backup_postgres.sh
 
 BACKUP_DIR="${BACKUP_DIR:-./backups/postgres}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 POSTGRES_BACKUP_MODE="${POSTGRES_BACKUP_MODE:-auto}"
 POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
-POSTGRES_USER="${POSTGRES_USER:-${PGUSER:-imaginary_tree}}"
-POSTGRES_DATABASES="${POSTGRES_DATABASES:-imaginary_tree}"
+POSTGRES_USER="${POSTGRES_USER:-${PGUSER:-cosmos_peace_forum}}"
+POSTGRES_DATABASES="${POSTGRES_DATABASES:-cosmos_peace_forum}"
 POSTGRES_HOST="${POSTGRES_HOST:-${PGHOST:-localhost}}"
 POSTGRES_PORT="${POSTGRES_PORT:-${PGPORT:-5432}}"
 PGDUMP_BIN="${PGDUMP_BIN:-pg_dump}"

@@ -1,6 +1,6 @@
 # PostgreSQL 配置库合并与备份策略
 
-本文档说明 Imaginary Tree 后续数据库治理方向：哪些数据应该迁移到 PostgreSQL，哪些不应该合并，以及运营时如何做定时备份。
+本文档说明 CosmosPeaceForum 后续数据库治理方向：哪些数据应该迁移到 PostgreSQL，哪些不应该合并，以及运营时如何做定时备份。
 
 ## 结论
 
@@ -10,9 +10,9 @@
 
 | 数据 | 建议位置 | 说明 |
 | --- | --- | --- |
-| social_platform 业务数据 | PostgreSQL: `imaginary_tree` | 用户、帖子、评论、点赞、关注、通知等核心业务数据 |
-| social_platform 管理数据 | PostgreSQL: `imaginary_tree`，独立表前缀或 schema | 平台管理员、审计日志、用户处罚状态 |
-| social_platform 动态配置 | PostgreSQL: `imaginary_tree` | 主题配置等 `social_platform/app/admin` 可热更新配置，例如 `platform_theme_settings` |
+| social_platform 业务数据 | PostgreSQL: `cosmos_peace_forum` | 用户、帖子、评论、点赞、关注、通知等核心业务数据 |
+| social_platform 管理数据 | PostgreSQL: `cosmos_peace_forum`，独立表前缀或 schema | 平台管理员、审计日志、用户处罚状态 |
+| social_platform 动态配置 | PostgreSQL: `cosmos_peace_forum` | 主题配置等 `social_platform/app/admin` 可热更新配置，例如 `platform_theme_settings` |
 | agents/management 配置数据 | 暂时保留 SQLite，后续单独评估 | Agent 配置、模型配置、Embedding 配置、系统热更新配置、管理后台账号；保持与 social_platform 解耦 |
 | Agent 长期记忆主记录 | 暂时保留 SQLite，后续单独评估 | 当前与 ChromaDB/Tantivy 三写绑定，迁移优先级低于管理配置库 |
 | ChromaDB、Tantivy、搜索索引 | 不合并到 PostgreSQL | 这些是可重建索引或专用存储，不是主事实数据 |
@@ -44,8 +44,8 @@
 推荐至少分两个 database：
 
 ```text
-imaginary_tree
-imaginary_tree_management
+cosmos_peace_forum
+cosmos_peace_forum_management
 ```
 
 这样有几个好处：
@@ -70,7 +70,7 @@ imaginary_tree_management
 
 ### 第二阶段：评估 management 配置库
 
-当前暂不修改 `agents/management` 的配置数据库实现，保持它作为与 social_platform 解耦的独立存在。后续如果确认需要统一到 PostgreSQL，再评估是否把以下表迁到 `imaginary_tree_management`：
+当前暂不修改 `agents/management` 的配置数据库实现，保持它作为与 social_platform 解耦的独立存在。后续如果确认需要统一到 PostgreSQL，再评估是否把以下表迁到 `cosmos_peace_forum_management`：
 
 - `admin_users`
 - `agent_configs`
@@ -82,7 +82,7 @@ imaginary_tree_management
 
 届时建议新增或切换：
 
-- `MANAGEMENT_DATABASE_URL=postgresql+psycopg://.../imaginary_tree_management`
+- `MANAGEMENT_DATABASE_URL=postgresql+psycopg://.../cosmos_peace_forum_management`
 - management 专用 Alembic migration；
 - 一次性 `sqlite -> postgresql` 数据搬运脚本；
 - 搬运后的数据量和关键配置校验。
@@ -165,19 +165,19 @@ TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_DIR"
 
 docker-compose exec -T postgres pg_dump \
-  -U imaginary_tree \
-  imaginary_tree \
-  | gzip > "$BACKUP_DIR/imaginary_tree-$TIMESTAMP.sql.gz"
+  -U cosmos_peace_forum \
+  cosmos_peace_forum \
+  | gzip > "$BACKUP_DIR/cosmos_peace_forum-$TIMESTAMP.sql.gz"
 
 docker-compose exec -T postgres pg_dump \
-  -U imaginary_tree \
-  imaginary_tree_management \
-  | gzip > "$BACKUP_DIR/imaginary_tree_management-$TIMESTAMP.sql.gz"
+  -U cosmos_peace_forum \
+  cosmos_peace_forum_management \
+  | gzip > "$BACKUP_DIR/cosmos_peace_forum_management-$TIMESTAMP.sql.gz"
 
 find "$BACKUP_DIR" -type f -name "*.sql.gz" -mtime +"$RETENTION_DAYS" -delete
 ```
 
-当前脚本默认只备份 `imaginary_tree`。上面的 `imaginary_tree_management` 只有在 management 配置库正式迁到 PostgreSQL 后才启用。迁移前，management SQLite 仍需单独备份。
+当前脚本默认只备份 `cosmos_peace_forum`。上面的 `cosmos_peace_forum_management` 只有在 management 配置库正式迁到 PostgreSQL 后才启用。迁移前，management SQLite 仍需单独备份。
 
 ## management SQLite 过渡期备份
 
@@ -204,7 +204,7 @@ gzip "$BACKUP_DIR/management-$TIMESTAMP.db"
 cron 示例：
 
 ```cron
-15 3 * * * cd /path/to/imaginary-tree && BACKUP_DIR=/data/backups ./ops/backup/backup_postgres.sh
+15 3 * * * cd /path/to/cosmos-peace-forum && BACKUP_DIR=/data/backups ./ops/backup/backup_postgres.sh
 ```
 
 systemd timer 更适合长期运行的服务器，因为日志、失败状态和重试更清楚。
@@ -222,8 +222,8 @@ systemd timer 更适合长期运行的服务器，因为日志、失败状态和
 恢复命令示例：
 
 ```bash
-gunzip -c backups/postgres/imaginary_tree-20260522-030000.sql.gz \
-  | docker-compose exec -T postgres psql -U imaginary_tree -d imaginary_tree
+gunzip -c backups/postgres/cosmos_peace_forum-20260522-030000.sql.gz \
+  | docker-compose exec -T postgres psql -U cosmos_peace_forum -d cosmos_peace_forum
 ```
 
 ## 发版前检查清单

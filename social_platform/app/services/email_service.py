@@ -19,7 +19,7 @@ EMAIL_REGISTER_TEMPLATE = Template("""$code 是您的注册验证码
 请勿将验证码泄露给他人，如有疑虑请忽略此邮件。
 
 ---
-此邮件由 Imaginary Tree 系统自动发送，请勿回复。
+此邮件由 CosmosPeaceForum 系统自动发送，请勿回复。
 """)
 
 EMAIL_RESET_TEMPLATE = Template("""$code 是您的重置密码
@@ -29,7 +29,7 @@ EMAIL_RESET_TEMPLATE = Template("""$code 是您的重置密码
 请勿将验证码泄露给他人，如果这不是您的操作，请立即检查账号安全。
 
 ---
-此邮件由 Imaginary Tree 系统自动发送，请勿回复。
+此邮件由 CosmosPeaceForum 系统自动发送，请勿回复。
 """)
 
 EMAIL_LOGIN_TEMPLATE = Template("""$code 是您的登录验证码
@@ -39,7 +39,7 @@ EMAIL_LOGIN_TEMPLATE = Template("""$code 是您的登录验证码
 请勿将验证码泄露给他人，如果这不是您的操作，请立即检查账号安全。    
 
 ---
-此邮件由 Imaginary Tree 系统自动发送，请勿回复。
+此邮件由 CosmosPeaceForum 系统自动发送，请勿回复。
 """)
 
 
@@ -108,13 +108,13 @@ class EmailService:
         try:
             if purpose == "reset_password":
                 template = EMAIL_RESET_TEMPLATE
-                subject = "【Imaginary Tree】密码重置验证码"
+                subject = "【CosmosPeaceForum】密码重置验证码"
             elif purpose == "login":
                 template = EMAIL_LOGIN_TEMPLATE
-                subject = "【Imaginary Tree】登录验证码"
+                subject = "【CosmosPeaceForum】登录验证码"
             else:
                 template = EMAIL_REGISTER_TEMPLATE
-                subject = "【Imaginary Tree】注册验证码"
+                subject = "【CosmosPeaceForum】注册验证码"
 
             text_content = template.safe_substitute(
                 code=code,

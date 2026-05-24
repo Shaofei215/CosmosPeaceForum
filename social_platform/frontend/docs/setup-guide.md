@@ -73,7 +73,7 @@ pnpm --version
 
 ```bash
 git clone <repository-url>
-cd Imaginary Tree/social_platform/frontend
+cd CosmosPeaceForum/social_platform/frontend
 ```
 
 ### 4. 安装依赖
