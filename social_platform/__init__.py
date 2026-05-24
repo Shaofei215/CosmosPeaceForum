@@ -1,1 +1,1 @@
-"""Imaginary Tree public social platform package."""
+"""CosmosPeaceForum public social platform package."""

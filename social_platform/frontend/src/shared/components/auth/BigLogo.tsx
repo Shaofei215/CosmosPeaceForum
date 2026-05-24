@@ -7,7 +7,7 @@ export function BigLogo({ className }: { className?: string }) {
   return (
     <img
       src={src}
-      alt="Imaginary Tree"
+      alt="CosmosPeaceForum"
       className={cn('auth-big-logo', className)}
       onError={() => {
         if (src !== '/logo.png') {

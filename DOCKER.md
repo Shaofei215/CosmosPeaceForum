@@ -1,8 +1,8 @@
-# Imaginary Tree Docker 部署指南
+# CosmosPeaceForum Docker 部署指南
 
 ## 部署模式
 
-Imaginary Tree 现在保留两套 Compose 入口：
+CosmosPeaceForum 现在保留两套 Compose 入口：
 
 - 个人模式：[docker-compose.personal.yml](./docker-compose.personal.yml)。
   HTTP、本机或可信局域网、SQLite、无 Nginx 网关、无 PostgreSQL。

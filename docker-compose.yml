@@ -1,14 +1,16 @@
-# Imaginary Tree Docker Compose
+# CosmosPeaceForum Docker Compose
 # Production layout:
 # - nginx is the only public web entrypoint on 80/443.
 # - social-platform serves API/uploads internally and is reachable from the host
 #   only through 127.0.0.1:9001 for SSH-tunneled administration.
 # - agent-scheduler exposes its management backend only on 127.0.0.1:9002.
 
+name: cosmos-peace-forum
+
 services:
   nginx:
     image: nginx:1.27-alpine
-    container_name: imaginary-tree-nginx
+    container_name: cosmos-peace-forum-nginx
     ports:
       - "80:80"
       - "443:443"
@@ -21,33 +23,33 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - imaginary-tree
+      - cosmos-peace-forum
 
   postgres:
     image: postgres:16-alpine
-    container_name: imaginary-tree-postgres
+    container_name: cosmos-peace-forum-postgres
     expose:
       - "5432"
     environment:
-      POSTGRES_DB: imaginary_tree
-      POSTGRES_USER: imaginary_tree
-      POSTGRES_PASSWORD: imaginary_tree
+      POSTGRES_DB: cosmos_peace_forum
+      POSTGRES_USER: cosmos_peace_forum
+      POSTGRES_PASSWORD: cosmos_peace_forum
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U imaginary_tree -d imaginary_tree"]
+      test: ["CMD-SHELL", "pg_isready -U cosmos_peace_forum -d cosmos_peace_forum"]
       interval: 5s
       timeout: 5s
       retries: 12
     restart: unless-stopped
     networks:
-      - imaginary-tree
+      - cosmos-peace-forum
 
   social-platform:
     build:
       context: ./social_platform
       dockerfile: Dockerfile
-    container_name: imaginary-tree-social-platform
+    container_name: cosmos-peace-forum-social-platform
     expose:
       - "8000"
     ports:
@@ -56,7 +58,7 @@ services:
       - path: ./social_platform/.env
         required: true
     environment:
-      DATABASE_URL: postgresql+psycopg://imaginary_tree:imaginary_tree@postgres:5432/imaginary_tree
+      DATABASE_URL: postgresql+psycopg://cosmos_peace_forum:cosmos_peace_forum@postgres:5432/cosmos_peace_forum
     volumes:
       - ./social_platform/app/data:/app/social_platform/app/data
       - ./social_platform/app/uploads:/app/social_platform/app/uploads
@@ -77,13 +79,13 @@ services:
       start_period: 20s
     restart: unless-stopped
     networks:
-      - imaginary-tree
+      - cosmos-peace-forum
 
   agent-scheduler:
     build:
       context: ./agents
       dockerfile: Dockerfile
-    container_name: imaginary-tree-agent-scheduler
+    container_name: cosmos-peace-forum-agent-scheduler
     expose:
       - "8001"
     ports:
@@ -102,10 +104,10 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - imaginary-tree
+      - cosmos-peace-forum
 
 networks:
-  imaginary-tree:
+  cosmos-peace-forum:
     driver: bridge
 
 volumes:

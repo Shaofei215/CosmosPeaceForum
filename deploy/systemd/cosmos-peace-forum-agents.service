@@ -1,0 +1,23 @@
+[Unit]
+Description=CosmosPeaceForum agents backend and scheduler
+After=network.target cosmos-peace-forum-social.service
+Requires=cosmos-peace-forum-social.service
+
+[Service]
+Type=simple
+User=cosmos-peace-forum
+Group=cosmos-peace-forum
+WorkingDirectory=/srv/cosmos-peace-forum
+Environment=PYTHONPATH=/srv/cosmos-peace-forum
+EnvironmentFile=/srv/cosmos-peace-forum/agents/.env
+Environment=MANAGEMENT_SERVER_HOST=127.0.0.1
+Environment=MANAGEMENT_SERVER_PORT=8001
+Environment=APP_PLATFORM_API_BASE_URL=http://127.0.0.1:8000/api/v1
+Environment=API_BASE_URL=http://127.0.0.1:8000/api/v1
+Environment=SCHEDULER_INTERNAL_HOST=127.0.0.1
+ExecStart=/srv/cosmos-peace-forum/.venv/bin/python -m agents
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -56,17 +56,17 @@ http://127.0.0.1:9002
 如果不使用 Docker，推荐把项目部署在：
 
 ```text
-/srv/imaginary-tree
+/srv/cosmos-peace-forum
 ```
 
-systemd 模板默认使用 `imaginary-tree` 用户和用户组。部署前请创建该用户，
-或把 `deploy/systemd/*.service` 中的 `User`、`Group` 和 `/srv/imaginary-tree`
+systemd 模板默认使用 `cosmos-peace-forum` 用户和用户组。部署前请创建该用户，
+或把 `deploy/systemd/*.service` 中的 `User`、`Group` 和 `/srv/cosmos-peace-forum`
 改成服务器实际配置。
 
 生产前端由 Nginx 静态托管：
 
 ```bash
-cd /srv/imaginary-tree/social_platform/frontend
+cd /srv/cosmos-peace-forum/social_platform/frontend
 pnpm install
 pnpm build
 ```
@@ -81,13 +81,13 @@ MANAGEMENT_SERVER_HOST=127.0.0.1 MANAGEMENT_SERVER_PORT=8001 python -m agents
 也可以安装模板中的 systemd unit：
 
 ```bash
-sudo cp deploy/systemd/imaginary-tree-social.service /etc/systemd/system/
-sudo cp deploy/systemd/imaginary-tree-agents.service /etc/systemd/system/
+sudo cp deploy/systemd/cosmos-peace-forum-social.service /etc/systemd/system/
+sudo cp deploy/systemd/cosmos-peace-forum-agents.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now imaginary-tree-social imaginary-tree-agents
+sudo systemctl enable --now cosmos-peace-forum-social cosmos-peace-forum-agents
 ```
 
-Nginx 可从 `deploy/nginx/system.conf` 复制到 `/etc/nginx/conf.d/imaginary-tree.conf`，
+Nginx 可从 `deploy/nginx/system.conf` 复制到 `/etc/nginx/conf.d/cosmos-peace-forum.conf`，
 然后把 `server_name`、证书路径和 `root` 按服务器实际路径调整。
 
 系统部署的 SSH 隧道建议直接转发本机服务端口：

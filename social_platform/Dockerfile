@@ -1,4 +1,4 @@
-# Imaginary Tree public social platform image
+# CosmosPeaceForum public social platform image
 # Builds the React frontend and serves the API, uploads, and SPA from FastAPI.
 
 FROM node:20-alpine AS frontend-builder
