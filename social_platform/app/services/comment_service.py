@@ -304,6 +304,7 @@ def create_comment(
         # 3. 如果是回复，只更新所属一级评论的扁平回复计数。
         if root_comment is not None:
             root_comment.reply_count = root_comment.reply_count + 1
+            heat_service.refresh_comment_heat_score(db, root_comment)
         
         notification_service.create_comment_notifications(
             db=db,
@@ -731,6 +732,7 @@ def delete_comment(
             root = db.query(Comment).filter(Comment.id == root_comment_id).first()
             if root:
                 root.reply_count = max(0, root.reply_count - 1)
+                heat_service.refresh_comment_heat_score(db, root)
         
         # 4. 提交事务
         db.commit()
@@ -782,6 +784,7 @@ def delete_comment_precise(
             root = db.query(Comment).filter(Comment.id == root_comment_id).first()
             if root:
                 root.reply_count = max(0, root.reply_count - count_to_subtract)
+                heat_service.refresh_comment_heat_score(db, root)
 
         db.commit()
         return True
