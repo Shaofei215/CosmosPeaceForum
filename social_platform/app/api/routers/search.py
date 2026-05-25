@@ -37,6 +37,12 @@ def search(
                 page_size=page_size,
                 current_user_id=current_user.id if current_user else None,
             )
-        return search_service.search_users(db=db, query=q, page=page, page_size=page_size)
+        return search_service.search_users(
+            db=db,
+            query=q,
+            page=page,
+            page_size=page_size,
+            current_user_id=current_user.id if current_user else None,
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"搜索失败: {str(exc)}")

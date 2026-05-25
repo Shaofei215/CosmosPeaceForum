@@ -16,7 +16,7 @@ import type {
  */
 export const commentApi = {
   /**
-   * 获取评论树
+   * 获取一级评论列表
    * GET /api/v1/posts/{post_id}/comments
    */
   getComments: (
@@ -29,6 +29,24 @@ export const commentApi = {
       seed?: string;
     } = {}
   ) => apiClient.get<CommentListResponse>(`/posts/${postId}/comments`, { params }),
+
+  /**
+   * 获取所属一级评论 thread 下的扁平回复
+   * GET /api/v1/posts/{post_id}/comments/{comment_id}/replies
+   */
+  getCommentReplies: (
+    postId: number,
+    commentId: number,
+    params: {
+      skip?: number;
+      limit?: number;
+      sort?: CommentSort;
+      seed?: string;
+    } = {}
+  ) =>
+    apiClient.get<CommentListResponse>(`/posts/${postId}/comments/${commentId}/replies`, {
+      params,
+    }),
 
   /**
    * 获取评论详情

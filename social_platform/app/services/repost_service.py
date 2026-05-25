@@ -111,16 +111,34 @@ def _is_repost_origin_missing(post: Post) -> bool:
 
 
 def build_repost_chain_authors(db: Session, content: str) -> list[dict[str, object]]:
-    usernames = list(dict.fromkeys(re.findall(r"@([^:\s/]+)", content or "")))
-    if not usernames:
-        return []
+    return build_repost_chain_authors_for_contents(db, [content])[0]
 
-    users = db.query(User).filter(User.username.in_(usernames)).all()
+
+def build_repost_chain_authors_for_contents(
+    db: Session,
+    contents: list[str],
+) -> list[list[dict[str, object]]]:
+    usernames_by_content = [
+        list(dict.fromkeys(re.findall(r"@([^:\s/]+)", content or "")))
+        for content in contents
+    ]
+    all_usernames = list(dict.fromkeys(
+        username
+        for usernames in usernames_by_content
+        for username in usernames
+    ))
+    if not all_usernames:
+        return [[] for _ in contents]
+
+    users = db.query(User).filter(User.username.in_(all_usernames)).all()
     user_by_name = {user.username: user for user in users}
     return [
-        {"user_id": user_by_name[username].id, "username": username}
-        for username in usernames
-        if username in user_by_name
+        [
+            {"user_id": user_by_name[username].id, "username": username}
+            for username in usernames
+            if username in user_by_name
+        ]
+        for usernames in usernames_by_content
     ]
 
 

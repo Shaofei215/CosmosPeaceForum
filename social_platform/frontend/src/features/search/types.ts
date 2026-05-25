@@ -11,4 +11,8 @@ export interface SearchParams {
 }
 
 export type ContentSearchItem = PostFeedItem;
-export type UserSearchItem = UserProfile;
+export type UserSearchItem = UserProfile & {
+  is_following?: boolean;
+  is_followed_by?: boolean;
+  is_mutual?: boolean;
+};

@@ -1,10 +1,12 @@
 # 评论业务逻辑层
 # 实现评论相关的核心业务逻辑，包括创建、查询、点赞等功能
 import hashlib
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy.exc import IntegrityError
-from typing import Tuple, List, Optional, Dict
 from collections import defaultdict
+
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm.attributes import set_committed_value
+from sqlalchemy.exc import IntegrityError
+from typing import Tuple, List, Optional
 
 from social_platform.app.models.comment import Comment, CommentLike
 from social_platform.app.models.post import Post
@@ -144,6 +146,78 @@ def _get_comments_for_tree(query, skip: int, limit: int, total: int, sort: str, 
     return candidates[skip:skip + limit]
 
 
+def _resolve_thread_root_id(comment: Comment, db: Session) -> int:
+    if comment.parent_id is None:
+        return comment.id
+    if comment.root_comment_id is not None:
+        return comment.root_comment_id
+
+    seen = {comment.id}
+    parent_id = comment.parent_id
+    while parent_id is not None and parent_id not in seen:
+        parent = db.query(Comment.id, Comment.parent_id).filter(Comment.id == parent_id).first()
+        if parent is None:
+            return parent_id
+        if parent.parent_id is None:
+            return parent.id
+        seen.add(parent.id)
+        parent_id = parent.parent_id
+
+    return comment.parent_id
+
+
+def _legacy_descendant_ids_by_root(db: Session, root_ids: List[int]) -> dict[int, set[int]]:
+    descendants_by_root = {root_id: set() for root_id in root_ids}
+    seen_by_root = {root_id: {root_id} for root_id in root_ids}
+    frontier_by_root = {root_id: {root_id} for root_id in root_ids}
+
+    while True:
+        parent_to_root = {
+            parent_id: root_id
+            for root_id, parent_ids in frontier_by_root.items()
+            for parent_id in parent_ids
+        }
+        if not parent_to_root:
+            break
+
+        rows = db.query(Comment.id, Comment.parent_id).filter(
+            Comment.parent_id.in_(parent_to_root.keys())
+        ).all()
+        next_frontier_by_root: dict[int, set[int]] = defaultdict(set)
+
+        for comment_id, parent_id in rows:
+            root_id = parent_to_root.get(parent_id)
+            if root_id is None or comment_id in seen_by_root[root_id]:
+                continue
+            seen_by_root[root_id].add(comment_id)
+            descendants_by_root[root_id].add(comment_id)
+            next_frontier_by_root[root_id].add(comment_id)
+
+        frontier_by_root = dict(next_frontier_by_root)
+
+    return descendants_by_root
+
+
+def _reply_ids_by_thread_root(db: Session, root_ids: List[int]) -> dict[int, set[int]]:
+    reply_ids_by_root = {root_id: set() for root_id in root_ids}
+    if not root_ids:
+        return reply_ids_by_root
+
+    for comment_id, root_comment_id in db.query(Comment.id, Comment.root_comment_id).filter(
+        Comment.root_comment_id.in_(root_ids)
+    ).all():
+        reply_ids_by_root[root_comment_id].add(comment_id)
+
+    for root_id, legacy_ids in _legacy_descendant_ids_by_root(db, root_ids).items():
+        reply_ids_by_root[root_id].update(legacy_ids)
+
+    return reply_ids_by_root
+
+
+def _set_response_children_empty(comment: Comment) -> None:
+    set_committed_value(comment, "children", [])
+
+
 def create_comment(
     post_id: int,
     user_id: int,
@@ -157,7 +231,7 @@ def create_comment(
     
     在数据库事务中创建评论，并更新相关的计数器：
     - 更新帖子的 comment_count
-    - 如果是回复，循环更新所有祖先的 reply_count
+    - 如果是回复，只更新所属一级评论的 reply_count
     
     Args:
         post_id: 帖子 ID
@@ -189,14 +263,23 @@ def create_comment(
     if not post:
         raise PostNotFoundError(post_id)
     
-    # 如果指定了父评论，检查父评论是否存在且属于同一帖子
+    # 如果指定了父评论，检查父评论是否存在且属于同一帖子。
+    # parent_id 只表示“回复了哪条评论”；root_comment_id 才表示归属哪个一级评论 thread。
     parent_comment = None
+    root_comment = None
+    root_comment_id = None
     if parent_id is not None:
         parent_comment = db.query(Comment).filter(Comment.id == parent_id).first()
         if not parent_comment:
             raise ParentCommentNotFoundError(parent_id)
         if parent_comment.post_id != post_id:
             raise ParentCommentMismatchError(parent_id, post_id, parent_comment.post_id)
+        root_comment_id = _resolve_thread_root_id(parent_comment, db)
+        root_comment = (
+            parent_comment
+            if parent_comment.id == root_comment_id
+            else db.query(Comment).filter(Comment.id == root_comment_id).first()
+        )
     
     try:
         # 1. 创建新评论
@@ -204,6 +287,7 @@ def create_comment(
             post_id=post_id,
             owner_id=user_id,
             parent_id=parent_id,
+            root_comment_id=root_comment_id,
             content=content,
             like_count=0,
             reply_count=0
@@ -217,17 +301,9 @@ def create_comment(
         heat_service.refresh_post_heat_score(db, post)
         heat_service.refresh_comment_heat_score(db, new_comment)
         
-        # 3. 如果是回复，循环更新所有祖先的 reply_count
-        if parent_id is not None:
-            current_id = parent_id
-            while current_id is not None:
-                # 更新当前祖先的 reply_count
-                ancestor = db.query(Comment).filter(Comment.id == current_id).first()
-                if ancestor:
-                    ancestor.reply_count = ancestor.reply_count + 1
-                    current_id = ancestor.parent_id  # 继续向上追溯
-                else:
-                    break  # 祖先不存在，退出循环
+        # 3. 如果是回复，只更新所属一级评论的扁平回复计数。
+        if root_comment is not None:
+            root_comment.reply_count = root_comment.reply_count + 1
         
         notification_service.create_comment_notifications(
             db=db,
@@ -390,10 +466,9 @@ def get_comment_tree(
     seed: Optional[str] = None,
 ) -> Tuple[List[Comment], int]:
     """
-    获取帖子的评论树
+    获取帖子的一级评论
     
-    查询指定帖子的一级评论列表，并递归加载所有回复。
-    使用批量加载策略优化性能。
+    查询指定帖子的一级评论列表。回复通过 replies 接口按一级评论 thread 扁平分页加载。
     
     Args:
         post_id: 帖子 ID
@@ -404,8 +479,8 @@ def get_comment_tree(
     
     Returns:
         Tuple[List[Comment], int]: (评论列表，总数)
-        - 评论列表：一级评论对象列表，每个评论的 children 属性包含回复
-        - 总数：帖子下所有评论的总数
+        - 评论列表：一级评论对象列表，每个评论的 children 为空
+        - 总数：帖子下一级评论总数
     
     Raises:
         PostNotFoundError: 当帖子不存在时抛出
@@ -424,12 +499,9 @@ def get_comment_tree(
     seed = _normalize_seed(seed)
 
     # 检查帖子是否存在
-    post = db.query(Post).filter(Post.id == post_id).first()
-    if not post:
+    post_exists = db.query(Post.id).filter(Post.id == post_id).first()
+    if not post_exists:
         raise PostNotFoundError(post_id)
-    
-    # 获取帖子下所有评论的总数
-    total = db.query(Comment).filter(Comment.post_id == post_id).count()
     
     root_query = db.query(Comment).filter(
         Comment.post_id == post_id,
@@ -437,7 +509,7 @@ def get_comment_tree(
     )
     root_total = root_query.count()
 
-    # 查询一级评论（parent_id IS NULL）。分页只作用于一级评论，避免截断回复树。
+    # 查询一级评论（parent_id IS NULL）。回复由 /comments/{comment_id}/replies 按需分页加载。
     # 默认流先取 Top-N 候选池，再用本次浏览 seed 在候选池内轻量重排。
     root_comments = _get_comments_for_tree(
         query=root_query.options(joinedload(Comment.owner)),
@@ -450,67 +522,30 @@ def get_comment_tree(
     
     # 如果没有一级评论，直接返回
     if not root_comments:
-        return ([], total)
+        return ([], root_total)
     
     # 获取所有一级评论的 ID
     root_comment_ids = [c.id for c in root_comments]
-    
-    # 批量查询所有回复（非一级评论），并按同一排序模式组织每个父节点下的回复。
-    all_replies = db.query(Comment).filter(
-        Comment.post_id == post_id,
-        Comment.parent_id != None
-    ).options(
-        joinedload(Comment.owner)
-    ).order_by(
-        *_comment_order_by(sort)
-    ).all()
-    
-    # 构建评论树结构
-    # 使用字典存储每个评论的子评论列表
-    children_map: Dict[int, List[Comment]] = defaultdict(list)
-    
-    # 按 parent_id 分组回复
-    for reply in all_replies:
-        children_map[reply.parent_id].append(reply)
-    
-    # 递归函数：为每个评论设置 children
-    def attach_children(comment: Comment) -> None:
-        """递归附加子评论"""
-        comment.children = children_map.get(comment.id, [])
-        for child in comment.children:
-            attach_children(child)
-    
-    # 为每个一级评论附加子评论树
+
     for root_comment in root_comments:
-        attach_children(root_comment)
+        set_committed_value(root_comment, "reply_count", root_comment.reply_count or 0)
+        _set_response_children_empty(root_comment)
     
     # 如果提供了 user_id，注入点赞状态
     if user_id is not None:
-        # 获取所有评论的 ID（包括一级评论和所有回复）
-        all_comment_ids = root_comment_ids.copy()
-        for reply in all_replies:
-            all_comment_ids.append(reply.id)
-        
         # 批量查询用户的点赞记录
         liked_comment_ids = set(
             row[0] for row in db.query(CommentLike.comment_id).filter(
                 CommentLike.user_id == user_id,
-                CommentLike.comment_id.in_(all_comment_ids)
+                CommentLike.comment_id.in_(root_comment_ids)
             ).all()
         )
         
-        # 递归函数：设置点赞状态
-        def set_like_status(comment: Comment) -> None:
-            """递归设置点赞状态"""
-            comment.is_liked = comment.id in liked_comment_ids
-            for child in comment.children:
-                set_like_status(child)
-        
         # 为每个评论设置点赞状态
         for root_comment in root_comments:
-            set_like_status(root_comment)
+            root_comment.is_liked = root_comment.id in liked_comment_ids
     
-    return (root_comments, total)
+    return (root_comments, root_total)
 
 
 def get_comment_replies(
@@ -523,7 +558,7 @@ def get_comment_replies(
     sort: str = "default",
     seed: str = "default",
 ) -> Tuple[List[Comment], int]:
-    """获取某条评论下的直接回复，并为每条回复附加子回复树。"""
+    """获取所属一级评论 thread 下的扁平回复列表。"""
     sort = _normalize_comment_sort(sort)
     seed = _normalize_seed(seed)
 
@@ -533,13 +568,18 @@ def get_comment_replies(
     if parent.post_id != post_id:
         raise ParentCommentMismatchError(comment_id, post_id, parent.post_id)
 
+    root_comment_id = _resolve_thread_root_id(parent, db)
+    reply_ids = _reply_ids_by_thread_root(db, [root_comment_id]).get(root_comment_id, set())
     replies_query = db.query(Comment).filter(
         Comment.post_id == post_id,
-        Comment.parent_id == comment_id,
+        Comment.id.in_(reply_ids),
     )
     total = replies_query.count()
     replies = _get_comments_for_tree(
-        query=replies_query.options(joinedload(Comment.owner)),
+        query=replies_query.options(
+            joinedload(Comment.owner),
+            joinedload(Comment.parent).joinedload(Comment.owner),
+        ),
         skip=skip,
         limit=limit,
         total=total,
@@ -550,53 +590,21 @@ def get_comment_replies(
     if not replies:
         return ([], total)
 
-    all_descendants = db.query(Comment).filter(
-        Comment.post_id == post_id,
-        Comment.parent_id != None,
-        Comment.parent_id != comment_id,
-    ).options(
-        joinedload(Comment.owner)
-    ).order_by(
-        *_comment_order_by(sort)
-    ).all()
-
-    children_map: Dict[int, List[Comment]] = defaultdict(list)
-    for reply in all_descendants:
-        children_map[reply.parent_id].append(reply)
-
-    def attach_children(comment: Comment) -> None:
-        comment.children = children_map.get(comment.id, [])
-        for child in comment.children:
-            attach_children(child)
-
     for reply in replies:
-        attach_children(reply)
+        _set_response_children_empty(reply)
 
     if user_id is not None:
-        all_comment_ids = []
-
-        def collect_ids(comment: Comment) -> None:
-            all_comment_ids.append(comment.id)
-            for child in comment.children:
-                collect_ids(child)
-
-        for reply in replies:
-            collect_ids(reply)
+        reply_ids = [reply.id for reply in replies]
 
         liked_comment_ids = set(
             row[0] for row in db.query(CommentLike.comment_id).filter(
                 CommentLike.user_id == user_id,
-                CommentLike.comment_id.in_(all_comment_ids)
+                CommentLike.comment_id.in_(reply_ids)
             ).all()
         )
 
-        def set_like_status(comment: Comment) -> None:
-            comment.is_liked = comment.id in liked_comment_ids
-            for child in comment.children:
-                set_like_status(child)
-
         for reply in replies:
-            set_like_status(reply)
+            reply.is_liked = reply.id in liked_comment_ids
 
     return (replies, total)
 
@@ -623,9 +631,19 @@ def get_comment_by_id(
         >>> if comment:
         ...     print(f"评论内容：{comment.content}")
     """
-    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    comment = db.query(Comment).options(
+        joinedload(Comment.owner),
+        joinedload(Comment.parent).joinedload(Comment.owner),
+    ).filter(Comment.id == comment_id).first()
     if not comment:
         return None
+
+    if comment.parent_id is not None and comment.root_comment_id is None:
+        set_committed_value(
+            comment,
+            "root_comment_id",
+            _resolve_thread_root_id(comment, db),
+        )
     
     # 如果提供了 user_id，注入点赞状态
     if user_id is not None:
@@ -641,18 +659,7 @@ def get_comment_by_id(
 
 
 def _get_descendant_comment_ids(comment_id: int, db: Session) -> List[int]:
-    descendant_ids: List[int] = []
-    pending_ids = [comment_id]
-
-    while pending_ids:
-        child_ids = [
-            row[0]
-            for row in db.query(Comment.id).filter(Comment.parent_id.in_(pending_ids)).all()
-        ]
-        descendant_ids.extend(child_ids)
-        pending_ids = child_ids
-
-    return descendant_ids
+    return list(_reply_ids_by_thread_root(db, [comment_id]).get(comment_id, set()))
 
 
 def delete_comment(
@@ -665,7 +672,7 @@ def delete_comment(
     
     删除评论并更新相关的计数器：
     - 更新帖子的 comment_count
-    - 更新所有祖先的 reply_count
+    - 更新所属一级评论的 reply_count
     
     Args:
         comment_id: 评论 ID
@@ -695,11 +702,22 @@ def delete_comment(
     try:
         post_id = comment.post_id
         parent_id = comment.parent_id
+        root_comment_id = (
+            _resolve_thread_root_id(comment, db) if parent_id is not None else None
+        )
         
-        # 获取该评论下的所有回复数量（用于更新计数）
-        reply_count_to_subtract = 1 + comment.reply_count  # 1 是评论本身 + 所有回复
+        if parent_id is None:
+            reply_ids = _get_descendant_comment_ids(comment_id, db)
+            reply_count_to_subtract = 1 + len(reply_ids)
+        else:
+            reply_count_to_subtract = 1
+            db.query(Comment).filter(Comment.parent_id == comment_id).update(
+                {Comment.parent_id: parent_id},
+                synchronize_session=False
+            )
+            db.flush()
         
-        # 1. 删除评论（级联删除会自动删除子评论和点赞记录）
+        # 1. 删除评论。一级评论删除会级联删除 thread 下的回复；单条回复删除前会转移语义回复指针。
         db.delete(comment)
         
         # 2. 更新帖子的评论计数
@@ -708,16 +726,11 @@ def delete_comment(
             post.comment_count = max(0, post.comment_count - reply_count_to_subtract)
             heat_service.refresh_post_heat_score(db, post)
         
-        # 3. 更新所有祖先的 reply_count
-        if parent_id is not None:
-            current_id = parent_id
-            while current_id is not None:
-                ancestor = db.query(Comment).filter(Comment.id == current_id).first()
-                if ancestor:
-                    ancestor.reply_count = max(0, ancestor.reply_count - reply_count_to_subtract)
-                    current_id = ancestor.parent_id
-                else:
-                    break
+        # 3. 回复被删除时，只更新所属一级评论的扁平回复计数。
+        if root_comment_id is not None:
+            root = db.query(Comment).filter(Comment.id == root_comment_id).first()
+            if root:
+                root.reply_count = max(0, root.reply_count - 1)
         
         # 4. 提交事务
         db.commit()
@@ -744,6 +757,9 @@ def delete_comment_precise(
     try:
         post_id = comment.post_id
         parent_id = comment.parent_id
+        root_comment_id = (
+            _resolve_thread_root_id(comment, db) if parent_id is not None else None
+        )
 
         if parent_id is None:
             count_to_subtract = 1 + len(_get_descendant_comment_ids(comment_id, db))
@@ -763,13 +779,9 @@ def delete_comment_precise(
             heat_service.refresh_post_heat_score(db, post)
 
         if parent_id is not None:
-            current_id = parent_id
-            while current_id is not None:
-                ancestor = db.query(Comment).filter(Comment.id == current_id).first()
-                if not ancestor:
-                    break
-                ancestor.reply_count = max(0, ancestor.reply_count - count_to_subtract)
-                current_id = ancestor.parent_id
+            root = db.query(Comment).filter(Comment.id == root_comment_id).first()
+            if root:
+                root.reply_count = max(0, root.reply_count - count_to_subtract)
 
         db.commit()
         return True

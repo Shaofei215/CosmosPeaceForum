@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDown as ExpandIcon,
@@ -17,19 +17,15 @@ import type { PostWithLikeStatus } from '@/features/post';
 import { useDeletePost, useRepost } from '@/features/post';
 import type { Comment, CommentSort } from '@/features/comment';
 import {
+  useComment,
   useComments,
+  useCommentReplies,
   useCreateComment,
   useDeleteComment,
   useToggleCommentLike,
 } from '@/features/comment';
-import {
-  containsComment,
-  getInitialVisibleReplyCount,
-  getNextVisibleReplyCount,
-  getReplyCount,
-} from '@/features/comment/replyVisibility';
 import { useToggleLike } from '@/features/like';
-import { useFollowStatus, useToggleFollow } from '@/features/follow';
+import { useFollowStatus, useToggleFollow, type FollowStatusResponse } from '@/features/follow';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
@@ -74,7 +70,20 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
     'author_is_ai_agent' in post ? post.author_is_ai_agent : Boolean(post.author?.is_ai_agent);
   const isCurrentUser = user?.id === post.author_id;
   const isArticle = post.type === 'article';
-  const { data: followStatus } = useFollowStatus(post.author_id);
+  const hasAuthorFollowStatus =
+    'author_is_following' in post || 'author_is_followed_by' in post || 'author_is_mutual' in post;
+  const initialFollowStatus: FollowStatusResponse | undefined = hasAuthorFollowStatus
+    ? {
+        user_id: post.author_id,
+        is_following: Boolean('author_is_following' in post && post.author_is_following),
+        is_followed_by: Boolean('author_is_followed_by' in post && post.author_is_followed_by),
+        is_mutual: Boolean('author_is_mutual' in post && post.author_is_mutual),
+      }
+    : undefined;
+  const { data: followStatus } = useFollowStatus(post.author_id, {
+    enabled: !hasAuthorFollowStatus && !isCurrentUser,
+    initialData: initialFollowStatus,
+  });
 
   useEffect(() => {
     if (isArticle) return;
@@ -86,11 +95,16 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const { data: commentsData, isLoading: isCommentsLoading } = useComments(
     post.id,
     user?.id,
-    commentSort
+    commentSort,
+    { enabled: isCommentsExpanded }
   );
+  const { data: focusedComment } = useComment(post.id, focusedCommentId, user?.id, {
+    enabled: isCommentsExpanded && !!focusedCommentId,
+  });
   const topLevelComments = commentsData?.items || [];
   const previewComments = expanded ? topLevelComments : topLevelComments.slice(0, 5);
   const hasMoreComments = !expanded && topLevelComments.length > 5;
+  const focusedThreadRootId = focusedComment?.root_comment_id ?? focusedComment?.id;
 
   const requireLogin = () => {
     if (isAuthenticated) return true;
@@ -466,6 +480,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   depth={0}
                   parentOwner={null}
                   focusedCommentId={focusedCommentId}
+                  autoExpandReplies={
+                    !!focusedComment?.root_comment_id && focusedThreadRootId === comment.id
+                  }
                 />
               ))}
               {hasMoreComments && (
@@ -608,8 +625,8 @@ interface CommentItemProps {
   depth: number;
   parentOwner: { id: number; username: string } | null;
   focusedCommentId?: number;
-  renderReplies?: boolean;
-  visibleReplyLimit?: number;
+  threadRootId?: number;
+  autoExpandReplies?: boolean;
 }
 
 function CommentItem({
@@ -626,32 +643,63 @@ function CommentItem({
   depth,
   parentOwner,
   focusedCommentId,
-  renderReplies = true,
-  visibleReplyLimit,
+  threadRootId,
+  autoExpandReplies = false,
 }: CommentItemProps) {
-  const shouldShowFocusedReply = focusedCommentId
-    ? containsComment(comment, focusedCommentId)
-    : false;
-  const totalReplies = renderReplies ? getReplyCount(comment) : 0;
-  const initialVisibleReplyCount = renderReplies
-    ? getInitialVisibleReplyCount(comment, focusedCommentId)
-    : 0;
-  const [showReplies, setShowReplies] = useState(depth === 0 ? shouldShowFocusedReply : true);
-  const [visibleReplyCount, setVisibleReplyCount] = useState(initialVisibleReplyCount);
+  const [showReplies, setShowReplies] = useState(false);
   const toggleCommentLike = useToggleCommentLike(postId, currentUserId, commentSort);
   const deleteComment = useDeleteComment(postId);
   const repost = useRepost();
+  const {
+    data: repliesData,
+    fetchNextPage: fetchNextReplyPage,
+    hasNextPage: hasNextReplyPage,
+    isFetchingNextPage: isFetchingNextReplyPage,
+    isLoading: isRepliesLoading,
+  } = useCommentReplies(postId, comment.id, currentUserId, commentSort, {
+    enabled: depth === 0 && showReplies && comment.reply_count > 0,
+  });
   const itemRef = useRef<HTMLDivElement>(null);
   const isReplying = replyingTo?.id === comment.id;
   const [isRepostOpen, setIsRepostOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [repostContent, setRepostContent] = useState('');
   const isTopLevel = depth === 0;
-  const isSecondLevel = depth === 1;
+  const rootId = threadRootId ?? comment.root_comment_id ?? comment.id;
   const isCurrentUserComment = currentUserId === comment.owner_id;
-  const hasReplies = totalReplies > 0;
-  const displayedReplyCount = visibleReplyLimit ?? visibleReplyCount;
-  const hasMoreRepliesToShow = visibleReplyLimit === undefined && visibleReplyCount < totalReplies;
+  const loadedReplies = useMemo(
+    () => repliesData?.pages.flatMap(page => page.items) || comment.children || [],
+    [comment.children, repliesData?.pages]
+  );
+  const totalReplies = repliesData?.pages[0]?.total ?? comment.reply_count ?? loadedReplies.length;
+  const hasReplies = isTopLevel && totalReplies > 0;
+  const replyTargetOwner =
+    !isTopLevel && comment.parent_id !== rootId ? comment.parent?.owner : null;
+  const replyTargetUsername =
+    replyTargetOwner?.username || parentOwner?.username || comment.owner?.username;
+  const replyTargetId = replyTargetOwner?.id || parentOwner?.id || comment.owner_id;
+
+  useEffect(() => {
+    if (autoExpandReplies) {
+      setShowReplies(true);
+    }
+  }, [autoExpandReplies]);
+
+  useEffect(() => {
+    if (!isTopLevel || !showReplies || !focusedCommentId) return;
+    if (loadedReplies.some(reply => reply.id === focusedCommentId)) return;
+    if (!hasNextReplyPage || isFetchingNextReplyPage) return;
+
+    fetchNextReplyPage();
+  }, [
+    fetchNextReplyPage,
+    focusedCommentId,
+    hasNextReplyPage,
+    isFetchingNextReplyPage,
+    isTopLevel,
+    loadedReplies,
+    showReplies,
+  ]);
 
   const handleDeleteComment = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -662,23 +710,6 @@ function CommentItem({
       onSuccess: () => setIsMoreOpen(false),
     });
   };
-
-  useEffect(() => {
-    if (focusedCommentId && shouldShowFocusedReply) {
-      setShowReplies(true);
-      setVisibleReplyCount(count => Math.max(count, initialVisibleReplyCount));
-    }
-  }, [focusedCommentId, initialVisibleReplyCount, shouldShowFocusedReply]);
-
-  useEffect(() => {
-    if (visibleReplyLimit !== undefined) return;
-
-    if (visibleReplyCount > totalReplies) {
-      setVisibleReplyCount(totalReplies);
-    } else if (visibleReplyCount === 0 && totalReplies > 0) {
-      setVisibleReplyCount(getNextVisibleReplyCount(0, totalReplies));
-    }
-  }, [totalReplies, visibleReplyCount, visibleReplyLimit]);
 
   useEffect(() => {
     if (focusedCommentId === comment.id && itemRef.current) {
@@ -703,7 +734,7 @@ function CommentItem({
           size="sm"
         />
         <div className="min-w-0 flex-1">
-          {isTopLevel || isSecondLevel ? (
+          {!replyTargetOwner ? (
             <Link
               to={`/user/${comment.owner_id}`}
               className="text-sm font-medium text-foreground/70 hover:text-primary"
@@ -720,10 +751,10 @@ function CommentItem({
               </Link>
               <span className="text-muted-foreground">回复</span>
               <Link
-                to={`/user/${parentOwner?.id || comment.owner_id}`}
+                to={`/user/${replyTargetId}`}
                 className="text-muted-foreground hover:text-primary"
               >
-                @{parentOwner?.username || comment.owner?.username}
+                @{replyTargetUsername}
               </Link>
             </div>
           )}
@@ -810,7 +841,7 @@ function CommentItem({
                 </div>
               )}
             </div>
-            {isTopLevel && hasReplies && (
+            {hasReplies && (
               <button
                 onClick={event => {
                   event.preventDefault();
@@ -893,51 +924,49 @@ function CommentItem({
 
       {showReplies && hasReplies && (
         <div className={isTopLevel ? 'pl-8' : 'pl-0'}>
-          {(() => {
-            let remainingReplyCount = displayedReplyCount;
-
-            return comment.children.map(child => {
-              if (remainingReplyCount <= 0) return null;
-
-              const childReplyCount = getReplyCount(child);
-              const childVisibleReplyLimit = Math.min(childReplyCount, remainingReplyCount - 1);
-              remainingReplyCount -= 1 + childVisibleReplyLimit;
-
-              return (
-                <CommentItem
-                  key={child.id}
-                  comment={child}
-                  postId={postId}
-                  isAuthenticated={isAuthenticated}
-                  currentUserId={currentUserId}
-                  commentSort={commentSort}
-                  user={user}
-                  replyingTo={replyingTo}
-                  onReply={onReply}
-                  onCancelReply={onCancelReply}
-                  onReplySuccess={onReplySuccess}
-                  depth={depth + 1}
-                  parentOwner={{
-                    id: comment.owner_id,
-                    username: comment.owner?.username || `用户${comment.owner_id}`,
-                  }}
-                  focusedCommentId={focusedCommentId}
-                  visibleReplyLimit={childVisibleReplyLimit}
-                />
-              );
-            });
-          })()}
-          {hasMoreRepliesToShow && (
+          {isRepliesLoading ? (
+            <div className="py-2">
+              <CommentSkeleton />
+            </div>
+          ) : (
+            loadedReplies.map(child => (
+              <CommentItem
+                key={child.id}
+                comment={child}
+                postId={postId}
+                isAuthenticated={isAuthenticated}
+                currentUserId={currentUserId}
+                commentSort={commentSort}
+                user={user}
+                replyingTo={replyingTo}
+                onReply={onReply}
+                onCancelReply={onCancelReply}
+                onReplySuccess={onReplySuccess}
+                depth={depth + 1}
+                parentOwner={{
+                  id: comment.owner_id,
+                  username: comment.owner?.username || `用户${comment.owner_id}`,
+                }}
+                focusedCommentId={focusedCommentId}
+                threadRootId={comment.id}
+                autoExpandReplies={false}
+              />
+            ))
+          )}
+          {hasNextReplyPage && (
             <button
               type="button"
               onClick={event => {
                 event.preventDefault();
                 event.stopPropagation();
-                setVisibleReplyCount(count => getNextVisibleReplyCount(count, totalReplies));
+                fetchNextReplyPage();
               }}
+              disabled={isFetchingNextReplyPage}
               className="mt-3 text-xs text-primary transition-colors hover:text-primary/80"
             >
-              展开更多回复 ({visibleReplyCount}/{totalReplies})
+              {isFetchingNextReplyPage
+                ? '加载中...'
+                : `展开更多回复 (${loadedReplies.length}/${totalReplies})`}
             </button>
           )}
         </div>

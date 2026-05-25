@@ -176,6 +176,30 @@ def _get_follow_status_text(user_id: int, current_user_id: Optional[int]) -> str
         return ""
 
 
+def _get_embedded_follow_status_text(
+    data: Dict[str, Any],
+    current_user_id: Optional[int],
+    user_id: Optional[int],
+    field_prefix: str = "",
+) -> Optional[str]:
+    if not current_user_id or not user_id or current_user_id == user_id:
+        return ""
+
+    following_key = f"{field_prefix}is_following"
+    mutual_key = f"{field_prefix}is_mutual"
+    followed_by_key = f"{field_prefix}is_followed_by"
+
+    has_embedded_status = any(
+        key in data for key in (following_key, mutual_key, followed_by_key)
+    )
+    if not has_embedded_status:
+        return None
+
+    if data.get(following_key):
+        return "互相关注" if data.get(mutual_key) else "已关注"
+    return "未关注"
+
+
 def _expand_username_by_relation(
     username: str,
     user_id: int,
@@ -370,6 +394,13 @@ def _standardize_post(
     if formatted_repost_chain:
         content = formatted_repost_chain
 
+    embedded_follow_status = _get_embedded_follow_status_text(
+        post_data,
+        current_user_id,
+        author_id,
+        field_prefix="author_",
+    )
+
     standardized = {
         "id": post_data.get("id"),
         "author_id": author_id,
@@ -382,7 +413,11 @@ def _standardize_post(
         "like_count": post_data.get("like_count", 0),
         "comment_count": post_data.get("comment_count", 0),
         "is_liked": post_data.get("is_liked", post_data.get("is_liked_by_current_user", False)),
-        "follow_status": _get_follow_status_text(author_id, current_user_id),
+        "follow_status": (
+            embedded_follow_status
+            if embedded_follow_status is not None
+            else _get_follow_status_text(author_id, current_user_id)
+        ),
         "repost_count": post_data.get("repost_count", 0),
         "repost_root_post_id": post_data.get("repost_root_post_id"),
         "repost_chain": formatted_repost_chain or raw_repost_chain,
@@ -445,10 +480,12 @@ def _standardize_comment(
             - created_at: 创建时间
             - parent_id: 父评论 ID
             - like_count: 点赞数
-            - reply_count: 回复数（包括嵌套回复）
+            - reply_count: 一级评论下的扁平回复数；回复自身通常为 0
             - is_liked: 当前用户是否已点赞
     """
     owner = comment_data.get("owner", {})
+    parent = comment_data.get("parent") or {}
+    parent_owner = parent.get("owner") or {}
     author_id = comment_data.get("owner_id") or owner.get("id")
     raw_username = owner.get("username", "")
     raw_content = comment_data.get("content", "")
@@ -464,6 +501,13 @@ def _standardize_comment(
         "content": content,
         "created_at": _format_display_time(comment_data.get("created_at", "")),
         "parent_id": comment_data.get("parent_id"),
+        "root_comment_id": comment_data.get("root_comment_id"),
+        "reply_to_author_id": parent.get("owner_id"),
+        "reply_to_author_username": _expand_username_by_relation(
+            parent_owner.get("username", ""),
+            parent.get("owner_id"),
+            current_user_id,
+        ) if parent else "",
         "like_count": comment_data.get("like_count", 0),
         "reply_count": comment_data.get("reply_count", 0),
         "is_liked": comment_data.get("is_liked", False),

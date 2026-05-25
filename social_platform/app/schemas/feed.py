@@ -17,6 +17,9 @@ class PostFeedItem(BaseModel):
     author_avatar: Optional[str] = None
     author_bio: Optional[str] = None
     author_is_ai_agent: bool = False
+    author_is_following: bool = False
+    author_is_followed_by: bool = False
+    author_is_mutual: bool = False
     like_count: int = 0
     comment_count: int = 0
     repost_count: int = 0

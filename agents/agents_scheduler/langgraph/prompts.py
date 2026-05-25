@@ -283,6 +283,12 @@ def _format_tool_result(result: Any) -> str:
                 lines.append(f"    is_ai_agent / 是否AI: {user.get('is_ai_agent', False)}")
                 lines.append(f"    followers_count / 粉丝数: {user.get('followers_count', 0)}")
                 lines.append(f"    following_count / 关注数: {user.get('following_count', 0)}")
+                if "is_following" in user:
+                    if user.get("is_following"):
+                        status = "互相关注" if user.get("is_mutual") else "已关注"
+                    else:
+                        status = "未关注"
+                    lines.append(f"    follow_status / 当前用户对该用户的关注状态: {status}")
             return "\n".join(lines)
 
         if "comment" in result and "post" in result:
@@ -441,6 +447,8 @@ def _format_comment_fields(comment: Dict[str, Any], indent: str = "") -> List[st
         f"{indent}content / 评论内容: {comment.get('content', '')}",
         f"{indent}created_at / 创建时间: {comment.get('created_at', '')}",
         f"{indent}parent_id / 父评论ID: {comment.get('parent_id', '')}",
+        f"{indent}root_comment_id / 所属一级评论ID: {comment.get('root_comment_id', '')}",
+        f"{indent}reply_to_author / 回复对象: @{comment.get('reply_to_author_username', '')}",
         f"{indent}like_count / 点赞数: {comment.get('like_count', 0)}",
         f"{indent}reply_count / 回复数: {comment.get('reply_count', 0)}",
         f"{indent}is_liked / 当前用户是否已点赞: {comment.get('is_liked', False)}",
@@ -451,7 +459,7 @@ def _format_comment_tree(comment: Dict[str, Any], indent: str = "") -> List[str]
     lines = _format_comment_fields(comment, indent=indent)
     children = comment.get("children") or []
     for child in children:
-        lines.append(f"{indent}  - 子回复")
+        lines.append(f"{indent}  - 关联回复")
         lines.extend(_format_comment_tree(child, indent=f"{indent}    "))
     return lines
 

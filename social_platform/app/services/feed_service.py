@@ -51,6 +51,43 @@ def _get_user_like_status(
     }
 
 
+def _get_author_follow_status(
+    db: Session,
+    author_ids: List[int],
+    current_user_id: Optional[int],
+) -> Dict[int, Dict[str, bool]]:
+    if not current_user_id or not author_ids:
+        return {}
+
+    target_author_ids = list(dict.fromkeys(
+        author_id for author_id in author_ids if author_id != current_user_id
+    ))
+    if not target_author_ids:
+        return {}
+
+    following_ids = set(
+        row[0] for row in db.query(Follow.following_id).filter(
+            Follow.follower_id == current_user_id,
+            Follow.following_id.in_(target_author_ids),
+        ).all()
+    )
+    follower_ids = set(
+        row[0] for row in db.query(Follow.follower_id).filter(
+            Follow.following_id == current_user_id,
+            Follow.follower_id.in_(target_author_ids),
+        ).all()
+    )
+
+    return {
+        author_id: {
+            "is_following": author_id in following_ids,
+            "is_followed_by": author_id in follower_ids,
+            "is_mutual": author_id in following_ids and author_id in follower_ids,
+        }
+        for author_id in target_author_ids
+    }
+
+
 def _calculate_pagination(
     page: int,
     page_size: int,
@@ -165,9 +202,19 @@ def _build_feed_items(
 ) -> List[PostFeedItem]:
     post_ids = [post.id for post in posts]
     like_status_map = _get_user_like_status(db, post_ids, current_user_id)
+    follow_status_map = _get_author_follow_status(
+        db,
+        [post.author_id for post in posts],
+        current_user_id,
+    )
+    repost_chain_authors = repost_service.build_repost_chain_authors_for_contents(
+        db,
+        [post.content for post in posts],
+    )
 
     feed_items: List[PostFeedItem] = []
-    for post in posts:
+    for post, chain_authors in zip(posts, repost_chain_authors):
+        author_follow_status = follow_status_map.get(post.author_id, {})
         feed_item = PostFeedItem(
             id=post.id,
             title=post.title,
@@ -179,6 +226,9 @@ def _build_feed_items(
             author_avatar=post.author.avatar_url,
             author_bio=post.author.bio,
             author_is_ai_agent=post.author.is_ai_agent,
+            author_is_following=author_follow_status.get("is_following", False),
+            author_is_followed_by=author_follow_status.get("is_followed_by", False),
+            author_is_mutual=author_follow_status.get("is_mutual", False),
             like_count=post.like_count,
             comment_count=post.comment_count,
             repost_count=post.repost_count,
@@ -188,7 +238,7 @@ def _build_feed_items(
             repost_source_id=post.repost_source_id,
             repost_root_post_id=post.repost_root_post_id,
             repost_chain=post.repost_chain,
-            repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
+            repost_chain_authors=chain_authors,
             repost_origin=post.repost_root_post if post.repost_root_post_id else None,
             repost_origin_missing=repost_service.is_repost_origin_missing(post),
         )

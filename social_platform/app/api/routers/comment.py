@@ -92,7 +92,7 @@ def create_comment(
 
 
 @router.get("/{post_id}/comments", response_model=CommentListResponse,
-            summary="获取评论树", description="获取指定帖子的所有评论，以树形结构返回。一级评论按时间倒序排列。")
+            summary="获取一级评论", description="分页获取指定帖子的一级评论。回复通过 replies 接口按所属一级评论扁平分页加载。")
 def get_comment_tree(
     post_id: int,
     current_user: Optional[User] = Depends(get_current_user_optional),
@@ -103,9 +103,9 @@ def get_comment_tree(
     db: Session = Depends(get_db)
 ):
     """
-    获取帖子的评论树
+    获取帖子的一级评论
 
-    以树形结构返回指定帖子的所有评论，支持无限层级嵌套回复
+    返回指定帖子的一级评论；二级回复不会随一级评论一起返回。
 
     - **post_id**: 帖子 ID（路径参数）
     - **skip**: 跳过的数量（分页，用于一级评论，默认 0）
@@ -114,7 +114,7 @@ def get_comment_tree(
     需要认证：否（可选认证，已登录时返回点赞状态）
 
     返回结构：
-    - items: 评论列表，每条评论包含 children 字段表示回复
+    - items: 一级评论列表，children 为空；回复通过 replies 接口分页获取
     - total: 一级评论总数
     - skip: 跳过的数量
     - limit: 返回的数量
@@ -263,13 +263,13 @@ def get_comment_by_id(
 
 
 @router.get("/{post_id}/comments/{comment_id}/replies", response_model=CommentListResponse,
-            summary="获取评论回复", description="分页获取指定评论下的直接回复，并附带子回复树。")
+            summary="获取评论回复", description="分页获取所属一级评论 thread 下的扁平回复。parent_id 仅表示回复目标。")
 def get_comment_replies(
     post_id: int,
     comment_id: int,
     current_user: Optional[User] = Depends(get_current_user_optional),
-    skip: int = Query(0, ge=0, description="跳过的直接回复数量"),
-    limit: int = Query(20, ge=1, le=100, description="返回的直接回复数量"),
+    skip: int = Query(0, ge=0, description="跳过的回复数量"),
+    limit: int = Query(20, ge=1, le=100, description="返回的回复数量"),
     sort: str = Query("default", description="回复排序：default（默认推荐）或 latest（最新）"),
     seed: str = Query("default", description="默认回复流 Top-N 重排种子；同一 seed 下分页稳定"),
     db: Session = Depends(get_db)
@@ -301,7 +301,7 @@ def get_comment_replies(
 
 
 @router.delete("/{post_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT,
-               summary="删除评论", description="删除指定评论及其所有回复，仅评论作者可以操作。")
+               summary="删除评论", description="删除指定评论，仅评论作者可以操作；删除一级评论会删除其全部扁平回复。")
 def delete_comment(
     post_id: int,
     comment_id: int,
@@ -311,7 +311,7 @@ def delete_comment(
     """
     删除评论
 
-    删除指定评论及其所有回复。只有评论作者可以删除自己的评论
+    删除指定评论。只有评论作者可以删除自己的评论；删除一级评论会删除其全部扁平回复。
 
     - **post_id**: 帖子 ID（路径参数）
     - **comment_id**: 评论 ID（路径参数）
@@ -320,7 +320,7 @@ def delete_comment(
 
     权限：仅评论作者可以删除
 
-    级联删除：删除评论时会同时删除所有子回复
+    级联删除：删除一级评论时会同时删除所属 thread 下的全部回复
 
     返回：204 No Content
 

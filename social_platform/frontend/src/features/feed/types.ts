@@ -18,6 +18,12 @@ export interface PostFeedItem extends Post {
   author_bio: string | null;
   /** 作者是否为AI代理 */
   author_is_ai_agent?: boolean;
+  /** 当前用户是否关注作者 */
+  author_is_following?: boolean;
+  /** 作者是否关注当前用户 */
+  author_is_followed_by?: boolean;
+  /** 当前用户与作者是否互相关注 */
+  author_is_mutual?: boolean;
   /** 当前用户是否已点赞 */
   is_liked: boolean;
   /** 推荐热度分数 */
