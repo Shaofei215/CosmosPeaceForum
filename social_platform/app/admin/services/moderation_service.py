@@ -358,16 +358,10 @@ def delete_post_as_admin(
 
 
 def _get_descendant_comment_ids(db: Session, comment_id: int) -> list[int]:
-    descendant_ids: list[int] = []
-    pending_ids = [comment_id]
-    while pending_ids:
-        child_ids = [
-            row[0]
-            for row in db.query(Comment.id).filter(Comment.parent_id.in_(pending_ids)).all()
-        ]
-        descendant_ids.extend(child_ids)
-        pending_ids = child_ids
-    return descendant_ids
+    return [
+        row[0]
+        for row in db.query(Comment.id).filter(Comment.root_comment_id == comment_id).all()
+    ]
 
 
 def delete_comment_as_admin(
@@ -383,6 +377,7 @@ def delete_comment_as_admin(
 
     post_id = comment.post_id
     parent_id = comment.parent_id
+    root_comment_id = comment.root_comment_id
     owner_id = comment.owner_id
     if parent_id is None:
         count_to_subtract = 1 + len(_get_descendant_comment_ids(db, comment_id))
@@ -403,13 +398,9 @@ def delete_comment_as_admin(
         heat_service.refresh_post_heat_score(db, post)
 
     if parent_id is not None:
-        current_id = parent_id
-        while current_id is not None:
-            ancestor = db.query(Comment).filter(Comment.id == current_id).first()
-            if not ancestor:
-                break
-            ancestor.reply_count = max(0, ancestor.reply_count - count_to_subtract)
-            current_id = ancestor.parent_id
+        root = db.query(Comment).filter(Comment.id == root_comment_id).first()
+        if root:
+            root.reply_count = max(0, root.reply_count - count_to_subtract)
 
     if notify_author:
         _notify_moderation_action(db, owner_id, "comment", comment_id, reason)

@@ -3,7 +3,7 @@
  */
 
 import { useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { commentApi } from './api';
 import type {
   CommentSort,
@@ -17,8 +17,10 @@ interface UseCommentsOptions {
   enabled?: boolean;
 }
 
+const REPLY_PAGE_SIZE = 5;
+
 /**
- * 获取评论树Hook
+ * 获取一级评论Hook
  */
 export const useComments = (
   postId: number,
@@ -46,6 +48,49 @@ export const useCommentLikeStatus = (postId: number, commentId: number, enabled 
   });
 };
 
+export const useCommentReplies = (
+  postId: number,
+  commentId: number,
+  userId?: number,
+  sort: CommentSort = 'default',
+  options: UseCommentsOptions = {}
+) => {
+  const seed = useMemo(
+    () => `${postId}-${commentId}-${sort}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    [commentId, postId, sort]
+  );
+
+  return useInfiniteQuery({
+    queryKey: ['commentReplies', postId, commentId, userId, sort, seed],
+    queryFn: ({ pageParam = 0 }) =>
+      commentApi.getCommentReplies(postId, commentId, {
+        skip: pageParam,
+        limit: REPLY_PAGE_SIZE,
+        sort,
+        seed,
+      }),
+    getNextPageParam: lastPage => {
+      const nextSkip = lastPage.skip + lastPage.items.length;
+      return nextSkip < lastPage.total ? nextSkip : undefined;
+    },
+    initialPageParam: 0,
+    enabled: !!postId && !!commentId && (options.enabled ?? true),
+  });
+};
+
+export const useComment = (
+  postId: number,
+  commentId?: number,
+  userId?: number,
+  options: UseCommentsOptions = {}
+) => {
+  return useQuery({
+    queryKey: ['comment', postId, commentId, userId],
+    queryFn: () => commentApi.getComment(postId, commentId as number, userId),
+    enabled: !!postId && !!commentId && (options.enabled ?? true),
+  });
+};
+
 /**
  * 创建评论Hook
  */
@@ -54,9 +99,13 @@ export const useCreateComment = (postId: number) => {
 
   return useMutation({
     mutationFn: (data: CreateCommentData) => commentApi.createComment(postId, data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       // 刷新评论列表
       queryClient.invalidateQueries({ queryKey: ['comments', postId] });
+      if (variables.parent_id) {
+        queryClient.invalidateQueries({ queryKey: ['commentReplies', postId] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['comment', postId] });
       // 刷新帖子评论数
       queryClient.invalidateQueries({ queryKey: ['post', postId] });
       // 刷新信息流
@@ -76,6 +125,8 @@ export const useDeleteComment = (postId: number) => {
     onSuccess: () => {
       // 刷新评论列表
       queryClient.invalidateQueries({ queryKey: ['comments', postId] });
+      queryClient.invalidateQueries({ queryKey: ['commentReplies', postId] });
+      queryClient.invalidateQueries({ queryKey: ['comment', postId] });
       // 刷新帖子评论数
       queryClient.invalidateQueries({ queryKey: ['post', postId] });
       // 刷新信息流
@@ -162,6 +213,8 @@ export const useToggleCommentLike = (
     },
     onSuccess: (data, { commentId }) => {
       queryClient.setQueryData(['comments', postId, commentId, 'like-status'], data);
+      queryClient.invalidateQueries({ queryKey: ['commentReplies', postId] });
+      queryClient.invalidateQueries({ queryKey: ['comment', postId] });
     },
   });
 };

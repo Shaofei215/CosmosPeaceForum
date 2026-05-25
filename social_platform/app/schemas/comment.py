@@ -20,17 +20,28 @@ class CommentUpdate(BaseModel):
     content: Optional[str] = Field(None, min_length=1)
 
 
+class CommentParentResponse(BaseModel):
+    id: int
+    owner_id: int
+    owner: Optional[UserResponse] = None
+
+    class Config:
+        from_attributes = True
+
+
 class CommentResponse(CommentBase):
     id: int
     post_id: int
     owner_id: int
     parent_id: Optional[int] = None
+    root_comment_id: Optional[int] = None
     like_count: int = 0
     reply_count: int = 0
     heat_score: float = 0
     created_at: datetime
     is_liked: bool = False
     owner: Optional[UserResponse] = None
+    parent: Optional[CommentParentResponse] = None
 
     class Config:
         from_attributes = True

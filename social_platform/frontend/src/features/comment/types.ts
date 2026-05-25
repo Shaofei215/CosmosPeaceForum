@@ -16,8 +16,10 @@ export interface Comment {
   post_id: number;
   /** 评论者ID */
   owner_id: number;
-  /** 父评论ID（null表示一级评论） */
+  /** 语义回复目标ID（null表示一级评论） */
   parent_id: number | null;
+  /** 所属一级评论ID（一级评论为null，回复为对应一级评论ID） */
+  root_comment_id: number | null;
   /** 评论内容 */
   content: string;
   /** 点赞数 */
@@ -32,7 +34,13 @@ export interface Comment {
   is_liked: boolean;
   /** 评论者信息 */
   owner: UserProfile;
-  /** 子评论（回复） */
+  /** 被回复的评论（仅用于展示“回复 @某人”） */
+  parent?: {
+    id: number;
+    owner_id: number;
+    owner?: UserProfile | null;
+  } | null;
+  /** 兼容字段；回复通过 replies 接口分页加载 */
   children: Comment[];
 }
 

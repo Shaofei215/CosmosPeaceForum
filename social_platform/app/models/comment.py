@@ -1,5 +1,5 @@
 # 评论数据库模型
-# 定义评论表结构，支持无限层级回复和评论点赞功能
+# 定义评论表结构，支持两级评论和评论点赞功能
 from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
 from sqlalchemy.orm import relationship, remote, foreign
 from datetime import datetime
@@ -10,27 +10,38 @@ from social_platform.app.db.session import Base
 class Comment(Base):
     """
     评论模型
-    存储用户对帖子的评论和回复，支持无限层级嵌套
+    存储用户对帖子的评论和回复。产品语义为两级评论：
+    一级评论作为 thread，所有回复在 thread 下扁平排列。
     
     Attributes:
         id: 评论唯一标识符
         post_id: 关联帖子ID
         owner_id: 评论发布者ID
-        parent_id: 父评论ID，为空表示一级评论，有值表示回复
+        parent_id: 语义回复目标 ID，为空表示一级评论，有值表示回复了哪条评论
+        root_comment_id: 所属一级评论 ID；一级评论为空，回复必填
         content: 评论内容
         like_count: 冗余点赞数，默认0
-        reply_count: 全量回复数（所有子孙后代总数），默认0
+        reply_count: 一级评论下的扁平回复总数，回复自身始终为 0
         created_at: 创建时间
     
     Note:
-        - 通过 parent_id 自关联实现无限层级回复
-        - reply_count 统计当前评论下的所有回复（含嵌套回复）
+        - parent_id 只用于展示“回复了谁”，不决定排序和加载层级
+        - root_comment_id 决定回复归属哪个一级评论 thread
         - 删除帖子或用户时自动删除关联评论
     """
     __tablename__ = "comments"  # 数据库表名
 
     __table_args__ = (
         Index("idx_comments_post_parent_latest", "post_id", "parent_id", "created_at", "id"),
+        Index("idx_comments_post_root_latest", "post_id", "root_comment_id", "created_at", "id"),
+        Index(
+            "idx_comments_post_root_heat",
+            "post_id",
+            "root_comment_id",
+            "heat_score",
+            "created_at",
+            "id",
+        ),
         Index(
             "idx_comments_post_parent_heat",
             "post_id",
@@ -51,8 +62,11 @@ class Comment(Base):
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # 父评论ID，外键关联到 comments 表自身
-    # 为空表示一级评论，有值表示回复
+    # 为空表示一级评论，有值表示语义上回复哪条评论
     parent_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    # 所属一级评论 ID。一级评论为空；回复不再按 parent_id 建树，而是按该字段扁平加载。
+    root_comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
     
     # 评论内容，必填
     content = Column(Text, nullable=False)
@@ -60,7 +74,7 @@ class Comment(Base):
     # 点赞计数，冗余存储以提高查询性能
     like_count = Column(Integer, default=0, nullable=False)
     
-    # 回复计数，统计所有子孙后代回复总数（全量统计）
+    # 回复计数，一级评论统计 thread 下全部扁平回复；回复自身保持为 0。
     reply_count = Column(Integer, default=0, nullable=False)
     
     # 创建时间，自动设置为当前 UTC 时间
@@ -78,10 +92,22 @@ class Comment(Base):
     
     # 关联关系：父评论
     # remote_side=[id] 表示 id 是远程端（被引用的表）
-    parent = relationship("Comment", remote_side=[id], back_populates="children")
+    parent = relationship(
+        "Comment",
+        remote_side=[id],
+        foreign_keys=[parent_id],
+        back_populates="children",
+    )
+
+    root_comment = relationship("Comment", remote_side=[id], foreign_keys=[root_comment_id])
     
     # 关联关系：子评论（回复列表）
-    children = relationship("Comment", back_populates="parent", cascade="all, delete-orphan")
+    children = relationship(
+        "Comment",
+        foreign_keys=[parent_id],
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
     
     # 关联关系：评论的点赞记录
     likes = relationship("CommentLike", back_populates="comment", cascade="all, delete-orphan")

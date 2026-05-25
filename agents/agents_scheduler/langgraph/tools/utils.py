@@ -480,10 +480,12 @@ def _standardize_comment(
             - created_at: 创建时间
             - parent_id: 父评论 ID
             - like_count: 点赞数
-            - reply_count: 回复数（包括嵌套回复）
+            - reply_count: 一级评论下的扁平回复数；回复自身通常为 0
             - is_liked: 当前用户是否已点赞
     """
     owner = comment_data.get("owner", {})
+    parent = comment_data.get("parent") or {}
+    parent_owner = parent.get("owner") or {}
     author_id = comment_data.get("owner_id") or owner.get("id")
     raw_username = owner.get("username", "")
     raw_content = comment_data.get("content", "")
@@ -499,6 +501,13 @@ def _standardize_comment(
         "content": content,
         "created_at": _format_display_time(comment_data.get("created_at", "")),
         "parent_id": comment_data.get("parent_id"),
+        "root_comment_id": comment_data.get("root_comment_id"),
+        "reply_to_author_id": parent.get("owner_id"),
+        "reply_to_author_username": _expand_username_by_relation(
+            parent_owner.get("username", ""),
+            parent.get("owner_id"),
+            current_user_id,
+        ) if parent else "",
         "like_count": comment_data.get("like_count", 0),
         "reply_count": comment_data.get("reply_count", 0),
         "is_liked": comment_data.get("is_liked", False),
