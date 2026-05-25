@@ -499,8 +499,8 @@ def get_comment_tree(
     seed = _normalize_seed(seed)
 
     # 检查帖子是否存在
-    post = db.query(Post).filter(Post.id == post_id).first()
-    if not post:
+    post_exists = db.query(Post.id).filter(Post.id == post_id).first()
+    if not post_exists:
         raise PostNotFoundError(post_id)
     
     root_query = db.query(Comment).filter(
@@ -527,10 +527,8 @@ def get_comment_tree(
     # 获取所有一级评论的 ID
     root_comment_ids = [c.id for c in root_comments]
 
-    reply_ids_by_root = _reply_ids_by_thread_root(db, root_comment_ids)
-
     for root_comment in root_comments:
-        set_committed_value(root_comment, "reply_count", len(reply_ids_by_root[root_comment.id]))
+        set_committed_value(root_comment, "reply_count", root_comment.reply_count or 0)
         _set_response_children_empty(root_comment)
     
     # 如果提供了 user_id，注入点赞状态

@@ -115,7 +115,7 @@ def test_deleting_reply_keeps_other_flat_replies_in_thread(db_session):
     assert [comment.id for comment in replies] == [remaining_reply.id]
 
 
-def test_legacy_recursive_replies_still_show_as_flat_thread(db_session):
+def test_comment_tree_uses_stored_reply_count_without_legacy_recount(db_session):
     db = db_session
 
     root = comment_service.create_comment(1, 2, "root", None, db)
@@ -139,7 +139,7 @@ def test_legacy_recursive_replies_still_show_as_flat_thread(db_session):
 
     assert top_level_total == 1
     assert top_level_comments[0].id == root.id
-    assert top_level_comments[0].reply_count == 2
+    assert top_level_comments[0].reply_count == 0
 
     replies, reply_total = comment_service.get_comment_replies(
         post_id=1,
