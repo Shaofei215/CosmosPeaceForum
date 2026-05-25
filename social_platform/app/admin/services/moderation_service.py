@@ -401,6 +401,7 @@ def delete_comment_as_admin(
         root = db.query(Comment).filter(Comment.id == root_comment_id).first()
         if root:
             root.reply_count = max(0, root.reply_count - count_to_subtract)
+            heat_service.refresh_comment_heat_score(db, root)
 
     if notify_author:
         _notify_moderation_action(db, owner_id, "comment", comment_id, reason)

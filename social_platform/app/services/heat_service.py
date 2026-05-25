@@ -34,7 +34,7 @@ def calculate_post_heat_score(post: Post, now: Optional[datetime] = None) -> flo
 def calculate_comment_heat_score(comment: Comment, now: Optional[datetime] = None) -> float:
     now = now or datetime.utcnow()
     age_hours = _age_hours(comment.created_at, now)
-    base_score = (comment.like_count or 0) * 1
+    base_score = (comment.like_count or 0) * 1 + (comment.reply_count or 0) * 3
     time_decay = (age_hours + 2) ** 1.1
     fresh_boost = 1 + max(0, 12 - age_hours) / 12 * 0.3
     return (base_score + 1) / time_decay * fresh_boost
