@@ -1,6 +1,8 @@
 # 评论业务逻辑层
 # 实现评论相关的核心业务逻辑，包括创建、查询、点赞等功能
 import hashlib
+from collections import defaultdict
+
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.exc import IntegrityError
@@ -144,8 +146,72 @@ def _get_comments_for_tree(query, skip: int, limit: int, total: int, sort: str, 
     return candidates[skip:skip + limit]
 
 
-def _thread_root_id(comment: Comment) -> int:
-    return comment.id if comment.parent_id is None else (comment.root_comment_id or comment.parent_id)
+def _resolve_thread_root_id(comment: Comment, db: Session) -> int:
+    if comment.parent_id is None:
+        return comment.id
+    if comment.root_comment_id is not None:
+        return comment.root_comment_id
+
+    seen = {comment.id}
+    parent_id = comment.parent_id
+    while parent_id is not None and parent_id not in seen:
+        parent = db.query(Comment.id, Comment.parent_id).filter(Comment.id == parent_id).first()
+        if parent is None:
+            return parent_id
+        if parent.parent_id is None:
+            return parent.id
+        seen.add(parent.id)
+        parent_id = parent.parent_id
+
+    return comment.parent_id
+
+
+def _legacy_descendant_ids_by_root(db: Session, root_ids: List[int]) -> dict[int, set[int]]:
+    descendants_by_root = {root_id: set() for root_id in root_ids}
+    seen_by_root = {root_id: {root_id} for root_id in root_ids}
+    frontier_by_root = {root_id: {root_id} for root_id in root_ids}
+
+    while True:
+        parent_to_root = {
+            parent_id: root_id
+            for root_id, parent_ids in frontier_by_root.items()
+            for parent_id in parent_ids
+        }
+        if not parent_to_root:
+            break
+
+        rows = db.query(Comment.id, Comment.parent_id).filter(
+            Comment.parent_id.in_(parent_to_root.keys())
+        ).all()
+        next_frontier_by_root: dict[int, set[int]] = defaultdict(set)
+
+        for comment_id, parent_id in rows:
+            root_id = parent_to_root.get(parent_id)
+            if root_id is None or comment_id in seen_by_root[root_id]:
+                continue
+            seen_by_root[root_id].add(comment_id)
+            descendants_by_root[root_id].add(comment_id)
+            next_frontier_by_root[root_id].add(comment_id)
+
+        frontier_by_root = dict(next_frontier_by_root)
+
+    return descendants_by_root
+
+
+def _reply_ids_by_thread_root(db: Session, root_ids: List[int]) -> dict[int, set[int]]:
+    reply_ids_by_root = {root_id: set() for root_id in root_ids}
+    if not root_ids:
+        return reply_ids_by_root
+
+    for comment_id, root_comment_id in db.query(Comment.id, Comment.root_comment_id).filter(
+        Comment.root_comment_id.in_(root_ids)
+    ).all():
+        reply_ids_by_root[root_comment_id].add(comment_id)
+
+    for root_id, legacy_ids in _legacy_descendant_ids_by_root(db, root_ids).items():
+        reply_ids_by_root[root_id].update(legacy_ids)
+
+    return reply_ids_by_root
 
 
 def _set_response_children_empty(comment: Comment) -> None:
@@ -208,7 +274,7 @@ def create_comment(
             raise ParentCommentNotFoundError(parent_id)
         if parent_comment.post_id != post_id:
             raise ParentCommentMismatchError(parent_id, post_id, parent_comment.post_id)
-        root_comment_id = _thread_root_id(parent_comment)
+        root_comment_id = _resolve_thread_root_id(parent_comment, db)
         root_comment = (
             parent_comment
             if parent_comment.id == root_comment_id
@@ -461,7 +527,10 @@ def get_comment_tree(
     # 获取所有一级评论的 ID
     root_comment_ids = [c.id for c in root_comments]
 
+    reply_ids_by_root = _reply_ids_by_thread_root(db, root_comment_ids)
+
     for root_comment in root_comments:
+        set_committed_value(root_comment, "reply_count", len(reply_ids_by_root[root_comment.id]))
         _set_response_children_empty(root_comment)
     
     # 如果提供了 user_id，注入点赞状态
@@ -501,10 +570,11 @@ def get_comment_replies(
     if parent.post_id != post_id:
         raise ParentCommentMismatchError(comment_id, post_id, parent.post_id)
 
-    root_comment_id = _thread_root_id(parent)
+    root_comment_id = _resolve_thread_root_id(parent, db)
+    reply_ids = _reply_ids_by_thread_root(db, [root_comment_id]).get(root_comment_id, set())
     replies_query = db.query(Comment).filter(
         Comment.post_id == post_id,
-        Comment.root_comment_id == root_comment_id,
+        Comment.id.in_(reply_ids),
     )
     total = replies_query.count()
     replies = _get_comments_for_tree(
@@ -569,6 +639,13 @@ def get_comment_by_id(
     ).filter(Comment.id == comment_id).first()
     if not comment:
         return None
+
+    if comment.parent_id is not None and comment.root_comment_id is None:
+        set_committed_value(
+            comment,
+            "root_comment_id",
+            _resolve_thread_root_id(comment, db),
+        )
     
     # 如果提供了 user_id，注入点赞状态
     if user_id is not None:
@@ -584,10 +661,7 @@ def get_comment_by_id(
 
 
 def _get_descendant_comment_ids(comment_id: int, db: Session) -> List[int]:
-    return [
-        row[0]
-        for row in db.query(Comment.id).filter(Comment.root_comment_id == comment_id).all()
-    ]
+    return list(_reply_ids_by_thread_root(db, [comment_id]).get(comment_id, set()))
 
 
 def delete_comment(
@@ -630,7 +704,9 @@ def delete_comment(
     try:
         post_id = comment.post_id
         parent_id = comment.parent_id
-        root_comment_id = comment.root_comment_id
+        root_comment_id = (
+            _resolve_thread_root_id(comment, db) if parent_id is not None else None
+        )
         
         if parent_id is None:
             reply_ids = _get_descendant_comment_ids(comment_id, db)
@@ -683,7 +759,9 @@ def delete_comment_precise(
     try:
         post_id = comment.post_id
         parent_id = comment.parent_id
-        root_comment_id = comment.root_comment_id
+        root_comment_id = (
+            _resolve_thread_root_id(comment, db) if parent_id is not None else None
+        )
 
         if parent_id is None:
             count_to_subtract = 1 + len(_get_descendant_comment_ids(comment_id, db))

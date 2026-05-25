@@ -113,3 +113,46 @@ def test_deleting_reply_keeps_other_flat_replies_in_thread(db_session):
     assert remaining_reply.root_comment_id == root.id
     assert reply_total == 1
     assert [comment.id for comment in replies] == [remaining_reply.id]
+
+
+def test_legacy_recursive_replies_still_show_as_flat_thread(db_session):
+    db = db_session
+
+    root = comment_service.create_comment(1, 2, "root", None, db)
+    reply_to_root = comment_service.create_comment(1, 3, "reply to root", root.id, db)
+    reply_to_reply = comment_service.create_comment(1, 4, "reply to reply", reply_to_root.id, db)
+
+    root.reply_count = 0
+    reply_to_root.root_comment_id = None
+    reply_to_reply.root_comment_id = None
+    db.commit()
+    db.expire_all()
+
+    top_level_comments, top_level_total = comment_service.get_comment_tree(
+        post_id=1,
+        user_id=None,
+        skip=0,
+        limit=20,
+        db=db,
+        sort="latest",
+    )
+
+    assert top_level_total == 1
+    assert top_level_comments[0].id == root.id
+    assert top_level_comments[0].reply_count == 2
+
+    replies, reply_total = comment_service.get_comment_replies(
+        post_id=1,
+        comment_id=root.id,
+        user_id=None,
+        skip=0,
+        limit=20,
+        db=db,
+        sort="latest",
+    )
+
+    assert reply_total == 2
+    assert [comment.id for comment in replies] == [reply_to_reply.id, reply_to_root.id]
+
+    focused_reply = comment_service.get_comment_by_id(reply_to_reply.id, user_id=None, db=db)
+    assert focused_reply.root_comment_id == root.id
