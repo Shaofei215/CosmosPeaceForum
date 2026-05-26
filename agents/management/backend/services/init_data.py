@@ -8,6 +8,7 @@ from sqlmodel import Session
 
 from agents.management.backend.core.database import get_session_local
 from agents.management.backend.services.auth_service import init_default_admin
+from agents.management.backend.services.prompt_service import init_default_prompt_configs
 from agents.management.backend.services.system_service import init_default_configs
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,12 @@ def initialize_database():
             logger.info("已创建 %d 条默认系统配置", config_count)
         else:
             logger.info("系统配置已存在")
+
+        prompt_config_count = init_default_prompt_configs(session)
+        if prompt_config_count > 0:
+            logger.info("已创建 %d 条默认提示词配置", prompt_config_count)
+        else:
+            logger.info("提示词配置已存在")
 
     finally:
         session.close()

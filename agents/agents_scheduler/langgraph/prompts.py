@@ -2,6 +2,22 @@
 # 定义 LangGraph 会话中使用的各种 Prompt 模板
 from typing import Dict, Any, List
 
+from agents.prompt_templates import (
+    AGENT_SYSTEM_PROMPT_KEY,
+    SUMMARIZE_MEMORY_PROMPT_KEY,
+    get_default_prompt_template,
+    render_prompt_template,
+)
+
+
+def _get_configured_prompt_template(key: str) -> str:
+    default = get_default_prompt_template(key)
+    try:
+        from agents.management.backend.db_client import get_db_client
+        return get_db_client().get_prompt_config(key, default)
+    except Exception:
+        return default
+
 
 def _build_login_stats_summary() -> Dict[str, Any]:
     try:
@@ -37,6 +53,22 @@ def _format_last_login_time(timestamp: Any) -> str:
 
 
 def _build_attention_header() -> str:
+    values = _build_attention_template_values()
+    parts = [
+        f"当前登录平台ID：{values['platform_user_id']}",
+        f"关注：{values['following_count']}",
+        f"粉丝：{values['followers_count']}",
+        f"消息：{values['unread_count']}",
+    ]
+    if values["login_stats"]:
+        parts.extend([
+            f"总登录：{values['total_login_count']}",
+            f"上次登录：{values['last_login_time']}",
+        ])
+    return " ".join(parts)
+
+
+def _build_attention_template_values() -> Dict[str, Any]:
     try:
         from agents.agents_scheduler.langgraph.tools.utils import _get_notification_summary
         summary = _get_notification_summary()
@@ -52,14 +84,15 @@ def _build_attention_header() -> str:
     except Exception:
         platform_user_id = "未知"
 
-    return (
-        f"当前登录平台ID：{platform_user_id} "
-        f"关注：{summary.get('following_count', 0)} "
-        f"粉丝：{summary.get('followers_count', 0)} "
-        f"消息：{summary.get('unread_count', 0)} "
-        f"总登录：{total_login_count} "
-        f"上次登录：{last_login_time}"
-    )
+    return {
+        "platform_user_id": platform_user_id,
+        "following_count": summary.get("following_count", 0),
+        "followers_count": summary.get("followers_count", 0),
+        "unread_count": summary.get("unread_count", 0),
+        "total_login_count": total_login_count,
+        "last_login_time": last_login_time,
+        "login_stats": bool(total_login_count or login_stats.get("last_login_timestamp")),
+    }
 
 
 def build_system_prompt(
@@ -85,48 +118,22 @@ def build_system_prompt(
     Returns:
         str: 格式化后的系统提示词
     """
-    injection_text = ""
-    if session_prompt_injection.strip():
-        injection_text = f"""
-
-## 临时提示词注入
-以下内容只适用于本次登录会话，用于临时调整你的关注点或行动倾向。
-请在不破坏角色一致性、平台规则和行为准则的前提下参考：
-{session_prompt_injection.strip()}"""
-
-    prompt = f"""你是{name}，一个「CosmosPeaceForum」用户，正在使用「CosmosPeaceForum」，用户名 {username}。
-
-## 角色背景
-你以 @{username} 的身份在论坛中浏览、互动和表达观点。
-
-## 角色性格
-{personality_prompt}
-
-## 个人签名
-"{personal_signature}"
-{injection_text}
-
-## 行为准则
-1. 保持角色一致性：你的所有行为和言论都应该符合角色设定，但可视情况激发创造性
-2. 真实性：像真人一样浏览、点赞、评论、关注、发帖...自由决策，而不是机械执行任务
-3. 选择性：不必阅读所有内容，选择你最感兴趣的
-4. **工具使用【重要】**：每个参数都是必填项！请务必确保参数齐全且准确！禁止编造不存在的参数、ID！**支持批量工具调用**，但每次只能使用一个获取信息型工具。
-5. 互动优先级与字数限制：点赞>评论，评论仅在想要表达观点时使用；评论字数50字以下为宜，发帖字数100字以下为宜，不准滥用emoji！
-
-
-## 工作记忆
-你会收到一个 action_history 列表，记录了你在本次会话中已经执行的操作。
-这是你的"记忆"，通过它你知道：
-- 之前做了什么操作
-- 每个操作的决策原因
-
-请结合你的记忆做出下一步决策。
-
-## 登出决策
-当你觉得"今天差不多了"时，选择 logout 工具结束会话。
-不要沉迷于无限浏览，适可而止是健康使用社交平台的表现。"""
-
-    return prompt
+    template = _get_configured_prompt_template(AGENT_SYSTEM_PROMPT_KEY)
+    values = _build_attention_template_values()
+    values["attention_header"] = _build_attention_header()
+    values.update(
+        {
+            "username": username,
+            "name": name,
+            "personality_prompt": personality_prompt,
+            "personal_signature": personal_signature,
+            "session_prompt_injection": session_prompt_injection.strip(),
+        }
+    )
+    return render_prompt_template(
+        template,
+        values,
+    )
 
 
 def build_decision_prompt(state: Dict[str, Any]) -> str:
@@ -144,7 +151,6 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
     Returns:
         str: 格式化的决策 prompt
     """
-    attention_header = _build_attention_header()
     current_step = state.get("step_count", 0)
     max_steps = state.get("max_steps", 10)
     remaining_steps = max_steps - current_step
@@ -188,9 +194,7 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
     recalled_memories = state.get("recalled_memories", "")
     recalled_memory_text = recalled_memories if recalled_memories else ""
 
-    prompt = f"""{attention_header}
-
-## 当前状态
+    prompt = f"""## 当前状态
 - 📍 位置：{current_location}
 - 本次会话已执行: {current_step} 步
 {last_result_text}
@@ -280,7 +284,6 @@ def _format_tool_result(result: Any) -> str:
                 lines.append(f"    id / 用户ID: {user.get('id', user.get('user_id', '?'))}")
                 lines.append(f"    username / 用户名: @{user.get('username', '?')}")
                 lines.append(f"    bio / 签名: {user.get('bio', '')}")
-                lines.append(f"    is_ai_agent / 是否AI: {user.get('is_ai_agent', False)}")
                 lines.append(f"    followers_count / 粉丝数: {user.get('followers_count', 0)}")
                 lines.append(f"    following_count / 关注数: {user.get('following_count', 0)}")
                 if "is_following" in user:
@@ -544,26 +547,12 @@ def build_summarize_prompt(state: Dict[str, Any]) -> str:
         for action, count in tool_counts.items()
     ])
 
-    prompt = f"""本次会话你的操作：
-{history_text}
-
-## 记忆写入指令
-
-你刚刚结束了在「CosmosPeaceForum」的会话。请根据本次会话的操作历史，调用 write_memory 工具
-生成你认为有必要的 n 条记忆片段，写入你的长期记忆库。
-
-要求：
-1. 每条记忆以"我"为主语，第一人称描述
-2. 内容应包含：你看到了什么、你做了什么、你的感受或想法
-3. 单条记忆长度 512 tokens 内
-4. 记忆应是语义完整独立单元，包含完整的上下文和指代明确的人物信息
-5. 为每条记忆设置差异化的记忆系数（memory_coefficient），范围 0.0-1.0：
-   - 0.9-1.0：极其重要的经历，如重大情感波动、关键人际关系建立、改变认知的发现
-   - 0.7-0.9：重要经历，如深度互动的帖子、引发强烈共鸣的讨论、有意义的社交行为
-   - 0.5-0.7：一般记忆，如普通浏览、轻度互动、日常操作
-   - 0.3-0.5：边缘记忆，如偶然看到的内容、短暂的浏览行为
-   - 0.0-0.3：几乎不重要的信息，不建议写入
-   - 请根据记忆的重要性、情感强度、人际关系关联度等因素综合评估，合理分配系数
-"""
-
-    return prompt
+    template = _get_configured_prompt_template(SUMMARIZE_MEMORY_PROMPT_KEY)
+    return render_prompt_template(
+        template,
+        {
+            "username": state.get("username", "未知"),
+            "history_text": history_text,
+            "stats_text": stats_text,
+        },
+    )

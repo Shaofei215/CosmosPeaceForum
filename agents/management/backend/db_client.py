@@ -85,6 +85,35 @@ class ManagementDBClient:
                 conn.close()
         except Exception:
             return {}
+
+    def get_prompt_config(self, key: str, default: str = "") -> str:
+        """
+        获取可编辑提示词配置。
+
+        Args:
+            key: 提示词配置键
+            default: 表或记录不存在时使用的默认值
+
+        Returns:
+            str: 提示词模板文本
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                cursor = conn.execute(
+                    "SELECT value, default_value FROM prompt_configs WHERE key = ?",
+                    (key,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return default
+                if row["value"] == row["default_value"] and row["default_value"] != default:
+                    return default
+                return row["value"]
+            finally:
+                conn.close()
+        except Exception:
+            return default
     
     def _parse_knows_ids(self, raw_value: str) -> list:
         """解析 knows_ids JSON 字符串"""

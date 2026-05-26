@@ -5,7 +5,7 @@ import type {
   AgentRuntimeStatusResponse, PromptInjectionRequest, AgentAppLoginResponse,
   DashboardStats,
   ModelConfig, ModelConfigCreate, ModelConfigUpdate,
-  SystemConfig, OperationLogListResponse, MessageResponse,
+  SystemConfig, PromptConfig, OperationLogListResponse, MessageResponse,
   EmbeddingConfig, EmbeddingConfigCreate, EmbeddingConfigUpdate,
   ChunkModelConfig, ChunkModelConfigCreate, ChunkModelConfigUpdate,
   MemoryListResponse, MemoryOwnerListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
@@ -132,6 +132,17 @@ export const systemApi = {
 
   restart: () =>
     apiClient.post<MessageResponse>('/system/restart'),
+};
+
+export const promptApi = {
+  list: () =>
+    apiClient.get<PromptConfig[]>('/prompts/'),
+
+  update: (key: string, value: string) =>
+    apiClient.put<PromptConfig>(`/prompts/${key}`, { value }),
+
+  reset: (key: string) =>
+    apiClient.post<PromptConfig>(`/prompts/${key}/reset`),
 };
 
 export const logApi = {

@@ -174,6 +174,16 @@ export interface SystemConfig {
   updated_at: string;
 }
 
+export interface PromptConfig {
+  id: number;
+  key: string;
+  name: string;
+  value: string;
+  default_value: string;
+  description: string;
+  updated_at: string;
+}
+
 export interface OperationLog {
   id: number;
   operator_id: number | null;

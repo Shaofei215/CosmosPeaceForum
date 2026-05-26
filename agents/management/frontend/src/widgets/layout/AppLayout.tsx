@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Cpu, Settings, FileText,
-  Menu, X, LogOut, Brain, Shield,
+  Menu, X, LogOut, Brain, Shield, ScrollText,
 } from 'lucide-react';
 import { useLogout, useCurrentAdmin } from '@/features/auth';
 import type { AdminPermission } from '@/shared/types/api';
@@ -12,6 +12,7 @@ const navItems = [
   { path: '/agents', label: '角色管理', icon: Users, permission: 'manage_agents' },
   { path: '/models', label: '模型配置', icon: Cpu, permission: 'manage_models' },
   { path: '/memories', label: '记忆管理', icon: Brain, permission: 'manage_memories' },
+  { path: '/prompts', label: '提示词管理', icon: ScrollText, permission: 'manage_system' },
   { path: '/system', label: '系统配置', icon: Settings, permission: 'manage_system' },
   { path: '/admins', label: '管理员', icon: Shield, permission: 'manage_admins' },
   { path: '/logs', label: '操作日志', icon: FileText, permission: 'view_logs' },

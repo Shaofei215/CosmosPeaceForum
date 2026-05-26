@@ -13,6 +13,7 @@ import ModelListPage from '@/pages/ModelListPage';
 import MemoryListPage from '@/pages/MemoryListPage';
 import MemoryDetailPage from '@/pages/MemoryDetailPage';
 import SystemConfigPage from '@/pages/SystemConfigPage';
+import PromptConfigPage from '@/pages/PromptConfigPage';
 import LogPage from '@/pages/LogPage';
 
 export const router = createBrowserRouter([
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
       { path: 'models', element: <ModelListPage /> },
       { path: 'memories', element: <MemoryListPage /> },
       { path: 'memories/:ownerId', element: <MemoryDetailPage /> },
+      { path: 'prompts', element: <PromptConfigPage /> },
       { path: 'system', element: <SystemConfigPage /> },
       { path: 'admins', element: <AdminListPage /> },
       { path: 'logs', element: <LogPage /> },

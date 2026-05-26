@@ -9,6 +9,7 @@ from agents.management.backend.models.embedding_config import EmbeddingConfig
 from agents.management.backend.models.model_config import ModelConfig
 from agents.management.backend.models.system_config import SystemConfig
 from agents.management.backend.models.operation_log import OperationLog
+from agents.management.backend.models.prompt_config import PromptConfig
 
 __all__ = [
     "AdminUser",
@@ -18,4 +19,5 @@ __all__ = [
     "ModelConfig",
     "SystemConfig",
     "OperationLog",
+    "PromptConfig",
 ]

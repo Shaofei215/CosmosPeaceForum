@@ -269,6 +269,23 @@ class SystemConfigUpdate(BaseModel):
     value: str
 
 
+class PromptConfigResponse(BaseModel):
+    id: int
+    key: str
+    name: str
+    value: str
+    default_value: str
+    description: str
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PromptConfigUpdate(BaseModel):
+    value: str = Field(min_length=1, max_length=50000)
+
+
 # ==================== Operation Log ====================
 
 class OperationLogResponse(BaseModel):

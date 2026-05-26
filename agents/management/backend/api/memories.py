@@ -21,7 +21,13 @@ from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.agent_config import AgentConfig
 from agents.management.backend.services.log_service import create_log
 from agents.management.backend.services.chunk_model_service import get_active_chunk_model_config
+from agents.management.backend.services.prompt_service import get_prompt_config
 from agents.management.backend.services.permissions import PERMISSION_MANAGE_MEMORIES
+from agents.prompt_templates import (
+    MEMORY_CHUNK_SYSTEM_PROMPT_KEY,
+    get_default_prompt_template,
+    render_prompt_template,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -190,27 +196,12 @@ async def _llm_smart_chunk(
             detail="未配置或未启用分块模型，请先在模型配置页的分块模型配置中添加并启用"
         )
 
-    system_prompt = """你是一个记忆分块助手。请根据人物信息，将提供的文本拆分为多个语义完整的、符合角色设定的第一人称记忆片段。
-
-【分块规则】
-1. 每条记忆以"我"为主语，第一人称描述
-2. 内容应包含：你看到了什么、你做了什么、你的感受或想法
-3. 单条记忆长度 512 tokens 内
-4. **核心规则：每条记忆可以聚焦事件的不同阶段/方面，但必须简要交代整个事件的起因和结果作为上下文，确保每条记忆独立可读。**
-   - 举例：文档描述了一次完整旅行（出发→游玩A→游玩B→返回）
-     - 分块1：详细描写游玩A的体验，但开头简述"我去了某地旅行，在游玩A时……，这次旅行让我难忘"
-     - 分块2：详细描写游玩B的体验，但开头简述"我去了某地旅行，在游玩B时……，这次旅行让我难忘"
-   - **绝不允许**：分块只写"我到了某地"（只有起因无结果）或"我回家了"（只有结果无起因）
-5. 每条记忆中的人物与关系应指代明确
-6. 为每条记忆设置差异化的记忆系数（memory_coefficient），范围 0.0-1.0：
-   - 0.9-1.0：极其重要的经历，如重大情感波动、关键人际关系建立、改变认知的发现、重要事务
-   - 0.7-0.9：重要经历，如深度互动的内容、引发强烈共鸣的信息、有意义的行为
-   - 0.5-0.7：一般记忆，一般经历
-   - 0.3-0.5：边缘记忆，不感兴趣的内容
-   - 0.0-0.3：几乎不重要的信息，不建议写入
-   - 请根据记忆的重要性、情感强度、人际关系关联度等因素综合评估，合理分配系数
-
-请调用 chunk_memories 工具，一次性传入所有分块后的记忆列表。"""
+    prompt_config = get_prompt_config(db, MEMORY_CHUNK_SYSTEM_PROMPT_KEY)
+    prompt_template = (
+        prompt_config.value
+        if prompt_config and isinstance(prompt_config.value, str)
+        else get_default_prompt_template(MEMORY_CHUNK_SYSTEM_PROMPT_KEY)
+    )
 
     static_memories_context = ""
     if enable_rag_on_chunking:
@@ -226,16 +217,21 @@ async def _llm_smart_chunk(
                 static_lines = []
                 for chunk, _ in recalled:
                     static_lines.append(f"- [{chunk.memory_coefficient:.2f}] {chunk.content}")
-                static_memories_context = "\n\n【已有的相关记忆】\n" + "\n".join(static_lines) + "\n\n请参考以上已有记忆进行分块，系数越高表示该记忆越重要，避免生成重复内容。"
+                static_memories_context = "\n".join(static_lines)
         except Exception as e:
             logger.warning("召回记忆失败，继续不带 RAG 的分块: %s", e)
 
-    user_prompt = f"""【角色设定】
-{personality_prompt}
-
-【待分块文本】
-{text}{static_memories_context}
-请按照规则进行分块，并调用 chunk_memories 工具传入结果。"""
+    system_prompt = render_prompt_template(
+        prompt_template,
+        {
+            "personality_prompt": personality_prompt,
+            "text": text,
+            "static_memories_context": static_memories_context,
+            "owner_id": owner_id,
+            "semantic_timestamp": semantic_timestamp,
+        },
+    )
+    user_prompt = "请按照系统提示词规则进行分块，并调用 chunk_memories 工具传入结果。"
 
     try:
         llm_kwargs = {
