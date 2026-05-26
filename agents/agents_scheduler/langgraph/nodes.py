@@ -155,7 +155,7 @@ def start_node(state: SessionState) -> SessionState:
     username = state.get("username", "未知")
     logger.info("start_node | 用户=%s | 初始化会话状态", username)
     try:
-        from agents.agents_scheduler.langgraph.tools.utils import _clear_scroll_cursor
+        from agents.agents_scheduler.langgraph.tools.support.platform import _clear_scroll_cursor
         _clear_scroll_cursor()
     except Exception:
         pass
@@ -501,13 +501,13 @@ def tool_execution_node(state: SessionState) -> SessionState:
 
     last_tool_result = result.get("data", {}) if isinstance(result, dict) else result
     if tool_name == "recall_memory" and isinstance(last_tool_result, dict):
-        from agents.agents_scheduler.langgraph.tools.memory import merge_recall_memory_result
+        from agents.agents_scheduler.langgraph.tools.support.result_context import merge_recall_memory_result
         last_tool_result = merge_recall_memory_result(
             state.get("last_tool_result"),
             last_tool_result,
         )
     if tool_name == "web_search" and isinstance(last_tool_result, dict):
-        from agents.agents_scheduler.langgraph.tools.web_search import merge_web_search_result
+        from agents.agents_scheduler.langgraph.tools.support.result_context import merge_web_search_result
         last_tool_result = merge_web_search_result(
             state.get("last_tool_result"),
             last_tool_result,

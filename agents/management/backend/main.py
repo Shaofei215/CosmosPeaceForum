@@ -16,6 +16,7 @@ from agents.management.backend.core.config import get_config
 from agents.management.backend.core.database import init_db
 from agents.management.backend.api import api_router
 from agents.management.backend.services.init_data import initialize_database
+from agents.management.backend.services.terminal_log_service import terminal_log_capture
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ def get_frontend_dist_dir() -> Path:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
+    terminal_log_capture.start()
     config = get_config()
     logger.info("=" * 50)
     logger.info("Management Backend 启动中...")
@@ -45,6 +47,7 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Management Backend 关闭中...")
+    terminal_log_capture.stop()
 
 
 def create_app() -> FastAPI:

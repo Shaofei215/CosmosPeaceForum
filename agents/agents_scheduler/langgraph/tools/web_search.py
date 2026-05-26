@@ -69,35 +69,6 @@ def _normalize_tavily_response(response: Any) -> Dict[str, Any]:
     }
 
 
-def merge_web_search_result(
-    previous_result: Any,
-    web_search_result: Dict[str, Any],
-) -> Dict[str, Any]:
-    """
-    将主动联网搜索结果追加到 last_tool_result，而不是替换上一步页面内容。
-
-    结构沿用 recall_memory 的合并结果，以便 LLM 下一步同时看到“刚才在看什么”
-    和“刚才为什么搜索、搜到了什么”。
-    """
-    from agents.agents_scheduler.langgraph.tools.memory import is_merged_recall_memory_result
-
-    if is_merged_recall_memory_result(previous_result):
-        current_view = previous_result.get("current_view")
-        explicit_recalls = list(previous_result.get("explicit_recalls") or [])
-        web_searches = list(previous_result.get("web_searches") or [])
-    else:
-        current_view = previous_result
-        explicit_recalls = []
-        web_searches = []
-
-    web_searches.append(web_search_result)
-    return {
-        "current_view": current_view,
-        "explicit_recalls": explicit_recalls,
-        "web_searches": web_searches,
-    }
-
-
 @tool
 def web_search(
     query: str,

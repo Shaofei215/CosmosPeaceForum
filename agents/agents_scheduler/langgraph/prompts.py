@@ -70,7 +70,7 @@ def _build_attention_header() -> str:
 
 def _build_attention_template_values() -> Dict[str, Any]:
     try:
-        from agents.agents_scheduler.langgraph.tools.utils import _get_notification_summary
+        from agents.agents_scheduler.langgraph.tools.support.platform import _get_notification_summary
         summary = _get_notification_summary()
     except Exception:
         summary = {"following_count": 0, "followers_count": 0, "unread_count": 0}
@@ -239,12 +239,12 @@ def _format_tool_result(result: Any) -> str:
     elif isinstance(result, str):
         return result
     elif isinstance(result, dict):
-        from agents.agents_scheduler.langgraph.tools.memory import (
-            format_merged_recall_memory_result,
-            is_merged_recall_memory_result,
+        from agents.agents_scheduler.langgraph.tools.support.result_context import (
+            format_merged_tool_context_result,
+            is_merged_tool_context_result,
         )
-        if is_merged_recall_memory_result(result):
-            return format_merged_recall_memory_result(result, _format_tool_result)
+        if is_merged_tool_context_result(result):
+            return format_merged_tool_context_result(result, _format_tool_result)
 
         if result.get("source") == "web_search":
             query = result.get("query", "")

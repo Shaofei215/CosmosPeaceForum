@@ -13,12 +13,17 @@ from typing import List, Optional
 class TerminalLogHandler(logging.Handler):
     """自定义日志处理器，将日志写入捕获缓冲区"""
 
-    def __init__(self, capture):
+    def __init__(self, capture: "TerminalLogCapture"):
         super().__init__()
         self._capture = capture
 
-    def emit(self, record):
-        self._capture._append(self.format(record), record.levelno >= logging.ERROR)
+    def emit(self, record: logging.LogRecord) -> None:
+        level = (
+            record.levelname
+            if record.levelname in {"DEBUG", "INFO", "WARNING", "ERROR"}
+            else "INFO"
+        )
+        self._capture._append(self.format(record), level=level)
 
 
 class TerminalLogCapture:
@@ -42,13 +47,14 @@ class TerminalLogCapture:
         logging.getLogger().removeHandler(self._handler)
         self._handler = None
 
-    def _append(self, message: str, is_error: bool = False):
+    def _append(self, message: str, is_error: bool = False, level: Optional[str] = None):
         if not message or not message.strip():
             return
+        log_level = level or ("ERROR" if is_error else "INFO")
         with self._lock:
             self._logs.append({
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "level": "ERROR" if is_error else "INFO",
+                "level": log_level,
                 "message": message.strip(),
             })
 
@@ -71,13 +77,35 @@ class TerminalLogCapture:
             all_logs = [log for log in all_logs if marker in log["message"]]
         return all_logs[skip : skip + limit], len(all_logs)
 
-    def get_recent_logs(self, count: int = 50, role: Optional[str] = None) -> List[dict]:
+    def recent(
+        self,
+        count: int = 200,
+        level: Optional[str] = None,
+        keyword: Optional[str] = None,
+        role: Optional[str] = None,
+    ) -> tuple[List[dict], int]:
         with self._lock:
             logs = list(self._logs)
+        if level:
+            logs = [log for log in logs if log["level"] == level]
+        if keyword:
+            normalized = keyword.lower()
+            logs = [log for log in logs if normalized in log["message"].lower()]
         if role:
             marker = f"[{role}]"
             logs = [log for log in logs if marker in log["message"]]
-        return logs[-count:] if count else logs
+        items = logs[-count:] if count else logs
+        return items, len(logs)
+
+    def get_recent_logs(
+        self,
+        count: int = 50,
+        level: Optional[str] = None,
+        keyword: Optional[str] = None,
+        role: Optional[str] = None,
+    ) -> List[dict]:
+        logs, _ = self.recent(count=count, level=level, keyword=keyword, role=role)
+        return logs
 
     def clear(self):
         with self._lock:

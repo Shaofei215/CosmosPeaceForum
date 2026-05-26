@@ -2,8 +2,6 @@ import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
 from agents.agents_scheduler.langgraph.tools.memory import (
-    format_merged_recall_memory_result,
-    merge_recall_memory_result,
     recall_memory,
     write_memory,
 )
@@ -54,50 +52,6 @@ class TestRecallMemory:
 
     def test_recall_memory_tool_name(self):
         assert recall_memory.name == "recall_memory"
-
-
-class TestRecallMemoryResultHelpers:
-    def test_merge_recall_memory_result_wraps_previous_result(self):
-        previous = {"post": {"id": 1, "content": "hello"}}
-        recall = {"query": "hello", "memories": [{"content": "old hello"}], "total": 1}
-
-        result = merge_recall_memory_result(previous, recall)
-
-        assert result["current_view"] == previous
-        assert result["explicit_recalls"] == [recall]
-
-    def test_merge_recall_memory_result_keeps_existing_recalls(self):
-        previous = {
-            "current_view": {"post": {"id": 1}},
-            "explicit_recalls": [{"query": "first", "memories": [], "total": 0}],
-        }
-        recall = {"query": "second", "memories": [], "total": 0}
-
-        result = merge_recall_memory_result(previous, recall)
-
-        assert result["current_view"] == {"post": {"id": 1}}
-        assert [item["query"] for item in result["explicit_recalls"]] == ["first", "second"]
-
-    def test_format_merged_recall_memory_result(self):
-        result = {
-            "current_view": {"post": {"id": 1}},
-            "explicit_recalls": [
-                {
-                    "query": "hello",
-                    "memories": [{"content": "old hello", "time_description": "刚刚"}],
-                    "total": 1,
-                }
-            ],
-        }
-
-        formatted = format_merged_recall_memory_result(
-            result,
-            lambda current_view: f"view={current_view['post']['id']}",
-        )
-
-        assert "view=1" in formatted
-        assert "主动回想" in formatted
-        assert "old hello" in formatted
 
 
 class TestWriteMemory:

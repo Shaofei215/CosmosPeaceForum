@@ -2,10 +2,7 @@ import sys
 import types
 from unittest.mock import MagicMock, patch
 
-from agents.agents_scheduler.langgraph.tools.web_search import (
-    merge_web_search_result,
-    web_search,
-)
+from agents.agents_scheduler.langgraph.tools.web_search import web_search
 
 
 class TestWebSearch:
@@ -69,29 +66,3 @@ class TestWebSearch:
 
     def test_web_search_tool_name(self):
         assert web_search.name == "web_search"
-
-
-class TestWebSearchResultHelpers:
-    def test_merge_web_search_result_wraps_previous_result(self):
-        previous = {"post": {"id": 1, "content": "hello"}}
-        search = {"query": "hello", "results": [{"title": "Hello"}], "total": 1}
-
-        result = merge_web_search_result(previous, search)
-
-        assert result["current_view"] == previous
-        assert result["explicit_recalls"] == []
-        assert result["web_searches"] == [search]
-
-    def test_merge_web_search_result_keeps_existing_recalls(self):
-        previous = {
-            "current_view": {"post": {"id": 1}},
-            "explicit_recalls": [{"query": "first", "memories": [], "total": 0}],
-            "web_searches": [],
-        }
-        search = {"query": "second", "results": [], "total": 0}
-
-        result = merge_web_search_result(previous, search)
-
-        assert result["current_view"] == {"post": {"id": 1}}
-        assert [item["query"] for item in result["explicit_recalls"]] == ["first"]
-        assert result["web_searches"] == [search]

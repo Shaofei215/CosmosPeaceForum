@@ -45,14 +45,13 @@ export default function DashboardPage() {
 
   const { data: logsData, refetch } = useQuery({
     queryKey: ['terminal-logs', 'dashboard', selectedLogRole, logSearch],
-    queryFn: async () => {
-      const data = await terminalLogApi.recent(200, selectedLogRole || undefined);
-      const keyword = logSearch.trim().toLowerCase();
-      if (!keyword) return data;
-
-      const items = data.items.filter((log) => log.message.toLowerCase().includes(keyword));
-      return { ...data, items, total: items.length };
-    },
+    queryFn: () =>
+      terminalLogApi.list(
+        240,
+        undefined,
+        logSearch.trim() || undefined,
+        selectedLogRole || undefined,
+      ),
     refetchInterval: 2000,
   });
 
