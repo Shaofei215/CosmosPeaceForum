@@ -7,7 +7,7 @@ from agents.agents_scheduler.langgraph.tools.types import (
     UnauthorizedError,
     ToolResult,
 )
-from agents.agents_scheduler.langgraph.tools.utils import _truncate
+from agents.agents_scheduler.langgraph.tools.support.platform import _truncate
 
 
 class TestToolErrorTypes:

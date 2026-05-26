@@ -7,7 +7,7 @@ from langchain_core.tools import tool
 
 from agents.agents_scheduler.scheduler.context import get_current_user_id
 from agents.agents_scheduler.langgraph.tools.types import ToolResult, ToolExecutionError
-from agents.agents_scheduler.langgraph.tools.utils import (
+from agents.agents_scheduler.langgraph.tools.support.platform import (
     _get_post, _get_comment, _get_post_comments, _get_comment_replies,
     _get_global_feed, _get_user_posts, _search_platform,
     _standardize_post, _standardize_posts_list, _standardize_comment,

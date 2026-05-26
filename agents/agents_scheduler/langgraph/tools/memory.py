@@ -3,7 +3,7 @@
 # 注意：write_memory 工具应该仅在总结节点中绑定给 LLM，而不是随其他工具一起绑定
 
 import asyncio
-from typing import List, Dict, Any, Callable
+from typing import List, Dict, Any
 
 from langchain_core.tools import tool
 
@@ -19,65 +19,6 @@ def _short_query(query: str, max_length: int = 40) -> str:
     if len(query) <= max_length:
         return query
     return f"{query[:max_length]}..."
-
-
-def merge_recall_memory_result(
-    previous_result: Any,
-    recall_result: Dict[str, Any],
-) -> Dict[str, Any]:
-    """
-    将主动回想结果追加到 last_tool_result，而不是替换上一步页面内容。
-
-    自动 recall_memory_node 仍负责每轮环境式召回；这里保存的是 Agent 主动查询的
-    定向召回结果，下一次决策会在“上一步执行后当前查看的内容”中一起看到。
-    """
-    if is_merged_recall_memory_result(previous_result):
-        current_view = previous_result.get("current_view")
-        explicit_recalls = list(previous_result.get("explicit_recalls") or [])
-    else:
-        current_view = previous_result
-        explicit_recalls = []
-
-    explicit_recalls.append(recall_result)
-    return {
-        "current_view": current_view,
-        "explicit_recalls": explicit_recalls,
-    }
-
-
-def is_merged_recall_memory_result(result: Any) -> bool:
-    """判断 last_tool_result 是否包含主动回想合并结果。"""
-    return (
-        isinstance(result, dict)
-        and "current_view" in result
-        and "explicit_recalls" in result
-    )
-
-
-def format_merged_recall_memory_result(
-    result: Dict[str, Any],
-    format_current_view: Callable[[Any], str],
-) -> str:
-    """格式化“上一步页面内容 + 主动回想”结构，供 prompt 展示。"""
-    lines = []
-    current_view = result.get("current_view")
-    if current_view is not None:
-        lines.append("【上一步页面内容】")
-        lines.append(format_current_view(current_view))
-
-    explicit_recalls = result.get("explicit_recalls") or []
-    for recall in explicit_recalls:
-        query = recall.get("query", "")
-        memories = recall.get("memories", [])
-        total = recall.get("total", len(memories))
-        lines.append(f"\n【主动回想】查询：{query}，共{total}条")
-        if not memories:
-            lines.append("没有回想起相关记忆")
-            continue
-        for memory in memories:
-            lines.append(f"  - 记忆片段 - {memory.get('time_description', '时间未知')}")
-            lines.append(f"    {memory.get('content', '')}")
-    return "\n".join(lines)
 
 
 @tool

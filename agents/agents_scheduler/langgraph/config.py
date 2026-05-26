@@ -30,6 +30,8 @@ class SessionConfig:
     openai_model_name: str = ""
     anthropic_api_key: str = ""
     anthropic_model_name: str = ""
+    web_search_enabled: bool = False
+    tavily_api_key: str = ""
 
     @classmethod
     def from_db(cls) -> "SessionConfig":
@@ -75,6 +77,8 @@ class SessionConfig:
             openai_model_name=openai_model_name,
             anthropic_api_key=anthropic_api_key,
             anthropic_model_name=anthropic_model_name,
+            web_search_enabled=_get("WEB_SEARCH_ENABLED", "false").lower() in ("true", "1", "yes"),
+            tavily_api_key=_get("TAVILY_API_KEY", ""),
         )
 
     def __post_init__(self):

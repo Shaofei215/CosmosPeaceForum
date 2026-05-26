@@ -12,7 +12,7 @@ from agents.agents_scheduler.langgraph.tools.types import (
     ToolResult,
 )
 
-from agents.agents_scheduler.langgraph.tools.utils import (
+from agents.agents_scheduler.langgraph.tools.support.registry import (
     get_social_tools,
     get_all_tools_for_summarize,
 )

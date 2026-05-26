@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import requests
 
-from agents.agents_scheduler.langgraph.tools.utils import (
+from agents.agents_scheduler.langgraph.tools.support.platform import (
     _get_api_base_url,
     _make_request,
     _get_follow_status_text,
@@ -21,6 +21,8 @@ from agents.agents_scheduler.langgraph.tools.utils import (
     _get_comment_replies,
     _get_user_posts,
     _get_global_feed,
+)
+from agents.agents_scheduler.langgraph.tools.support.registry import (
     get_social_tools,
     get_all_tools_for_summarize,
 )
@@ -41,9 +43,9 @@ class TestGetApiBaseUrl:
 
 
 class TestMakeRequest:
-    @patch("agents.agents_scheduler.langgraph.tools.utils.requests.request")
-    @patch("agents.agents_scheduler.langgraph.tools.utils.get_current_token")
-    @patch("agents.agents_scheduler.langgraph.tools.utils._get_api_base_url")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.requests.request")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.get_current_token")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._get_api_base_url")
     def test_make_request_success(self, mock_base_url, mock_token, mock_request):
         mock_base_url.return_value = "http://localhost:8000"
         mock_token.return_value = "test_token"
@@ -64,9 +66,9 @@ class TestMakeRequest:
             timeout=30
         )
 
-    @patch("agents.agents_scheduler.langgraph.tools.utils.requests.request")
-    @patch("agents.agents_scheduler.langgraph.tools.utils.get_current_token")
-    @patch("agents.agents_scheduler.langgraph.tools.utils._get_api_base_url")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.requests.request")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.get_current_token")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._get_api_base_url")
     def test_make_request_401(self, mock_base_url, mock_token, mock_request):
         mock_base_url.return_value = "http://localhost:8000"
         mock_token.return_value = "test_token"
@@ -77,9 +79,9 @@ class TestMakeRequest:
         with pytest.raises(AuthenticationError):
             _make_request("GET", "/users/1")
 
-    @patch("agents.agents_scheduler.langgraph.tools.utils.requests.request")
-    @patch("agents.agents_scheduler.langgraph.tools.utils.get_current_token")
-    @patch("agents.agents_scheduler.langgraph.tools.utils._get_api_base_url")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.requests.request")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.get_current_token")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._get_api_base_url")
     def test_make_request_404(self, mock_base_url, mock_token, mock_request):
         mock_base_url.return_value = "http://localhost:8000"
         mock_token.return_value = "test_token"
@@ -92,9 +94,9 @@ class TestMakeRequest:
         with pytest.raises(NotFoundError):
             _make_request("GET", "/users/999")
 
-    @patch("agents.agents_scheduler.langgraph.tools.utils.requests.request")
-    @patch("agents.agents_scheduler.langgraph.tools.utils.get_current_token")
-    @patch("agents.agents_scheduler.langgraph.tools.utils._get_api_base_url")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.requests.request")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.get_current_token")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._get_api_base_url")
     def test_make_request_500(self, mock_base_url, mock_token, mock_request):
         mock_base_url.return_value = "http://localhost:8000"
         mock_token.return_value = "test_token"
@@ -107,9 +109,9 @@ class TestMakeRequest:
         with pytest.raises(ToolExecutionError):
             _make_request("GET", "/users/1")
 
-    @patch("agents.agents_scheduler.langgraph.tools.utils.requests.request")
-    @patch("agents.agents_scheduler.langgraph.tools.utils.get_current_token")
-    @patch("agents.agents_scheduler.langgraph.tools.utils._get_api_base_url")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.requests.request")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.get_current_token")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._get_api_base_url")
     def test_make_request_connection_error(self, mock_base_url, mock_token, mock_request):
         mock_base_url.return_value = "http://localhost:8000"
         mock_token.return_value = "test_token"
@@ -118,9 +120,9 @@ class TestMakeRequest:
         with pytest.raises(ToolExecutionError):
             _make_request("GET", "/users/1")
 
-    @patch("agents.agents_scheduler.langgraph.tools.utils.requests.request")
-    @patch("agents.agents_scheduler.langgraph.tools.utils.get_current_token")
-    @patch("agents.agents_scheduler.langgraph.tools.utils._get_api_base_url")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.requests.request")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.get_current_token")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._get_api_base_url")
     def test_make_request_timeout(self, mock_base_url, mock_token, mock_request):
         mock_base_url.return_value = "http://localhost:8000"
         mock_token.return_value = "test_token"
@@ -129,9 +131,9 @@ class TestMakeRequest:
         with pytest.raises(ToolExecutionError):
             _make_request("GET", "/users/1")
 
-    @patch("agents.agents_scheduler.langgraph.tools.utils.requests.request")
-    @patch("agents.agents_scheduler.langgraph.tools.utils.get_current_token")
-    @patch("agents.agents_scheduler.langgraph.tools.utils._get_api_base_url")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.requests.request")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.get_current_token")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._get_api_base_url")
     def test_make_request_with_token_param(self, mock_base_url, mock_token, mock_request):
         mock_base_url.return_value = "http://localhost:8000"
         mock_response = MagicMock()
@@ -145,9 +147,9 @@ class TestMakeRequest:
         call_kwargs = mock_request.call_args[1]
         assert call_kwargs["headers"]["Authorization"] == "Bearer custom_token"
 
-    @patch("agents.agents_scheduler.langgraph.tools.utils.requests.request")
-    @patch("agents.agents_scheduler.langgraph.tools.utils.get_current_token")
-    @patch("agents.agents_scheduler.langgraph.tools.utils._get_api_base_url")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.requests.request")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.get_current_token")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._get_api_base_url")
     def test_make_request_no_token(self, mock_base_url, mock_token, mock_request):
         mock_base_url.return_value = "http://localhost:8000"
         mock_token.return_value = None
@@ -161,9 +163,9 @@ class TestMakeRequest:
         call_kwargs = mock_request.call_args[1]
         assert "Authorization" not in call_kwargs["headers"]
 
-    @patch("agents.agents_scheduler.langgraph.tools.utils.requests.request")
-    @patch("agents.agents_scheduler.langgraph.tools.utils.get_current_token")
-    @patch("agents.agents_scheduler.langgraph.tools.utils._get_api_base_url")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.requests.request")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform.get_current_token")
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._get_api_base_url")
     def test_make_request_empty_response(self, mock_base_url, mock_token, mock_request):
         mock_base_url.return_value = "http://localhost:8000"
         mock_token.return_value = "test_token"
@@ -189,9 +191,9 @@ class TestStandardizePost:
             "is_liked": False,
             "author_bio": "bio text"
         }
-        with patch("agents.agents_scheduler.langgraph.tools.utils._expand_username_by_relation", return_value="testuser"), \
-             patch("agents.agents_scheduler.langgraph.tools.utils._expand_content_mentions_by_relation", return_value="hello world"), \
-             patch("agents.agents_scheduler.langgraph.tools.utils._get_follow_status_text", return_value=""):
+        with patch("agents.agents_scheduler.langgraph.tools.support.platform._expand_username_by_relation", return_value="testuser"), \
+             patch("agents.agents_scheduler.langgraph.tools.support.platform._expand_content_mentions_by_relation", return_value="hello world"), \
+             patch("agents.agents_scheduler.langgraph.tools.support.platform._get_follow_status_text", return_value=""):
             result = _standardize_post(post_data)
             assert result["id"] == 1
             assert result["author_id"] == 10
@@ -211,9 +213,9 @@ class TestStandardizePost:
             "comment_count": 0,
             "is_liked": True,
         }
-        with patch("agents.agents_scheduler.langgraph.tools.utils._expand_username_by_relation", return_value="nested_user"), \
-             patch("agents.agents_scheduler.langgraph.tools.utils._expand_content_mentions_by_relation", return_value="test"), \
-             patch("agents.agents_scheduler.langgraph.tools.utils._get_follow_status_text", return_value=""):
+        with patch("agents.agents_scheduler.langgraph.tools.support.platform._expand_username_by_relation", return_value="nested_user"), \
+             patch("agents.agents_scheduler.langgraph.tools.support.platform._expand_content_mentions_by_relation", return_value="test"), \
+             patch("agents.agents_scheduler.langgraph.tools.support.platform._get_follow_status_text", return_value=""):
             result = _standardize_post(post_data)
             assert result["author_username"] == "nested_user"
             assert result["author_bio"] == "nested bio"
@@ -232,13 +234,13 @@ class TestStandardizePost:
             "author_is_mutual": False,
         }
         with patch(
-            "agents.agents_scheduler.langgraph.tools.utils._expand_username_by_relation",
+            "agents.agents_scheduler.langgraph.tools.support.platform._expand_username_by_relation",
             return_value="testuser",
         ), patch(
-            "agents.agents_scheduler.langgraph.tools.utils._expand_content_mentions_by_relation",
+            "agents.agents_scheduler.langgraph.tools.support.platform._expand_content_mentions_by_relation",
             return_value="hello world",
         ), patch(
-            "agents.agents_scheduler.langgraph.tools.utils._get_follow_status_text",
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_follow_status_text",
             return_value="未关注",
         ) as mock_follow_status:
             result = _standardize_post(post_data, current_user_id=99)
@@ -262,13 +264,13 @@ class TestStandardizePost:
             "is_liked": False,
         }
         with patch(
-            "agents.agents_scheduler.langgraph.tools.utils._expand_username_by_relation",
+            "agents.agents_scheduler.langgraph.tools.support.platform._expand_username_by_relation",
             side_effect=lambda username, user_id, owner_id: username,
         ), patch(
-            "agents.agents_scheduler.langgraph.tools.utils._expand_content_mentions_by_relation",
+            "agents.agents_scheduler.langgraph.tools.support.platform._expand_content_mentions_by_relation",
             side_effect=lambda content, owner_id: content,
         ), patch(
-            "agents.agents_scheduler.langgraph.tools.utils._get_follow_status_text",
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_follow_status_text",
             return_value="",
         ):
             result = _standardize_post(post_data, current_user_id=99)
@@ -291,8 +293,8 @@ class TestStandardizeComment:
             "reply_count": 1,
             "is_liked": False,
         }
-        with patch("agents.agents_scheduler.langgraph.tools.utils._expand_username_by_relation", return_value="commenter"), \
-             patch("agents.agents_scheduler.langgraph.tools.utils._expand_content_mentions_by_relation", return_value="good post"):
+        with patch("agents.agents_scheduler.langgraph.tools.support.platform._expand_username_by_relation", return_value="commenter"), \
+             patch("agents.agents_scheduler.langgraph.tools.support.platform._expand_content_mentions_by_relation", return_value="good post"):
             result = _standardize_comment(comment_data)
             assert result["id"] == 1
             assert result["author_id"] == 10
@@ -314,9 +316,9 @@ class TestStandardizeNotification:
             "is_read": False,
             "created_at": "2024-01-01",
         }
-        with patch("agents.agents_scheduler.langgraph.tools.utils._expand_username_by_relation", return_value="sender"), \
-             patch("agents.agents_scheduler.langgraph.tools.utils._expand_content_mentions_by_relation", return_value=""), \
-             patch("agents.agents_scheduler.langgraph.tools.utils._get_follow_status_text", return_value="未关注"):
+        with patch("agents.agents_scheduler.langgraph.tools.support.platform._expand_username_by_relation", return_value="sender"), \
+             patch("agents.agents_scheduler.langgraph.tools.support.platform._expand_content_mentions_by_relation", return_value=""), \
+             patch("agents.agents_scheduler.langgraph.tools.support.platform._get_follow_status_text", return_value="未关注"):
             result = _standardize_notification(notification_data, current_user_id=99)
             assert result["sender_id"] == 10
             assert result["sender_username"] == "sender"
@@ -329,7 +331,7 @@ class TestStandardizeLists:
             {"id": 1, "author_name": "user1", "content": "post1", "created_at": "", "like_count": 0, "comment_count": 0, "is_liked": False},
             {"id": 2, "author_name": "user2", "content": "post2", "created_at": "", "like_count": 0, "comment_count": 0, "is_liked": True},
         ]
-        with patch("agents.agents_scheduler.langgraph.tools.utils._standardize_post") as mock_std:
+        with patch("agents.agents_scheduler.langgraph.tools.support.platform._standardize_post") as mock_std:
             mock_std.return_value = {"id": 0}
             result = _standardize_posts_list(posts)
             assert len(result) == 2
@@ -340,7 +342,7 @@ class TestStandardizeLists:
             {"id": 1, "owner": {"username": "u1"}, "owner_id": 1, "content": "c1", "created_at": "", "parent_id": None, "like_count": 0, "reply_count": 0, "is_liked": False},
             {"id": 2, "owner": {"username": "u2"}, "owner_id": 2, "content": "c2", "created_at": "", "parent_id": None, "like_count": 0, "reply_count": 0, "is_liked": False},
         ]
-        with patch("agents.agents_scheduler.langgraph.tools.utils._standardize_comment") as mock_std:
+        with patch("agents.agents_scheduler.langgraph.tools.support.platform._standardize_comment") as mock_std:
             mock_std.return_value = {"id": 0}
             result = _standardize_comments_list(comments)
             assert len(result) == 2
@@ -369,6 +371,14 @@ class TestGetSocialTools:
         ]
         for name in expected_names:
             assert name in tool_names, f"Missing tool: {name}"
+
+    def test_get_social_tools_contains_web_search_when_enabled(self):
+        with patch("agents.agents_scheduler.langgraph.config.get_session_config") as mock_config:
+            mock_config.return_value = MagicMock(web_search_enabled=True)
+            tools = get_social_tools()
+
+        tool_names = [t.name.lower() for t in tools]
+        assert "web_search" in tool_names
 
     def test_get_social_tools_caching(self):
         tools1 = get_social_tools()

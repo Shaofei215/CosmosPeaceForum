@@ -1,9 +1,8 @@
-"""
-Management Backend - 终端日志路由
-"""
+"""Management Backend - 终端日志路由"""
 
-import json
 import asyncio
+import json
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
@@ -18,17 +17,27 @@ router = APIRouter()
 
 @router.get("/", response_model=TerminalLogListResponse)
 def get_terminal_logs(
-    skip: int = 0,
-    limit: int = 200,
-    level: str = Query(None),
-    keyword: str = Query(None),
-    role: str = Query(None),
+    count: int = Query(200, ge=1, le=1000),
+    skip: int | None = Query(default=None, ge=0),
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    level: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    role: str | None = Query(default=None),
     current_admin: AdminUser = Depends(require_permission(PERMISSION_VIEW_LOGS)),
 ):
-    """获取终端日志列表"""
-    logs, total = terminal_log_capture.get_logs(
-        skip=skip,
-        limit=limit,
+    """获取最近的终端日志，用于管理端轮询刷新。"""
+    if skip is not None or limit is not None:
+        logs, total = terminal_log_capture.get_logs(
+            skip=skip or 0,
+            limit=limit or count,
+            level=level,
+            keyword=keyword,
+            role=role,
+        )
+        return TerminalLogListResponse(items=logs, total=total)
+
+    logs, total = terminal_log_capture.recent(
+        count=count,
         level=level,
         keyword=keyword,
         role=role,
@@ -38,13 +47,20 @@ def get_terminal_logs(
 
 @router.get("/recent")
 def get_recent_terminal_logs(
-    count: int = 50,
-    role: str = Query(None),
+    count: int = Query(50, ge=1, le=1000),
+    level: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    role: str | None = Query(default=None),
     current_admin: AdminUser = Depends(require_permission(PERMISSION_VIEW_LOGS)),
 ):
     """获取最近的终端日志"""
-    logs = terminal_log_capture.get_recent_logs(count=count, role=role)
-    return {"items": logs, "total": len(logs)}
+    logs, total = terminal_log_capture.recent(
+        count=count,
+        level=level,
+        keyword=keyword,
+        role=role,
+    )
+    return {"items": logs, "total": total}
 
 
 @router.get("/stream")

@@ -70,7 +70,7 @@ def _build_attention_header() -> str:
 
 def _build_attention_template_values() -> Dict[str, Any]:
     try:
-        from agents.agents_scheduler.langgraph.tools.utils import _get_notification_summary
+        from agents.agents_scheduler.langgraph.tools.support.platform import _get_notification_summary
         summary = _get_notification_summary()
     except Exception:
         summary = {"following_count": 0, "followers_count": 0, "unread_count": 0}
@@ -239,12 +239,30 @@ def _format_tool_result(result: Any) -> str:
     elif isinstance(result, str):
         return result
     elif isinstance(result, dict):
-        from agents.agents_scheduler.langgraph.tools.memory import (
-            format_merged_recall_memory_result,
-            is_merged_recall_memory_result,
+        from agents.agents_scheduler.langgraph.tools.support.result_context import (
+            format_merged_tool_context_result,
+            is_merged_tool_context_result,
         )
-        if is_merged_recall_memory_result(result):
-            return format_merged_recall_memory_result(result, _format_tool_result)
+        if is_merged_tool_context_result(result):
+            return format_merged_tool_context_result(result, _format_tool_result)
+
+        if result.get("source") == "web_search":
+            query = result.get("query", "")
+            results = result.get("results", [])
+            total = result.get("total", len(results))
+            depth = result.get("search_depth", "advanced")
+            lines = [f"【联网搜索】查询：{query}，深度：{depth}，共{total}条："]
+            answer = result.get("answer")
+            if answer:
+                lines.append(f"概览：{answer}")
+            if not results:
+                lines.append("暂无网页结果")
+            for item in results:
+                lines.append(f"  - {item.get('title', 'Untitled')}")
+                lines.append(f"    URL: {item.get('url', '')}")
+                if item.get("content"):
+                    lines.append(f"    摘要: {item.get('content')}")
+            return "\n".join(lines)
 
         if "notifications" in result:
             notifications = result.get("notifications", [])

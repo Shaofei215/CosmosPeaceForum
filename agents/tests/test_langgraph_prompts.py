@@ -79,7 +79,7 @@ class TestBuildDecisionPrompt:
         mock_time_system.get_scaled_timestamp.return_value = 3600.0
 
         with patch(
-            "agents.agents_scheduler.langgraph.tools.utils._get_notification_summary",
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
             return_value={
                 "following_count": 1,
                 "followers_count": 2,

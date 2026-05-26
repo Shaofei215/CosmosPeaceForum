@@ -370,6 +370,9 @@ class LLMRegistry:
             config.anthropic_api_key,
             config.anthropic_model_name,
             config.temperature,
+            config.web_search_enabled,
+            bool(config.tavily_api_key),
+            tuple(t.name for t in tools or []),
         )
 
         with cls._lock:
@@ -422,7 +425,7 @@ def run_session(
         config = get_default_config()
 
     from agents.agents_scheduler.langgraph.tools import get_social_tools
-    from agents.agents_scheduler.langgraph.tools.utils import get_all_tools_for_summarize
+    from agents.agents_scheduler.langgraph.tools.support.registry import get_all_tools_for_summarize
 
     social_tools = get_social_tools(relation_map=relation_map)
     llm_invoker = LLMRegistry.get_invoker(config, tools=social_tools)

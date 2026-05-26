@@ -27,6 +27,8 @@ DEFAULT_SYSTEM_CONFIGS = [
     ("LANGGRAPH_MAX_STEPS", "20", "LangGraph 最大决策步数"),
     ("LANGGRAPH_MAX_CONSECUTIVE_ERRORS", "3", "最大连续错误次数"),
     ("LANGGRAPH_TOOL_TIMEOUT", "30", "工具调用超时时间（秒）"),
+    ("WEB_SEARCH_ENABLED", "false", "启用联网搜索工具"),
+    ("TAVILY_API_KEY", "", "Tavily API Key"),
     ("MEMORY_ENABLED", "true", "是否启用记忆系统"),
     ("MEMORY_RECALL_LIMIT", "5", "召回记忆数量"),
     ("MEMORY_RECALL_VECTOR_RESULTS", "5", "向量检索返回数量"),
@@ -39,8 +41,16 @@ DEFAULT_SYSTEM_CONFIGS = [
 
 def list_system_configs(db: Session) -> List[SystemConfig]:
     """获取所有系统配置"""
-    stmt = select(SystemConfig).order_by(SystemConfig.key)
-    return list(db.exec(stmt).all())
+    stmt = select(SystemConfig)
+    items = list(db.exec(stmt).all())
+    default_order = {key: index for index, (key, _, _) in enumerate(DEFAULT_SYSTEM_CONFIGS)}
+    default_descriptions = {key: description for key, _, description in DEFAULT_SYSTEM_CONFIGS}
+
+    for item in items:
+        if item.key in default_descriptions:
+            item.description = default_descriptions[item.key]
+
+    return sorted(items, key=lambda item: (default_order.get(item.key, len(default_order)), item.key))
 
 
 def get_system_config(db: Session, key: str) -> Optional[SystemConfig]:
@@ -117,6 +127,8 @@ def get_config_value(db: Session, key: str, default: str = "") -> str:
         "LANGGRAPH_MAX_STEPS": "20",
         "LANGGRAPH_MAX_CONSECUTIVE_ERRORS": "3",
         "LANGGRAPH_TOOL_TIMEOUT": "30",
+        "WEB_SEARCH_ENABLED": "false",
+        "TAVILY_API_KEY": "",
         "MEMORY_ENABLED": "true",
         "MEMORY_RECALL_LIMIT": "5",
         "MEMORY_RECALL_VECTOR_RESULTS": "5",

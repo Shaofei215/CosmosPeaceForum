@@ -200,10 +200,9 @@ export const memoryApi = {
 };
 
 export const terminalLogApi = {
-  list: (skip = 0, limit = 200, level?: string, keyword?: string, role?: string) => {
+  list: (count = 200, level?: string, keyword?: string, role?: string) => {
     const params = new URLSearchParams({
-      skip: String(skip),
-      limit: String(limit),
+      count: String(count),
     });
     if (level) params.set('level', level);
     if (keyword) params.set('keyword', keyword);
@@ -211,9 +210,11 @@ export const terminalLogApi = {
     return apiClient.get<TerminalLogListResponse>(`/terminal-logs/?${params.toString()}`);
   },
 
-  recent: (count = 50, role?: string) => {
+  recent: (count = 50, role?: string, keyword?: string, level?: string) => {
     const params = new URLSearchParams({ count: String(count) });
     if (role) params.set('role', role);
+    if (keyword) params.set('keyword', keyword);
+    if (level) params.set('level', level);
     return apiClient.get<{ items: TerminalLog[]; total: number }>(
       `/terminal-logs/recent?${params.toString()}`,
     );

@@ -13,6 +13,9 @@ from agents.agents_scheduler.scheduler.context import (
     get_current_token,
     get_current_user_id,
 )
+from agents.agents_scheduler.langgraph.tools.support.registry import (
+    get_relation_mapping_service as _get_relation_mapping_service,
+)
 from agents.agents_scheduler.langgraph.tools.types import ToolExecutionError, AuthenticationError, NotFoundError, ValidationError, UnauthorizedError
 
 
@@ -838,101 +841,3 @@ def _get_notification(notification_id: int) -> Dict[str, Any]:
         endpoint=f"/notifications/{notification_id}",
         reason="内部调用：查看单条消息"
     )
-
-
-# ==================== 工具注册函数 ====================
-
-_social_tools = None
-_relation_map_override = None
-
-
-def get_social_tools(relation_map=None) -> List:
-    """
-    获取所有决策节点可用工具的列表（不包含 write_memory）
-
-    write_memory 工具应仅在总结节点中单独绑定给 LLM。recall_memory 是决策节点可用的
-    主动回想工具，会在工具执行节点中合并进 last_tool_result。
-
-    Args:
-        relation_map: 关系映射服务（可选），用于 @mention 拓展
-
-    Returns:
-        List: 包含所有工具函数的列表（不含 write_memory）
-    """
-    global _social_tools, _relation_map_override
-
-    if relation_map is not None:
-        _relation_map_override = relation_map
-
-    if _social_tools is None:
-        from agents.agents_scheduler.langgraph.tools.social import (
-            search_platform,
-            view_notifications,
-            view_notification_origin,
-            toggle_post_like,
-            toggle_comment_like,
-            create_comment,
-            repost,
-            toggle_follow,
-            create_post,
-            delete_content,
-            logout,
-            get_user_profile,
-        )
-        from agents.agents_scheduler.langgraph.tools.feed import (
-            get_global_feed,
-            expand_post,
-            view_post_comments,
-            expand_comment,
-            scroll,
-        )
-        from agents.agents_scheduler.langgraph.tools.memory import recall_memory
-
-        _social_tools = [
-            search_platform,
-            view_notifications,
-            view_notification_origin,
-            toggle_post_like,
-            toggle_comment_like,
-            create_comment,
-            repost,
-            toggle_follow,
-            create_post,
-            delete_content,
-            logout,
-            get_user_profile,
-            get_global_feed,
-            expand_post,
-            view_post_comments,
-            expand_comment,
-            scroll,
-            recall_memory,
-        ]
-
-    return _social_tools
-
-
-def get_all_tools_for_summarize() -> List:
-    """
-    获取总结节点使用的所有工具（仅包含 write_memory）
-
-    此函数仅在 summarize_node 中调用，用于绑定 write_memory 工具。
-    总结节点只允许 LLM 调用 write_memory，不应绑定其他社交工具。
-
-    Returns:
-        List: 仅包含 write_memory 的工具列表
-    """
-    from agents.agents_scheduler.langgraph.tools.memory import write_memory
-    return [write_memory]
-
-
-def _get_relation_mapping_service():
-    """
-    获取关系映射服务（延迟加载，支持覆盖）
-
-    优先使用 _relation_map_override（会话级），否则使用全局单例。
-    """
-    if _relation_map_override is not None:
-        return _relation_map_override
-    from agents.agents_scheduler.scheduler.relation_map import get_relation_mapping_service as _get_service
-    return _get_service()

@@ -7,7 +7,7 @@ from langchain_core.tools import tool
 
 from agents.agents_scheduler.scheduler.context import get_current_user_id
 from agents.agents_scheduler.langgraph.tools.types import ToolResult, UnauthorizedError, NotFoundError, ValidationError, ToolExecutionError
-from agents.agents_scheduler.langgraph.tools.utils import (
+from agents.agents_scheduler.langgraph.tools.support.platform import (
     _make_request, _get_user, _get_post, _get_comment, _get_user_posts, _get_follow_status_text,
     _get_notifications, _get_notification, _search_platform,
     _standardize_post, _standardize_posts_list, _standardize_comment,
