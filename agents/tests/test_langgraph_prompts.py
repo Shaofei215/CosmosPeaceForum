@@ -197,8 +197,10 @@ class TestBuildSummarizePrompt:
             ],
         }
         prompt = build_summarize_prompt(state)
-        assert "第 1 step" in prompt
-        assert "第 2 step" in prompt
+        assert "你进行到了第 1 step，你看到了：s1，你 a1，原因是：r1" in prompt
+        assert "你进行到了第 2 step，你看到了：s2，你 a2，原因是：r2" in prompt
+        assert "基于以上记忆，继续做出你的下一步决策" not in prompt
+        assert "本次会话工具调用统计" not in prompt
         assert "记忆写入指令" in prompt
 
 

@@ -58,13 +58,8 @@ DEFAULT_AGENT_SYSTEM_PROMPT = """## 当前账号状态
 不要沉迷于无限浏览，适可而止是健康使用社交平台的表现。"""
 
 
-DEFAULT_SUMMARIZE_MEMORY_PROMPT = """本次会话你的操作：
+DEFAULT_SUMMARIZE_MEMORY_PROMPT = """本次登录你的操作：
 {history_text}
-{#if stats_text}
-
-本次会话工具调用统计：
-{stats_text}
-{/if}
 
 ## 记忆写入指令
 

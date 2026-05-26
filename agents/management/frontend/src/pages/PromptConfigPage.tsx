@@ -33,8 +33,6 @@ const PLACEHOLDER_LABELS: Record<string, PlaceholderHint[]> = {
   summarize_memory_prompt: [
     { token: '{username}', description: '角色用户名。' },
     { token: '{history_text}', description: '本次会话操作历史。' },
-    { token: '{#if stats_text}', description: '条件段：仅存在工具调用统计时拼入。' },
-    { token: '{stats_text}', description: '本次会话工具调用统计。' },
   ],
   memory_chunk_system_prompt: [
     { token: '{personality_prompt}', description: '角色性格提示词。' },

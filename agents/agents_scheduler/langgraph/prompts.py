@@ -161,16 +161,11 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
     location_text = f"📍 你当前在：{current_location}"
 
     # 构建工作记忆（action_history）
-    history_text = ""
     if state.get("action_history"):
-        history_text = "【你的工作记忆】\n"
-        for record in state["action_history"]:
-            step = record.get("step", "?")
-            summary = record.get("summary", "")
-            action = record.get("action", "")
-            reason = record.get("reason", "")
-            history_text += f"你进行到了第 {step} step，你看到了：{summary}，你 {action}，原因是：{reason}\n"
-        history_text += "\n基于以上记忆，继续做出你的下一步决策。\n"
+        history_text = _build_action_history_text(
+            state["action_history"],
+            include_decision_guidance=True,
+        )
     else:
         # 首次决策：LLM 需要主动调用 get_global_feed 获取初始信息
         history_text = """【你的工作记忆】
@@ -205,6 +200,28 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
 请做出你的下一步决策。"""
 
     return prompt
+
+
+def _build_action_history_text(
+    action_history: List[Dict[str, Any]],
+    *,
+    include_decision_guidance: bool,
+) -> str:
+    history_text = "【你的工作记忆】\n"
+    for record in action_history:
+        step = record.get("step", "?")
+        summary = record.get("summary", "")
+        action = record.get("action", "")
+        reason = record.get("reason", "")
+        history_text += (
+            f"你进行到了第 {step} step，你看到了：{summary}，"
+            f"你 {action}，原因是：{reason}\n"
+        )
+
+    if include_decision_guidance:
+        history_text += "\n基于以上记忆，继续做出你的下一步决策。\n"
+
+    return history_text
 
 
 def _format_tool_result(result: Any) -> str:
@@ -528,24 +545,10 @@ def build_summarize_prompt(state: Dict[str, Any]) -> str:
     if not state.get("action_history"):
         return f"""用户 {state.get('username', '未知')} 的本次会话未执行任何操作。"""
 
-    history_text = ""
-    for r in state["action_history"]:
-        step = r.get("step", "?")
-        summary = r.get("summary", "")
-        action = r.get("action", "")
-        reason = r.get("reason", "")
-        history_text += f"- 第 {step} step：你看到了 {summary}，你 {action}，原因是 {reason}\n"
-
-    tool_counts: Dict[str, int] = {}
-    for record in state["action_history"]:
-        action = record.get("action", "")
-        if action:
-            tool_counts[action] = tool_counts.get(action, 0) + 1
-
-    stats_text = "\n".join([
-        f"  - {action}: {count} 次"
-        for action, count in tool_counts.items()
-    ])
+    history_text = _build_action_history_text(
+        state["action_history"],
+        include_decision_guidance=False,
+    )
 
     template = _get_configured_prompt_template(SUMMARIZE_MEMORY_PROMPT_KEY)
     return render_prompt_template(
@@ -553,6 +556,5 @@ def build_summarize_prompt(state: Dict[str, Any]) -> str:
         {
             "username": state.get("username", "未知"),
             "history_text": history_text,
-            "stats_text": stats_text,
         },
     )
