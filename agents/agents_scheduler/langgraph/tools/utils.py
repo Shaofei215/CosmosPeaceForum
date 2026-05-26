@@ -842,7 +842,7 @@ def _get_notification(notification_id: int) -> Dict[str, Any]:
 
 # ==================== 工具注册函数 ====================
 
-_social_tools = None
+_base_social_tools = None
 _relation_map_override = None
 
 
@@ -859,12 +859,12 @@ def get_social_tools(relation_map=None) -> List:
     Returns:
         List: 包含所有工具函数的列表（不含 write_memory）
     """
-    global _social_tools, _relation_map_override
+    global _base_social_tools, _relation_map_override
 
     if relation_map is not None:
         _relation_map_override = relation_map
 
-    if _social_tools is None:
+    if _base_social_tools is None:
         from agents.agents_scheduler.langgraph.tools.social import (
             search_platform,
             view_notifications,
@@ -888,7 +888,7 @@ def get_social_tools(relation_map=None) -> List:
         )
         from agents.agents_scheduler.langgraph.tools.memory import recall_memory
 
-        _social_tools = [
+        _base_social_tools = [
             search_platform,
             view_notifications,
             view_notification_origin,
@@ -909,7 +909,16 @@ def get_social_tools(relation_map=None) -> List:
             recall_memory,
         ]
 
-    return _social_tools
+    try:
+        from agents.agents_scheduler.langgraph.config import get_session_config
+        config = get_session_config()
+        if config.web_search_enabled:
+            from agents.agents_scheduler.langgraph.tools.web_search import web_search
+            return [*_base_social_tools, web_search]
+    except Exception:
+        pass
+
+    return _base_social_tools
 
 
 def get_all_tools_for_summarize() -> List:

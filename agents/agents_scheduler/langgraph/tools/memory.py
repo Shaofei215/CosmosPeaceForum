@@ -39,9 +39,13 @@ def merge_recall_memory_result(
         explicit_recalls = []
 
     explicit_recalls.append(recall_result)
+    web_searches = []
+    if is_merged_recall_memory_result(previous_result):
+        web_searches = list(previous_result.get("web_searches") or [])
     return {
         "current_view": current_view,
         "explicit_recalls": explicit_recalls,
+        "web_searches": web_searches,
     }
 
 
@@ -77,6 +81,26 @@ def format_merged_recall_memory_result(
         for memory in memories:
             lines.append(f"  - 记忆片段 - {memory.get('time_description', '时间未知')}")
             lines.append(f"    {memory.get('content', '')}")
+
+    web_searches = result.get("web_searches") or []
+    for search in web_searches:
+        query = search.get("query", "")
+        results = search.get("results", [])
+        total = search.get("total", len(results))
+        depth = search.get("search_depth", "advanced")
+        lines.append(f"\n【联网搜索】查询：{query}，深度：{depth}，共{total}条")
+        answer = search.get("answer")
+        if answer:
+            lines.append(f"概览：{answer}")
+        if not results:
+            lines.append("没有找到相关网页结果")
+            continue
+        for item in results:
+            lines.append(f"  - {item.get('title', 'Untitled')}")
+            lines.append(f"    URL: {item.get('url', '')}")
+            content = item.get("content", "")
+            if content:
+                lines.append(f"    摘要: {content}")
     return "\n".join(lines)
 
 

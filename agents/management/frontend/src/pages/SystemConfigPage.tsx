@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { systemApi } from '@/shared/api/modules';
 import {
-  Button, Input, Card, CardContent,
+  Button, Input, Card, CardContent, Switch,
 } from '@/shared/components/ui';
 import { Settings, Edit, Eye, EyeOff } from 'lucide-react';
 
-const PASSWORD_KEYS = ['AI_USER_PASSWORD'];
+const PASSWORD_KEYS = ['AI_USER_PASSWORD', 'TAVILY_API_KEY'];
+const BOOLEAN_KEYS = ['MEMORY_ENABLED', 'LANGGRAPH_CHECKPOINTER_ENABLED', 'WEB_SEARCH_ENABLED'];
 
 const configGroupLabels: Record<string, string[]> = {
   '通用': ['ADMIN_KEY', 'AI_USER_PASSWORD', 'API_BASE_URL', 'LOG_LEVEL'],
   'LangGraph': ['LANGGRAPH_MAX_STEPS', 'LANGGRAPH_MAX_CONSECUTIVE_ERRORS', 'LANGGRAPH_TOOL_TIMEOUT'],
+  '联网搜索': ['WEB_SEARCH_ENABLED', 'TAVILY_API_KEY'],
   '记忆': ['MEMORY_ENABLED', 'MEMORY_RECALL_LIMIT', 'MEMORY_RECALL_VECTOR_RESULTS', 'MEMORY_RECALL_BM25_RESULTS', 'MEMORY_THRESHOLD', 'MEMORY_BOOST_FACTOR', 'MEMORY_DECAY_RATE'],
 };
 
@@ -89,38 +91,50 @@ export default function SystemConfigPage() {
                       <td className="py-2 px-4 text-sm font-mono">{config.key}</td>
                       <td className="py-2 px-4 text-sm text-muted-foreground">{config.description}</td>
                       <td className="py-2 px-4 text-sm">
-                        <div className="relative">
-                          <Input
-                            type={PASSWORD_KEYS.includes(config.key) && !visiblePasswords.has(config.key) ? 'password' : 'text'}
-                            value={editingKey === config.key ? editValue : config.value}
-                            onChange={(e) => {
-                              if (editingKey === config.key) setEditValue(e.target.value);
+                        {BOOLEAN_KEYS.includes(config.key) ? (
+                          <Switch
+                            checked={config.value.toLowerCase() === 'true'}
+                            onCheckedChange={(checked) => {
+                              updateMutation.mutate({ key: config.key, value: checked ? 'true' : 'false' });
                             }}
-                            disabled={editingKey !== config.key}
-                            className={`text-sm h-7 ${PASSWORD_KEYS.includes(config.key) ? 'pr-10' : ''}`}
+                            disabled={updateMutation.isPending}
                           />
-                          {PASSWORD_KEYS.includes(config.key) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const next = new Set(visiblePasswords);
-                                if (next.has(config.key)) {
-                                  next.delete(config.key);
-                                } else {
-                                  next.add(config.key);
-                                }
-                                setVisiblePasswords(next);
+                        ) : (
+                          <div className="relative">
+                            <Input
+                              type={PASSWORD_KEYS.includes(config.key) && !visiblePasswords.has(config.key) ? 'password' : 'text'}
+                              value={editingKey === config.key ? editValue : config.value}
+                              onChange={(e) => {
+                                if (editingKey === config.key) setEditValue(e.target.value);
                               }}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                              tabIndex={-1}
-                            >
-                              {visiblePasswords.has(config.key) ? <EyeOff size={14} /> : <Eye size={14} />}
-                            </button>
-                          )}
-                        </div>
+                              disabled={editingKey !== config.key}
+                              className={`text-sm h-7 ${PASSWORD_KEYS.includes(config.key) ? 'pr-10' : ''}`}
+                            />
+                            {PASSWORD_KEYS.includes(config.key) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = new Set(visiblePasswords);
+                                  if (next.has(config.key)) {
+                                    next.delete(config.key);
+                                  } else {
+                                    next.add(config.key);
+                                  }
+                                  setVisiblePasswords(next);
+                                }}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                tabIndex={-1}
+                              >
+                                {visiblePasswords.has(config.key) ? <EyeOff size={14} /> : <Eye size={14} />}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="py-2 px-4 text-right">
-                        {editingKey === config.key ? (
+                        {BOOLEAN_KEYS.includes(config.key) ? (
+                          <span className="text-sm text-muted-foreground">-</span>
+                        ) : editingKey === config.key ? (
                           <div className="flex justify-end gap-1">
                             <Button
                               size="sm"

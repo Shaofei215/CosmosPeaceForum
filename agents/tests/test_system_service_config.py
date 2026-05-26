@@ -15,6 +15,13 @@ def test_default_system_configs_do_not_include_env_managed_keys():
     assert default_keys.isdisjoint(ENV_MANAGED_CONFIG_KEYS)
 
 
+def test_default_system_configs_include_web_search_keys():
+    default_keys = {key for key, _, _ in DEFAULT_SYSTEM_CONFIGS}
+
+    assert "WEB_SEARCH_ENABLED" in default_keys
+    assert "TAVILY_API_KEY" in default_keys
+
+
 def test_init_default_configs_purges_env_managed_values_from_sqlite():
     engine = create_engine("sqlite:///:memory:")
     SQLModel.metadata.create_all(engine)

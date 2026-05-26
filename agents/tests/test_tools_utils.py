@@ -370,6 +370,14 @@ class TestGetSocialTools:
         for name in expected_names:
             assert name in tool_names, f"Missing tool: {name}"
 
+    def test_get_social_tools_contains_web_search_when_enabled(self):
+        with patch("agents.agents_scheduler.langgraph.config.get_session_config") as mock_config:
+            mock_config.return_value = MagicMock(web_search_enabled=True)
+            tools = get_social_tools()
+
+        tool_names = [t.name.lower() for t in tools]
+        assert "web_search" in tool_names
+
     def test_get_social_tools_caching(self):
         tools1 = get_social_tools()
         tools2 = get_social_tools()

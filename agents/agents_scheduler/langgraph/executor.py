@@ -370,6 +370,9 @@ class LLMRegistry:
             config.anthropic_api_key,
             config.anthropic_model_name,
             config.temperature,
+            config.web_search_enabled,
+            bool(config.tavily_api_key),
+            tuple(t.name for t in tools or []),
         )
 
         with cls._lock:

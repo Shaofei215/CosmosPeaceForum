@@ -42,6 +42,7 @@ TOOL_TO_LOCATION = {
     "create_post": None,
     "scroll": None,
     "recall_memory": None,
+    "web_search": None,
     "logout": None,
 }
 
@@ -56,6 +57,7 @@ TOOLS_WITH_RETURN_VALUE = {
     "expand_comment",
     "scroll",
     "recall_memory",
+    "web_search",
 }
 
 TOOL_NO_RETURN_VALUE = {
@@ -501,6 +503,12 @@ def tool_execution_node(state: SessionState) -> SessionState:
     if tool_name == "recall_memory" and isinstance(last_tool_result, dict):
         from agents.agents_scheduler.langgraph.tools.memory import merge_recall_memory_result
         last_tool_result = merge_recall_memory_result(
+            state.get("last_tool_result"),
+            last_tool_result,
+        )
+    if tool_name == "web_search" and isinstance(last_tool_result, dict):
+        from agents.agents_scheduler.langgraph.tools.web_search import merge_web_search_result
+        last_tool_result = merge_web_search_result(
             state.get("last_tool_result"),
             last_tool_result,
         )
