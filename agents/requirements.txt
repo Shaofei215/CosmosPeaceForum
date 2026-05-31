@@ -25,13 +25,13 @@ requests==2.32.5
 APScheduler==3.11.2
 
 # AI/LLM 相关
-langgraph==0.2.61
-langchain==0.3.18
-langchain-openai==0.3.5
-langchain-anthropic==0.2.4
-langchain-core==0.3.37
-langchain-tavily>=0.1.0,<0.3.0
-openai==1.68.2
+langgraph==0.2.76
+langchain==0.3.30
+langchain-openai==0.3.35
+langchain-anthropic==0.3.22
+langchain-core==0.3.86
+langchain-tavily>=0.2.0,<0.2.18
+openai==1.109.1
 
 # 工具库
 numpy==1.26.4
