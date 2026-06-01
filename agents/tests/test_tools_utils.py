@@ -21,6 +21,7 @@ from agents.agents_scheduler.langgraph.tools.support.platform import (
     _get_comment_replies,
     _get_user_posts,
     _get_global_feed,
+    _get_hot_topics,
 )
 from agents.agents_scheduler.langgraph.tools.support.registry import (
     get_social_tools,
@@ -176,6 +177,22 @@ class TestMakeRequest:
 
         result = _make_request("POST", "/users/1", json_data={"name": "test"})
         assert result == {}
+
+
+class TestHotTopics:
+    @patch("agents.agents_scheduler.langgraph.tools.support.platform._make_request")
+    def test_get_hot_topics_uses_public_endpoint(self, mock_make_request):
+        mock_make_request.return_value = [{"title": "热榜", "rank": 1}]
+
+        result = _get_hot_topics(limit=8)
+
+        assert result == [{"title": "热榜", "rank": 1}]
+        mock_make_request.assert_called_once_with(
+            method="GET",
+            endpoint="/hot-topics",
+            params={"limit": 8},
+            reason="内部调用：获取公开热榜",
+        )
 
 
 class TestStandardizePost:
@@ -364,6 +381,7 @@ class TestGetSocialTools:
         tools = get_social_tools()
         tool_names = [t.name.lower() for t in tools]
         expected_names = [
+            "view_full_hot_topics",
             "toggle_post_like", "toggle_comment_like",
             "create_comment", "toggle_follow", "create_post", "logout",
             "get_user_profile", "get_global_feed", "expand_post",

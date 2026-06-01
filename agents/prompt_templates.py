@@ -14,6 +14,7 @@ DEFAULT_AGENT_SYSTEM_PROMPT = """## 当前账号状态
 关注：{following_count}
 粉丝：{followers_count}
 消息：{unread_count}
+热榜：{hot_topic_titles}
 {#if login_stats}
 总登录：{total_login_count}
 上次登录：{last_login_time}

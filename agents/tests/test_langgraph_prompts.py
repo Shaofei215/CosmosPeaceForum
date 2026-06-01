@@ -64,6 +64,33 @@ class TestBuildSystemPrompt:
         assert "今天重点关注活动通知" in prompt
         assert prompt.index("个人签名") < prompt.index("临时提示词注入") < prompt.index("行为准则")
 
+    def test_build_system_prompt_renders_hot_topics_through_template(self):
+        with patch(
+            "agents.agents_scheduler.langgraph.prompts._get_configured_prompt_template",
+            return_value="账号状态\n热榜：{hot_topic_titles}",
+        ), patch(
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
+            return_value={
+                "following_count": 0,
+                "followers_count": 0,
+                "unread_count": 0,
+            },
+        ), patch(
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_hot_topics",
+            return_value=[
+                {"title": "第一条热榜"},
+                {"title": "第二条热榜"},
+            ],
+        ):
+            prompt = build_system_prompt(
+                username="test_user",
+                name="Test",
+                personality_prompt="friendly",
+                personal_signature="sig",
+            )
+
+        assert prompt == "账号状态\n热榜：1. 第一条热榜；2. 第二条热榜"
+
 
 class TestBuildDecisionPrompt:
     def teardown_method(self):
@@ -96,6 +123,25 @@ class TestBuildDecisionPrompt:
         assert "消息：3" in header
         assert "总登录：3" in header
         assert "上次登录：" in header
+
+    def test_attention_header_includes_hot_topic_titles(self):
+        topics = [{"title": f"热榜{i}", "rank": i} for i in range(1, 10)]
+        with patch(
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
+            return_value={
+                "following_count": 0,
+                "followers_count": 0,
+                "unread_count": 0,
+            },
+        ), patch(
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_hot_topics",
+            return_value=topics,
+        ):
+            header = _build_attention_header()
+
+        assert "热榜：1. 热榜1" in header
+        assert "8. 热榜8" in header
+        assert "热榜9" not in header
 
     def test_build_decision_prompt_first_decision(self):
         state = {
@@ -313,3 +359,23 @@ class TestFormatToolResult:
         }
         formatted = _format_tool_result(result)
         assert "repost_count / repost count: 3" in formatted
+
+    def test_format_hot_topics_includes_full_summary_and_search_query(self):
+        result = {
+            "hot_topics": [
+                {
+                    "rank": 1,
+                    "title": "第一条热榜",
+                    "summary": "这是一段完整摘要，不应该被压缩或丢失。",
+                    "search_query": "第一条 关键词",
+                }
+            ],
+            "total": 1,
+        }
+
+        formatted = _format_tool_result(result)
+
+        assert "【完整热榜】" in formatted
+        assert "第一条热榜" in formatted
+        assert "这是一段完整摘要，不应该被压缩或丢失。" in formatted
+        assert "搜索关键词: 第一条 关键词" in formatted
