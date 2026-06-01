@@ -187,10 +187,20 @@ export interface HotTopicSettings {
   web_search_enabled: boolean;
   tavily_api_key: string | null;
   history_limit: number;
+  max_llm_rounds: number;
   updated_at: string;
 }
 
 export type HotTopicSettingsUpdate = Partial<Omit<HotTopicSettings, 'id' | 'updated_at'>>;
+
+export interface HotTopicPromptConfig {
+  key: string;
+  name: string;
+  description: string;
+  value: string;
+  default_value: string;
+  updated_at: string;
+}
 
 export interface HotTopicGeneration {
   id: number;

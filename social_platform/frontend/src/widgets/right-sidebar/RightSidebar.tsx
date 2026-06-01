@@ -18,7 +18,7 @@ export function RightSidebar() {
   const { data: hotTopics = [], isLoading } = useHotTopics(10);
 
   return (
-    <aside className="fixed top-24 z-30 h-fit max-h-[calc(100vh-6.75rem)] w-64 space-y-3 overflow-y-auto pb-3">
+    <aside className="fixed top-24 z-30 h-fit w-64 space-y-3 pb-3">
       {isAuthenticated && (
         <div className="rounded-lg bg-white p-3 shadow-sm">
           <CreatePostForm />
@@ -52,7 +52,7 @@ export function RightSidebar() {
           )}
         </div>
 
-        {hotTopics.length > 0 && (
+        {!isLoading && (
           <div className="mt-3 text-center">
             <Link to="/hot" className="text-xs text-muted-foreground hover:text-primary">
               查看完整热榜

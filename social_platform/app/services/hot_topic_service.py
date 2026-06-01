@@ -22,8 +22,20 @@ VALID_GENERATION_STATUSES = {"pending", "success", "failed"}
 VALID_PUBLISH_POLICIES = {"auto", "draft"}
 SECRET_MASK = "********"
 DEFAULT_HISTORY_LIMIT = 3
+DEFAULT_MAX_LLM_ROUNDS = 6
 HOT_TOPIC_LLM_TIMEOUT_SECONDS = 90
 HOT_TOPIC_LLM_MAX_RETRIES = 1
+HOT_TOPIC_AGENT_PROMPT_KEY = "hot_topic_agent_prompt"
+HOT_TOPIC_AGENT_PROMPT_NAME = "热榜生成提示词"
+HOT_TOPIC_AGENT_PROMPT_DESCRIPTION = "用于指导热榜 Agent 生成候选热点。"
+DEFAULT_HOT_TOPIC_AGENT_PROMPT = """你是 CosmosPeaceForum 的热榜编辑 Agent。请根据站内热点、当前热榜和以往热榜生成新的热榜候选。
+目标：标题要适合公开展示，search_query 用于提取关键词，要适合站内搜索召回相关帖子。
+约束：不要编造无法从上下文或搜索工具支撑的事实；每条必须包含 title 和 search_query；建议输出 5 到 10 条，rank 从 1 开始递增。
+可先调用 search_platform 复核站内讨论；如果启用了 web_search，可以检索外部背景。
+最终必须通过 submit_hot_topics 工具提交热榜结果。
+
+当前上下文 JSON：
+{context_json}"""
 
 _scheduler = None
 _agent_run_lock = threading.Lock()
@@ -113,6 +125,19 @@ def serialize_settings(settings: HotTopicSettings) -> dict[str, Any]:
         "web_search_enabled": settings.web_search_enabled,
         "tavily_api_key": _mask_secret(settings.tavily_api_key),
         "history_limit": settings.history_limit,
+        "max_llm_rounds": settings.max_llm_rounds or DEFAULT_MAX_LLM_ROUNDS,
+        "updated_at": settings.updated_at,
+    }
+
+
+def serialize_prompt_config(settings: HotTopicSettings) -> dict[str, Any]:
+    value = settings.prompt_template or DEFAULT_HOT_TOPIC_AGENT_PROMPT
+    return {
+        "key": HOT_TOPIC_AGENT_PROMPT_KEY,
+        "name": HOT_TOPIC_AGENT_PROMPT_NAME,
+        "description": HOT_TOPIC_AGENT_PROMPT_DESCRIPTION,
+        "value": value,
+        "default_value": DEFAULT_HOT_TOPIC_AGENT_PROMPT,
         "updated_at": settings.updated_at,
     }
 
@@ -129,7 +154,9 @@ def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicS
         if field == "agent_interval_minutes":
             value = max(5, int(value))
         if field == "history_limit":
-            value = max(1, min(int(value), 10))
+            value = max(0, min(int(value), 10))
+        if field == "max_llm_rounds":
+            value = max(1, min(int(value), 20))
         if field in string_fields:
             value = _normalize_text(value)
             if value == SECRET_MASK:
@@ -142,6 +169,30 @@ def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicS
     db.commit()
     db.refresh(settings)
     configure_hot_topic_agent_job()
+    return settings
+
+
+def update_hot_topic_prompt_template(db: Session, value: str) -> HotTopicSettings:
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("提示词模板不能为空")
+
+    settings = get_hot_topic_settings(db)
+    settings.prompt_template = normalized
+    settings.updated_at = _now()
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+def reset_hot_topic_prompt_template(db: Session) -> HotTopicSettings:
+    settings = get_hot_topic_settings(db)
+    settings.prompt_template = DEFAULT_HOT_TOPIC_AGENT_PROMPT
+    settings.updated_at = _now()
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
     return settings
 
 
@@ -384,17 +435,12 @@ def build_hot_topic_agent_context(db: Session, history_limit: int = DEFAULT_HIST
     }
 
 
-def build_hot_topic_agent_prompt(context: dict[str, Any]) -> str:
-    return (
-        "你是 CosmosPeaceForum 的热榜编辑 Agent。请根据站内热点、当前热榜和以往热榜生成新的热榜候选。\n"
-        "目标：标题要适合公开展示，search_query 用于提取关键词，要适合站内搜索召回相关帖子。\n"
-        "约束：不要编造无法从上下文或搜索工具支撑的事实；每条必须包含 title 和 search_query；"
-        "建议输出 5 到 10 条，rank 从 1 开始递增。\n"
-        "可先调用 search_platform 复核站内讨论；如果启用了 web_search，可以检索外部背景。\n"
-        "最终必须调用 submit_hot_topics 工具，参数 topics_json 为 JSON 数组字符串。\n\n"
-        "当前上下文 JSON：\n"
-        f"{json.dumps(context, ensure_ascii=False, indent=2)}"
-    )
+def build_hot_topic_agent_prompt(context: dict[str, Any], template: str | None = None) -> str:
+    context_json = json.dumps(context, ensure_ascii=False, indent=2)
+    prompt_template = template or DEFAULT_HOT_TOPIC_AGENT_PROMPT
+    if "{context_json}" not in prompt_template:
+        prompt_template = f"{prompt_template.rstrip()}\n\n当前上下文 JSON：\n{{context_json}}"
+    return prompt_template.replace("{context_json}", context_json).strip()
 
 
 def _extract_json_array(value: str) -> list[dict[str, Any]]:
@@ -533,8 +579,32 @@ def _create_submit_tool(submitted: dict[str, list[dict[str, Any]]]):
 
     @tool
     def submit_hot_topics(topics_json: str) -> str:
-        """提交最终热榜。topics_json 必须是 JSON 数组字符串。"""
-        submitted["topics"] = normalize_agent_topics(_extract_json_array(topics_json))
+        """提交最终热榜。topics_json 必须是合法 JSON 数组字符串，每项包含 title、search_query，可选 summary、rank。"""
+        try:
+            topics = normalize_agent_topics(_extract_json_array(topics_json))
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.warning("热榜 Agent 提交了非法 topics_json: %s", exc)
+            return json.dumps(
+                {
+                    "accepted": 0,
+                    "error": "invalid_topics_json",
+                    "message": str(exc),
+                    "hint": "请重新调用 submit_hot_topics，传入合法 JSON 数组字符串。数组项至少包含 title 和 search_query，字符串内部双引号必须转义，数组项之间必须用逗号分隔。",
+                },
+                ensure_ascii=False,
+            )
+
+        if not topics:
+            return json.dumps(
+                {
+                    "accepted": 0,
+                    "error": "empty_topics",
+                    "message": "没有可接受的热榜条目；每项至少需要非空 title 和 search_query。",
+                },
+                ensure_ascii=False,
+            )
+
+        submitted["topics"] = topics
         return json.dumps({"accepted": len(submitted["topics"])}, ensure_ascii=False)
 
     return submit_hot_topics
@@ -666,11 +736,12 @@ def run_hot_topic_agent(
                 "publish_policy",
             )
             logger.info(
-                "热榜 Agent 开始运行 force=%s enabled=%s publish_policy=%s history_limit=%s web_search=%s model=%s base_url_configured=%s",
+                "热榜 Agent 开始运行 force=%s enabled=%s publish_policy=%s history_limit=%s max_llm_rounds=%s web_search=%s model=%s base_url_configured=%s",
                 force,
                 settings.agent_enabled,
                 publish_policy,
                 settings.history_limit,
+                settings.max_llm_rounds or DEFAULT_MAX_LLM_ROUNDS,
                 settings.web_search_enabled,
                 settings.llm_model_name or "",
                 bool(settings.llm_base_url),
@@ -688,8 +759,9 @@ def run_hot_topic_agent(
 
         try:
             logger.info("热榜 Agent 构建上下文开始 generation_id=%s", generation.id)
-            context = build_hot_topic_agent_context(db, settings.history_limit or DEFAULT_HISTORY_LIMIT)
-            prompt = build_hot_topic_agent_prompt(context)
+            history_limit = DEFAULT_HISTORY_LIMIT if settings.history_limit is None else settings.history_limit
+            context = build_hot_topic_agent_context(db, history_limit)
+            prompt = build_hot_topic_agent_prompt(context, settings.prompt_template)
             generation.input_snapshot = json.dumps(context, ensure_ascii=False)
             db.add(generation)
             db.commit()
@@ -738,9 +810,18 @@ def run_hot_topic_agent(
                 llm = llm_factory(settings, tools)
 
             observations: list[str] = []
-            for round_index in range(1, 7):
+            max_rounds = max(1, min(settings.max_llm_rounds or DEFAULT_MAX_LLM_ROUNDS, 20))
+            for round_index in range(1, max_rounds + 1):
+                remaining_rounds = max_rounds - round_index
+                if remaining_rounds == 0:
+                    round_instruction = "这是最后一轮 LLM 决策，请立即通过 submit_hot_topics 提交最终热榜。"
+                else:
+                    round_instruction = (
+                        f"本次最多还有 {remaining_rounds} 轮后续 LLM 决策机会；"
+                        "必要时调用工具，但请在信息足够时尽早通过 submit_hot_topics 提交最终热榜。"
+                    )
                 user_prompt = (
-                    "请生成本轮热榜，必要时调用工具，最终调用 submit_hot_topics。\n"
+                    f"请生成本轮热榜。{round_instruction}\n"
                     "如果已有工具观察结果，请基于这些结果继续判断。\n\n"
                 )
                 if observations:
@@ -760,8 +841,23 @@ def run_hot_topic_agent(
                     [call.get("name") for call in tool_calls],
                 )
                 if not tool_calls:
-                    if not submitted["topics"]:
-                        submitted["topics"] = normalize_agent_topics(_extract_json_array(str(response.content)))
+                    if submitted["topics"]:
+                        break
+                    try:
+                        direct_topics = normalize_agent_topics(_extract_json_array(str(response.content)))
+                    except (json.JSONDecodeError, ValueError) as exc:
+                        observations.append(
+                            "模型直接输出不是合法热榜 JSON："
+                            f"{exc}。请改为调用 submit_hot_topics 工具提交合法 JSON 数组字符串。"
+                        )
+                        continue
+                    if not direct_topics:
+                        observations.append(
+                            "模型直接输出没有有效热榜条目；请调用 submit_hot_topics，"
+                            "每项至少包含非空 title 和 search_query。"
+                        )
+                        continue
+                    submitted["topics"] = direct_topics
                     break
 
                 tool_map = {tool.name: tool for tool in tools}
@@ -777,7 +873,23 @@ def run_hot_topic_agent(
                     if tool_name not in tool_map:
                         content = f"未知工具: {tool_name}"
                     else:
-                        content = str(tool_map[tool_name].invoke(tool_args))
+                        try:
+                            content = str(tool_map[tool_name].invoke(tool_args))
+                        except Exception as exc:
+                            logger.exception(
+                                "热榜 Agent 工具调用异常 generation_id=%s round=%s tool=%s",
+                                generation.id,
+                                round_index,
+                                tool_name,
+                            )
+                            content = json.dumps(
+                                {
+                                    "error": "tool_execution_error",
+                                    "message": str(exc),
+                                    "hint": "请根据错误修正工具参数后重新调用。",
+                                },
+                                ensure_ascii=False,
+                            )
                     observations.append(f"工具 {tool_name} 返回：\n{content}")
                     if tool_name == "submit_hot_topics":
                         break

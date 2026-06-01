@@ -48,6 +48,8 @@ class HotTopicSettings(Base):
     web_search_enabled = Column(Boolean, nullable=False, default=False, server_default="0")
     tavily_api_key = Column(String(500), nullable=True)
     history_limit = Column(Integer, nullable=False, default=3, server_default="3")
+    max_llm_rounds = Column(Integer, nullable=False, default=6, server_default="6")
+    prompt_template = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

@@ -35,7 +35,7 @@ export default function HotTopicsPage() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{topic.title}</p>
                 {topic.summary && (
-                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{topic.summary}</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{topic.summary}</p>
                 )}
                 <p className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <Search className="h-3.5 w-3.5" />

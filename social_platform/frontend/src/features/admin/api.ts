@@ -15,6 +15,7 @@ import type {
   HotTopic,
   HotTopicGeneration,
   HotTopicGenerationRunResponse,
+  HotTopicPromptConfig,
   HotTopicRequest,
   HotTopicSettings,
   HotTopicSettingsUpdate,
@@ -124,6 +125,13 @@ export const adminApi = {
   hotTopicSettings: () => client.get<unknown, HotTopicSettings>('/hot-topics/settings'),
   updateHotTopicSettings: (request: HotTopicSettingsUpdate) =>
     client.put<unknown, HotTopicSettings>('/hot-topics/settings', request),
+  hotTopicPrompt: () => client.get<unknown, HotTopicPromptConfig>('/hot-topics/prompt'),
+  updateHotTopicPrompt: (value: string) =>
+    client.put<unknown, HotTopicPromptConfig>('/hot-topics/prompt', { value }),
+  resetHotTopicPrompt: () =>
+    client.post<unknown, HotTopicPromptConfig>('/hot-topics/prompt/reset'),
+  getHotTopicGenerateEventsUrl: (token: string) =>
+    `${API_CONFIG.BASE_URL}/admin/hot-topics/generate/events?token=${encodeURIComponent(token)}`,
   hotTopicGenerations: (params: { skip?: number; limit?: number }) =>
     client.get<unknown, PaginatedResponse<HotTopicGeneration>>('/hot-topics/generations', {
       params,

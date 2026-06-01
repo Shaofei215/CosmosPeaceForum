@@ -1,14 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, Check, Flame, Play, Save, Search, Trash2 } from 'lucide-react';
+import {
+  Bot,
+  Braces,
+  Check,
+  Flame,
+  Loader2,
+  Play,
+  RotateCcw,
+  Save,
+  ScrollText,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import {
   adminApi,
   adminKeys,
   type HotTopic,
+  type HotTopicGenerationRunResponse,
+  type HotTopicPromptConfig,
   type HotTopicPublishPolicy,
   type HotTopicRequest,
+  type HotTopicSettings,
   type HotTopicSettingsUpdate,
 } from '@/features/admin';
 import { Button, Card, CardContent, Input, Textarea } from '@/shared/components/ui';
@@ -23,15 +38,64 @@ const emptyTopic: HotTopicRequest = {
   rank: 1,
 };
 
+const promptPlaceholders = [
+  { token: '{context_json}', description: '当前站内热帖、已有热榜和历史生成记录 JSON。' },
+];
+
+function settingsToForm(settings: HotTopicSettings): HotTopicSettingsUpdate {
+  return {
+    agent_enabled: settings.agent_enabled,
+    agent_interval_minutes: settings.agent_interval_minutes,
+    publish_policy: settings.publish_policy,
+    llm_base_url: settings.llm_base_url || '',
+    llm_model_name: settings.llm_model_name || '',
+    llm_api_key: settings.llm_api_key || '',
+    web_search_enabled: settings.web_search_enabled,
+    tavily_api_key: settings.tavily_api_key || '',
+    history_limit: settings.history_limit,
+    max_llm_rounds: settings.max_llm_rounds,
+  };
+}
+
+function normalizeSettingsForm(form: HotTopicSettingsUpdate): HotTopicSettingsUpdate {
+  return {
+    agent_enabled: !!form.agent_enabled,
+    agent_interval_minutes: Number(form.agent_interval_minutes || 180),
+    publish_policy: form.publish_policy || 'draft',
+    llm_base_url: form.llm_base_url || '',
+    llm_model_name: form.llm_model_name || '',
+    llm_api_key: form.llm_api_key || '',
+    web_search_enabled: !!form.web_search_enabled,
+    tavily_api_key: form.tavily_api_key || '',
+    history_limit: Number(form.history_limit ?? 3),
+    max_llm_rounds: Number(form.max_llm_rounds || 6),
+  };
+}
+
+function settingsFormsEqual(left: HotTopicSettingsUpdate, right: HotTopicSettingsUpdate) {
+  const normalizedLeft = normalizeSettingsForm(left);
+  const normalizedRight = normalizeSettingsForm(right);
+  return JSON.stringify(normalizedLeft) === JSON.stringify(normalizedRight);
+}
+
 export default function AdminHotTopicsPage() {
   const [editing, setEditing] = useState<HotTopic | null>(null);
   const [form, setForm] = useState<HotTopicRequest>(emptyTopic);
   const [settingsForm, setSettingsForm] = useState<HotTopicSettingsUpdate>({});
+  const [promptDraft, setPromptDraft] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const generateEventSourceRef = useRef<EventSource | null>(null);
   const queryClient = useQueryClient();
 
   const { data: activeTopicsData } = useQuery({
     queryKey: adminKeys.hotTopics('active', ''),
     queryFn: () => adminApi.hotTopics({ skip: 0, limit: 200, status: 'active' }),
+  });
+
+  const { data: settings } = useQuery({
+    queryKey: adminKeys.hotTopicSettings,
+    queryFn: adminApi.hotTopicSettings,
   });
 
   const { data: agentDraftsData } = useQuery({
@@ -46,26 +110,28 @@ export default function AdminHotTopicsPage() {
     enabled: settingsForm.publish_policy === 'draft',
   });
 
-  const { data: settings } = useQuery({
-    queryKey: adminKeys.hotTopicSettings,
-    queryFn: adminApi.hotTopicSettings,
+  const { data: promptConfig, isLoading: isPromptLoading } = useQuery({
+    queryKey: adminKeys.hotTopicPrompt,
+    queryFn: adminApi.hotTopicPrompt,
   });
 
   useEffect(() => {
     if (settings) {
-      setSettingsForm({
-        agent_enabled: settings.agent_enabled,
-        agent_interval_minutes: settings.agent_interval_minutes,
-        publish_policy: settings.publish_policy,
-        llm_base_url: settings.llm_base_url || '',
-        llm_model_name: settings.llm_model_name || '',
-        llm_api_key: settings.llm_api_key || '',
-        web_search_enabled: settings.web_search_enabled,
-        tavily_api_key: settings.tavily_api_key || '',
-        history_limit: settings.history_limit,
-      });
+      setSettingsForm(settingsToForm(settings));
     }
   }, [settings]);
+
+  useEffect(() => {
+    if (promptConfig && promptDraft === null) {
+      setPromptDraft(promptConfig.value);
+    }
+  }, [promptConfig, promptDraft]);
+
+  useEffect(() => {
+    return () => {
+      generateEventSourceRef.current?.close();
+    };
+  }, []);
 
   const invalidateHotTopics = () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'hot-topics'] });
@@ -100,17 +166,100 @@ export default function AdminHotTopicsPage() {
     },
   });
 
-  const generateMutation = useMutation({
-    mutationFn: adminApi.generateHotTopics,
-    onSuccess: () => {
-      invalidateHotTopics();
+  const updatePromptMutation = useMutation({
+    mutationFn: (value: string) => adminApi.updateHotTopicPrompt(value),
+    onSuccess: updated => {
+      setPromptDraft(updated.value);
+      queryClient.setQueryData(adminKeys.hotTopicPrompt, updated);
     },
   });
+
+  const resetPromptMutation = useMutation({
+    mutationFn: adminApi.resetHotTopicPrompt,
+    onSuccess: updated => {
+      setPromptDraft(updated.value);
+      queryClient.setQueryData(adminKeys.hotTopicPrompt, updated);
+    },
+  });
+
+  const saveSettings = saveSettingsMutation.mutate;
+  const settingsSavePending = saveSettingsMutation.isPending;
+
+  useEffect(() => {
+    if (!settings || settingsSavePending) return;
+    const current = normalizeSettingsForm(settingsForm);
+    const persisted = settingsToForm(settings);
+    if (settingsFormsEqual(current, persisted)) return;
+
+    const timeoutId = window.setTimeout(() => {
+      saveSettings(current);
+    }, 700);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [settings, settingsForm, settingsSavePending, saveSettings]);
 
   const agentEnabled = !!settingsForm.agent_enabled;
   const publishPolicy = settingsForm.publish_policy || 'draft';
   const activeTopics = activeTopicsData?.items ?? [];
   const agentDrafts = publishPolicy === 'draft' ? (agentDraftsData?.items ?? []) : [];
+  const promptValue = promptDraft ?? promptConfig?.value ?? '';
+  const isPromptDirty = !!promptConfig && promptValue !== promptConfig.value;
+  const settingsDirty = useMemo(() => {
+    if (!settings) return false;
+    return !settingsFormsEqual(settingsForm, settingsToForm(settings));
+  }, [settings, settingsForm]);
+
+  const closeGenerateStream = () => {
+    generateEventSourceRef.current?.close();
+    generateEventSourceRef.current = null;
+    setIsGenerating(false);
+  };
+
+  const startGenerate = () => {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      setGenerationError('管理员登录已失效，请重新登录');
+      return;
+    }
+
+    generateEventSourceRef.current?.close();
+    setGenerationError(null);
+    setIsGenerating(true);
+
+    const eventSource = new EventSource(adminApi.getHotTopicGenerateEventsUrl(token));
+    generateEventSourceRef.current = eventSource;
+
+    const handleCompleted = (event: MessageEvent<string>) => {
+      try {
+        JSON.parse(event.data) as HotTopicGenerationRunResponse;
+      } catch {
+        // 收到完成事件后仍以列表刷新作为最终状态来源。
+      }
+      invalidateHotTopics();
+      queryClient.invalidateQueries({ queryKey: adminKeys.hotTopicGenerations });
+      closeGenerateStream();
+    };
+
+    const handleFailed = (event: MessageEvent<string>) => {
+      try {
+        const data = JSON.parse(event.data) as { error?: string };
+        setGenerationError(data.error || '热榜生成失败，请检查后端日志');
+      } catch {
+        setGenerationError('热榜生成失败，请检查后端日志');
+      }
+      invalidateHotTopics();
+      closeGenerateStream();
+    };
+
+    eventSource.addEventListener('hot-topics.generate.completed', handleCompleted);
+    eventSource.addEventListener('hot-topics.generate.failed', handleFailed);
+    eventSource.onerror = () => {
+      if (generateEventSourceRef.current === eventSource) {
+        setGenerationError('热榜生成连接中断，请稍后重试');
+        closeGenerateStream();
+      }
+    };
+  };
 
   const startEdit = (topic: HotTopic) => {
     setEditing(topic);
@@ -245,13 +394,7 @@ export default function AdminHotTopicsPage() {
         <section className="space-y-5 xl:pl-1">
           <Card className="rounded-lg">
             <CardContent className="p-4">
-              <form
-                className="space-y-4"
-                onSubmit={event => {
-                  event.preventDefault();
-                  saveSettingsMutation.mutate(settingsForm);
-                }}
-              >
+              <div className="space-y-4">
                 <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2 font-semibold">
@@ -264,17 +407,32 @@ export default function AdminHotTopicsPage() {
                         setSettingsForm(current => ({ ...current, agent_enabled: checked }))
                       }
                     />
+                    {settingsDirty && (
+                      <span className="text-xs text-muted-foreground">
+                        {saveSettingsMutation.isPending ? '保存中' : '待自动保存'}
+                      </span>
+                    )}
                   </div>
                   <Button
                     type="button"
                     className="rounded-md"
-                    onClick={() => generateMutation.mutate()}
-                    disabled={!agentEnabled || generateMutation.isPending}
+                    onClick={startGenerate}
+                    disabled={!agentEnabled || isGenerating}
                   >
-                    <Play size={15} className="mr-1" />
-                    {generateMutation.isPending ? '生成中' : '立即生成'}
+                    {isGenerating ? (
+                      <Loader2 size={15} className="mr-1 animate-spin" />
+                    ) : (
+                      <Play size={15} className="mr-1" />
+                    )}
+                    {isGenerating ? '生成中' : '立即生成'}
                   </Button>
                 </div>
+
+                {generationError && (
+                  <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {generationError}
+                  </div>
+                )}
 
                 <fieldset
                   disabled={!agentEnabled}
@@ -311,14 +469,30 @@ export default function AdminHotTopicsPage() {
                         }
                       />
                     </Field>
-                    <Field label="历史热榜注入次数" hint="默认 3。">
+                    <Field label="历史热榜注入次数" hint="默认 3；填 0 表示不注入历史热榜。">
                       <Input
                         type="number"
+                        min={0}
+                        max={10}
                         value={settingsForm.history_limit ?? 3}
                         onChange={event =>
                           setSettingsForm(current => ({
                             ...current,
                             history_limit: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </Field>
+                    <Field label="最大对话轮数" hint="默认 6；最后一轮会要求模型提交结果。">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={settingsForm.max_llm_rounds ?? 6}
+                        onChange={event =>
+                          setSettingsForm(current => ({
+                            ...current,
+                            max_llm_rounds: Number(event.target.value),
                           }))
                         }
                       />
@@ -388,16 +562,7 @@ export default function AdminHotTopicsPage() {
                     />
                   </Field>
                 </fieldset>
-
-                <Button
-                  type="submit"
-                  className="rounded-md"
-                  disabled={saveSettingsMutation.isPending}
-                >
-                  <Save size={15} className="mr-1" />
-                  保存配置
-                </Button>
-              </form>
+              </div>
             </CardContent>
           </Card>
 
@@ -421,6 +586,19 @@ export default function AdminHotTopicsPage() {
               )}
             />
           )}
+
+          <PromptTemplatePanel
+            prompt={promptConfig}
+            draft={promptValue}
+            isLoading={isPromptLoading}
+            isDirty={isPromptDirty}
+            isSaving={updatePromptMutation.isPending}
+            isResetting={resetPromptMutation.isPending}
+            onDraftChange={setPromptDraft}
+            onCancel={() => setPromptDraft(promptConfig?.value ?? '')}
+            onReset={() => resetPromptMutation.mutate()}
+            onSave={() => updatePromptMutation.mutate(promptValue)}
+          />
         </section>
       </div>
     </div>
@@ -460,7 +638,7 @@ function HotTopicPanel({
                     >
                       <p className="truncate font-medium">{topic.title}</p>
                       {topic.summary && (
-                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                           {topic.summary}
                         </p>
                       )}
@@ -478,6 +656,95 @@ function HotTopicPanel({
         ) : (
           <div className="py-12 text-center text-muted-foreground">{emptyText}</div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PromptTemplatePanel({
+  prompt,
+  draft,
+  isLoading,
+  isDirty,
+  isSaving,
+  isResetting,
+  onDraftChange,
+  onCancel,
+  onReset,
+  onSave,
+}: {
+  prompt?: HotTopicPromptConfig;
+  draft: string;
+  isLoading: boolean;
+  isDirty: boolean;
+  isSaving: boolean;
+  isResetting: boolean;
+  onDraftChange: (value: string) => void;
+  onCancel: () => void;
+  onReset: () => void;
+  onSave: () => void;
+}) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="space-y-3 p-4">
+          <div className="h-4 w-1/4 animate-pulse rounded bg-muted" />
+          <div className="h-36 animate-pulse rounded bg-muted" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <ScrollText size={18} className="text-muted-foreground" />
+              <h2 className="text-lg font-semibold">{prompt?.name ?? '热榜生成提示词'}</h2>
+              {isDirty && <Badge variant="secondary">未保存</Badge>}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              disabled={!isDirty || isSaving || isResetting}
+            >
+              取消
+            </Button>
+            <Button variant="outline" onClick={onReset} disabled={isSaving || isResetting}>
+              <RotateCcw size={15} className="mr-1.5" />
+              恢复默认
+            </Button>
+            <Button onClick={onSave} disabled={!draft.trim() || !isDirty || isSaving}>
+              <Save size={15} className="mr-1.5" />
+              保存
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <Braces size={14} />
+          {promptPlaceholders.map(placeholder => (
+            <Badge
+              key={placeholder.token}
+              variant="outline"
+              className="font-mono"
+              title={placeholder.description}
+            >
+              {placeholder.token}
+            </Badge>
+          ))}
+        </div>
+
+        <Textarea
+          value={draft}
+          onChange={event => onDraftChange(event.target.value)}
+          className="min-h-[340px] font-mono leading-relaxed"
+          spellCheck={false}
+        />
       </CardContent>
     </Card>
   );
@@ -509,11 +776,38 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (checked: b
     >
       <span
         className={cn(
-          'absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform',
-          checked ? 'translate-x-6' : 'translate-x-1'
+          'absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform',
+          checked ? 'translate-x-5' : 'translate-x-0'
         )}
       />
     </button>
+  );
+}
+
+function Badge({
+  variant = 'secondary',
+  className,
+  children,
+  title,
+}: {
+  variant?: 'secondary' | 'outline';
+  className?: string;
+  children: ReactNode;
+  title?: string;
+}) {
+  return (
+    <span
+      title={title}
+      className={cn(
+        'inline-flex h-6 items-center rounded-md px-2 text-xs font-medium',
+        variant === 'outline'
+          ? 'border border-border bg-background text-muted-foreground'
+          : 'bg-muted text-muted-foreground',
+        className
+      )}
+    >
+      {children}
+    </span>
   );
 }
 

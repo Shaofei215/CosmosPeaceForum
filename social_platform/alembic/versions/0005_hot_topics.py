@@ -68,6 +68,8 @@ def upgrade() -> None:
             sa.Column("web_search_enabled", sa.Boolean(), server_default="0", nullable=False),
             sa.Column("tavily_api_key", sa.String(length=500), nullable=True),
             sa.Column("history_limit", sa.Integer(), server_default="3", nullable=False),
+            sa.Column("max_llm_rounds", sa.Integer(), server_default="6", nullable=False),
+            sa.Column("prompt_template", sa.Text(), nullable=True),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
             sa.PrimaryKeyConstraint("id"),
         )

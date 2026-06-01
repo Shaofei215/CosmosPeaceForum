@@ -87,6 +87,7 @@ def test_prompt_context_contains_top_posts_current_and_history(db_session):
     assert "当前热榜" in prompt
     assert "历史热榜" in prompt
     assert "submit_hot_topics" in prompt
+    assert "topics_json" not in prompt
 
 
 def test_auto_publish_archives_previous_agent_topics_but_keeps_manual_topic(db_session):
@@ -107,6 +108,134 @@ def test_auto_publish_archives_previous_agent_topics_but_keeps_manual_topic(db_s
     assert db_session.query(HotTopic).filter(HotTopic.title == "人工").one().status == "active"
     assert db_session.query(HotTopic).filter(HotTopic.title == "旧 Agent").one().status == "archived"
     assert generation.status == "success"
+
+
+def test_prompt_context_allows_zero_history_limit(db_session):
+    db_session.add(
+        HotTopicGeneration(
+            status="success",
+            publish_policy="auto",
+            output_json='[{"title":"历史热榜","search_query":"历史"}]',
+        )
+    )
+    db_session.commit()
+
+    context = hot_topic_service.build_hot_topic_agent_context(db_session, history_limit=0)
+
+    assert context["recent_generations"] == []
+
+
+def test_hot_topic_agent_tells_llm_when_final_round_is_reached(db_session):
+    settings = hot_topic_service.get_hot_topic_settings(db_session)
+    settings.publish_policy = "draft"
+    settings.max_llm_rounds = 2
+    db_session.commit()
+    seen_user_prompts = []
+
+    class FakeResponse:
+        content = "[]"
+        tool_calls = []
+
+    class FakeLLM:
+        def invoke(self, messages):
+            seen_user_prompts.append(messages[1]["content"])
+            if len(seen_user_prompts) == 1:
+                return type(
+                    "SearchResponse",
+                    (),
+                    {
+                        "content": "",
+                        "tool_calls": [
+                            {"name": "search_platform", "args": {"query": "火星", "count": 1}},
+                        ],
+                    },
+                )()
+            return type(
+                "SubmitResponse",
+                (),
+                {
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "name": "submit_hot_topics",
+                            "args": {
+                                "topics_json": (
+                                    '[{"title":"最后一轮热榜","search_query":"最后一轮","rank":1}]'
+                                )
+                            },
+                        }
+                    ],
+                },
+            )()
+
+    generation, topics = hot_topic_service.run_hot_topic_agent(
+        db_session,
+        force=True,
+        llm_factory=lambda _settings, _tools: FakeLLM(),
+    )
+
+    assert generation.status == "success"
+    assert topics[0].title == "最后一轮热榜"
+    assert "最多还有 1 轮" in seen_user_prompts[0]
+    assert "这是最后一轮" in seen_user_prompts[1]
+
+
+def test_hot_topic_agent_retries_after_invalid_submit_json(db_session):
+    settings = hot_topic_service.get_hot_topic_settings(db_session)
+    settings.publish_policy = "draft"
+    settings.max_llm_rounds = 2
+    db_session.commit()
+    seen_user_prompts = []
+
+    class FakeLLM:
+        def invoke(self, messages):
+            seen_user_prompts.append(messages[1]["content"])
+            if len(seen_user_prompts) == 1:
+                return type(
+                    "InvalidSubmitResponse",
+                    (),
+                    {
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "name": "submit_hot_topics",
+                                "args": {
+                                    "topics_json": (
+                                        '[{"title":"坏 JSON","search_query":"坏"}'
+                                        ' {"title":"缺逗号","search_query":"缺逗号"}]'
+                                    )
+                                },
+                            }
+                        ],
+                    },
+                )()
+            return type(
+                "ValidSubmitResponse",
+                (),
+                {
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "name": "submit_hot_topics",
+                            "args": {
+                                "topics_json": (
+                                    '[{"title":"修正后热榜","search_query":"修正后","rank":1}]'
+                                )
+                            },
+                        }
+                    ],
+                },
+            )()
+
+    generation, topics = hot_topic_service.run_hot_topic_agent(
+        db_session,
+        force=True,
+        llm_factory=lambda _settings, _tools: FakeLLM(),
+    )
+
+    assert generation.status == "success"
+    assert topics[0].title == "修正后热榜"
+    assert "invalid_topics_json" in seen_user_prompts[1]
 
 
 def test_hot_topic_agent_invokes_llm_with_fresh_system_user_messages(db_session):

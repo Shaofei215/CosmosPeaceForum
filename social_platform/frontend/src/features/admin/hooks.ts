@@ -9,6 +9,7 @@ export const adminKeys = {
   content: (type: string, keyword: string) => ['admin', 'content', type, keyword] as const,
   hotTopics: (status: string, source: string) => ['admin', 'hot-topics', status, source] as const,
   hotTopicSettings: ['admin', 'hot-topic-settings'] as const,
+  hotTopicPrompt: ['admin', 'hot-topic-prompt'] as const,
   hotTopicGenerations: ['admin', 'hot-topic-generations'] as const,
   admins: ['admin', 'admins'] as const,
   operations: ['admin', 'operations'] as const,

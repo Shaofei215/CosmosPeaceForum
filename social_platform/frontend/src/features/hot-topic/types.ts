@@ -35,6 +35,7 @@ export interface HotTopicSettings {
   web_search_enabled: boolean;
   tavily_api_key: string | null;
   history_limit: number;
+  max_llm_rounds: number;
   updated_at: string;
 }
 
