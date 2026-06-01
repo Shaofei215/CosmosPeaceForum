@@ -21,7 +21,7 @@ from social_platform.app.admin.schemas import (
     HotTopicUpdateRequest,
     PaginatedResponse,
 )
-from social_platform.app.admin.services.permissions import ALL_PERMISSIONS, PERMISSION_MANAGE_CONTENT
+from social_platform.app.admin.services.permissions import ALL_PERMISSIONS, PERMISSION_MANAGE_HOT_TOPICS
 from social_platform.app.api.deps import get_db
 from social_platform.app.core.security import decode_access_token
 from social_platform.app.db.session import SessionLocal
@@ -75,7 +75,7 @@ def _require_admin_token(token: str, db: Session) -> PlatformAdminUser:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="首次登录必须修改用户名和密码")
 
     permissions = ALL_PERMISSIONS if admin.is_super_admin else auth_service.parse_permissions(admin.permissions)
-    if PERMISSION_MANAGE_CONTENT not in permissions:
+    if PERMISSION_MANAGE_HOT_TOPICS not in permissions:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="缺少管理员权限")
     return admin
 
@@ -87,7 +87,7 @@ async def list_hot_topics(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         items, total = hot_topic_service.list_admin_hot_topics(
@@ -106,7 +106,7 @@ async def list_hot_topics(
 async def create_hot_topic(
     request: HotTopicCreateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         return hot_topic_service.create_hot_topic(db, request.model_dump())
@@ -119,7 +119,7 @@ async def update_hot_topic(
     topic_id: int,
     request: HotTopicUpdateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         return hot_topic_service.update_hot_topic(
@@ -135,7 +135,7 @@ async def update_hot_topic(
 async def delete_hot_topic(
     topic_id: int,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         hot_topic_service.delete_hot_topic(db, topic_id)
@@ -148,7 +148,7 @@ async def delete_hot_topic(
 async def publish_hot_topic(
     topic_id: int,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         return hot_topic_service.publish_hot_topic(db, topic_id)
@@ -160,7 +160,7 @@ async def publish_hot_topic(
 async def archive_hot_topic(
     topic_id: int,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         return hot_topic_service.archive_hot_topic(db, topic_id)
@@ -171,7 +171,7 @@ async def archive_hot_topic(
 @router.get("/settings", response_model=HotTopicSettingsResponse)
 async def get_settings(
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     settings = hot_topic_service.get_hot_topic_settings(db)
     return hot_topic_service.serialize_settings(settings)
@@ -181,7 +181,7 @@ async def get_settings(
 async def update_settings(
     request: HotTopicSettingsUpdateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         settings = hot_topic_service.update_hot_topic_settings(
@@ -196,7 +196,7 @@ async def update_settings(
 @router.get("/prompt", response_model=HotTopicPromptConfigResponse)
 async def get_prompt_config(
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     settings = hot_topic_service.get_hot_topic_settings(db)
     return hot_topic_service.serialize_prompt_config(settings)
@@ -206,7 +206,7 @@ async def get_prompt_config(
 async def update_prompt_config(
     request: HotTopicPromptConfigUpdateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         settings = hot_topic_service.update_hot_topic_prompt_template(db, request.value)
@@ -218,7 +218,7 @@ async def update_prompt_config(
 @router.post("/prompt/reset", response_model=HotTopicPromptConfigResponse)
 async def reset_prompt_config(
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     settings = hot_topic_service.reset_hot_topic_prompt_template(db)
     return hot_topic_service.serialize_prompt_config(settings)
@@ -229,7 +229,7 @@ async def list_generations(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     items, total = hot_topic_service.list_generations(db, skip=skip, limit=limit)
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
@@ -261,7 +261,7 @@ async def stream_generate_hot_topics(
 @router.post("/generate", response_model=HotTopicGenerationRunResponse)
 def generate_hot_topics(
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         logger.info("收到立即生成热榜请求")
@@ -294,7 +294,7 @@ def generate_hot_topics(
 async def publish_generation(
     generation_id: int,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         return hot_topic_service.publish_generation(db, generation_id)
