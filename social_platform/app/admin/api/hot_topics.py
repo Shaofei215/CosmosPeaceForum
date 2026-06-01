@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,7 @@ from social_platform.app.api.deps import get_db
 from social_platform.app.services import hot_topic_service
 
 router = APIRouter(prefix="/hot-topics", tags=["platform-admin-hot-topics"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/", response_model=PaginatedResponse[HotTopicResponse])
@@ -145,12 +148,35 @@ async def list_generations(
 
 
 @router.post("/generate", response_model=HotTopicGenerationRunResponse)
-async def generate_hot_topics(
+def generate_hot_topics(
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
 ):
-    generation, topics = hot_topic_service.run_hot_topic_agent(db, force=True)
-    return {"generation": generation, "topics": topics}
+    try:
+        logger.info("收到立即生成热榜请求")
+        generation, topics = hot_topic_service.run_hot_topic_agent(db, force=True)
+        if generation.status == "failed":
+            logger.error(
+                "立即生成热榜失败 generation_id=%s error=%s",
+                generation.id,
+                generation.error_message,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=generation.error_message or "热榜生成失败，请检查后端日志",
+            )
+        return {"generation": generation, "topics": topics}
+    except hot_topic_service.HotTopicAgentRunError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("立即生成热榜失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="热榜生成失败，请检查后端日志",
+        ) from exc
 
 
 @router.post("/generations/{generation_id}/publish", response_model=list[HotTopicResponse])

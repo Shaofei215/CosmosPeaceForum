@@ -145,3 +145,39 @@ def test_hot_topic_agent_invokes_llm_with_fresh_system_user_messages(db_session)
     assert topics[0].title == "新热榜"
     assert topics[0].rank == 1
     assert len(seen_messages) == 1
+
+
+def test_hot_topic_agent_records_failure_when_context_building_fails(db_session, monkeypatch):
+    settings = hot_topic_service.get_hot_topic_settings(db_session)
+    settings.publish_policy = "draft"
+    db_session.commit()
+
+    def fail_context(_db, history_limit=hot_topic_service.DEFAULT_HISTORY_LIMIT):
+        raise RuntimeError("context database failure")
+
+    monkeypatch.setattr(hot_topic_service, "build_hot_topic_agent_context", fail_context)
+
+    generation, topics = hot_topic_service.run_hot_topic_agent(db_session, force=True)
+
+    assert topics == []
+    assert generation.status == "failed"
+    assert generation.error_message == "context database failure"
+    assert generation.completed_at is not None
+
+
+def test_hot_topic_agent_records_failure_when_tool_setup_fails(db_session, monkeypatch):
+    settings = hot_topic_service.get_hot_topic_settings(db_session)
+    settings.publish_policy = "draft"
+    db_session.commit()
+
+    def fail_tool(_db):
+        raise RuntimeError("tool import failure")
+
+    monkeypatch.setattr(hot_topic_service, "_create_search_tool", fail_tool)
+
+    generation, topics = hot_topic_service.run_hot_topic_agent(db_session, force=True)
+
+    assert topics == []
+    assert generation.status == "failed"
+    assert generation.error_message == "tool import failure"
+    assert generation.input_snapshot is not None

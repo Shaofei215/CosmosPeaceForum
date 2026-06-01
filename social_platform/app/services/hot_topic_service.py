@@ -1,16 +1,17 @@
 import json
 import logging
 import os
+import threading
+import time
 from datetime import datetime
 from typing import Any, Callable, Iterable, Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.models.hot_topic import HotTopic, HotTopicGeneration, HotTopicSettings
 from social_platform.app.models.post import Post
-from social_platform.app.services import search_service
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +22,15 @@ VALID_GENERATION_STATUSES = {"pending", "success", "failed"}
 VALID_PUBLISH_POLICIES = {"auto", "draft"}
 SECRET_MASK = "********"
 DEFAULT_HISTORY_LIMIT = 3
+HOT_TOPIC_LLM_TIMEOUT_SECONDS = 90
+HOT_TOPIC_LLM_MAX_RETRIES = 1
 
 _scheduler = None
+_agent_run_lock = threading.Lock()
+
+
+class HotTopicAgentRunError(RuntimeError):
+    """Raised when a hot topic generation run cannot be represented safely."""
 
 
 def _now() -> datetime:
@@ -472,32 +480,50 @@ def apply_generated_hot_topics(
     return created
 
 
+def _search_platform_posts_for_agent(db: Session, query: str, count: int = 5) -> list[dict[str, Any]]:
+    normalized_query = _normalize_text(query)
+    if not normalized_query:
+        return []
+
+    safe_count = max(1, min(int(count or 5), 10))
+    like_query = f"%{normalized_query}%"
+    posts = (
+        db.query(Post)
+        .options(joinedload(Post.author))
+        .filter(or_(Post.title.ilike(like_query), Post.content.ilike(like_query)))
+        .order_by(func.coalesce(Post.heat_score, 0).desc(), Post.created_at.desc(), Post.id.desc())
+        .limit(safe_count)
+        .all()
+    )
+    return [
+        {
+            "title": post.title,
+            "content": (post.content or "")[:500],
+            "author": post.author.username if post.author else "",
+            "like_count": post.like_count or 0,
+            "comment_count": post.comment_count or 0,
+            "repost_count": post.repost_count or 0,
+            "heat_score": post.heat_score or 0,
+        }
+        for post in posts
+    ]
+
+
 def _create_search_tool(db: Session):
     from langchain_core.tools import tool
 
     @tool
     def search_platform(query: str, count: int = 5) -> str:
         """搜索站内帖子和文章内容，返回紧凑 JSON。"""
-        safe_count = max(1, min(int(count or 5), 10))
-        result = search_service.search_content(
-            db=db,
-            query=query,
-            page=1,
-            page_size=safe_count,
-            current_user_id=None,
-        )
-        posts = []
-        for post in result.data:
-            posts.append({
-                "title": post.title,
-                "content": post.content[:500],
-                "author": post.author_name,
-                "like_count": post.like_count,
-                "comment_count": post.comment_count,
-                "repost_count": post.repost_count,
-                "heat_score": post.heat_score,
-            })
-        return json.dumps({"query": query, "posts": posts}, ensure_ascii=False)
+        try:
+            safe_count = max(1, min(int(count or 5), 10))
+            logger.info("热榜 Agent 站内搜索开始 query=%r count=%s", (query or "")[:80], safe_count)
+            posts = _search_platform_posts_for_agent(db, query, safe_count)
+            logger.info("热榜 Agent 站内搜索完成 query=%r results=%s", (query or "")[:80], len(posts))
+            return json.dumps({"query": query, "posts": posts}, ensure_ascii=False)
+        except Exception as exc:
+            logger.exception("热榜 Agent 站内搜索失败 query=%r", (query or "")[:80])
+            return json.dumps({"query": query, "posts": [], "error": str(exc)}, ensure_ascii=False)
 
     return search_platform
 
@@ -580,94 +606,212 @@ def _invoke_hot_topic_llm(llm: Any, system_prompt: str, user_prompt: str) -> Any
     ])
 
 
-def run_hot_topic_agent(
-    db: Session,
-    force: bool = False,
-    llm_factory: Optional[Callable[[HotTopicSettings, list[Any]], Any]] = None,
-) -> tuple[HotTopicGeneration, list[HotTopic]]:
-    settings = get_hot_topic_settings(db)
-    if not force and not settings.agent_enabled:
-        raise ValueError("热榜 Agent 未启用")
-
-    publish_policy = _validate_choice(settings.publish_policy, VALID_PUBLISH_POLICIES, "publish_policy")
-    context = build_hot_topic_agent_context(db, settings.history_limit or DEFAULT_HISTORY_LIMIT)
-    prompt = build_hot_topic_agent_prompt(context)
+def _create_generation_record(db: Session, publish_policy: str) -> HotTopicGeneration:
     generation = HotTopicGeneration(
         status="pending",
         publish_policy=publish_policy,
-        input_snapshot=json.dumps(context, ensure_ascii=False),
         created_at=_now(),
     )
     db.add(generation)
     db.commit()
     db.refresh(generation)
+    return generation
 
-    submitted: dict[str, list[dict[str, Any]]] = {"topics": []}
-    tools = [_create_search_tool(db), _create_submit_tool(submitted)]
-    if settings.web_search_enabled:
-        tools.append(_create_web_search_tool(settings))
+
+def _mark_generation_failed(
+    db: Session,
+    generation: HotTopicGeneration,
+    exc: BaseException,
+) -> HotTopicGeneration:
+    db.rollback()
+    try:
+        persisted = db.get(HotTopicGeneration, generation.id)
+        if persisted is None:
+            raise HotTopicAgentRunError("热榜生成记录不存在，无法写入失败状态")
+
+        persisted.status = "failed"
+        persisted.error_message = str(exc)
+        persisted.completed_at = _now()
+        db.add(persisted)
+        db.commit()
+        db.refresh(persisted)
+        return persisted
+    except Exception as record_exc:
+        db.rollback()
+        logger.exception("热榜 Agent 失败状态写入失败")
+        raise HotTopicAgentRunError(
+            "热榜 Agent 生成失败，且失败状态无法写入数据库；请检查数据库迁移、连接和写入权限"
+        ) from record_exc
+
+
+def run_hot_topic_agent(
+    db: Session,
+    force: bool = False,
+    llm_factory: Optional[Callable[[HotTopicSettings, list[Any]], Any]] = None,
+) -> tuple[HotTopicGeneration, list[HotTopic]]:
+    run_started_at = time.perf_counter()
+    if not _agent_run_lock.acquire(blocking=False):
+        logger.warning("热榜 Agent 已在运行，拒绝新的生成请求 force=%s", force)
+        raise HotTopicAgentRunError("热榜 Agent 已在运行，请稍后再试")
 
     try:
-        if llm_factory is None:
-            if not settings.llm_model_name or not settings.llm_api_key:
-                raise ValueError("请先配置热榜 Agent 的模型名称和 API Key")
-            from langchain_openai import ChatOpenAI
+        try:
+            settings = get_hot_topic_settings(db)
+            if not force and not settings.agent_enabled:
+                raise ValueError("热榜 Agent 未启用")
 
-            kwargs: dict[str, Any] = {
-                "model": settings.llm_model_name,
-                "api_key": settings.llm_api_key,
-                "temperature": 0.7,
-            }
-            if settings.llm_base_url:
-                kwargs["base_url"] = settings.llm_base_url
-            llm = ChatOpenAI(**kwargs).bind_tools(tools)
-        else:
-            llm = llm_factory(settings, tools)
-
-        observations: list[str] = []
-        for _ in range(6):
-            user_prompt = (
-                "请生成本轮热榜，必要时调用工具，最终调用 submit_hot_topics。\n"
-                "如果已有工具观察结果，请基于这些结果继续判断。\n\n"
+            publish_policy = _validate_choice(
+                settings.publish_policy,
+                VALID_PUBLISH_POLICIES,
+                "publish_policy",
             )
-            if observations:
-                user_prompt += "## 已有工具观察结果\n" + "\n\n".join(observations)
-            response = _invoke_hot_topic_llm(llm, prompt, user_prompt)
-            tool_calls = _extract_tool_calls(response)
-            if not tool_calls:
-                if not submitted["topics"]:
-                    submitted["topics"] = normalize_agent_topics(_extract_json_array(str(response.content)))
-                break
+            logger.info(
+                "热榜 Agent 开始运行 force=%s enabled=%s publish_policy=%s history_limit=%s web_search=%s model=%s base_url_configured=%s",
+                force,
+                settings.agent_enabled,
+                publish_policy,
+                settings.history_limit,
+                settings.web_search_enabled,
+                settings.llm_model_name or "",
+                bool(settings.llm_base_url),
+            )
+            generation = _create_generation_record(db, publish_policy)
+            logger.info("热榜 Agent 创建生成记录 generation_id=%s", generation.id)
+        except Exception as exc:
+            db.rollback()
+            logger.exception("热榜 Agent 初始化失败")
+            raise HotTopicAgentRunError(
+                "热榜 Agent 初始化失败；请检查数据库迁移、连接和写入权限"
+            ) from exc
 
-            tool_map = {tool.name: tool for tool in tools}
-            for call in tool_calls:
-                tool_name = call.get("name")
-                tool_args = call.get("args") or {}
-                if tool_name not in tool_map:
-                    content = f"未知工具: {tool_name}"
-                else:
-                    content = str(tool_map[tool_name].invoke(tool_args))
-                observations.append(f"工具 {tool_name} 返回：\n{content}")
-                if tool_name == "submit_hot_topics":
+        submitted: dict[str, list[dict[str, Any]]] = {"topics": []}
+
+        try:
+            logger.info("热榜 Agent 构建上下文开始 generation_id=%s", generation.id)
+            context = build_hot_topic_agent_context(db, settings.history_limit or DEFAULT_HISTORY_LIMIT)
+            prompt = build_hot_topic_agent_prompt(context)
+            generation.input_snapshot = json.dumps(context, ensure_ascii=False)
+            db.add(generation)
+            db.commit()
+            db.refresh(generation)
+            logger.info(
+                "热榜 Agent 构建上下文完成 generation_id=%s top_posts=%s current_topics=%s history=%s",
+                generation.id,
+                len(context.get("top_posts", [])),
+                len(context.get("current_hot_topics", [])),
+                len(context.get("recent_generations", [])),
+            )
+
+            tools = [_create_search_tool(db), _create_submit_tool(submitted)]
+            if settings.web_search_enabled:
+                tools.append(_create_web_search_tool(settings))
+            logger.info(
+                "热榜 Agent 工具准备完成 generation_id=%s tools=%s",
+                generation.id,
+                [tool.name for tool in tools],
+            )
+
+            if llm_factory is None:
+                if not settings.llm_model_name or not settings.llm_api_key:
+                    raise ValueError("请先配置热榜 Agent 的模型名称和 API Key")
+                from langchain_openai import ChatOpenAI
+
+                kwargs: dict[str, Any] = {
+                    "model": settings.llm_model_name,
+                    "api_key": settings.llm_api_key,
+                    "temperature": 0.7,
+                    "timeout": HOT_TOPIC_LLM_TIMEOUT_SECONDS,
+                    "max_retries": HOT_TOPIC_LLM_MAX_RETRIES,
+                }
+                if settings.llm_base_url:
+                    kwargs["base_url"] = settings.llm_base_url
+                logger.info(
+                    "热榜 Agent 初始化 LLM generation_id=%s model=%s timeout=%ss max_retries=%s",
+                    generation.id,
+                    settings.llm_model_name,
+                    HOT_TOPIC_LLM_TIMEOUT_SECONDS,
+                    HOT_TOPIC_LLM_MAX_RETRIES,
+                )
+                llm = ChatOpenAI(**kwargs).bind_tools(tools)
+            else:
+                logger.info("热榜 Agent 使用测试/自定义 LLM factory generation_id=%s", generation.id)
+                llm = llm_factory(settings, tools)
+
+            observations: list[str] = []
+            for round_index in range(1, 7):
+                user_prompt = (
+                    "请生成本轮热榜，必要时调用工具，最终调用 submit_hot_topics。\n"
+                    "如果已有工具观察结果，请基于这些结果继续判断。\n\n"
+                )
+                if observations:
+                    user_prompt += "## 已有工具观察结果\n" + "\n\n".join(observations)
+                logger.info(
+                    "热榜 Agent 调用 LLM generation_id=%s round=%s observations=%s",
+                    generation.id,
+                    round_index,
+                    len(observations),
+                )
+                response = _invoke_hot_topic_llm(llm, prompt, user_prompt)
+                tool_calls = _extract_tool_calls(response)
+                logger.info(
+                    "热榜 Agent LLM 返回 generation_id=%s round=%s tool_calls=%s",
+                    generation.id,
+                    round_index,
+                    [call.get("name") for call in tool_calls],
+                )
+                if not tool_calls:
+                    if not submitted["topics"]:
+                        submitted["topics"] = normalize_agent_topics(_extract_json_array(str(response.content)))
                     break
-            if submitted["topics"]:
-                break
 
-        if not submitted["topics"]:
-            raise ValueError("热榜 Agent 没有提交有效热榜")
+                tool_map = {tool.name: tool for tool in tools}
+                for call in tool_calls:
+                    tool_name = call.get("name")
+                    tool_args = call.get("args") or {}
+                    logger.info(
+                        "热榜 Agent 调用工具 generation_id=%s round=%s tool=%s",
+                        generation.id,
+                        round_index,
+                        tool_name,
+                    )
+                    if tool_name not in tool_map:
+                        content = f"未知工具: {tool_name}"
+                    else:
+                        content = str(tool_map[tool_name].invoke(tool_args))
+                    observations.append(f"工具 {tool_name} 返回：\n{content}")
+                    if tool_name == "submit_hot_topics":
+                        break
+                if submitted["topics"]:
+                    break
 
-        generation.output_json = json.dumps(submitted["topics"], ensure_ascii=False)
-        topics = apply_generated_hot_topics(db, generation, submitted["topics"], publish_policy)
-        return generation, topics
-    except Exception as exc:
-        generation.status = "failed"
-        generation.error_message = str(exc)
-        generation.completed_at = _now()
-        db.add(generation)
-        db.commit()
-        db.refresh(generation)
-        logger.exception("热榜 Agent 生成失败")
-        return generation, []
+            if not submitted["topics"]:
+                raise ValueError("热榜 Agent 没有提交有效热榜")
+
+            generation.output_json = json.dumps(submitted["topics"], ensure_ascii=False)
+            logger.info(
+                "热榜 Agent 写入生成结果开始 generation_id=%s topic_count=%s publish_policy=%s",
+                generation.id,
+                len(submitted["topics"]),
+                publish_policy,
+            )
+            topics = apply_generated_hot_topics(db, generation, submitted["topics"], publish_policy)
+            logger.info(
+                "热榜 Agent 生成成功 generation_id=%s topic_count=%s duration=%.2fs",
+                generation.id,
+                len(topics),
+                time.perf_counter() - run_started_at,
+            )
+            return generation, topics
+        except Exception as exc:
+            generation = _mark_generation_failed(db, generation, exc)
+            logger.exception(
+                "热榜 Agent 生成失败 generation_id=%s duration=%.2fs",
+                generation.id,
+                time.perf_counter() - run_started_at,
+            )
+            return generation, []
+    finally:
+        _agent_run_lock.release()
 
 
 def run_scheduled_hot_topic_agent() -> None:
@@ -677,6 +821,8 @@ def run_scheduled_hot_topic_agent() -> None:
         if not settings.agent_enabled:
             return
         run_hot_topic_agent(db)
+    except Exception:
+        logger.exception("定时热榜 Agent 运行失败")
     finally:
         db.close()
 
