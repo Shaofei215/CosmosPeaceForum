@@ -5,6 +5,7 @@ import {
   ADMIN_PERMISSIONS,
   adminApi,
   adminKeys,
+  useAdminAuthStore,
   type AdminCreateRequest,
   type AdminPermission,
 } from '@/features/admin';
@@ -22,6 +23,7 @@ const permissionLabels: Record<AdminPermission, string> = {
 
 export default function AdminAdminsPage() {
   const [creating, setCreating] = useState(false);
+  const currentAdmin = useAdminAuthStore(state => state.admin);
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: adminKeys.admins,
@@ -63,38 +65,46 @@ export default function AdminAdminsPage() {
               </tr>
             </thead>
             <tbody>
-              {data?.items.map(admin => (
-                <tr key={admin.id} className="border-b last:border-0">
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{admin.username}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {admin.is_super_admin ? '超级管理员' : `ID ${admin.id}`}
-                    </p>
-                    {admin.email && <p className="text-xs text-muted-foreground">{admin.email}</p>}
-                  </td>
-                  <td className="max-w-md px-4 py-3">
-                    {admin.is_super_admin
-                      ? '全部权限'
-                      : admin.permissions.map(p => permissionLabels[p]).join('、')}
-                  </td>
-                  <td className="px-4 py-3">{admin.is_active ? '启用' : '停用'}</td>
-                  <td className="px-4 py-3">
-                    {admin.last_login ? new Date(admin.last_login).toLocaleString() : '从未登录'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md"
-                      onClick={() =>
-                        updateMutation.mutate({ adminId: admin.id, isActive: !admin.is_active })
-                      }
-                    >
-                      {admin.is_active ? '停用' : '启用'}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {data?.items.map(admin => {
+                const canToggleAdmin = admin.id !== currentAdmin?.id && !admin.is_super_admin;
+
+                return (
+                  <tr key={admin.id} className="border-b last:border-0">
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{admin.username}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {admin.is_super_admin ? '超级管理员' : `ID ${admin.id}`}
+                      </p>
+                      {admin.email && (
+                        <p className="text-xs text-muted-foreground">{admin.email}</p>
+                      )}
+                    </td>
+                    <td className="max-w-md px-4 py-3">
+                      {admin.is_super_admin
+                        ? '全部权限'
+                        : admin.permissions.map(p => permissionLabels[p]).join('、')}
+                    </td>
+                    <td className="px-4 py-3">{admin.is_active ? '启用' : '停用'}</td>
+                    <td className="px-4 py-3">
+                      {admin.last_login ? new Date(admin.last_login).toLocaleString() : '从未登录'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {canToggleAdmin && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-md"
+                          onClick={() =>
+                            updateMutation.mutate({ adminId: admin.id, isActive: !admin.is_active })
+                          }
+                        >
+                          {admin.is_active ? '停用' : '启用'}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </CardContent>

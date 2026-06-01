@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
+import { useCurrentAdmin } from '@/features/auth';
 import { adminApi } from '@/shared/api/modules';
 import {
   ADMIN_PERMISSIONS,
@@ -22,6 +23,7 @@ const permissionLabels: Record<AdminPermission, string> = {
 
 export default function AdminListPage() {
   const [creating, setCreating] = useState(false);
+  const { data: currentAdmin } = useCurrentAdmin();
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ['admins'],
@@ -64,38 +66,46 @@ export default function AdminListPage() {
                 </tr>
               </thead>
               <tbody>
-                {data?.items.map((admin) => (
-                  <tr key={admin.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{admin.username}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {admin.is_super_admin ? '超级管理员' : `ID ${admin.id}`}
-                      </p>
-                      {admin.email && <p className="text-xs text-muted-foreground">{admin.email}</p>}
-                    </td>
-                    <td className="max-w-md px-4 py-3">
-                      {admin.is_super_admin
-                        ? '全部权限'
-                        : admin.permissions.map((permission) => permissionLabels[permission]).join('、')}
-                    </td>
-                    <td className="px-4 py-3">{admin.is_active ? '启用' : '停用'}</td>
-                    <td className="px-4 py-3">
-                      {admin.last_login ? new Date(admin.last_login).toLocaleString() : '从未登录'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-md"
-                        onClick={() =>
-                          updateMutation.mutate({ adminId: admin.id, isActive: !admin.is_active })
-                        }
-                      >
-                        {admin.is_active ? '停用' : '启用'}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {data?.items.map((admin) => {
+                  const canToggleAdmin = admin.id !== currentAdmin?.id && !admin.is_super_admin;
+
+                  return (
+                    <tr key={admin.id} className="border-b last:border-0">
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{admin.username}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {admin.is_super_admin ? '超级管理员' : `ID ${admin.id}`}
+                        </p>
+                        {admin.email && (
+                          <p className="text-xs text-muted-foreground">{admin.email}</p>
+                        )}
+                      </td>
+                      <td className="max-w-md px-4 py-3">
+                        {admin.is_super_admin
+                          ? '全部权限'
+                          : admin.permissions.map((permission) => permissionLabels[permission]).join('、')}
+                      </td>
+                      <td className="px-4 py-3">{admin.is_active ? '启用' : '停用'}</td>
+                      <td className="px-4 py-3">
+                        {admin.last_login ? new Date(admin.last_login).toLocaleString() : '从未登录'}
+                      </td>
+                      <td className="px-4 py-3">
+                        {canToggleAdmin && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-md"
+                            onClick={() =>
+                              updateMutation.mutate({ adminId: admin.id, isActive: !admin.is_active })
+                            }
+                          >
+                            {admin.is_active ? '停用' : '启用'}
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {(!data?.items || data.items.length === 0) && (
                   <tr>
                     <td className="px-4 py-10 text-center text-muted-foreground" colSpan={5}>
