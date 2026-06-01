@@ -1,3 +1,9 @@
+"""热榜服务，被公开 API、管理 API 和后台调度共同使用。
+
+本模块把热榜生命周期收束在一处：人工编辑、Agent 生成草稿、发布归档、
+LLM 工具编排和 APScheduler 注册都复用同一套持久化规则。
+"""
+
 import json
 import logging
 import os
@@ -23,16 +29,31 @@ VALID_PUBLISH_POLICIES = {"auto", "draft"}
 SECRET_MASK = "********"
 DEFAULT_HISTORY_LIMIT = 3
 DEFAULT_MAX_LLM_ROUNDS = 6
+HOT_TOPIC_TITLE_MAX_LENGTH = 120
+HOT_TOPIC_SEARCH_QUERY_MAX_LENGTH = 200
+HOT_TOPIC_SUMMARY_MAX_LENGTH = 150
 HOT_TOPIC_LLM_TIMEOUT_SECONDS = 90
 HOT_TOPIC_LLM_MAX_RETRIES = 1
 HOT_TOPIC_AGENT_PROMPT_KEY = "hot_topic_agent_prompt"
 HOT_TOPIC_AGENT_PROMPT_NAME = "热榜生成提示词"
 HOT_TOPIC_AGENT_PROMPT_DESCRIPTION = "用于指导热榜 Agent 生成候选热点。"
-DEFAULT_HOT_TOPIC_AGENT_PROMPT = """你是 CosmosPeaceForum 的热榜编辑 Agent。请根据站内热点、当前热榜和以往热榜生成新的热榜候选。
-目标：标题要适合公开展示，search_query 用于提取关键词，要适合站内搜索召回相关帖子。
-约束：不要编造无法从上下文或搜索工具支撑的事实；每条必须包含 title 和 search_query；建议输出 5 到 10 条，rank 从 1 开始递增。
-可先调用 search_platform 复核站内讨论；如果启用了 web_search，可以检索外部背景。
-最终必须通过 submit_hot_topics 工具提交热榜结果。
+DEFAULT_HOT_TOPIC_AGENT_PROMPT = """你是 CosmosPeaceForum 的热榜编辑 Agent。请从站内讨论、当前热榜和历史生成记录中提炼新的候选事件。
+
+任务目标：
+- 生成 5 到 10 条适合公开展示的候选事件。
+- 每条都必须来自上下文、站内搜索结果或可验证的外部搜索结果，不得补写没有依据的事实。
+- 标题、摘要和搜索词都只描述事件本身，不评价热度、排名、趋势、爆火程度或推荐理由。
+
+输出字段：
+- title：简洁中文标题，聚焦一个具体事件或讨论主题，不写“热榜”“热门”“第几名”“最受关注”等与事件无关的表达。
+- summary：一句话说明事件核心信息，不超过 150 个中文字符；不要解释入选原因、讨论量、排序依据或热度变化。
+- search_query：只能是一个搜索关键词或一个不可拆分的短语，用于站内检索；不要放多个关键词、不要使用逗号、顿号、斜杠、分号、换行或“和/与/及”等并列词连接多个查询。
+- rank：从 1 开始递增，按事件热度或重大程度排序；不要在 title、summary 或 search_query 中提到排序信息。
+
+工具使用：
+- 可先调用 search_platform 复核站内讨论；如果启用了 web_search，可以检索外部背景。
+- 最终必须通过 submit_hot_topics 工具提交 JSON 数组字符串，数组项至少包含 title 和 search_query，可包含 summary 和 rank。
+- 如果证据不足，减少条目数量，也不要编造。
 
 当前上下文 JSON：
 {context_json}"""
@@ -41,8 +62,13 @@ _scheduler = None
 _agent_run_lock = threading.Lock()
 
 
+# ---------------------------------------------------------------------------
+# 基础归一化和运行配置
+# ---------------------------------------------------------------------------
+
+
 class HotTopicAgentRunError(RuntimeError):
-    """Raised when a hot topic generation run cannot be represented safely."""
+    """热榜生成流程无法安全表达结果时抛出。"""
 
 
 def _now() -> datetime:
@@ -50,6 +76,7 @@ def _now() -> datetime:
 
 
 def _normalize_text(value: str | None) -> str | None:
+    """统一清理人工输入和模型输出，空字符串按 NULL 处理。"""
     if value is None:
         return None
     stripped = value.strip()
@@ -57,6 +84,7 @@ def _normalize_text(value: str | None) -> str | None:
 
 
 def _validate_choice(value: str, choices: set[str], field_name: str) -> str:
+    """枚举字段入库前统一小写和校验，避免脏状态扩散。"""
     normalized = (value or "").strip().lower()
     if normalized not in choices:
         raise ValueError(f"{field_name} 必须是 {', '.join(sorted(choices))} 之一")
@@ -64,10 +92,12 @@ def _validate_choice(value: str, choices: set[str], field_name: str) -> str:
 
 
 def _mask_secret(value: str | None) -> str | None:
+    """对外序列化密钥时只返回稳定掩码，避免管理端误清空。"""
     return SECRET_MASK if value else None
 
 
 def _normalize_rank(value: Any, default: int = 1) -> int:
+    """所有状态桶都使用从 1 开始的连续 rank。"""
     try:
         rank = int(value)
     except (TypeError, ValueError):
@@ -75,7 +105,27 @@ def _normalize_rank(value: Any, default: int = 1) -> int:
     return max(rank, 1)
 
 
+def _normalize_search_query(value: str | None) -> str | None:
+    """只保留一个检索短语，让一条热榜对应一个召回意图。"""
+    normalized = _normalize_text(value)
+    if not normalized:
+        return None
+
+    for separator in ("\n", "\r", "，", ",", "、", "；", ";", "/", "|"):
+        normalized = normalized.split(separator, 1)[0].strip()
+    return normalized[:HOT_TOPIC_SEARCH_QUERY_MAX_LENGTH] or None
+
+
+def _normalize_summary(value: str | None) -> str | None:
+    """摘要遵守公开卡片的 150 字上限。"""
+    normalized = _normalize_text(value)
+    if not normalized:
+        return None
+    return normalized[:HOT_TOPIC_SUMMARY_MAX_LENGTH]
+
+
 def _ordered_topics_for_status(db: Session, status: str) -> list[HotTopic]:
+    """按 rank 修复时使用的稳定顺序读取同一状态桶。"""
     return (
         db.query(HotTopic)
         .filter(HotTopic.status == status)
@@ -90,6 +140,7 @@ def _renumber_topic_status(
     focus_topic: HotTopic | None = None,
     desired_rank: int | None = None,
 ) -> None:
+    """插入、移动、发布或删除后修复连续 rank。"""
     topics = _ordered_topics_for_status(db, status)
     if focus_topic is not None and focus_topic.status == status:
         topics = [topic for topic in topics if topic.id != focus_topic.id]
@@ -102,6 +153,7 @@ def _renumber_topic_status(
 
 
 def get_hot_topic_settings(db: Session) -> HotTopicSettings:
+    """读取单例配置；新库首次访问时顺手创建默认行。"""
     settings = db.query(HotTopicSettings).filter(HotTopicSettings.id == 1).first()
     if settings:
         return settings
@@ -114,6 +166,7 @@ def get_hot_topic_settings(db: Session) -> HotTopicSettings:
 
 
 def serialize_settings(settings: HotTopicSettings) -> dict[str, Any]:
+    """序列化管理端配置，同时避免泄露 API Key。"""
     return {
         "id": settings.id,
         "agent_enabled": settings.agent_enabled,
@@ -131,6 +184,7 @@ def serialize_settings(settings: HotTopicSettings) -> dict[str, Any]:
 
 
 def serialize_prompt_config(settings: HotTopicSettings) -> dict[str, Any]:
+    """同时暴露当前提示词和内置默认值，供管理端编辑与重置。"""
     value = settings.prompt_template or DEFAULT_HOT_TOPIC_AGENT_PROMPT
     return {
         "key": HOT_TOPIC_AGENT_PROMPT_KEY,
@@ -143,6 +197,7 @@ def serialize_prompt_config(settings: HotTopicSettings) -> dict[str, Any]:
 
 
 def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicSettings:
+    """应用管理端局部更新；调度相关字段变更后重配后台任务。"""
     settings = get_hot_topic_settings(db)
     string_fields = {"llm_base_url", "llm_model_name", "llm_api_key", "tavily_api_key"}
 
@@ -173,6 +228,7 @@ def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicS
 
 
 def update_hot_topic_prompt_template(db: Session, value: str) -> HotTopicSettings:
+    """保存自定义提示词；缺少上下文占位符时构建阶段会自动补上。"""
     normalized = (value or "").strip()
     if not normalized:
         raise ValueError("提示词模板不能为空")
@@ -187,6 +243,7 @@ def update_hot_topic_prompt_template(db: Session, value: str) -> HotTopicSetting
 
 
 def reset_hot_topic_prompt_template(db: Session) -> HotTopicSettings:
+    """恢复新一轮热榜生成使用的内置提示词。"""
     settings = get_hot_topic_settings(db)
     settings.prompt_template = DEFAULT_HOT_TOPIC_AGENT_PROMPT
     settings.updated_at = _now()
@@ -197,6 +254,7 @@ def reset_hot_topic_prompt_template(db: Session) -> HotTopicSettings:
 
 
 def list_public_hot_topics(db: Session, limit: int = 20) -> list[HotTopic]:
+    """公开 API 只展示 active 热榜，并尊重编辑控制的 rank。"""
     return (
         db.query(HotTopic)
         .filter(HotTopic.status == "active")
@@ -217,6 +275,7 @@ def list_admin_hot_topics(
     skip: int = 0,
     limit: int = 100,
 ) -> tuple[list[HotTopic], int]:
+    """管理端列表保留 draft、active、archived 的完整可见性。"""
     query = db.query(HotTopic)
     if status:
         query = query.filter(HotTopic.status == _validate_choice(status, VALID_STATUSES, "status"))
@@ -238,19 +297,25 @@ def list_admin_hot_topics(
     return items, total
 
 
+# ---------------------------------------------------------------------------
+# 人工热榜 CRUD 和生成记录发布
+# ---------------------------------------------------------------------------
+
+
 def create_hot_topic(db: Session, payload: dict[str, Any]) -> HotTopic:
+    """创建人工热榜，并把目标状态桶的 rank 调整为连续值。"""
     source = _validate_choice(payload.get("source", "manual"), VALID_SOURCES, "source")
     status = _validate_choice(payload.get("status", "active"), VALID_STATUSES, "status")
     title = _normalize_text(payload.get("title"))
-    search_query = _normalize_text(payload.get("search_query"))
+    search_query = _normalize_search_query(payload.get("search_query"))
     if not title or not search_query:
         raise ValueError("title 和 search_query 不能为空")
 
     desired_rank = _normalize_rank(payload.get("rank"), default=1)
     topic = HotTopic(
-        title=title,
+        title=title[:HOT_TOPIC_TITLE_MAX_LENGTH],
         search_query=search_query,
-        summary=_normalize_text(payload.get("summary")),
+        summary=_normalize_summary(payload.get("summary")),
         source=source,
         status=status,
         rank=desired_rank,
@@ -268,6 +333,7 @@ def create_hot_topic(db: Session, payload: dict[str, Any]) -> HotTopic:
 
 
 def update_hot_topic(db: Session, topic_id: int, payload: dict[str, Any]) -> HotTopic:
+    """更新一条热榜；状态或 rank 变化会触发两侧状态桶重排。"""
     topic = db.query(HotTopic).filter(HotTopic.id == topic_id).first()
     if not topic:
         raise ValueError("热点不存在")
@@ -283,12 +349,17 @@ def update_hot_topic(db: Session, topic_id: int, payload: dict[str, Any]) -> Hot
             value = _validate_choice(value, VALID_SOURCES, "source")
         elif field == "status":
             value = _validate_choice(value, VALID_STATUSES, "status")
-        elif field in {"title", "search_query"}:
+        elif field == "title":
             value = _normalize_text(value)
             if not value:
                 raise ValueError(f"{field} 不能为空")
+            value = value[:HOT_TOPIC_TITLE_MAX_LENGTH]
+        elif field == "search_query":
+            value = _normalize_search_query(value)
+            if not value:
+                raise ValueError(f"{field} 不能为空")
         elif field == "summary":
-            value = _normalize_text(value)
+            value = _normalize_summary(value)
         elif field == "rank":
             value = _normalize_rank(value, default=topic.rank)
             desired_rank = value
@@ -314,6 +385,7 @@ def update_hot_topic(db: Session, topic_id: int, payload: dict[str, Any]) -> Hot
 
 
 def delete_hot_topic(db: Session, topic_id: int) -> None:
+    """删除热榜后修复原状态桶 rank，避免公开列表出现空洞。"""
     topic = db.query(HotTopic).filter(HotTopic.id == topic_id).first()
     if not topic:
         raise ValueError("热点不存在")
@@ -333,6 +405,7 @@ def archive_hot_topic(db: Session, topic_id: int) -> HotTopic:
 
 
 def publish_generation(db: Session, generation_id: int) -> list[HotTopic]:
+    """把某次 Agent 生成记录发布为 active，并归档旧的 Agent 热榜。"""
     generation = db.query(HotTopicGeneration).filter(HotTopicGeneration.id == generation_id).first()
     if not generation:
         raise ValueError("生成记录不存在")
@@ -365,6 +438,7 @@ def publish_generation(db: Session, generation_id: int) -> list[HotTopic]:
 
 
 def list_generations(db: Session, skip: int = 0, limit: int = 20) -> tuple[list[HotTopicGeneration], int]:
+    """分页查看 Agent 生成历史，供管理端审计失败和发布状态。"""
     query = db.query(HotTopicGeneration)
     total = query.with_entities(func.count(HotTopicGeneration.id)).scalar() or 0
     items = (
@@ -377,17 +451,19 @@ def list_generations(db: Session, skip: int = 0, limit: int = 20) -> tuple[list[
 
 
 def _compact_topic(topic: HotTopic) -> dict[str, Any]:
+    """压缩热榜字段，避免把数据库对象细节塞进 LLM 上下文。"""
     return {
         "title": topic.title,
         "search_query": topic.search_query,
         "summary": topic.summary,
-            "source": topic.source,
-            "status": topic.status,
-            "rank": topic.rank,
+        "source": topic.source,
+        "status": topic.status,
+        "rank": topic.rank,
     }
 
 
 def _format_top_posts(db: Session, limit: int = 10) -> list[dict[str, Any]]:
+    """给 Agent 提供站内讨论样本；作者信息用 joinedload 避免 N+1。"""
     posts = (
         db.query(Post)
         .options(joinedload(Post.author))
@@ -411,7 +487,13 @@ def _format_top_posts(db: Session, limit: int = 10) -> list[dict[str, Any]]:
     ]
 
 
+# ---------------------------------------------------------------------------
+# Agent 上下文、提示词和输出清洗
+# ---------------------------------------------------------------------------
+
+
 def build_hot_topic_agent_context(db: Session, history_limit: int = DEFAULT_HISTORY_LIMIT) -> dict[str, Any]:
+    """组装一轮生成需要的站内帖子、当前热榜和近期生成历史。"""
     current_topics = [_compact_topic(topic) for topic in list_public_hot_topics(db, limit=20)]
     generations = (
         db.query(HotTopicGeneration)
@@ -436,6 +518,7 @@ def build_hot_topic_agent_context(db: Session, history_limit: int = DEFAULT_HIST
 
 
 def build_hot_topic_agent_prompt(context: dict[str, Any], template: str | None = None) -> str:
+    """渲染系统提示词，并兼容缺少 {context_json} 的旧自定义模板。"""
     context_json = json.dumps(context, ensure_ascii=False, indent=2)
     prompt_template = template or DEFAULT_HOT_TOPIC_AGENT_PROMPT
     if "{context_json}" not in prompt_template:
@@ -444,6 +527,7 @@ def build_hot_topic_agent_prompt(context: dict[str, Any], template: str | None =
 
 
 def _extract_json_array(value: str) -> list[dict[str, Any]]:
+    """从模型直出文本或 Markdown 代码块中提取 JSON 数组。"""
     cleaned = (value or "").strip()
     if not cleaned:
         return []
@@ -462,16 +546,19 @@ def _extract_json_array(value: str) -> list[dict[str, Any]]:
 
 
 def normalize_agent_topics(raw_topics: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """清洗模型提交结果，兜底执行标题、单一搜索词和摘要长度约束。"""
     topics: list[dict[str, Any]] = []
     for index, item in enumerate(raw_topics, start=1):
         title = _normalize_text(str(item.get("title") or ""))
-        search_query = _normalize_text(str(item.get("search_query") or item.get("query") or title or ""))
+        search_query = _normalize_search_query(
+            str(item.get("search_query") or item.get("query") or title or "")
+        )
         if not title or not search_query:
             continue
         topics.append({
-            "title": title[:120],
-            "search_query": search_query[:200],
-            "summary": _normalize_text(str(item.get("summary") or item.get("reason") or "")),
+            "title": title[:HOT_TOPIC_TITLE_MAX_LENGTH],
+            "search_query": search_query,
+            "summary": _normalize_summary(str(item.get("summary") or item.get("reason") or "")),
             "rank": _normalize_rank(item.get("rank"), default=index),
         })
     return topics[:10]
@@ -483,6 +570,7 @@ def apply_generated_hot_topics(
     topics: list[dict[str, Any]],
     publish_policy: str,
 ) -> list[HotTopic]:
+    """把已清洗的 Agent 结果落库；auto 模式会替换旧 Agent active 项。"""
     status = "active" if publish_policy == "auto" else "draft"
 
     if publish_policy == "auto":
@@ -526,7 +614,13 @@ def apply_generated_hot_topics(
     return created
 
 
+# ---------------------------------------------------------------------------
+# LLM 工具适配层
+# ---------------------------------------------------------------------------
+
+
 def _search_platform_posts_for_agent(db: Session, query: str, count: int = 5) -> list[dict[str, Any]]:
+    """站内搜索工具的实际查询实现，返回紧凑帖子摘要。"""
     normalized_query = _normalize_text(query)
     if not normalized_query:
         return []
@@ -556,6 +650,7 @@ def _search_platform_posts_for_agent(db: Session, query: str, count: int = 5) ->
 
 
 def _create_search_tool(db: Session):
+    """把站内搜索封装成 LangChain 工具，供 LLM 自助复核。"""
     from langchain_core.tools import tool
 
     @tool
@@ -575,6 +670,7 @@ def _create_search_tool(db: Session):
 
 
 def _create_submit_tool(submitted: dict[str, list[dict[str, Any]]]):
+    """把最终提交动作做成工具，用闭包保存本轮已接受结果。"""
     from langchain_core.tools import tool
 
     @tool
@@ -611,6 +707,7 @@ def _create_submit_tool(submitted: dict[str, list[dict[str, Any]]]):
 
 
 def _create_web_search_tool(settings: HotTopicSettings):
+    """按配置启用 Tavily 外部搜索，缺配置时返回结构化错误。"""
     from langchain_core.tools import tool
 
     @tool
@@ -640,6 +737,7 @@ def _create_web_search_tool(settings: HotTopicSettings):
 
 
 def _extract_tool_calls(response: Any) -> list[dict[str, Any]]:
+    """兼容 LangChain 标准 tool_calls 和 OpenAI function-call 结构。"""
     tool_calls = getattr(response, "tool_calls", None) or []
     additional_kwargs = getattr(response, "additional_kwargs", None) or {}
     if not tool_calls and isinstance(additional_kwargs, dict):
@@ -666,8 +764,13 @@ def _extract_tool_calls(response: Any) -> list[dict[str, Any]]:
     return normalized
 
 
+# ---------------------------------------------------------------------------
+# LLM 调用和生成生命周期
+# ---------------------------------------------------------------------------
+
+
 def _invoke_hot_topic_llm(llm: Any, system_prompt: str, user_prompt: str) -> Any:
-    # 和 agents 侧一致：每一轮重新发送 system/user，把工具结果写进 user 文本。
+    """每轮重新发送 system/user，让工具结果沉淀在新的 user 文本里。"""
     # 不把上一轮 AIMessage/ToolMessage 作为消息历史回传，避免部分 thinking 模型要求
     # reasoning_content 必须随历史消息一起回传。
     return llm.invoke([
@@ -677,6 +780,7 @@ def _invoke_hot_topic_llm(llm: Any, system_prompt: str, user_prompt: str) -> Any
 
 
 def _create_generation_record(db: Session, publish_policy: str) -> HotTopicGeneration:
+    """先写 pending 记录，确保后续失败也有可审计的 generation_id。"""
     generation = HotTopicGeneration(
         status="pending",
         publish_policy=publish_policy,
@@ -693,6 +797,7 @@ def _mark_generation_failed(
     generation: HotTopicGeneration,
     exc: BaseException,
 ) -> HotTopicGeneration:
+    """失败路径单独提交，避免被前一个异常后的事务状态吞掉。"""
     db.rollback()
     try:
         persisted = db.get(HotTopicGeneration, generation.id)
@@ -719,6 +824,7 @@ def run_hot_topic_agent(
     force: bool = False,
     llm_factory: Optional[Callable[[HotTopicSettings, list[Any]], Any]] = None,
 ) -> tuple[HotTopicGeneration, list[HotTopic]]:
+    """执行一轮热榜 Agent：建上下文、跑工具循环、落库或记录失败。"""
     run_started_at = time.perf_counter()
     if not _agent_run_lock.acquire(blocking=False):
         logger.warning("热榜 Agent 已在运行，拒绝新的生成请求 force=%s", force)
@@ -926,7 +1032,13 @@ def run_hot_topic_agent(
         _agent_run_lock.release()
 
 
+# ---------------------------------------------------------------------------
+# APScheduler 集成
+# ---------------------------------------------------------------------------
+
+
 def run_scheduled_hot_topic_agent() -> None:
+    """调度入口负责自己的数据库会话，避免复用请求上下文。"""
     db = SessionLocal()
     try:
         settings = get_hot_topic_settings(db)
@@ -940,12 +1052,14 @@ def run_scheduled_hot_topic_agent() -> None:
 
 
 def register_hot_topic_scheduler(scheduler) -> None:
+    """在应用启动时保存 scheduler 实例，并立即按配置同步任务。"""
     global _scheduler
     _scheduler = scheduler
     configure_hot_topic_agent_job()
 
 
 def configure_hot_topic_agent_job(scheduler=None) -> None:
+    """根据当前设置重建 interval job，保证禁用和间隔修改立即生效。"""
     active_scheduler = scheduler or _scheduler
     if active_scheduler is None:
         return

@@ -90,6 +90,38 @@ def test_prompt_context_contains_top_posts_current_and_history(db_session):
     assert "topics_json" not in prompt
 
 
+def test_default_prompt_spells_out_public_output_constraints():
+    prompt = hot_topic_service.DEFAULT_HOT_TOPIC_AGENT_PROMPT
+
+    assert "不超过 150" in prompt
+    assert "只能是一个搜索关键词" in prompt
+    assert "不评价热度、排名、趋势" in prompt
+    assert "不要解释入选原因、讨论量、排序依据或热度变化" in prompt
+    assert "topics_json" not in prompt
+
+
+def test_normalize_agent_topics_enforces_summary_limit_and_single_search_query():
+    long_summary = "这是一段很长的摘要" * 20
+
+    topics = hot_topic_service.normalize_agent_topics([
+        {
+            "title": "火星实验",
+            "search_query": "火星实验，月球基地/深空探测",
+            "summary": long_summary,
+            "rank": 1,
+        }
+    ])
+
+    assert topics == [
+        {
+            "title": "火星实验",
+            "search_query": "火星实验",
+            "summary": long_summary[:hot_topic_service.HOT_TOPIC_SUMMARY_MAX_LENGTH],
+            "rank": 1,
+        }
+    ]
+
+
 def test_auto_publish_archives_previous_agent_topics_but_keeps_manual_topic(db_session):
     manual = HotTopic(title="人工", search_query="人工", source="manual", status="active", rank=1)
     old_agent = HotTopic(title="旧 Agent", search_query="旧", source="agent", status="active", rank=1)

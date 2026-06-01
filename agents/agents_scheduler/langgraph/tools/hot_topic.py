@@ -7,17 +7,8 @@ from agents.agents_scheduler.langgraph.tools.types import ToolResult
 from agents.agents_scheduler.langgraph.tools.support.platform import _get_hot_topics, _truncate
 
 
-def _normalize_count(count: int) -> int:
-    try:
-        value = int(count)
-    except (TypeError, ValueError):
-        value = 50
-    return max(1, min(value, 50))
-
-
 @tool
 def view_full_hot_topics(
-    count: int = 50,
     reason: str = "用户想查看完整热榜",
     summary: str = "",
 ) -> ToolResult:
@@ -29,7 +20,6 @@ def view_full_hot_topics(
     - 系统提示词 header 只展示前 8 个标题，想查看热榜完整摘要和搜索关键词。
 
     Args:
-        count: 希望查看的热榜数量，范围 1 到 50，默认 50。
         reason: 调用该工具的原因，用于记录操作动机与上下文，75字以内。
         summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
 
@@ -39,8 +29,7 @@ def view_full_hot_topics(
             - data.hot_topics: 热榜列表。每条包含 rank、title、summary、search_query。
             - data.total: 本次返回的热榜数量
     """
-    safe_count = _normalize_count(count)
-    topics = _get_hot_topics(limit=safe_count)
+    topics = _get_hot_topics(limit=50)
     normalized_topics = [
         {
             "rank": topic.get("rank", index + 1),
@@ -64,4 +53,3 @@ def view_full_hot_topics(
             "total": len(normalized_topics),
         },
     )
-
