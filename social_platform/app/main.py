@@ -16,7 +16,20 @@ from social_platform.app.admin.api import admin_router
 from social_platform.app.admin.services.auth_service import ensure_initial_admin
 from social_platform.app.admin.services.terminal_log_service import terminal_log_capture
 
-from social_platform.app.api.routers import users, posts, feeds, like, comment, auth, avatar, follow, notifications, search, theme
+from social_platform.app.api.routers import (
+    users,
+    posts,
+    feeds,
+    like,
+    comment,
+    auth,
+    avatar,
+    follow,
+    notifications,
+    search,
+    theme,
+    hot_topics,
+)
 
 
 settings = get_settings()
@@ -33,6 +46,7 @@ def start_scheduler():
     - 每6小时执行一次
     """
     from social_platform.app.services.heat_service import refresh_all_heat_scores
+    from social_platform.app.services.hot_topic_service import register_hot_topic_scheduler
     from social_platform.app.tasks import cleanup_expired_verification_codes
 
     scheduler.add_job(
@@ -49,6 +63,7 @@ def start_scheduler():
         id='refresh_heat_scores',
         replace_existing=True
     )
+    register_hot_topic_scheduler(scheduler)
     # 启动时先刷新一次，避免旧数据在首次定时任务前全部以 0 分参与推荐排序。
     scheduler.start()
     refresh_all_heat_scores()
@@ -139,6 +154,7 @@ app.include_router(follow.router, prefix=f"{settings.API_V1_PREFIX}/users", tags
 app.include_router(notifications.router, prefix=f"{settings.API_V1_PREFIX}/notifications", tags=["notifications"])
 app.include_router(search.router, prefix=f"{settings.API_V1_PREFIX}/search", tags=["search"])
 app.include_router(theme.router, prefix=f"{settings.API_V1_PREFIX}/theme", tags=["theme"])
+app.include_router(hot_topics.router, prefix=f"{settings.API_V1_PREFIX}/hot-topics", tags=["hot-topics"])
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 
 

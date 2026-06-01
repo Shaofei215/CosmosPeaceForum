@@ -810,6 +810,18 @@ def _search_platform(
     )
 
 
+def _get_hot_topics(limit: int = 20) -> List[Dict[str, Any]]:
+    """获取公开热榜。"""
+    safe_limit = max(1, min(int(limit), 50))
+    data = _make_request(
+        method="GET",
+        endpoint="/hot-topics",
+        params={"limit": safe_limit},
+        reason="内部调用：获取公开热榜"
+    )
+    return data if isinstance(data, list) else []
+
+
 def _get_notification_summary() -> Dict[str, Any]:
     """获取关注、粉丝、未读消息数量；失败时返回空计数，避免阻断 prompt 构建。"""
     if not get_current_token():

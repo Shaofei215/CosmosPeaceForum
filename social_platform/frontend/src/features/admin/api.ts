@@ -12,6 +12,13 @@ import type {
   ContentDeleteRequest,
   ContentItem,
   DashboardStats,
+  HotTopic,
+  HotTopicGeneration,
+  HotTopicGenerationRunResponse,
+  HotTopicPromptConfig,
+  HotTopicRequest,
+  HotTopicSettings,
+  HotTopicSettingsUpdate,
   OperationLog,
   PaginatedResponse,
   TerminalLogList,
@@ -104,6 +111,35 @@ export const adminApi = {
     client.delete<unknown, void>(`/content/posts/${postId}`, { data: request }),
   deleteComment: (commentId: number, request: ContentDeleteRequest) =>
     client.delete<unknown, void>(`/content/comments/${commentId}`, { data: request }),
+  hotTopics: (params: { skip?: number; limit?: number; status?: string; source?: string }) =>
+    client.get<unknown, PaginatedResponse<HotTopic>>('/hot-topics/', { params }),
+  createHotTopic: (request: HotTopicRequest) =>
+    client.post<unknown, HotTopic>('/hot-topics/', request),
+  updateHotTopic: (topicId: number, request: Partial<HotTopicRequest>) =>
+    client.put<unknown, HotTopic>(`/hot-topics/items/${topicId}`, request),
+  deleteHotTopic: (topicId: number) => client.delete<unknown, void>(`/hot-topics/items/${topicId}`),
+  publishHotTopic: (topicId: number) =>
+    client.post<unknown, HotTopic>(`/hot-topics/items/${topicId}/publish`),
+  archiveHotTopic: (topicId: number) =>
+    client.post<unknown, HotTopic>(`/hot-topics/items/${topicId}/archive`),
+  hotTopicSettings: () => client.get<unknown, HotTopicSettings>('/hot-topics/settings'),
+  updateHotTopicSettings: (request: HotTopicSettingsUpdate) =>
+    client.put<unknown, HotTopicSettings>('/hot-topics/settings', request),
+  hotTopicPrompt: () => client.get<unknown, HotTopicPromptConfig>('/hot-topics/prompt'),
+  updateHotTopicPrompt: (value: string) =>
+    client.put<unknown, HotTopicPromptConfig>('/hot-topics/prompt', { value }),
+  resetHotTopicPrompt: () =>
+    client.post<unknown, HotTopicPromptConfig>('/hot-topics/prompt/reset'),
+  getHotTopicGenerateEventsUrl: (token: string) =>
+    `${API_CONFIG.BASE_URL}/admin/hot-topics/generate/events?token=${encodeURIComponent(token)}`,
+  hotTopicGenerations: (params: { skip?: number; limit?: number }) =>
+    client.get<unknown, PaginatedResponse<HotTopicGeneration>>('/hot-topics/generations', {
+      params,
+    }),
+  generateHotTopics: () =>
+    client.post<unknown, HotTopicGenerationRunResponse>('/hot-topics/generate'),
+  publishHotTopicGeneration: (generationId: number) =>
+    client.post<unknown, HotTopic[]>(`/hot-topics/generations/${generationId}/publish`),
   admins: (params: { skip?: number; limit?: number }) =>
     client.get<unknown, PaginatedResponse<AdminUser>>('/admins/', { params }),
   createAdmin: (request: AdminCreateRequest) =>

@@ -13,6 +13,17 @@ from social_platform.app.admin.schemas.admin import (
     TerminalLogResponse,
 )
 from social_platform.app.admin.schemas.content import ContentItemResponse
+from social_platform.app.admin.schemas.hot_topic import (
+    HotTopicCreateRequest,
+    HotTopicGenerationResponse,
+    HotTopicGenerationRunResponse,
+    HotTopicPromptConfigResponse,
+    HotTopicPromptConfigUpdateRequest,
+    HotTopicResponse,
+    HotTopicSettingsResponse,
+    HotTopicSettingsUpdateRequest,
+    HotTopicUpdateRequest,
+)
 from social_platform.app.admin.schemas.moderation import (
     AdminAnnouncementRequest,
     AdminAnnouncementResponse,
@@ -38,6 +49,15 @@ __all__ = [
     "ContentDeleteRequest",
     "ContentItemResponse",
     "DashboardStatsResponse",
+    "HotTopicCreateRequest",
+    "HotTopicGenerationResponse",
+    "HotTopicGenerationRunResponse",
+    "HotTopicPromptConfigResponse",
+    "HotTopicPromptConfigUpdateRequest",
+    "HotTopicResponse",
+    "HotTopicSettingsResponse",
+    "HotTopicSettingsUpdateRequest",
+    "HotTopicUpdateRequest",
     "OperationLogListResponse",
     "OperationLogResponse",
     "PaginatedResponse",

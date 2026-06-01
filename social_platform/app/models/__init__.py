@@ -9,6 +9,7 @@ from social_platform.app.models.follow import Follow
 from social_platform.app.models.email_verification import EmailVerificationCode
 from social_platform.app.models.notification import Notification
 from social_platform.app.models.theme import PlatformThemeSettings
+from social_platform.app.models.hot_topic import HotTopic, HotTopicGeneration, HotTopicSettings
 
 __all__ = [
     "User",
@@ -20,4 +21,7 @@ __all__ = [
     "EmailVerificationCode",
     "Notification",
     "PlatformThemeSettings",
+    "HotTopic",
+    "HotTopicGeneration",
+    "HotTopicSettings",
 ]

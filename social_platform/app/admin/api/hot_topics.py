@@ -1,0 +1,302 @@
+import asyncio
+import json
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
+from social_platform.app.admin.api.deps import require_permission
+from social_platform.app.admin.services import auth_service
+from social_platform.app.admin.models.admin_user import PlatformAdminUser
+from social_platform.app.admin.schemas import (
+    HotTopicCreateRequest,
+    HotTopicGenerationResponse,
+    HotTopicGenerationRunResponse,
+    HotTopicPromptConfigResponse,
+    HotTopicPromptConfigUpdateRequest,
+    HotTopicResponse,
+    HotTopicSettingsResponse,
+    HotTopicSettingsUpdateRequest,
+    HotTopicUpdateRequest,
+    PaginatedResponse,
+)
+from social_platform.app.admin.services.permissions import ALL_PERMISSIONS, PERMISSION_MANAGE_CONTENT
+from social_platform.app.api.deps import get_db
+from social_platform.app.core.security import decode_access_token
+from social_platform.app.db.session import SessionLocal
+from social_platform.app.services import hot_topic_service
+
+router = APIRouter(prefix="/hot-topics", tags=["platform-admin-hot-topics"])
+logger = logging.getLogger(__name__)
+
+
+def _sse_event(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _serialize_generation_run(generation, topics) -> dict:
+    return {
+        "generation": HotTopicGenerationResponse.model_validate(generation).model_dump(mode="json"),
+        "topics": [HotTopicResponse.model_validate(topic).model_dump(mode="json") for topic in topics],
+    }
+
+
+def _run_generation_for_stream() -> dict:
+    db = SessionLocal()
+    try:
+        logger.info("收到 SSE 立即生成热榜请求")
+        generation, topics = hot_topic_service.run_hot_topic_agent(db, force=True)
+        payload = _serialize_generation_run(generation, topics)
+        if generation.status == "failed":
+            payload["error"] = generation.error_message or "热榜生成失败，请检查后端日志"
+        return payload
+    except Exception as exc:
+        logger.exception("SSE 立即生成热榜失败")
+        return {"error": str(exc) or "热榜生成失败，请检查后端日志"}
+    finally:
+        db.close()
+
+
+def _require_admin_token(token: str, db: Session) -> PlatformAdminUser:
+    payload = decode_access_token(token)
+    if payload is None or payload.get("scope") != "platform_admin":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的管理员认证凭证")
+
+    try:
+        admin_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的管理员认证凭证")
+
+    admin = auth_service.get_admin_by_id(db, admin_id)
+    if admin is None or not admin.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员不存在或已停用")
+    if admin.must_change_credentials:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="首次登录必须修改用户名和密码")
+
+    permissions = ALL_PERMISSIONS if admin.is_super_admin else auth_service.parse_permissions(admin.permissions)
+    if PERMISSION_MANAGE_CONTENT not in permissions:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="缺少管理员权限")
+    return admin
+
+
+@router.get("/", response_model=PaginatedResponse[HotTopicResponse])
+async def list_hot_topics(
+    status_filter: str | None = Query(default=None, alias="status"),
+    source: str | None = Query(default=None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        items, total = hot_topic_service.list_admin_hot_topics(
+            db,
+            status=status_filter,
+            source=source,
+            skip=skip,
+            limit=limit,
+        )
+        return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/", response_model=HotTopicResponse, status_code=status.HTTP_201_CREATED)
+async def create_hot_topic(
+    request: HotTopicCreateRequest,
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        return hot_topic_service.create_hot_topic(db, request.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.put("/items/{topic_id}", response_model=HotTopicResponse)
+async def update_hot_topic(
+    topic_id: int,
+    request: HotTopicUpdateRequest,
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        return hot_topic_service.update_hot_topic(
+            db,
+            topic_id=topic_id,
+            payload=request.model_dump(exclude_unset=True),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete("/items/{topic_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_hot_topic(
+    topic_id: int,
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        hot_topic_service.delete_hot_topic(db, topic_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return None
+
+
+@router.post("/items/{topic_id}/publish", response_model=HotTopicResponse)
+async def publish_hot_topic(
+    topic_id: int,
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        return hot_topic_service.publish_hot_topic(db, topic_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/items/{topic_id}/archive", response_model=HotTopicResponse)
+async def archive_hot_topic(
+    topic_id: int,
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        return hot_topic_service.archive_hot_topic(db, topic_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/settings", response_model=HotTopicSettingsResponse)
+async def get_settings(
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    settings = hot_topic_service.get_hot_topic_settings(db)
+    return hot_topic_service.serialize_settings(settings)
+
+
+@router.put("/settings", response_model=HotTopicSettingsResponse)
+async def update_settings(
+    request: HotTopicSettingsUpdateRequest,
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        settings = hot_topic_service.update_hot_topic_settings(
+            db,
+            request.model_dump(exclude_unset=True),
+        )
+        return hot_topic_service.serialize_settings(settings)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/prompt", response_model=HotTopicPromptConfigResponse)
+async def get_prompt_config(
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    settings = hot_topic_service.get_hot_topic_settings(db)
+    return hot_topic_service.serialize_prompt_config(settings)
+
+
+@router.put("/prompt", response_model=HotTopicPromptConfigResponse)
+async def update_prompt_config(
+    request: HotTopicPromptConfigUpdateRequest,
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        settings = hot_topic_service.update_hot_topic_prompt_template(db, request.value)
+        return hot_topic_service.serialize_prompt_config(settings)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/prompt/reset", response_model=HotTopicPromptConfigResponse)
+async def reset_prompt_config(
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    settings = hot_topic_service.reset_hot_topic_prompt_template(db)
+    return hot_topic_service.serialize_prompt_config(settings)
+
+
+@router.get("/generations", response_model=PaginatedResponse[HotTopicGenerationResponse])
+async def list_generations(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    items, total = hot_topic_service.list_generations(db, skip=skip, limit=limit)
+    return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.get("/generate/events")
+async def stream_generate_hot_topics(
+    token: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    _require_admin_token(token, db)
+
+    async def event_stream():
+        yield _sse_event("hot-topics.generate.started", {"status": "running"})
+        payload = await asyncio.to_thread(_run_generation_for_stream)
+        event_name = "hot-topics.generate.failed" if payload.get("error") else "hot-topics.generate.completed"
+        yield _sse_event(event_name, payload)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/generate", response_model=HotTopicGenerationRunResponse)
+def generate_hot_topics(
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        logger.info("收到立即生成热榜请求")
+        generation, topics = hot_topic_service.run_hot_topic_agent(db, force=True)
+        if generation.status == "failed":
+            logger.error(
+                "立即生成热榜失败 generation_id=%s error=%s",
+                generation.id,
+                generation.error_message,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=generation.error_message or "热榜生成失败，请检查后端日志",
+            )
+        return {"generation": generation, "topics": topics}
+    except hot_topic_service.HotTopicAgentRunError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("立即生成热榜失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="热榜生成失败，请检查后端日志",
+        ) from exc
+
+
+@router.post("/generations/{generation_id}/publish", response_model=list[HotTopicResponse])
+async def publish_generation(
+    generation_id: int,
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        return hot_topic_service.publish_generation(db, generation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

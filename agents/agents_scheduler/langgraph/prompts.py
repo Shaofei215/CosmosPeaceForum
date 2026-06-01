@@ -59,6 +59,7 @@ def _build_attention_header() -> str:
         f"关注：{values['following_count']}",
         f"粉丝：{values['followers_count']}",
         f"消息：{values['unread_count']}",
+        f"热榜：{values['hot_topic_titles']}",
     ]
     if values["login_stats"]:
         parts.extend([
@@ -78,6 +79,7 @@ def _build_attention_template_values() -> Dict[str, Any]:
     login_stats = _build_login_stats_summary()
     total_login_count = login_stats.get("total_login_count", 0) or 0
     last_login_time = _format_last_login_time(login_stats.get("last_login_timestamp"))
+    hot_topic_titles = _build_hot_topic_titles()
     try:
         from agents.agents_scheduler.scheduler.context import get_current_user_id
         platform_user_id = get_current_user_id() or "未知"
@@ -89,10 +91,28 @@ def _build_attention_template_values() -> Dict[str, Any]:
         "following_count": summary.get("following_count", 0),
         "followers_count": summary.get("followers_count", 0),
         "unread_count": summary.get("unread_count", 0),
+        "hot_topic_titles": hot_topic_titles,
         "total_login_count": total_login_count,
         "last_login_time": last_login_time,
         "login_stats": bool(total_login_count or login_stats.get("last_login_timestamp")),
     }
+
+
+def _build_hot_topic_titles() -> str:
+    try:
+        from agents.agents_scheduler.langgraph.tools.support.platform import _get_hot_topics
+        topics = _get_hot_topics(limit=8)
+    except Exception:
+        topics = []
+
+    titles = [
+        str(topic.get("title", "")).strip()
+        for topic in topics
+        if isinstance(topic, dict) and str(topic.get("title", "")).strip()
+    ][:8]
+    if not titles:
+        return "暂无"
+    return "；".join(f"{index}. {title}" for index, title in enumerate(titles, start=1))
 
 
 def build_system_prompt(
@@ -273,6 +293,18 @@ def _format_tool_result(result: Any) -> str:
             for item in notifications:
                 lines.append("  - 消息")
                 lines.extend(_format_notification_fields(item, indent="    "))
+            return "\n".join(lines)
+
+        if "hot_topics" in result:
+            topics = result.get("hot_topics", [])
+            total = result.get("total", len(topics))
+            lines = [f"【完整热榜】共{total}条，显示{len(topics)}条："]
+            if not topics:
+                lines.append("暂无热榜")
+            for topic in topics:
+                lines.append(f"  - #{topic.get('rank', '?')} {topic.get('title', '')}")
+                lines.append(f"    完整摘要: {topic.get('summary', '')}")
+                lines.append(f"    搜索关键词: {topic.get('search_query', '')}")
             return "\n".join(lines)
 
         if "notification" in result:

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FileText,
+  Flame,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -17,6 +18,7 @@ const navItems = [
   { path: '/admin/dashboard', label: '仪表盘', icon: LayoutDashboard },
   { path: '/admin/users', label: '用户管理', icon: Users },
   { path: '/admin/content', label: '内容管理', icon: FileText },
+  { path: '/admin/hot-topics', label: '热点管理', icon: Flame },
   { path: '/admin/theme', label: '主题管理', icon: Palette },
   { path: '/admin/admins', label: '管理员', icon: Shield },
   { path: '/admin/logs', label: '日志', icon: UserCog },

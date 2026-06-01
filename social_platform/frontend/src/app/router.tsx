@@ -24,11 +24,13 @@ import FollowersListPage from '@/pages/profile/FollowersListPage';
 import NotificationsPage from '@/pages/notification/NotificationsPage';
 import ArticleEditorPage from '@/pages/article/ArticleEditorPage';
 import SearchPage from '@/pages/search/SearchPage';
+import HotTopicsPage from '@/pages/hot/HotTopicsPage';
 import AdminLoginPage from '@/pages/admin/AdminLoginPage';
 import AdminSetupPage from '@/pages/admin/AdminSetupPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import AdminContentPage from '@/pages/admin/AdminContentPage';
+import AdminHotTopicsPage from '@/pages/admin/AdminHotTopicsPage';
 import AdminAdminsPage from '@/pages/admin/AdminAdminsPage';
 import AdminLogsPage from '@/pages/admin/AdminLogsPage';
 import AdminThemePage from '@/pages/admin/AdminThemePage';
@@ -53,6 +55,7 @@ export const router = createBrowserRouter([
           { path: 'dashboard', element: <AdminDashboardPage /> },
           { path: 'users', element: <AdminUsersPage /> },
           { path: 'content', element: <AdminContentPage /> },
+          { path: 'hot-topics', element: <AdminHotTopicsPage /> },
           { path: 'theme', element: <AdminThemePage /> },
           { path: 'admins', element: <AdminAdminsPage /> },
           { path: 'logs', element: <AdminLogsPage /> },
@@ -74,6 +77,7 @@ export const router = createBrowserRouter([
       { path: 'user/:userId/following', element: <FollowingListPage /> },
       { path: 'user/:userId/followers', element: <FollowersListPage /> },
       { path: 'search', element: <SearchPage /> },
+      { path: 'hot', element: <HotTopicsPage /> },
 
       // 认证路由
       { path: 'login', element: <LoginPage /> },

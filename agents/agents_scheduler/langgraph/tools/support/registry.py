@@ -42,11 +42,13 @@ def get_social_tools(relation_map=None) -> List:
             scroll,
         )
         from agents.agents_scheduler.langgraph.tools.memory import recall_memory
+        from agents.agents_scheduler.langgraph.tools.hot_topic import view_full_hot_topics
 
         _base_social_tools = [
             search_platform,
             view_notifications,
             view_notification_origin,
+            view_full_hot_topics,
             toggle_post_like,
             toggle_comment_like,
             create_comment,
