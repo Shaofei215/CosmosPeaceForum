@@ -12,16 +12,51 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { useAdminAuthStore, useAdminLogout } from '@/features/admin';
+import { useAdminAuthStore, useAdminLogout, type AdminPermission } from '@/features/admin';
 
 const navItems = [
-  { path: '/admin/dashboard', label: '仪表盘', icon: LayoutDashboard },
-  { path: '/admin/users', label: '用户管理', icon: Users },
-  { path: '/admin/content', label: '内容管理', icon: FileText },
-  { path: '/admin/hot-topics', label: '热点管理', icon: Flame },
-  { path: '/admin/theme', label: '主题管理', icon: Palette },
-  { path: '/admin/admins', label: '管理员', icon: Shield },
-  { path: '/admin/logs', label: '日志', icon: UserCog },
+  {
+    path: '/admin/dashboard',
+    label: '仪表盘',
+    icon: LayoutDashboard,
+    permission: 'view_dashboard',
+  },
+  {
+    path: '/admin/users',
+    label: '用户管理',
+    icon: Users,
+    permission: 'manage_users',
+  },
+  {
+    path: '/admin/content',
+    label: '内容管理',
+    icon: FileText,
+    permission: 'manage_content',
+  },
+  {
+    path: '/admin/hot-topics',
+    label: '热点管理',
+    icon: Flame,
+    permission: 'manage_hot_topics',
+  },
+  {
+    path: '/admin/theme',
+    label: '主题管理',
+    icon: Palette,
+    permission: 'manage_theme',
+  },
+  {
+    path: '/admin/admins',
+    label: '管理员',
+    icon: Shield,
+    permission: 'manage_admins',
+  },
+  {
+    path: '/admin/logs',
+    label: '日志',
+    icon: UserCog,
+    permission: 'view_logs',
+  },
 ];
 
 export function AdminLayout() {
@@ -30,6 +65,9 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const admin = useAdminAuthStore(state => state.admin);
   const logout = useAdminLogout();
+  const visibleNavItems = navItems.filter(
+    item => admin?.is_super_admin || admin?.permissions.includes(item.permission as AdminPermission)
+  );
 
   const handleLogout = () => {
     logout();
@@ -68,7 +106,7 @@ export function AdminLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 px-2 py-2">
-          {navItems.map(item => {
+          {visibleNavItems.map(item => {
             const active =
               location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
             return (

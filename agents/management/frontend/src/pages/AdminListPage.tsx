@@ -14,6 +14,7 @@ const permissionLabels: Record<AdminPermission, string> = {
   manage_agents: '管理角色',
   manage_models: '管理模型',
   manage_memories: '管理记忆',
+  manage_prompts: '管理提示词',
   manage_system: '管理系统',
   manage_admins: '管理管理员',
   view_logs: '查看日志',

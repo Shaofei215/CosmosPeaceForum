@@ -2,6 +2,8 @@ export const ADMIN_PERMISSIONS = [
   'view_dashboard',
   'manage_users',
   'manage_content',
+  'manage_hot_topics',
+  'manage_theme',
   'manage_admins',
   'view_logs',
 ] as const;

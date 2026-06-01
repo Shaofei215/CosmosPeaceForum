@@ -3,6 +3,7 @@ export const ADMIN_PERMISSIONS = [
   'manage_agents',
   'manage_models',
   'manage_memories',
+  'manage_prompts',
   'manage_system',
   'manage_admins',
   'view_logs',
