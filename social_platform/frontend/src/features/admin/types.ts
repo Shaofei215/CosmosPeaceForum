@@ -167,6 +167,28 @@ export interface ReportReleaseResponse {
   released_count: number;
 }
 
+export interface ContentModerationLLMSettings {
+  id: number;
+  enabled: boolean;
+  llm_base_url: string | null;
+  llm_model_name: string | null;
+  llm_api_key: string | null;
+  updated_at: string;
+}
+
+export type ContentModerationLLMSettingsUpdate = Partial<
+  Omit<ContentModerationLLMSettings, "id" | "updated_at">
+>;
+
+export interface ContentModerationLLMPromptConfig {
+  key: string;
+  name: string;
+  description: string;
+  value: string;
+  default_value: string;
+  updated_at: string;
+}
+
 export type HotTopicSource = 'manual' | 'agent';
 export type HotTopicStatus = 'active' | 'draft' | 'archived';
 export type HotTopicPublishPolicy = 'auto' | 'draft';

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ContentItemResponse(BaseModel):
@@ -26,3 +26,32 @@ class ReportedContentItemResponse(ContentItemResponse):
     report_count: int
     report_reasons: list[ContentReportReasonResponse]
     last_reported_at: datetime
+
+
+class ContentModerationLLMSettingsResponse(BaseModel):
+    id: int
+    enabled: bool
+    llm_base_url: Optional[str]
+    llm_model_name: Optional[str]
+    llm_api_key: Optional[str]
+    updated_at: datetime
+
+
+class ContentModerationLLMSettingsUpdateRequest(BaseModel):
+    enabled: Optional[bool] = None
+    llm_base_url: Optional[str] = Field(default=None, max_length=500)
+    llm_model_name: Optional[str] = Field(default=None, max_length=120)
+    llm_api_key: Optional[str] = Field(default=None, max_length=500)
+
+
+class ContentModerationLLMPromptConfigResponse(BaseModel):
+    key: str
+    name: str
+    description: str
+    value: str
+    default_value: str
+    updated_at: datetime
+
+
+class ContentModerationLLMPromptConfigUpdateRequest(BaseModel):
+    value: str = Field(min_length=1)

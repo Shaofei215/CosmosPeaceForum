@@ -11,6 +11,9 @@ import type {
   AdminUser,
   ContentDeleteRequest,
   ContentItem,
+  ContentModerationLLMPromptConfig,
+  ContentModerationLLMSettings,
+  ContentModerationLLMSettingsUpdate,
   ReportedContentItem,
   ReportReleaseResponse,
   DashboardStats,
@@ -115,6 +118,16 @@ export const adminApi = {
     client.post<unknown, ReportReleaseResponse>('/content/reports/' + type + '/' + id + '/release'),
   deleteReportedContent: (type: string, id: number, request: ContentDeleteRequest) =>
     client.delete<unknown, void>('/content/reports/' + type + '/' + id, { data: request }),
+  reportModerationSettings: () =>
+    client.get<unknown, ContentModerationLLMSettings>('/content/report-moderation/settings'),
+  updateReportModerationSettings: (request: ContentModerationLLMSettingsUpdate) =>
+    client.put<unknown, ContentModerationLLMSettings>('/content/report-moderation/settings', request),
+  reportModerationPrompt: () =>
+    client.get<unknown, ContentModerationLLMPromptConfig>('/content/report-moderation/prompt'),
+  updateReportModerationPrompt: (value: string) =>
+    client.put<unknown, ContentModerationLLMPromptConfig>('/content/report-moderation/prompt', { value }),
+  resetReportModerationPrompt: () =>
+    client.post<unknown, ContentModerationLLMPromptConfig>('/content/report-moderation/prompt/reset'),
   deletePost: (postId: number, request: ContentDeleteRequest) =>
     client.delete<unknown, void>(`/content/posts/${postId}`, { data: request }),
   deleteComment: (commentId: number, request: ContentDeleteRequest) =>
