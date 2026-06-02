@@ -597,6 +597,65 @@ def delete_content(
 
 
 @tool
+def report_content(
+    content_type: str,
+    content_id: int,
+    report_reason: Optional[str] = None,
+    reason: str = "想要举报违规内容",
+    summary: str = ""
+) -> ToolResult:
+    """
+    当平台中存在违反社区规则的内容（如违反犯罪、色情、暴力、政治宣传、广告等）时，可以举报社交平台上的帖子或评论。
+
+    举报不会删除或隐藏内容，只会把内容提交给管理端审查。请只举报你已经通过
+    get_global_feed、expand_post、view_post_comments、expand_comment 等工具实际看到的内容。
+
+    Args:
+        content_type: 举报目标类型，必须是 "post" 或 "comment"。
+        content_id: 举报目标 ID。必须来自之前工具返回的真实帖子 ID 或评论 ID，不要编造。
+        report_reason: 举报原因，可选。为空时会使用默认原因提交，平台要求原因不能为空。
+        reason: 调用该工具的原因，用于记录操作动机与上下文，75字以内。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+
+    Returns:
+        ToolResult: 举报提交后的操作记录。
+
+    Raises:
+        UnauthorizedError: 未登录或 Token 已过期
+        NotFoundError: 内容不存在
+        ValidationError: content_type 不是 "post" 或 "comment"
+        ToolExecutionError: 服务端错误
+    """
+    content_type = content_type.lower()
+    if content_type not in {"post", "comment"}:
+        raise ValidationError("content_type 必须是 \"post\" 或 \"comment\"")
+
+    safe_report_reason = (report_reason or "").strip() or "疑似违反社区规则"
+    report_result = _make_request(
+        method="POST",
+        endpoint="/reports",
+        json_data={
+            "target_type": content_type,
+            "target_id": content_id,
+            "reason": safe_report_reason,
+        },
+        reason=reason,
+        summary=summary,
+    )
+
+    label = "帖子" if content_type == "post" else "评论"
+    return ToolResult(
+        action=f"举报了{label}（ID {content_id}）：{_truncate(safe_report_reason)}",
+        data={
+            "content_type": content_type,
+            "content_id": content_id,
+            "report_reason": safe_report_reason,
+            "report": report_result,
+        },
+    )
+
+
+@tool
 def repost(
     source_type: str,
     source_id: int,

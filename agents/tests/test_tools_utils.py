@@ -384,6 +384,7 @@ class TestGetSocialTools:
             "view_full_hot_topics",
             "toggle_post_like", "toggle_comment_like",
             "create_comment", "toggle_follow", "create_post", "logout",
+            "delete_content", "report_content",
             "get_user_profile", "get_global_feed", "expand_post",
             "view_post_comments", "expand_comment", "scroll", "recall_memory",
         ]

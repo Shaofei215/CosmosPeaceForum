@@ -2,7 +2,8 @@ from unittest.mock import MagicMock
 
 from agents.agents_scheduler.langgraph import prompts
 from agents.agents_scheduler.langgraph.nodes import tool_execution_node
-from agents.agents_scheduler.langgraph.tools import feed, social, utils
+from agents.agents_scheduler.langgraph.tools import feed, social
+from agents.agents_scheduler.langgraph.tools.support import platform as utils
 
 
 def _disable_relation_expansion(monkeypatch):
@@ -184,6 +185,52 @@ def test_create_comment_with_parent_sends_parent_id_and_returns_new_comment_id(m
     assert result["data"]["parent_comment"]["id"] == 201
     assert result["data"]["new_comment"]["id"] == 501
     assert result["data"]["new_comment"]["parent_id"] == 201
+
+
+def test_report_content_sends_report_payload(monkeypatch):
+    mock_request = MagicMock(
+        return_value={"id": 7, "status": "pending", "message": "举报已提交"}
+    )
+    monkeypatch.setattr(social, "_make_request", mock_request)
+
+    result = social.report_content.invoke(
+        {
+            "content_type": "comment",
+            "content_id": 201,
+            "report_reason": "疑似辱骂",
+            "reason": "看到评论违规",
+            "summary": "我正在查看评论区",
+        }
+    )
+
+    mock_request.assert_called_once_with(
+        method="POST",
+        endpoint="/reports",
+        json_data={"target_type": "comment", "target_id": 201, "reason": "疑似辱骂"},
+        reason="看到评论违规",
+        summary="我正在查看评论区",
+    )
+    assert result["data"]["content_type"] == "comment"
+    assert result["data"]["content_id"] == 201
+    assert result["data"]["report_reason"] == "疑似辱骂"
+    assert result["data"]["report"]["status"] == "pending"
+
+
+def test_report_content_uses_default_report_reason(monkeypatch):
+    mock_request = MagicMock(return_value={"status": "pending"})
+    monkeypatch.setattr(social, "_make_request", mock_request)
+
+    result = social.report_content.invoke(
+        {"content_type": "post", "content_id": 10, "report_reason": "   "}
+    )
+
+    mock_request.assert_called_once()
+    assert mock_request.call_args.kwargs["json_data"] == {
+        "target_type": "post",
+        "target_id": 10,
+        "reason": "疑似违反社区规则",
+    }
+    assert result["data"]["report_reason"] == "疑似违反社区规则"
 
 
 def test_prompt_for_created_reply_includes_new_comment_id():
