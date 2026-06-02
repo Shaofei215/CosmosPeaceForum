@@ -3,12 +3,21 @@ from sqlalchemy.orm import Session
 
 from social_platform.app.admin.api.deps import require_permission
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
-from social_platform.app.admin.schemas import ContentDeleteRequest, ContentItemResponse, PaginatedResponse
+from social_platform.app.admin.schemas import (
+    ContentDeleteRequest,
+    ContentItemResponse,
+    PaginatedResponse,
+    ReportedContentItemResponse,
+)
 from social_platform.app.admin.services.moderation_service import (
     ContentType,
     delete_comment_as_admin,
     delete_post_as_admin,
+    delete_reported_comment_as_admin,
+    delete_reported_post_as_admin,
     list_content,
+    list_reported_content,
+    release_reported_content,
 )
 from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_CONTENT
 from social_platform.app.api.deps import get_db
@@ -27,6 +36,70 @@ async def content(
 ):
     items, total = list_content(db, content_type=content_type, skip=skip, limit=limit, keyword=keyword)
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.get("/reports", response_model=PaginatedResponse[ReportedContentItemResponse])
+async def reported_content(
+    content_type: ContentType | None = Query(default=None, alias="type"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    items, total = list_reported_content(
+        db,
+        content_type=content_type,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+    return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.post("/reports/{content_type}/{content_id}/release")
+async def release_report(
+    content_type: ContentType,
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        released_count = release_reported_content(db, content_type, content_id, current_admin)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return {"released_count": released_count}
+
+
+@router.delete("/reports/{content_type}/{content_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_reported_content(
+    content_type: ContentType,
+    content_id: int,
+    request: ContentDeleteRequest | None = None,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    payload = request or ContentDeleteRequest()
+    try:
+        if content_type == "comment":
+            delete_reported_comment_as_admin(
+                db,
+                comment_id=content_id,
+                admin=current_admin,
+                reason=payload.reason,
+                notify_author=payload.notify_author,
+            )
+        else:
+            delete_reported_post_as_admin(
+                db,
+                post_id=content_id,
+                admin=current_admin,
+                reason=payload.reason,
+                notify_author=payload.notify_author,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return None
 
 
 @router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -5,6 +5,7 @@ import {
   ChevronUp,
   Clock,
   CornerDownRight,
+  Flag,
   Flame,
   Heart,
   MessageCircle,
@@ -15,6 +16,7 @@ import {
 import type { PostFeedItem } from '@/features/feed';
 import type { PostWithLikeStatus } from '@/features/post';
 import { useDeletePost, useRepost } from '@/features/post';
+import { useCreateReport } from '@/features/report';
 import type { Comment, CommentSort } from '@/features/comment';
 import {
   useComment,
@@ -46,6 +48,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const createComment = useCreateComment(post.id);
   const repost = useRepost();
   const deletePost = useDeletePost();
+  const createReport = useCreateReport();
 
   const [isCommentsExpanded, setIsCommentsExpanded] = useState(expanded);
   const [isContentExpanded, setIsContentExpanded] = useState(expanded);
@@ -57,6 +60,8 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const [replyingTo, setReplyingTo] = useState<{ id: number; username: string } | null>(null);
   const [isRepostOpen, setIsRepostOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportError, setReportError] = useState('');
   const [repostContent, setRepostContent] = useState('');
   const contentRef = useRef<HTMLParagraphElement>(null);
 
@@ -161,6 +166,31 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         }
       },
     });
+  };
+
+  const handleOpenPostReport = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!requireLogin()) return;
+    setReportError('');
+    setIsReportOpen(true);
+  };
+
+  const handleSubmitPostReport = (reason: string) => {
+    setReportError('');
+    createReport.mutate(
+      { target_type: 'post', target_id: post.id, reason },
+      {
+        onSuccess: () => {
+          setIsReportOpen(false);
+          setIsMoreOpen(false);
+        },
+        onError: error => {
+          const message = error instanceof Error ? error.message : '举报提交失败，请稍后重试';
+          setReportError(message);
+        },
+      }
+    );
   };
 
   return (
@@ -357,6 +387,15 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   删除
                 </button>
               )}
+              {!isCurrentUser && (
+                <button
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={handleOpenPostReport}
+                >
+                  <Flag className="h-3.5 w-3.5" />
+                  举报
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -380,6 +419,16 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             </Button>
           </div>
         </form>
+      )}
+
+      {isReportOpen && (
+        <ReportDialog
+          targetLabel={post.type === 'article' ? '文章' : '帖子'}
+          saving={createReport.isPending}
+          error={reportError}
+          onClose={() => setIsReportOpen(false)}
+          onConfirm={handleSubmitPostReport}
+        />
       )}
 
       {isCommentsExpanded && (
@@ -600,6 +649,58 @@ function LinkedMentions({
   );
 }
 
+function ReportDialog({
+  targetLabel,
+  saving,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  targetLabel: string;
+  saving: boolean;
+  error: string;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  const trimmedReason = reason.trim();
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={event => event.stopPropagation()}
+    >
+      <div className="w-full max-w-lg rounded-lg border border-border bg-background p-5 shadow-xl">
+        <div>
+          <h2 className="text-lg font-semibold">举报{targetLabel}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">请填写举报原因，管理端会进行审查。</p>
+        </div>
+        <Textarea
+          value={reason}
+          onChange={event => setReason(event.target.value)}
+          placeholder="填写举报原因"
+          rows={4}
+          className="mt-4"
+          autoFocus
+        />
+        {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" className="rounded-md" onClick={onClose} disabled={saving}>
+            取消
+          </Button>
+          <Button
+            className="rounded-md"
+            disabled={saving || !trimmedReason}
+            onClick={() => onConfirm(trimmedReason)}
+          >
+            {saving ? '提交中...' : '提交举报'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CommentSkeleton() {
   return (
     <div className="flex gap-2">
@@ -646,10 +747,12 @@ function CommentItem({
   threadRootId,
   autoExpandReplies = false,
 }: CommentItemProps) {
+  const navigate = useNavigate();
   const [showReplies, setShowReplies] = useState(false);
   const toggleCommentLike = useToggleCommentLike(postId, currentUserId, commentSort);
   const deleteComment = useDeleteComment(postId);
   const repost = useRepost();
+  const createReport = useCreateReport();
   const {
     data: repliesData,
     fetchNextPage: fetchNextReplyPage,
@@ -663,6 +766,8 @@ function CommentItem({
   const isReplying = replyingTo?.id === comment.id;
   const [isRepostOpen, setIsRepostOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportError, setReportError] = useState('');
   const [repostContent, setRepostContent] = useState('');
   const isTopLevel = depth === 0;
   const rootId = threadRootId ?? comment.root_comment_id ?? comment.id;
@@ -709,6 +814,34 @@ function CommentItem({
     deleteComment.mutate(comment.id, {
       onSuccess: () => setIsMoreOpen(false),
     });
+  };
+
+  const handleOpenCommentReport = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    setReportError('');
+    setIsReportOpen(true);
+  };
+
+  const handleSubmitCommentReport = (reason: string) => {
+    setReportError('');
+    createReport.mutate(
+      { target_type: 'comment', target_id: comment.id, reason },
+      {
+        onSuccess: () => {
+          setIsReportOpen(false);
+          setIsMoreOpen(false);
+        },
+        onError: error => {
+          const message = error instanceof Error ? error.message : '举报提交失败，请稍后重试';
+          setReportError(message);
+        },
+      }
+    );
   };
 
   useEffect(() => {
@@ -838,6 +971,15 @@ function CommentItem({
                       删除
                     </button>
                   )}
+                  {!isCurrentUserComment && (
+                    <button
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={handleOpenCommentReport}
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                      举报
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -921,6 +1063,16 @@ function CommentItem({
           )}
         </div>
       </div>
+
+      {isReportOpen && (
+        <ReportDialog
+          targetLabel="评论"
+          saving={createReport.isPending}
+          error={reportError}
+          onClose={() => setIsReportOpen(false)}
+          onConfirm={handleSubmitCommentReport}
+        />
+      )}
 
       {showReplies && hasReplies && (
         <div className={isTopLevel ? 'pl-8' : 'pl-0'}>

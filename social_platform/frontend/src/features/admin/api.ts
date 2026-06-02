@@ -11,6 +11,8 @@ import type {
   AdminUser,
   ContentDeleteRequest,
   ContentItem,
+  ReportedContentItem,
+  ReportReleaseResponse,
   DashboardStats,
   HotTopic,
   HotTopicGeneration,
@@ -107,6 +109,12 @@ export const adminApi = {
     client.post<unknown, AdminAnnouncementResponse>('/announcements/', request),
   content: (params: { skip?: number; limit?: number; type?: string; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<ContentItem>>('/content/', { params }),
+  reportedContent: (params: { skip?: number; limit?: number; type?: string; keyword?: string }) =>
+    client.get<unknown, PaginatedResponse<ReportedContentItem>>('/content/reports', { params }),
+  releaseReportedContent: (type: string, id: number) =>
+    client.post<unknown, ReportReleaseResponse>('/content/reports/' + type + '/' + id + '/release'),
+  deleteReportedContent: (type: string, id: number, request: ContentDeleteRequest) =>
+    client.delete<unknown, void>('/content/reports/' + type + '/' + id, { data: request }),
   deletePost: (postId: number, request: ContentDeleteRequest) =>
     client.delete<unknown, void>(`/content/posts/${postId}`, { data: request }),
   deleteComment: (commentId: number, request: ContentDeleteRequest) =>
@@ -128,8 +136,7 @@ export const adminApi = {
   hotTopicPrompt: () => client.get<unknown, HotTopicPromptConfig>('/hot-topics/prompt'),
   updateHotTopicPrompt: (value: string) =>
     client.put<unknown, HotTopicPromptConfig>('/hot-topics/prompt', { value }),
-  resetHotTopicPrompt: () =>
-    client.post<unknown, HotTopicPromptConfig>('/hot-topics/prompt/reset'),
+  resetHotTopicPrompt: () => client.post<unknown, HotTopicPromptConfig>('/hot-topics/prompt/reset'),
   getHotTopicGenerateEventsUrl: (token: string) =>
     `${API_CONFIG.BASE_URL}/admin/hot-topics/generate/events?token=${encodeURIComponent(token)}`,
   hotTopicGenerations: (params: { skip?: number; limit?: number }) =>

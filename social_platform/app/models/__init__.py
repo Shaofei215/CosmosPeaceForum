@@ -10,6 +10,7 @@ from social_platform.app.models.email_verification import EmailVerificationCode
 from social_platform.app.models.notification import Notification
 from social_platform.app.models.theme import PlatformThemeSettings
 from social_platform.app.models.hot_topic import HotTopic, HotTopicGeneration, HotTopicSettings
+from social_platform.app.models.content_report import ContentReport
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "HotTopic",
     "HotTopicGeneration",
     "HotTopicSettings",
+    "ContentReport",
 ]

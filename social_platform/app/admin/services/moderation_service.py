@@ -8,7 +8,9 @@ from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.models.user_moderation import UserModeration
 from social_platform.app.admin.schemas import (
     ContentItemResponse,
+    ContentReportReasonResponse,
     DashboardStatsResponse,
+    ReportedContentItemResponse,
     UserModerationBatchUpdateRequest,
     UserModerationBatchUpdateResponse,
     UserModerationResponse,
@@ -19,6 +21,7 @@ from social_platform.app.admin.schemas import (
 from social_platform.app.admin.services.announcement_service import create_user_moderation_notice
 from social_platform.app.admin.services.log_service import create_operation_log
 from social_platform.app.models.comment import Comment, CommentLike
+from social_platform.app.models.content_report import ContentReport
 from social_platform.app.models.follow import Follow
 from social_platform.app.models.like import Like
 from social_platform.app.models.post import Post
@@ -470,6 +473,208 @@ def list_content(
     items.sort(key=lambda item: item.created_at, reverse=True)
     total = len(items)
     return items[skip:skip + limit], total
+
+
+def list_reported_content(
+    db: Session,
+    content_type: Optional[ContentType],
+    skip: int,
+    limit: int,
+    keyword: Optional[str] = None,
+) -> tuple[list[ReportedContentItemResponse], int]:
+    reports = _pending_reports_query(db, content_type).all()
+    keyword_value = keyword.strip() if keyword else None
+    grouped: dict[tuple[str, int], dict[str, object]] = {}
+
+    for report in reports:
+        if report.target_type == "post":
+            target = report.post
+            target_id = report.post_id
+        else:
+            target = report.comment
+            target_id = report.comment_id
+        if target is None or target_id is None:
+            continue
+
+        key = (report.target_type, target_id)
+        group = grouped.setdefault(
+            key,
+            {"target": target, "reports": []},
+        )
+        group_reports = group["reports"]
+        assert isinstance(group_reports, list)
+        group_reports.append(report)
+
+    items: list[ReportedContentItemResponse] = []
+    for (target_type, _), group in grouped.items():
+        target = group["target"]
+        group_reports = group["reports"]
+        assert isinstance(group_reports, list)
+        if not group_reports:
+            continue
+
+        item = _reported_content_item_from_group(target_type, target, group_reports)
+        if keyword_value and keyword_value not in (item.title or "") and keyword_value not in item.content:
+            continue
+        items.append(item)
+
+    items.sort(key=lambda item: (item.report_count, item.last_reported_at), reverse=True)
+    total = len(items)
+    return items[skip:skip + limit], total
+
+
+def release_reported_content(
+    db: Session,
+    content_type: ContentType,
+    content_id: int,
+    admin: PlatformAdminUser,
+) -> int:
+    reports = _pending_reports_for_target(db, content_type, content_id).all()
+    if not reports:
+        raise ValueError("待审举报不存在")
+
+    now = datetime.utcnow()
+    for report in reports:
+        report.status = "released"
+        report.reviewed_at = now
+        report.reviewed_by_admin_id = admin.id
+    create_operation_log(
+        db,
+        admin,
+        action="release_reported_content",
+        target_type=content_type,
+        target_id=content_id,
+        details={"report_count": len(reports)},
+    )
+    db.commit()
+    return len(reports)
+
+
+def delete_reported_post_as_admin(
+    db: Session,
+    post_id: int,
+    admin: PlatformAdminUser,
+    reason: Optional[str] = None,
+    notify_author: bool = True,
+) -> None:
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise ValueError("帖子不存在")
+    reporter_ids = _pending_reporter_ids(db, "post", post_id)
+    _notify_reporters_content_deleted(db, reporter_ids, "post", post_id)
+    delete_post_as_admin(db, post_id, admin, reason=reason, notify_author=notify_author)
+
+
+def delete_reported_comment_as_admin(
+    db: Session,
+    comment_id: int,
+    admin: PlatformAdminUser,
+    reason: Optional[str] = None,
+    notify_author: bool = True,
+) -> None:
+    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    if not comment:
+        raise ValueError("评论不存在")
+    reporter_ids = _pending_reporter_ids(db, "comment", comment_id)
+    _notify_reporters_content_deleted(db, reporter_ids, "comment", comment_id)
+    delete_comment_as_admin(db, comment_id, admin, reason=reason, notify_author=notify_author)
+
+
+def _pending_reports_query(db: Session, content_type: Optional[ContentType]):
+    query = db.query(ContentReport).options(
+        joinedload(ContentReport.post).joinedload(Post.author),
+        joinedload(ContentReport.comment).joinedload(Comment.owner),
+    ).filter(ContentReport.status == "pending")
+    if content_type:
+        query = query.filter(ContentReport.target_type == content_type)
+    return query
+
+
+def _pending_reports_for_target(db: Session, content_type: ContentType, content_id: int):
+    query = db.query(ContentReport).filter(
+        ContentReport.status == "pending",
+        ContentReport.target_type == content_type,
+    )
+    if content_type == "post":
+        return query.filter(ContentReport.post_id == content_id)
+    return query.filter(ContentReport.comment_id == content_id)
+
+
+def _pending_reporter_ids(db: Session, content_type: ContentType, content_id: int) -> list[int]:
+    return sorted({
+        row[0]
+        for row in _pending_reports_for_target(db, content_type, content_id)
+        .with_entities(ContentReport.reporter_id)
+        .all()
+    })
+
+
+def _reported_content_item_from_group(
+    target_type: str,
+    target: Post | Comment,
+    reports: list[ContentReport],
+) -> ReportedContentItemResponse:
+    reason_counts: dict[str, int] = {}
+    for report in reports:
+        reason_counts[report.reason] = reason_counts.get(report.reason, 0) + 1
+    report_reasons = [
+        ContentReportReasonResponse(reason=reason, count=count)
+        for reason, count in sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)
+    ]
+    last_reported_at = max(report.created_at for report in reports)
+
+    if target_type == "post":
+        assert isinstance(target, Post)
+        return ReportedContentItemResponse(
+            id=target.id,
+            type=target.type,
+            post_id=target.id,
+            author_id=target.author_id,
+            author_username=target.author.username if target.author else None,
+            title=target.title,
+            content=target.content,
+            created_at=target.created_at,
+            like_count=target.like_count,
+            comment_count=target.comment_count,
+            report_count=len({report.reporter_id for report in reports}),
+            report_reasons=report_reasons,
+            last_reported_at=last_reported_at,
+        )
+
+    assert isinstance(target, Comment)
+    return ReportedContentItemResponse(
+        id=target.id,
+        type="comment",
+        post_id=target.post_id,
+        author_id=target.owner_id,
+        author_username=target.owner.username if target.owner else None,
+        content=target.content,
+        created_at=target.created_at,
+        like_count=target.like_count,
+        reply_count=target.reply_count,
+        report_count=len({report.reporter_id for report in reports}),
+        report_reasons=report_reasons,
+        last_reported_at=last_reported_at,
+    )
+
+
+def _notify_reporters_content_deleted(
+    db: Session,
+    reporter_ids: list[int],
+    resource_type: str,
+    resource_id: int,
+) -> None:
+    for reporter_id in reporter_ids:
+        notification_service.create_notification(
+            db=db,
+            recipient_id=reporter_id,
+            sender_id=None,
+            notification_type="moderation",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            source_content="你举报的内容存在违规，已被管理端处理。",
+            truncate_source_content=False,
+        )
 
 
 def get_dashboard_stats(db: Session) -> DashboardStatsResponse:

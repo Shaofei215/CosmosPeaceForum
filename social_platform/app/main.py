@@ -29,6 +29,7 @@ from social_platform.app.api.routers import (
     search,
     theme,
     hot_topics,
+    reports,
 )
 
 
@@ -155,6 +156,7 @@ app.include_router(notifications.router, prefix=f"{settings.API_V1_PREFIX}/notif
 app.include_router(search.router, prefix=f"{settings.API_V1_PREFIX}/search", tags=["search"])
 app.include_router(theme.router, prefix=f"{settings.API_V1_PREFIX}/theme", tags=["theme"])
 app.include_router(hot_topics.router, prefix=f"{settings.API_V1_PREFIX}/hot-topics", tags=["hot-topics"])
+app.include_router(reports.router, prefix=f"{settings.API_V1_PREFIX}/reports", tags=["reports"])
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 
 

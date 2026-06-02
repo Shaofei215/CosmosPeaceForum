@@ -152,6 +152,21 @@ export interface ContentDeleteRequest {
   notify_author: boolean;
 }
 
+export interface ContentReportReason {
+  reason: string;
+  count: number;
+}
+
+export interface ReportedContentItem extends ContentItem {
+  report_count: number;
+  report_reasons: ContentReportReason[];
+  last_reported_at: string;
+}
+
+export interface ReportReleaseResponse {
+  released_count: number;
+}
+
 export type HotTopicSource = 'manual' | 'agent';
 export type HotTopicStatus = 'active' | 'draft' | 'archived';
 export type HotTopicPublishPolicy = 'auto' | 'draft';
