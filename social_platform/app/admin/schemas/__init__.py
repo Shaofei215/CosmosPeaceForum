@@ -14,6 +14,10 @@ from social_platform.app.admin.schemas.admin import (
 )
 from social_platform.app.admin.schemas.content import (
     ContentItemResponse,
+    ContentModerationLLMPromptConfigResponse,
+    ContentModerationLLMPromptConfigUpdateRequest,
+    ContentModerationLLMSettingsResponse,
+    ContentModerationLLMSettingsUpdateRequest,
     ContentReportReasonResponse,
     ReportedContentItemResponse,
 )
@@ -52,6 +56,10 @@ __all__ = [
     "AdminUpdateRequest",
     "ContentDeleteRequest",
     "ContentItemResponse",
+    "ContentModerationLLMPromptConfigResponse",
+    "ContentModerationLLMPromptConfigUpdateRequest",
+    "ContentModerationLLMSettingsResponse",
+    "ContentModerationLLMSettingsUpdateRequest",
     "ContentReportReasonResponse",
     "DashboardStatsResponse",
     "HotTopicCreateRequest",

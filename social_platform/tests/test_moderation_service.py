@@ -9,6 +9,7 @@ from social_platform.app.admin.models import PlatformAdminOperationLog, Platform
 from social_platform.app.admin.schemas import UserModerationUpdateRequest
 from social_platform.app.admin.services.moderation_guard import ensure_account_available
 from social_platform.app.services.report_service import create_content_report
+from social_platform.app.services import content_moderation_llm_service
 from social_platform.app.admin.services.moderation_service import (
     delete_post_as_admin,
     delete_reported_post_as_admin,
@@ -253,3 +254,137 @@ def test_delete_reported_content_notifies_author_with_reason_and_reporters_witho
     assert "广告引流" not in by_recipient[reporter_a.id]
     assert db_session.query(Post).filter(Post.id == post.id).first() is None
 
+
+
+class _FakeLLMResponse:
+    def __init__(self, content):
+        self.content = content
+
+
+class _FakeLLM:
+    def __init__(self, content):
+        self.content = content
+        self.messages = None
+
+    def invoke(self, messages):
+        self.messages = messages
+        return _FakeLLMResponse(self.content)
+
+
+def _enable_content_moderation_llm(db_session):
+    settings = content_moderation_llm_service.get_content_moderation_llm_settings(db_session)
+    settings.enabled = True
+    settings.llm_model_name = "test-model"
+    settings.llm_api_key = "test-key"
+    db_session.add(settings)
+    db_session.commit()
+    return settings
+
+
+def test_content_moderation_llm_pass_releases_reported_content(db_session):
+    author, _ = _seed_user_and_admin(db_session)
+    reporter = User(username="llm_pass_reporter")
+    post = Post(author_id=author.id, content="正常讨论内容")
+    db_session.add_all([reporter, post])
+    db_session.commit()
+    report = create_content_report(db_session, reporter, "post", post.id, "误报")
+    _enable_content_moderation_llm(db_session)
+
+    decision, reason = content_moderation_llm_service.review_report(
+        db_session,
+        report.id,
+        llm_factory=lambda settings: _FakeLLM("pass"),
+    )
+
+    assert decision == "pass"
+    assert reason is None
+    stored_report = db_session.query(ContentReport).filter(ContentReport.id == report.id).one()
+    assert stored_report.status == "released"
+    assert stored_report.reviewed_by_admin.username == "llm_moderator"
+    assert db_session.query(Post).filter(Post.id == post.id).first() is not None
+
+
+def test_content_moderation_llm_delete_removes_reported_post(db_session):
+    author, _ = _seed_user_and_admin(db_session)
+    reporter = User(username="llm_delete_reporter")
+    post = Post(author_id=author.id, content="诈骗广告内容")
+    db_session.add_all([reporter, post])
+    db_session.commit()
+    report = create_content_report(db_session, reporter, "post", post.id, "广告")
+    _enable_content_moderation_llm(db_session)
+
+    decision, reason = content_moderation_llm_service.review_report(
+        db_session,
+        report.id,
+        llm_factory=lambda settings: _FakeLLM("delete 诈骗广告引流"),
+    )
+
+    assert decision == "delete"
+    assert reason == "诈骗广告引流"
+    assert db_session.query(Post).filter(Post.id == post.id).first() is None
+    notification = db_session.query(Notification).filter(Notification.recipient_id == author.id).one()
+    assert "诈骗广告引流" in notification.source_content
+
+
+def test_content_moderation_llm_drop_keeps_report_pending(db_session):
+    author, _ = _seed_user_and_admin(db_session)
+    reporter = User(username="llm_drop_reporter")
+    post = Post(author_id=author.id, content="语义有争议的内容")
+    db_session.add_all([reporter, post])
+    db_session.commit()
+    report = create_content_report(db_session, reporter, "post", post.id, "需要人工确认")
+    _enable_content_moderation_llm(db_session)
+
+    decision, reason = content_moderation_llm_service.review_report(
+        db_session,
+        report.id,
+        llm_factory=lambda settings: _FakeLLM("drop"),
+    )
+
+    assert decision == "drop"
+    assert reason is None
+    stored_report = db_session.query(ContentReport).filter(ContentReport.id == report.id).one()
+    assert stored_report.status == "pending"
+    log = db_session.query(PlatformAdminOperationLog).filter(
+        PlatformAdminOperationLog.action == "content_moderation_llm_drop"
+    ).one()
+    assert log.operator_username == "llm_moderator"
+
+
+def test_content_moderation_llm_comment_context_includes_post_and_parent_comment(db_session):
+    author, _ = _seed_user_and_admin(db_session)
+    reporter = User(username="llm_context_reporter")
+    post = Post(author_id=author.id, title="上下文帖子", content="帖子正文")
+    db_session.add_all([reporter, post])
+    db_session.commit()
+    parent = Comment(post_id=post.id, owner_id=author.id, content="父评论")
+    db_session.add(parent)
+    db_session.commit()
+    comment = Comment(
+        post_id=post.id,
+        owner_id=author.id,
+        parent_id=parent.id,
+        root_comment_id=parent.id,
+        content="被举报回复",
+    )
+    db_session.add(comment)
+    db_session.commit()
+    report = create_content_report(db_session, reporter, "comment", comment.id, "回复违规")
+
+    context = content_moderation_llm_service.build_report_context(db_session, report)
+
+    assert context["target_comment"]["id"] == comment.id
+    assert context["post"]["id"] == post.id
+    assert context["post"]["content"] == "帖子正文"
+    assert context["parent_comment"]["id"] == parent.id
+    assert context["parent_comment"]["content"] == "父评论"
+
+
+def test_content_moderation_llm_prompt_requires_strict_output():
+    settings = content_moderation_llm_service.ContentModerationLLMSettings()
+    prompt = content_moderation_llm_service.serialize_prompt_config(settings)["default_value"]
+
+    assert "pass" in prompt
+    assert "delete {处理原因}" in prompt
+    assert "drop" in prompt
+    assert "不能输出解释" in prompt

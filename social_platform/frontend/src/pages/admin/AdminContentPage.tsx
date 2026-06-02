@@ -1,16 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
+  Bot,
+  Braces,
   CheckCircle,
   FileText,
   Heart,
   MessageCircle,
+  RotateCcw,
+  Save,
+  ScrollText,
   Search,
   ShieldAlert,
   Trash2,
 } from 'lucide-react';
-import { adminApi, adminKeys, type ContentItem, type ReportedContentItem } from '@/features/admin';
+import {
+  adminApi,
+  adminKeys,
+  type ContentItem,
+  type ContentModerationLLMPromptConfig,
+  type ContentModerationLLMSettings,
+  type ContentModerationLLMSettingsUpdate,
+  type ReportedContentItem,
+} from '@/features/admin';
 import { Button, Card, CardContent, Input, Textarea } from '@/shared/components/ui';
 
 type ContentMode = 'all' | 'reported';
@@ -21,6 +35,40 @@ function getContentKey(item: ContentItem) {
 
 function getReviewTargetType(item: ContentItem) {
   return item.type === 'comment' ? 'comment' : 'post';
+}
+
+
+const reportPromptPlaceholders = [
+  { token: "{context_json}", description: "被举报内容、举报原因、所属帖子和父评论 JSON。" },
+];
+
+function reportSettingsToForm(
+  settings: ContentModerationLLMSettings
+): ContentModerationLLMSettingsUpdate {
+  return {
+    enabled: settings.enabled,
+    llm_base_url: settings.llm_base_url || "",
+    llm_model_name: settings.llm_model_name || "",
+    llm_api_key: settings.llm_api_key || "",
+  };
+}
+
+function normalizeReportSettingsForm(
+  form: ContentModerationLLMSettingsUpdate
+): ContentModerationLLMSettingsUpdate {
+  return {
+    enabled: !!form.enabled,
+    llm_base_url: form.llm_base_url || "",
+    llm_model_name: form.llm_model_name || "",
+    llm_api_key: form.llm_api_key || "",
+  };
+}
+
+function reportSettingsFormsEqual(
+  left: ContentModerationLLMSettingsUpdate,
+  right: ContentModerationLLMSettingsUpdate
+) {
+  return JSON.stringify(normalizeReportSettingsForm(left)) === JSON.stringify(normalizeReportSettingsForm(right));
 }
 
 function getContentPath(item: ContentItem): string | null {
@@ -62,6 +110,8 @@ export default function AdminContentPage() {
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [releasingKey, setReleasingKey] = useState<string | null>(null);
+  const [reportSettingsForm, setReportSettingsForm] = useState<ContentModerationLLMSettingsUpdate>({});
+  const [reportPromptDraft, setReportPromptDraft] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const contentQuery = useQuery({
@@ -88,11 +138,43 @@ export default function AdminContentPage() {
     enabled: mode === 'reported',
   });
 
+  const { data: reportSettings } = useQuery({
+    queryKey: adminKeys.reportModerationSettings,
+    queryFn: adminApi.reportModerationSettings,
+    enabled: mode === 'reported',
+  });
+
+  const { data: reportPromptConfig, isLoading: isReportPromptLoading } = useQuery({
+    queryKey: adminKeys.reportModerationPrompt,
+    queryFn: adminApi.reportModerationPrompt,
+    enabled: mode === 'reported',
+  });
+
   const items = contentQuery.data?.items ?? [];
   const reportedItems = reportedQuery.data?.items ?? [];
   const selectedItems = items.filter(item => selectedKeys.includes(getContentKey(item)));
   const allPageSelected =
     items.length > 0 && items.every(item => selectedKeys.includes(getContentKey(item)));
+  const reportPromptValue = reportPromptDraft ?? reportPromptConfig?.value ?? "";
+  const isReportPromptDirty = !!reportPromptConfig && reportPromptValue !== reportPromptConfig.value;
+  const reportSettingsDirty = useMemo(() => {
+    if (!reportSettings) return false;
+    return !reportSettingsFormsEqual(reportSettingsForm, reportSettingsToForm(reportSettings));
+  }, [reportSettings, reportSettingsForm]);
+
+
+
+  useEffect(() => {
+    if (reportSettings) {
+      setReportSettingsForm(reportSettingsToForm(reportSettings));
+    }
+  }, [reportSettings]);
+
+  useEffect(() => {
+    if (reportPromptConfig && reportPromptDraft === null) {
+      setReportPromptDraft(reportPromptConfig.value);
+    }
+  }, [reportPromptConfig, reportPromptDraft]);
 
   const deleteMutation = useMutation({
     mutationFn: ({ item, reason }: { item: ContentItem; reason: string }) => {
@@ -162,6 +244,42 @@ export default function AdminContentPage() {
       setDeletingReported(null);
     },
   });
+
+  const saveReportSettingsMutation = useMutation({
+    mutationFn: adminApi.updateReportModerationSettings,
+    onSuccess: data => {
+      queryClient.setQueryData(adminKeys.reportModerationSettings, data);
+    },
+  });
+
+  const updateReportPromptMutation = useMutation({
+    mutationFn: (value: string) => adminApi.updateReportModerationPrompt(value),
+    onSuccess: updated => {
+      setReportPromptDraft(updated.value);
+      queryClient.setQueryData(adminKeys.reportModerationPrompt, updated);
+    },
+  });
+
+  const resetReportPromptMutation = useMutation({
+    mutationFn: adminApi.resetReportModerationPrompt,
+    onSuccess: updated => {
+      setReportPromptDraft(updated.value);
+      queryClient.setQueryData(adminKeys.reportModerationPrompt, updated);
+    },
+  });
+
+  useEffect(() => {
+    if (!reportSettings || saveReportSettingsMutation.isPending) return;
+    const current = normalizeReportSettingsForm(reportSettingsForm);
+    const persisted = reportSettingsToForm(reportSettings);
+    if (reportSettingsFormsEqual(current, persisted)) return;
+
+    const timeoutId = window.setTimeout(() => {
+      saveReportSettingsMutation.mutate(current);
+    }, 700);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [reportSettings, reportSettingsForm, saveReportSettingsMutation]);
 
   const toggleSelected = (item: ContentItem) => {
     const key = getContentKey(item);
@@ -262,13 +380,31 @@ export default function AdminContentPage() {
           onDelete={setDeleting}
         />
       ) : (
-        <ReportedContentTable
-          items={reportedItems}
-          releasingKey={releasingKey}
-          releasePending={releaseMutation.isPending}
-          onRelease={item => releaseMutation.mutate(item)}
-          onDelete={setDeletingReported}
-        />
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+          <ReportedContentTable
+            items={reportedItems}
+            releasingKey={releasingKey}
+            releasePending={releaseMutation.isPending}
+            onRelease={item => releaseMutation.mutate(item)}
+            onDelete={setDeletingReported}
+          />
+          <ReportModerationLLMPanel
+            settingsForm={reportSettingsForm}
+            settingsDirty={reportSettingsDirty}
+            settingsSaving={saveReportSettingsMutation.isPending}
+            prompt={reportPromptConfig}
+            promptDraft={reportPromptValue}
+            promptLoading={isReportPromptLoading}
+            promptDirty={isReportPromptDirty}
+            promptSaving={updateReportPromptMutation.isPending}
+            promptResetting={resetReportPromptMutation.isPending}
+            onSettingsChange={setReportSettingsForm}
+            onPromptDraftChange={setReportPromptDraft}
+            onPromptCancel={() => setReportPromptDraft(reportPromptConfig?.value ?? "")}
+            onPromptReset={() => resetReportPromptMutation.mutate()}
+            onPromptSave={() => updateReportPromptMutation.mutate(reportPromptValue)}
+          />
+        </div>
       )}
 
       {deleting && (
@@ -495,6 +631,215 @@ function ReportedContentTable({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+
+function ReportModerationLLMPanel({
+  settingsForm,
+  settingsDirty,
+  settingsSaving,
+  prompt,
+  promptDraft,
+  promptLoading,
+  promptDirty,
+  promptSaving,
+  promptResetting,
+  onSettingsChange,
+  onPromptDraftChange,
+  onPromptCancel,
+  onPromptReset,
+  onPromptSave,
+}: {
+  settingsForm: ContentModerationLLMSettingsUpdate;
+  settingsDirty: boolean;
+  settingsSaving: boolean;
+  prompt?: ContentModerationLLMPromptConfig;
+  promptDraft: string;
+  promptLoading: boolean;
+  promptDirty: boolean;
+  promptSaving: boolean;
+  promptResetting: boolean;
+  onSettingsChange: (updater: (current: ContentModerationLLMSettingsUpdate) => ContentModerationLLMSettingsUpdate) => void;
+  onPromptDraftChange: (value: string) => void;
+  onPromptCancel: () => void;
+  onPromptReset: () => void;
+  onPromptSave: () => void;
+}) {
+  const enabled = !!settingsForm.enabled;
+
+  return (
+    <aside className="space-y-4 xl:sticky xl:top-20">
+      <Card className="rounded-lg">
+        <CardContent className="space-y-4 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 font-semibold">
+              <Bot size={17} className="text-primary" />
+              LLM审查
+            </div>
+            <CompactSwitch
+              checked={enabled}
+              onChange={checked => onSettingsChange(current => ({ ...current, enabled: checked }))}
+            />
+          </div>
+
+          {settingsDirty && (
+            <div className="text-xs text-muted-foreground">
+              {settingsSaving ? "保存中" : "待自动保存"}
+            </div>
+          )}
+
+          <fieldset className={!enabled ? "pointer-events-none space-y-3 opacity-50" : "space-y-3"}>
+            <CompactField label="Base URL">
+              <Input
+                value={settingsForm.llm_base_url || ""}
+                onChange={event =>
+                  onSettingsChange(current => ({ ...current, llm_base_url: event.target.value }))
+                }
+                placeholder="OpenAI-compatible API 地址"
+              />
+            </CompactField>
+            <CompactField label="API Key">
+              <Input
+                value={settingsForm.llm_api_key || ""}
+                onChange={event =>
+                  onSettingsChange(current => ({ ...current, llm_api_key: event.target.value }))
+                }
+                placeholder="留空不修改，星号会保留旧值"
+                type="password"
+              />
+            </CompactField>
+            <CompactField label="模型名称">
+              <Input
+                value={settingsForm.llm_model_name || ""}
+                onChange={event =>
+                  onSettingsChange(current => ({ ...current, llm_model_name: event.target.value }))
+                }
+                placeholder="例如 gpt-4.1-mini"
+              />
+            </CompactField>
+          </fieldset>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-lg">
+        <CardContent className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2 font-semibold">
+              <ScrollText size={17} className="text-muted-foreground" />
+              <span className="truncate">{prompt?.name ?? "审查提示词"}</span>
+            </div>
+            {promptDirty && <CompactBadge>未保存</CompactBadge>}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Braces size={14} />
+            {reportPromptPlaceholders.map(placeholder => (
+              <CompactBadge key={placeholder.token} title={placeholder.description} variant="outline">
+                {placeholder.token}
+              </CompactBadge>
+            ))}
+          </div>
+
+          {promptLoading ? (
+            <div className="h-40 animate-pulse rounded-md bg-muted" />
+          ) : (
+            <Textarea
+              value={promptDraft}
+              onChange={event => onPromptDraftChange(event.target.value)}
+              className="min-h-[260px] font-mono text-xs leading-relaxed"
+              spellCheck={false}
+            />
+          )}
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-md"
+              onClick={onPromptCancel}
+              disabled={!promptDirty || promptSaving || promptResetting}
+            >
+              取消
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-md"
+              onClick={onPromptReset}
+              disabled={promptSaving || promptResetting}
+            >
+              <RotateCcw size={14} className="mr-1" />
+              默认
+            </Button>
+            <Button
+              size="sm"
+              className="rounded-md"
+              onClick={onPromptSave}
+              disabled={!promptDraft.trim() || !promptDirty || promptSaving}
+            >
+              <Save size={14} className="mr-1" />
+              保存
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </aside>
+  );
+}
+
+function CompactField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function CompactSwitch({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={
+        "relative h-6 w-11 rounded-full transition-colors " +
+        (checked ? "bg-[var(--theme-accent-bg)]" : "bg-muted")
+      }
+      onClick={() => onChange(!checked)}
+    >
+      <span
+        className={
+          "absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform " +
+          (checked ? "translate-x-5" : "translate-x-0")
+        }
+      />
+    </button>
+  );
+}
+
+function CompactBadge({
+  children,
+  title,
+  variant = "secondary",
+}: {
+  children: ReactNode;
+  title?: string;
+  variant?: "secondary" | "outline";
+}) {
+  return (
+    <span
+      title={title}
+      className={
+        "inline-flex h-6 items-center rounded-md px-2 text-xs font-medium " +
+        (variant === "outline"
+          ? "border border-border bg-background font-mono text-muted-foreground"
+          : "bg-muted text-muted-foreground")
+      }
+    >
+      {children}
+    </span>
   );
 }
 
