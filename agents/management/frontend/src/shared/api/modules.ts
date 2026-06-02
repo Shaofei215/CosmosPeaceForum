@@ -199,16 +199,16 @@ export const memoryApi = {
     apiClient.delete<MessageResponse>(`/memories/user/${ownerId}`),
 };
 
+interface TerminalLogParams {
+  count?: number;
+  level?: string;
+  keyword?: string;
+  role?: string;
+}
+
 export const terminalLogApi = {
-  list: (count = 200, level?: string, keyword?: string, role?: string) => {
-    const params = new URLSearchParams({
-      count: String(count),
-    });
-    if (level) params.set('level', level);
-    if (keyword) params.set('keyword', keyword);
-    if (role) params.set('role', role);
-    return apiClient.get<TerminalLogListResponse>(`/terminal-logs/?${params.toString()}`);
-  },
+  list: (params: TerminalLogParams = {}) =>
+    apiClient.get<TerminalLogListResponse>('/logs/terminal', { params }),
 
   recent: (count = 50, role?: string, keyword?: string, level?: string) => {
     const params = new URLSearchParams({ count: String(count) });
@@ -221,5 +221,5 @@ export const terminalLogApi = {
   },
 
   clear: () =>
-    apiClient.post<MessageResponse>('/terminal-logs/clear'),
+    apiClient.delete<MessageResponse>('/logs/terminal'),
 };
