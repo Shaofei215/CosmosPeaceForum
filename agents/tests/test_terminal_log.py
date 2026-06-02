@@ -123,6 +123,23 @@ class TestTerminalLogCapture:
         assert len(logs) == 5
         assert logs[0]["message"] == "Log 15"
 
+    def test_file_backed_logs_are_shared_between_instances(self, tmp_path):
+        log_file = tmp_path / "terminal_logs.jsonl"
+        writer = TerminalLogCapture(max_lines=100, log_file_path=log_file)
+        reader = TerminalLogCapture(max_lines=100, log_file_path=log_file)
+
+        writer._append("Shared scheduler log", level="ERROR")
+
+        logs, total = reader.recent(count=10)
+        assert total == 1
+        assert logs[0]["level"] == "ERROR"
+        assert logs[0]["message"] == "Shared scheduler log"
+
+        reader.clear()
+        logs, total = writer.recent(count=10)
+        assert logs == []
+        assert total == 0
+
     def test_clear_logs(self, capture):
         capture._append("Log 1")
         capture._append("Log 2")
@@ -151,6 +168,24 @@ class TestTerminalLogCapture:
         capture.start()
         assert len(root.handlers) == count_before + 1
         capture.stop()
+
+    def test_agents_logger_is_captured_when_root_handler_is_missing(self, capture):
+        root = logging.getLogger()
+        old_level = root.level
+        root.setLevel(logging.INFO)
+
+        capture.start()
+        root.removeHandler(capture._handler)
+
+        test_logger = logging.getLogger("agents.agents_scheduler.scheduler.internal_server")
+        test_logger.info("scheduler internal log")
+
+        logs, total = capture.get_logs()
+        assert total == 1
+        assert "scheduler internal log" in logs[0]["message"]
+
+        capture.stop()
+        root.setLevel(old_level)
 
     def test_stop_removes_handler(self, capture):
         root = logging.getLogger()

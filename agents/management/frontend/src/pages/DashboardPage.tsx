@@ -46,12 +46,11 @@ export default function DashboardPage() {
   const { data: logsData, refetch } = useQuery({
     queryKey: ['terminal-logs', 'dashboard', selectedLogRole, logSearch],
     queryFn: () =>
-      terminalLogApi.list(
-        240,
-        undefined,
-        logSearch.trim() || undefined,
-        selectedLogRole || undefined,
-      ),
+      terminalLogApi.list({
+        count: 240,
+        keyword: logSearch.trim() || undefined,
+        role: selectedLogRole || undefined,
+      }),
     refetchInterval: 2000,
   });
 

@@ -29,8 +29,10 @@ def get_frontend_dist_dir() -> Path:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    terminal_log_capture.start()
     config = get_config()
+    numeric_level = getattr(logging, config.log_level.upper(), logging.INFO)
+    logging.getLogger().setLevel(numeric_level)
+    terminal_log_capture.start()
     logger.info("=" * 50)
     logger.info("Management Backend 启动中...")
     logger.info("=" * 50)
