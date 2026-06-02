@@ -31,6 +31,7 @@ def get_social_tools(relation_map=None) -> List:
             toggle_follow,
             create_post,
             delete_content,
+            report_content,
             logout,
             get_user_profile,
         )
@@ -56,6 +57,7 @@ def get_social_tools(relation_map=None) -> List:
             toggle_follow,
             create_post,
             delete_content,
+            report_content,
             logout,
             get_user_profile,
             get_global_feed,

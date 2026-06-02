@@ -7,6 +7,8 @@ export const adminKeys = {
   stats: ['admin', 'stats'] as const,
   users: (keyword: string) => ['admin', 'users', keyword] as const,
   content: (type: string, keyword: string) => ['admin', 'content', type, keyword] as const,
+  reportedContent: (type: string, keyword: string) =>
+    ['admin', 'content', 'reports', type, keyword] as const,
   hotTopics: (status: string, source: string) => ['admin', 'hot-topics', status, source] as const,
   hotTopicSettings: ['admin', 'hot-topic-settings'] as const,
   hotTopicPrompt: ['admin', 'hot-topic-prompt'] as const,

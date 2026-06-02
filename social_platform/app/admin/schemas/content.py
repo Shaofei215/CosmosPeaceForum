@@ -16,3 +16,13 @@ class ContentItemResponse(BaseModel):
     like_count: int
     comment_count: Optional[int] = None
     reply_count: Optional[int] = None
+
+class ContentReportReasonResponse(BaseModel):
+    reason: str
+    count: int
+
+
+class ReportedContentItemResponse(ContentItemResponse):
+    report_count: int
+    report_reasons: list[ContentReportReasonResponse]
+    last_reported_at: datetime

@@ -41,6 +41,8 @@ TOOL_TO_LOCATION = {
     "create_comment": None,
     "repost": None,
     "create_post": None,
+    "delete_content": None,
+    "report_content": None,
     "scroll": None,
     "recall_memory": None,
     "web_search": None,
@@ -69,6 +71,8 @@ TOOL_NO_RETURN_VALUE = {
     "create_comment",
     "repost",
     "create_post",
+    "delete_content",
+    "report_content",
     "logout",  
 }
 

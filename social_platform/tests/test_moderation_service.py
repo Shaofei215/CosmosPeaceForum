@@ -8,12 +8,16 @@ from sqlalchemy.orm import sessionmaker
 from social_platform.app.admin.models import PlatformAdminOperationLog, PlatformAdminUser, UserModeration
 from social_platform.app.admin.schemas import UserModerationUpdateRequest
 from social_platform.app.admin.services.moderation_guard import ensure_account_available
+from social_platform.app.services.report_service import create_content_report
 from social_platform.app.admin.services.moderation_service import (
     delete_post_as_admin,
+    delete_reported_post_as_admin,
+    list_reported_content,
+    release_reported_content,
     update_user_moderation,
 )
 from social_platform.app.db.session import Base
-from social_platform.app.models import Notification, Post, User
+from social_platform.app.models import Comment, ContentReport, Notification, Post, User
 
 
 @pytest.fixture()
@@ -164,3 +168,88 @@ def test_moderation_notice_keeps_long_reason_without_original_content(db_session
     assert notification.source_content == f"你的内容因违反社区规则已被管理端处理。\n原因：{long_reason}"
     assert "原内容" not in notification.source_content
     assert "这段原内容不应该进入管理通知" not in notification.source_content
+
+def test_create_content_report_for_post_and_comment_deduplicates_pending_report(db_session):
+    author, _ = _seed_user_and_admin(db_session)
+    reporter = User(username="reporter")
+    post = Post(author_id=author.id, content="被举报帖子")
+    db_session.add_all([reporter, post])
+    db_session.commit()
+    comment = Comment(post_id=post.id, owner_id=author.id, content="被举报评论")
+    db_session.add(comment)
+    db_session.commit()
+
+    first = create_content_report(db_session, reporter, "post", post.id, "垃圾内容")
+    second = create_content_report(db_session, reporter, "post", post.id, "更新后的原因")
+    comment_report = create_content_report(db_session, reporter, "comment", comment.id, "评论违规")
+
+    assert first.id == second.id
+    assert second.reason == "更新后的原因"
+    assert comment_report.comment_id == comment.id
+    assert db_session.query(ContentReport).filter(ContentReport.status == "pending").count() == 2
+
+
+def test_reported_content_list_groups_by_content_and_sorts_by_report_count(db_session):
+    author, _ = _seed_user_and_admin(db_session)
+    reporter_a = User(username="reporter_a")
+    reporter_b = User(username="reporter_b")
+    reporter_c = User(username="reporter_c")
+    post_one = Post(author_id=author.id, content="多人举报")
+    post_two = Post(author_id=author.id, content="单人举报")
+    db_session.add_all([reporter_a, reporter_b, reporter_c, post_one, post_two])
+    db_session.commit()
+
+    create_content_report(db_session, reporter_a, "post", post_two.id, "原因 C")
+    create_content_report(db_session, reporter_b, "post", post_one.id, "原因 A")
+    create_content_report(db_session, reporter_c, "post", post_one.id, "原因 B")
+
+    items, total = list_reported_content(db_session, content_type=None, skip=0, limit=10)
+
+    assert total == 2
+    assert items[0].id == post_one.id
+    assert items[0].report_count == 2
+    assert {reason.reason for reason in items[0].report_reasons} == {"原因 A", "原因 B"}
+    assert items[1].id == post_two.id
+    assert items[1].report_count == 1
+
+
+def test_release_reported_content_removes_item_from_pending_review_without_deleting(db_session):
+    author, admin = _seed_user_and_admin(db_session)
+    reporter = User(username="release_reporter")
+    post = Post(author_id=author.id, content="待放行内容")
+    db_session.add_all([reporter, post])
+    db_session.commit()
+    create_content_report(db_session, reporter, "post", post.id, "误报待确认")
+
+    released_count = release_reported_content(db_session, "post", post.id, admin)
+    items, total = list_reported_content(db_session, content_type=None, skip=0, limit=10)
+
+    assert released_count == 1
+    assert total == 0
+    assert items == []
+    assert db_session.query(Post).filter(Post.id == post.id).first() is not None
+    report = db_session.query(ContentReport).one()
+    assert report.status == "released"
+    assert report.reviewed_by_admin_id == admin.id
+
+
+def test_delete_reported_content_notifies_author_with_reason_and_reporters_without_reason(db_session):
+    author, admin = _seed_user_and_admin(db_session)
+    reporter_a = User(username="delete_reporter_a")
+    reporter_b = User(username="delete_reporter_b")
+    post = Post(author_id=author.id, content="确认违规内容")
+    db_session.add_all([reporter_a, reporter_b, post])
+    db_session.commit()
+    create_content_report(db_session, reporter_a, "post", post.id, "违规线索 A")
+    create_content_report(db_session, reporter_b, "post", post.id, "违规线索 B")
+
+    delete_reported_post_as_admin(db_session, post.id, admin, reason="广告引流", notify_author=True)
+
+    notifications = db_session.query(Notification).order_by(Notification.recipient_id).all()
+    by_recipient = {notification.recipient_id: notification.source_content for notification in notifications}
+    assert "原因：广告引流" in by_recipient[author.id]
+    assert by_recipient[reporter_a.id] == "你举报的内容存在违规，已被管理端处理。"
+    assert by_recipient[reporter_b.id] == "你举报的内容存在违规，已被管理端处理。"
+    assert "广告引流" not in by_recipient[reporter_a.id]
+    assert db_session.query(Post).filter(Post.id == post.id).first() is None
+
