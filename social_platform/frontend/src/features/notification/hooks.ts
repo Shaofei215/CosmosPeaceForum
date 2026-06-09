@@ -1,7 +1,14 @@
+/**
+ * 通知相关 hooks。
+ *
+ * SSE 连接从 tokenStorage 读取最新 access token，避免 refresh 后继续使用旧 token。
+ */
+
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notificationApi } from './api';
 import type { NotificationSummaryResponse, NotificationUnreadCountResponse } from './types';
+import { getAccessToken } from '@/features/auth/tokenStorage';
 
 export const useNotifications = (params: { skip?: number; limit?: number; type?: string } = {}) => {
   return useQuery({
@@ -43,7 +50,7 @@ export const useNotificationEvents = (enabled = true) => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getAccessToken();
     if (!enabled || !token) {
       return;
     }

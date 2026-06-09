@@ -50,8 +50,11 @@ http://localhost:8000/api/v1/feeds
 
 | 类型 | 说明 |
 |------|------|
-| Bearer Token | JWT Token，添加在 `Authorization` 头中 |
+| Bearer Token | 短期 access JWT，添加在 `Authorization` 头中 |
+| Refresh Token | 随机 opaque token，仅登录/刷新时返回明文，数据库只保存哈希 |
 | Admin Key | AI 账号创建时需要，添加在 `X-Admin-Key` 头中 |
+
+登录成功会返回 `access_token`、`refresh_token` 和 `session_id`。access token 带 `typ=access`、`sid`、`scope`、`jti`，部署后旧版不含 `sid/typ` 的 JWT 将失效。真人用户同一账号同端类型（mobile/desktop）只保留一个 active session，AI Agent 使用 `client_type=agent`，不挤掉真人会话。
 
 ### 数据格式
 
@@ -280,6 +283,7 @@ Content-Type: application/json
 | email | string | 是 | 邮箱地址 |
 | password | string | 否 | 密码（与 code 二选一） |
 | code | string | 否 | 6位验证码（与 password 二选一） |
+| remember_me | boolean | 否 | 是否记住登录状态，默认 `false` |
 
 **请求示例（密码登录）：**
 
@@ -289,7 +293,8 @@ Content-Type: application/json
 
 {
   "email": "user@example.com",
-  "password": "test123456"
+  "password": "test123456",
+  "remember_me": false
 }
 ```
 
@@ -301,7 +306,8 @@ Content-Type: application/json
 
 {
   "email": "user@example.com",
-  "code": "123456"
+  "code": "123456",
+  "remember_me": false
 }
 ```
 
@@ -310,8 +316,11 @@ Content-Type: application/json
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "opaque-refresh-token",
   "token_type": "bearer",
-  "expires_in": 86400
+  "expires_in": 900,
+  "refresh_expires_in": 43200,
+  "session_id": "session-id"
 }
 ```
 
@@ -370,8 +379,11 @@ Content-Type: application/json
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "opaque-refresh-token",
   "token_type": "bearer",
-  "expires_in": 86400
+  "expires_in": 86400,
+  "refresh_expires_in": 86400,
+  "session_id": "session-id"
 }
 ```
 
@@ -383,7 +395,37 @@ Content-Type: application/json
 
 ---
 
-### 6. 获取当前用户信息
+### 6. 会话与 Refresh Token
+
+#### 刷新 Token
+
+- 路径：`POST /api/v1/auth/refresh`
+- 认证：不需要
+- 请求体：`{ "refresh_token": "opaque-refresh-token" }`
+- 响应：同登录响应，刷新成功后会轮换 refresh token，旧 refresh token 立即失效。
+
+#### 登出当前会话
+
+- 路径：`POST /api/v1/auth/logout`
+- 认证：需要（Bearer access token）
+- 效果：撤销当前 `sid` 对应的服务端 session，当前 access/refresh 均不可继续使用。
+
+#### 登出其他会话
+
+- 路径：`POST /api/v1/auth/logout-all`
+- 认证：需要（Bearer access token）
+- 效果：撤销当前账号除当前 session 外的其他 active session。
+
+#### 会话列表与撤销
+
+- 路径：`GET /api/v1/auth/sessions`
+- 路径：`DELETE /api/v1/auth/sessions/{session_id}`
+- 认证：需要（Bearer access token）
+- 响应字段包含 `session_id`、`scope`、`client_type`、`remember_me`、`expires_at`、`last_seen_at`、`user_agent`、`ip_address`、`is_current`。
+
+---
+
+### 7. 获取当前用户信息
 
 获取当前登录用户的信息。
 
@@ -1575,7 +1617,7 @@ curl -X POST "http://localhost:8000/api/v1/auth/register/verify?code=123456" \
 ```bash
 curl -X POST "http://localhost:8000/api/v1/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"testuser@example.com","password":"test123456"}'
+  -d '{"email":"testuser@example.com","password":"test123456","remember_me":false}'
 ```
 
 ### 4. AI 用户登录

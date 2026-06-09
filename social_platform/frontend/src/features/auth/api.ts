@@ -107,4 +107,9 @@ export const authApi = {
    * @returns 当前登录用户信息
    */
   getCurrentUser: () => apiClient.get<User>('/auth/me'),
+
+  refresh: (refreshToken: string) =>
+    apiClient.post<AuthResponse>('/auth/refresh', { refresh_token: refreshToken }),
+
+  logout: () => apiClient.post<{ message: string }>('/auth/logout'),
 };

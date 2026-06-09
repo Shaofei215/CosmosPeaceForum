@@ -1,3 +1,9 @@
+/**
+ * Management 管理员认证 API 封装。
+ *
+ * logout 会撤销当前服务端 admin session，refresh 由共享 apiClient 自动处理。
+ */
+
 import { apiClient } from '@/shared/api/client';
 import type { LoginRequest, LoginResponse, AdminUser } from '@/shared/types/api';
 
@@ -7,4 +13,7 @@ export const authApi = {
 
   getCurrentAdmin: () =>
     apiClient.get<AdminUser>('/auth/me'),
+
+  logout: () =>
+    apiClient.post<{ message: string }>('/auth/logout'),
 };

@@ -1,54 +1,34 @@
 /**
- * 认证状态管理
- * 使用Zustand管理认证状态
+ * 公开平台认证状态管理。
+ *
+ * Zustand 只持久化用户资料；access/refresh token 由 tokenStorage 按 remember_me
+ * 分别写入 sessionStorage 或 localStorage，避免默认登录被误持久化。
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, AuthState } from '../types';
+import { clearTokens, getAccessToken, setTokens } from '../tokenStorage';
 
-/**
- * 认证状态存储
- */
 interface AuthStore extends AuthState {
-  /**
-   * 设置认证信息
-   *
-   * @param token - 访问令牌
-   * @param user - 用户信息
-   */
-  setAuth: (token: string, user: User) => void;
-
-  /**
-   * 清除认证信息（登出）
-   */
+  setAuth: (token: string, user: User, refreshToken?: string, rememberMe?: boolean) => void;
   logout: () => void;
-
-  /**
-   * 设置加载状态
-   *
-   * @param loading - 是否加载中
-   */
   setLoading: (loading: boolean) => void;
 }
 
-/**
- * 创建认证状态存储
- */
 export const useAuthStore = create<AuthStore>()(
   persist(
     set => ({
-      // 初始状态
       user: null,
-      token: null,
-      isAuthenticated: false,
+      token: getAccessToken(),
+      isAuthenticated: Boolean(getAccessToken()),
       isLoading: false,
 
-      /**
-       * 设置认证信息
-       */
-      setAuth: (token: string, user: User) => {
-        localStorage.setItem('token', token);
+      /** 保存认证状态；只有传入 refreshToken 时才重写浏览器 token 存储位置。 */
+      setAuth: (token: string, user: User, refreshToken?: string, rememberMe = false) => {
+        if (refreshToken) {
+          setTokens(token, refreshToken, rememberMe);
+        }
         set({
           token,
           user,
@@ -57,12 +37,8 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
-      /**
-       * 清除认证信息
-       */
       logout: () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        clearTokens();
         set({
           token: null,
           user: null,
@@ -71,9 +47,6 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
-      /**
-       * 设置加载状态
-       */
       setLoading: (loading: boolean) => {
         set({ isLoading: loading });
       },
@@ -81,10 +54,19 @@ export const useAuthStore = create<AuthStore>()(
     {
       name: 'auth-storage',
       partialize: state => ({
-        token: state.token,
         user: state.user,
-        isAuthenticated: state.isAuthenticated,
       }),
+      // 重新加载页面时以 tokenStorage 为准；没有 token 就不恢复旧用户。
+      merge: (persisted, current) => {
+        const token = getAccessToken();
+        const persistedState = persisted as Partial<AuthStore> | undefined;
+        return {
+          ...current,
+          user: token ? (persistedState?.user ?? null) : null,
+          token,
+          isAuthenticated: Boolean(token),
+        };
+      },
     }
   )
 );

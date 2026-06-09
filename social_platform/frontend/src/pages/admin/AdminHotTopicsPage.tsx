@@ -1,3 +1,9 @@
+/**
+ * 平台管理员热门话题页面。
+ *
+ * 生成事件流从管理员 tokenStorage 读取最新 access token，配合 refresh 轮换后的登录态。
+ */
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -27,6 +33,7 @@ import {
   type HotTopicSettingsUpdate,
 } from '@/features/admin';
 import { Button, Card, CardContent, Input, Textarea } from '@/shared/components/ui';
+import { getAdminAccessToken } from '@/features/admin/tokenStorage';
 import { cn } from '@/shared/lib/utils';
 
 const emptyTopic: HotTopicRequest = {
@@ -216,7 +223,7 @@ export default function AdminHotTopicsPage() {
   };
 
   const startGenerate = () => {
-    const token = localStorage.getItem('adminToken');
+    const token = getAdminAccessToken();
     if (!token) {
       setGenerationError('管理员登录已失效，请重新登录');
       return;

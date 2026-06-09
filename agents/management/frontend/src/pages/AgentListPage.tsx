@@ -1,3 +1,9 @@
+/**
+ * Agent 列表与管理页面。
+ *
+ * 公开平台角色登录会把 access/refresh token 一起传给登录桥，确保后续 401 可刷新。
+ */
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +21,7 @@ import {
 import { ImportDialog } from '@/features/agents/components/ImportDialog';
 import { formatDate } from '@/shared/lib/format';
 import type { AgentRuntimeStatus, AgentRuntimeStatusResponse } from '@/shared/types/api';
+import { getAccessToken } from '@/features/auth/tokenStorage';
 
 function formatLastLogin(value: string | null): string {
   return value ? formatDate(value) : '未登录';
@@ -97,7 +104,7 @@ export default function AgentListPage() {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getAccessToken();
     if (!token) return undefined;
 
     const controller = new AbortController();
@@ -207,6 +214,7 @@ export default function AgentListPage() {
       const loginUrl = new URL('/management-login', API_CONFIG.APP_PLATFORM_FRONTEND_URL);
       const hashParams = new URLSearchParams({
         token: result.access_token,
+        refresh_token: result.refresh_token,
         redirect: `/user/${result.app_platform_user_id}`,
       });
       loginUrl.hash = hashParams.toString();

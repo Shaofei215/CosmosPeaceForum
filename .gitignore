@@ -232,6 +232,8 @@ certs/*
 # IDE settings
 .idea/
 .vscode/
+.trae/
+.codex/
 
 # Database files (SQLite and other)
 *.db

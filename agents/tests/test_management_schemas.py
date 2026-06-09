@@ -41,8 +41,19 @@ class TestAuthSchemas:
             updated_at=now,
             last_login=now,
         )
-        resp = LoginResponse(access_token="token", admin=admin)
+        resp = LoginResponse(
+            access_token="token",
+            refresh_token="refresh",
+            expires_in=600,
+            refresh_expires_in=28800,
+            session_id="session-id",
+            admin=admin,
+        )
         assert resp.access_token == "token"
+        assert resp.refresh_token == "refresh"
+        assert resp.expires_in == 600
+        assert resp.refresh_expires_in == 28800
+        assert resp.session_id == "session-id"
         assert resp.token_type == "bearer"
         assert resp.admin.username == "admin"
 

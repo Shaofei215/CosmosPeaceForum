@@ -16,6 +16,7 @@ export default function RegisterPage() {
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
 
@@ -102,6 +103,7 @@ export default function RegisterPage() {
         email: email.trim(),
         password,
         code: code.trim(),
+        remember_me: rememberMe,
       },
       {
         onSuccess: data => {
@@ -204,6 +206,17 @@ export default function RegisterPage() {
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                disabled={isPending}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              记住我
+            </label>
 
             <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
               {isRegistering ? '注册中...' : '注册'}

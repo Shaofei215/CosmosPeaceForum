@@ -1,3 +1,9 @@
+"""平台内管理员 API 请求/响应模型。
+
+管理员登录响应包含短期 access token、opaque refresh token 和 session_id，
+用于支持 refresh token 轮换与服务端会话撤销。
+"""
+
 from datetime import datetime
 from typing import Generic, List, Optional, TypeVar
 
@@ -15,8 +21,11 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 
 class AdminLoginRequest(BaseModel):
+    """平台管理员登录请求，remember_me 控制 refresh/session 生命周期。"""
+
     username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=1)
+    remember_me: bool = False
 
 
 class AdminResponse(BaseModel):
@@ -35,9 +44,35 @@ class AdminResponse(BaseModel):
 
 
 class AdminLoginResponse(BaseModel):
+    """平台管理员登录/刷新响应，返回新的 token 对和当前管理员资料。"""
+
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+    expires_in: int
+    refresh_expires_in: int
+    session_id: str
     admin: AdminResponse
+
+
+class AdminRefreshTokenRequest(BaseModel):
+    """平台管理员 refresh 请求体，携带 opaque refresh token。"""
+
+    refresh_token: str = Field(min_length=32)
+
+
+class AdminSessionResponse(BaseModel):
+    """平台管理员会话列表项，用于展示和撤销 active sessions。"""
+
+    session_id: str
+    scope: str
+    client_type: str
+    remember_me: bool
+    expires_at: datetime
+    last_seen_at: datetime
+    user_agent: Optional[str] = None
+    ip_address: Optional[str] = None
+    is_current: bool = False
 
 
 class AdminProfileUpdateRequest(BaseModel):

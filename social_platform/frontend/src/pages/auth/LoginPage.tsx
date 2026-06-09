@@ -27,6 +27,7 @@ export default function LoginPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   // 验证码倒计时
   const [countdown, setCountdown] = useState(0);
@@ -119,7 +120,7 @@ export default function LoginPage() {
       }
 
       login(
-        { email: email.trim(), password },
+        { email: email.trim(), password, remember_me: rememberMe },
         {
           onSuccess: () => {
             navigate(from, { replace: true });
@@ -141,7 +142,7 @@ export default function LoginPage() {
       }
 
       login(
-        { email: email.trim(), code },
+        { email: email.trim(), code, remember_me: rememberMe },
         {
           onSuccess: () => {
             navigate(from, { replace: true });
@@ -267,8 +268,17 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* 忘记密码链接 */}
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  disabled={isPending}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                记住我
+              </label>
               <Link to="/forgot-password" className="text-sm text-primary hover:underline">
                 忘记密码？
               </Link>

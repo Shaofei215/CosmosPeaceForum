@@ -5,8 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, object_session
 
-from social_platform.app.api.deps import get_db, get_current_user_including_banned
-from social_platform.app.core.security import decode_access_token
+from social_platform.app.api.deps import get_access_payload, get_db, get_current_user_including_banned
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.models.comment import CommentLike
 from social_platform.app.models.like import Like
@@ -71,15 +70,14 @@ def get_unread_count(
 
 
 @router.get("/events")
-async def stream_notification_events(token: str = Query(...)):
-    payload = decode_access_token(token)
-    if payload is None or payload.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
+async def stream_notification_events(token: str = Query(...), db: Session = Depends(get_db)):
+    """通知 SSE 入口，query token 同样要校验 active user session。
 
+    EventSource 无法稳定附带 Authorization header，因此前端通过 query 传 access token；
+    这里仍复用 get_access_payload，保证 session 撤销后 SSE 也无法继续建立。
+    """
     try:
+        payload = get_access_payload(token, db, "user")
         user_id = int(payload["sub"])
     except (ValueError, TypeError):
         raise HTTPException(
@@ -88,6 +86,7 @@ async def stream_notification_events(token: str = Query(...)):
         )
 
     def build_payload(event_type: str) -> dict[str, int | str]:
+        """为 SSE 事件即时读取最新通知摘要，避免长连接复用已关闭的请求会话。"""
         db = SessionLocal()
         try:
             summary = notification_service.get_summary(db, user_id)

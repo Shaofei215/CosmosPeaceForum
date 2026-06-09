@@ -1,3 +1,9 @@
+/**
+ * Management 管理员认证 hooks。
+ *
+ * 登录成功保存 token 对；登出调用后端撤销当前 admin session。
+ */
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { authApi } from './api';
 import { useAuthStore } from './stores/authStore';
@@ -8,8 +14,8 @@ export const useLogin = () => {
 
   return useMutation({
     mutationFn: authApi.login,
-    onSuccess: (data) => {
-      setAuth(data.access_token, data.admin);
+    onSuccess: (data, variables) => {
+      setAuth(data.access_token, data.admin, data.refresh_token, Boolean(variables.remember_me));
       queryClient.setQueryData(['auth', 'me'], data.admin);
     },
   });
@@ -35,9 +41,13 @@ export const useLogout = () => {
   const { logout } = useAuthStore();
   const queryClient = useQueryClient();
 
-  return () => {
-    logout();
-    queryClient.clear();
-    window.location.href = '/login';
+  return async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      logout();
+      queryClient.clear();
+      window.location.href = '/login';
+    }
   };
 };

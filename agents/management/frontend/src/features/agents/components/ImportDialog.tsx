@@ -1,3 +1,9 @@
+/**
+ * Agent 导入对话框。
+ *
+ * 流式导入请求从 tokenStorage 读取最新 access token，避免 refresh 后沿用旧 token。
+ */
+
 import { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,6 +12,7 @@ import {
 } from '@/shared/components/ui';
 import { Upload, FileUp, Check, AlertTriangle, Loader2, XCircle } from 'lucide-react';
 import { API_CONFIG } from '@/shared/config/api';
+import { getAccessToken } from '@/features/auth/tokenStorage';
 
 interface ImportDialogProps {
   open: boolean;
@@ -87,7 +94,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = localStorage.getItem('token');
+    const token = getAccessToken();
     const apiUrl = API_CONFIG.BASE_URL;
 
     try {

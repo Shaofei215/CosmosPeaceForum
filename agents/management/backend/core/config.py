@@ -72,6 +72,21 @@ MANAGEMENT_ACCESS_TOKEN_EXPIRE_HOURS = _get_int_env(
     "MANAGEMENT_ACCESS_TOKEN_EXPIRE_HOURS",
     720,
 )
+# 新 management session 机制使用分钟级 access token；旧 HOURS 配置仅保留兼容。
+MANAGEMENT_ACCESS_TOKEN_EXPIRE_MINUTES = _get_int_env(
+    "MANAGEMENT_ACCESS_TOKEN_EXPIRE_MINUTES",
+    10,
+)
+# 未勾选 remember me 时，管理端 refresh/session 只保留短窗口。
+MANAGEMENT_REFRESH_TOKEN_EXPIRE_HOURS = _get_int_env(
+    "MANAGEMENT_REFRESH_TOKEN_EXPIRE_HOURS",
+    8,
+)
+# 勾选 remember me 时，管理端 refresh/session 延长到天级窗口。
+MANAGEMENT_REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS = _get_int_env(
+    "MANAGEMENT_REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS",
+    7,
+)
 
 # 管理员初始账号（首次启动使用）。优先读取环境变量，其次读取 agents/.env。
 MANAGEMENT_ADMIN_USERNAME = _get_env(
@@ -126,6 +141,9 @@ class Settings:
     jwt_secret_key: str = MANAGEMENT_JWT_SECRET_KEY
     jwt_algorithm: str = MANAGEMENT_JWT_ALGORITHM
     jwt_access_token_expire_hours: int = MANAGEMENT_ACCESS_TOKEN_EXPIRE_HOURS
+    jwt_access_token_expire_minutes: int = MANAGEMENT_ACCESS_TOKEN_EXPIRE_MINUTES
+    refresh_token_expire_hours: int = MANAGEMENT_REFRESH_TOKEN_EXPIRE_HOURS
+    remember_me_refresh_token_expire_days: int = MANAGEMENT_REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS
     
     # 管理员初始账号
     admin_username: str = MANAGEMENT_ADMIN_USERNAME

@@ -3,6 +3,7 @@ Management Backend - 数据模型导出
 """
 
 from agents.management.backend.models.admin_user import AdminUser
+from agents.management.backend.models.admin_session import AdminSession
 from agents.management.backend.models.agent_config import AgentConfig
 from agents.management.backend.models.chunk_model_config import ChunkModelConfig
 from agents.management.backend.models.embedding_config import EmbeddingConfig
@@ -13,6 +14,7 @@ from agents.management.backend.models.prompt_config import PromptConfig
 
 __all__ = [
     "AdminUser",
+    "AdminSession",
     "AgentConfig",
     "ChunkModelConfig",
     "EmbeddingConfig",

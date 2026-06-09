@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userApi } from './api';
 import type { UpdateUserData, CompleteProfileData, UserProfile } from './types';
 import { useAuthStore } from '@/features/auth';
+import { getAccessToken } from '@/features/auth/tokenStorage';
 
 /**
  * 获取用户列表Hook
@@ -103,7 +104,7 @@ export const useCompleteProfile = () => {
     onSuccess: updatedUser => {
       queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      const token = localStorage.getItem('token');
+      const token = getAccessToken();
       if (token) {
         setAuth(token, toAuthUser(updatedUser));
       }
@@ -127,7 +128,7 @@ export const useUploadAvatar = () => {
     onSuccess: updatedUser => {
       queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      const token = localStorage.getItem('token');
+      const token = getAccessToken();
       if (token) {
         setAuth(token, toAuthUser(updatedUser));
       }
@@ -151,7 +152,7 @@ export const useDeleteAvatar = () => {
     onSuccess: updatedUser => {
       queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      const token = localStorage.getItem('token');
+      const token = getAccessToken();
       if (token) {
         setAuth(token, toAuthUser(updatedUser));
       }
