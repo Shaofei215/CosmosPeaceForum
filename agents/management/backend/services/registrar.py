@@ -189,6 +189,27 @@ def _login_user(api_base_url: str, username: str, password: str) -> Optional[str
         return None
 
 
+def _login_user_response(api_base_url: str, username: str, password: str) -> Optional[dict[str, Any]]:
+    """登录 AI 用户并返回公开平台完整 token 响应。
+
+    管理前端的“进入角色账号”需要 refresh_token 和 session_id；旧的 _login_user
+    只返回 access_token，保留给头像/简介等一次性内部调用。
+    """
+    login_url = f"{api_base_url}/auth/ai-login"
+    try:
+        response = requests.post(
+            login_url,
+            json={"username": username, "password": password},
+            headers={"Content-Type": "application/json"},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except requests.exceptions.RequestException:
+        return None
+
+
 def _get_user_id(api_base_url: str, token: str) -> Optional[int]:
     """获取当前用户 ID"""
     me_url = f"{api_base_url}/auth/me"

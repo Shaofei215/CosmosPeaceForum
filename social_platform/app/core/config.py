@@ -44,6 +44,17 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_HOURS: int
+    # 新会话机制使用分钟级 access token；HOURS 保留给旧调用的兼容 fallback。
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_HOURS: int = 12
+    REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    # 平台内管理员会话更短，refresh 生命周期由 remember_me 决定。
+    ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES: int = 10
+    ADMIN_REFRESH_TOKEN_EXPIRE_HOURS: int = 8
+    ADMIN_REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # AI Agent 不参与真人 mobile/desktop 互斥，保留较长单次任务窗口。
+    AI_ACCESS_TOKEN_EXPIRE_HOURS: int = 24
+    AI_REFRESH_TOKEN_EXPIRE_HOURS: int = 24
 
     ADMIN_KEY: str
 

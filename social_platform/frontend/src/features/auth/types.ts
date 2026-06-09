@@ -13,6 +13,8 @@ export interface LoginCredentials {
   password?: string;
   /** 验证码（与password二选一） */
   code?: string;
+  /** 是否记住登录状态 */
+  remember_me?: boolean;
 }
 
 /**
@@ -35,6 +37,8 @@ export interface RegisterWithEmailCredentials {
   email: string;
   /** 验证码 */
   code: string;
+  /** 是否记住登录状态 */
+  remember_me?: boolean;
 }
 
 /**
@@ -47,10 +51,16 @@ export interface RegisterResponse {
   username: string;
   /** 访问令牌 */
   access_token: string;
+  /** 刷新令牌 */
+  refresh_token: string;
   /** 令牌类型 */
   token_type: string;
   /** 过期时间（秒） */
   expires_in: number;
+  /** refresh token 剩余有效期（秒） */
+  refresh_expires_in: number;
+  /** 服务端会话ID */
+  session_id: string;
   /** 响应消息 */
   message: string;
 }
@@ -81,10 +91,16 @@ export interface SendVerificationCodeResponse {
 export interface AuthResponse {
   /** 访问令牌 */
   access_token: string;
+  /** 刷新令牌 */
+  refresh_token: string;
   /** 令牌类型 */
   token_type: string;
   /** 过期时间（秒） */
   expires_in: number;
+  /** refresh token 剩余有效期（秒） */
+  refresh_expires_in: number;
+  /** 服务端会话ID */
+  session_id: string;
 }
 
 /**

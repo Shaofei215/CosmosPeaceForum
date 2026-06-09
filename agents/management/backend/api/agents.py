@@ -43,6 +43,7 @@ from agents.management.backend.services.registrar import (
     _get_ai_user_password,
     _get_user_id,
     _login_user,
+    _login_user_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -373,7 +374,11 @@ def login_agent_app_platform_account(
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
-    """为管理员生成指定 Agent 的 app_platform 登录令牌。"""
+    """为管理员生成指定 Agent 的公开平台登录 token 对。
+
+    返回 access_token、refresh_token 和 session_id，前端会通过登录桥写入公开平台
+    tokenStorage，使角色账号页面也能参与 401 自动 refresh。
+    """
     agent = agent_service.get_agent(db, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent 不存在")
@@ -383,10 +388,11 @@ def login_agent_app_platform_account(
 
     api_base_url = _get_api_base_url(db)
     password = _get_ai_user_password(db)
-    token = _login_user(api_base_url, agent.username, password)
-    if not token:
+    token_response = _login_user_response(api_base_url, agent.username, password)
+    if not token_response or not token_response.get("access_token"):
         raise HTTPException(status_code=502, detail="无法登录 app_platform")
 
+    token = token_response["access_token"]
     platform_user_id = _get_user_id(api_base_url, token)
     if platform_user_id != agent.app_platform_user_id:
         raise HTTPException(status_code=502, detail="app_platform 账号映射不一致")
@@ -395,6 +401,10 @@ def login_agent_app_platform_account(
 
     return AgentAppLoginResponse(
         access_token=token,
+        refresh_token=token_response["refresh_token"],
+        expires_in=token_response["expires_in"],
+        refresh_expires_in=token_response["refresh_expires_in"],
+        session_id=token_response["session_id"],
         app_platform_user_id=agent.app_platform_user_id,
         username=agent.username,
     )
@@ -860,6 +870,7 @@ async def upload_agent_avatar(
         _get_api_base_url,
         _get_ai_user_password,
         _login_user,
+    _login_user_response,
     )
 
     agent = agent_service.get_agent(db, agent_id)

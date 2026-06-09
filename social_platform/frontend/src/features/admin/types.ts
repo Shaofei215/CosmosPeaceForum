@@ -1,3 +1,9 @@
+/**
+ * 平台管理员类型定义。
+ *
+ * 登录响应携带 access/refresh token 和 session_id，供管理员短会话与记住我模式使用。
+ */
+
 export const ADMIN_PERMISSIONS = [
   'view_dashboard',
   'manage_users',
@@ -26,11 +32,16 @@ export interface AdminUser {
 export interface AdminLoginRequest {
   username: string;
   password: string;
+  remember_me?: boolean;
 }
 
 export interface AdminLoginResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
+  expires_in: number;
+  refresh_expires_in: number;
+  session_id: string;
   admin: AdminUser;
 }
 
@@ -177,7 +188,7 @@ export interface ContentModerationLLMSettings {
 }
 
 export type ContentModerationLLMSettingsUpdate = Partial<
-  Omit<ContentModerationLLMSettings, "id" | "updated_at">
+  Omit<ContentModerationLLMSettings, 'id' | 'updated_at'>
 >;
 
 export interface ContentModerationLLMPromptConfig {

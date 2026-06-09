@@ -1,3 +1,9 @@
+/**
+ * Management 前端共享 API 类型。
+ *
+ * 登录和 Agent app-login 响应包含 refresh token 与 session_id，匹配新的会话协议。
+ */
+
 export const ADMIN_PERMISSIONS = [
   'view_dashboard',
   'manage_agents',
@@ -27,11 +33,16 @@ export interface AdminUser {
 export interface LoginRequest {
   username: string;
   password: string;
+  remember_me?: boolean;
 }
 
 export interface LoginResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
+  expires_in: number;
+  refresh_expires_in: number;
+  session_id: string;
   admin: AdminUser;
 }
 
@@ -97,7 +108,11 @@ export interface PromptInjectionRequest {
 
 export interface AgentAppLoginResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
+  expires_in: number;
+  refresh_expires_in: number;
+  session_id: string;
   app_platform_user_id: number;
   username: string;
 }

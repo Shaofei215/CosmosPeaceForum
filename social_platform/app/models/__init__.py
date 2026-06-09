@@ -12,6 +12,7 @@ from social_platform.app.models.theme import PlatformThemeSettings
 from social_platform.app.models.hot_topic import HotTopic, HotTopicGeneration, HotTopicSettings
 from social_platform.app.models.content_report import ContentReport
 from social_platform.app.models.content_moderation_llm import ContentModerationLLMSettings
+from social_platform.app.models.session import UserSession
 
 __all__ = [
     "User",
@@ -28,4 +29,5 @@ __all__ = [
     "HotTopicSettings",
     "ContentReport",
     "ContentModerationLLMSettings",
+    "UserSession",
 ]

@@ -5,21 +5,22 @@ import string
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 
 from social_platform.app.admin.services.moderation_guard import ensure_account_available
-from social_platform.app.api.deps import get_db, get_current_user
+from social_platform.app.api.deps import get_access_payload, get_db, get_current_user, security
 from social_platform.app.core.config import get_settings
 from social_platform.app.core.security import (
     get_password_hash,
     verify_password,
-    create_access_token,
     verify_admin_key,
 )
 from social_platform.app.models.user import User
 from social_platform.app.models.email_verification import EmailVerificationCode
+from social_platform.app.models.session import UserSession
 from social_platform.app.schemas.auth import (
     UserRegister,
     UserLogin,
@@ -27,6 +28,8 @@ from social_platform.app.schemas.auth import (
     UserResponse,
     RegisterResponse,
     AILoginRequest,
+    RefreshTokenRequest,
+    SessionResponse,
 )
 from social_platform.app.schemas.email_verification import (
     EmailCodeSendRequest,
@@ -35,11 +38,37 @@ from social_platform.app.schemas.email_verification import (
     PasswordResetConfirmRequest,
 )
 from social_platform.app.services.email_service import email_service
-from social_platform.app.services import search_service
+from social_platform.app.services import search_service, session_service
 
 
 router = APIRouter()
 settings = get_settings()
+
+
+def _request_session_context(request: Request, client_type: str | None = None) -> tuple[str, str | None, str | None]:
+    """收集创建/刷新 session 所需的端类型、User-Agent 和 IP。"""
+    user_agent = request.headers.get("user-agent")
+    return (client_type or session_service.detect_client_type(user_agent), user_agent, session_service.get_request_ip(request))
+
+
+def _session_response(session: UserSession, current_session_id: str | None = None) -> SessionResponse:
+    """把数据库 session 转成前端可展示的会话响应对象。"""
+    return SessionResponse(
+        session_id=session.session_id,
+        scope=session.scope,
+        client_type=session.client_type,
+        remember_me=session.remember_me,
+        expires_at=session.expires_at,
+        last_seen_at=session.last_seen_at,
+        user_agent=session.user_agent,
+        ip_address=session.ip_address,
+        is_current=session.session_id == current_session_id,
+    )
+
+
+def _current_user_payload(credentials: HTTPAuthorizationCredentials, db: Session) -> dict:
+    """复用统一鉴权逻辑，取得当前 user scope access token 的 payload。"""
+    return get_access_payload(credentials.credentials, db, "user")
 
 
 def generate_verification_code(length: int = 6) -> str:
@@ -257,7 +286,7 @@ def send_login_verification_code(
         )
 
     # 检查发送频率限制
-    remaining = check_send_frequency_by_email(db, email)
+    remaining = check_send_frequency_by_email(db, email, "login")
     if remaining:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -406,6 +435,7 @@ def register(
 )
 def verify_and_register(
     user_data: UserRegister,
+    request: Request,
     code: str = Query(..., description="邮箱验证码"),
     db: Session = Depends(get_db)
 ) -> RegisterResponse:
@@ -511,20 +541,23 @@ def verify_and_register(
     verification.user_id = db_user.id
     db.commit()
 
-    # 注册成功后生成访问令牌
-    access_token_expires = timedelta(hours=settings.ACCESS_TOKEN_EXPIRE_HOURS)
-    access_token = create_access_token(
-        data={"sub": str(db_user.id), "email": email},
-        expires_delta=access_token_expires
+    client_type, user_agent, ip_address = _request_session_context(request)
+    token_pair = session_service.create_session_token_pair(
+        db=db,
+        account_id=db_user.id,
+        scope="user",
+        client_type=client_type,
+        remember_me=user_data.remember_me,
+        user_agent=user_agent,
+        ip_address=ip_address,
+        revoke_same_client=True,
     )
 
     return RegisterResponse(
         id=db_user.id,
         username=db_user.username,
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_HOURS * 3600,
-        message="注册成功，请完善您的个人资料"
+        message="注册成功，请完善您的个人资料",
+        **token_pair,
     )
 
 
@@ -534,6 +567,7 @@ def verify_and_register(
 @router.post("/login", response_model=TokenResponse)
 def login(
     user_data: UserLogin,
+    request: Request,
     db: Session = Depends(get_db)
 ) -> TokenResponse:
     """
@@ -648,13 +682,19 @@ def login(
         db.commit()
 
     ensure_account_available(db, user)
-    access_token = create_access_token(data={"sub": str(user.id)})
-
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_HOURS * 3600
+    client_type, user_agent, ip_address = _request_session_context(request)
+    token_pair = session_service.create_session_token_pair(
+        db=db,
+        account_id=user.id,
+        scope="user",
+        client_type=client_type,
+        remember_me=user_data.remember_me,
+        user_agent=user_agent,
+        ip_address=ip_address,
+        revoke_same_client=True,
     )
+
+    return TokenResponse(**token_pair)
 
 
 # ========== AI 用户登录 ==========
@@ -663,6 +703,7 @@ def login(
 @router.post("/ai-login", response_model=TokenResponse)
 def ai_login(
     login_data: AILoginRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ) -> TokenResponse:
     """
@@ -717,13 +758,97 @@ def ai_login(
         )
 
     ensure_account_available(db, user)
-    access_token = create_access_token(data={"sub": str(user.id)})
-
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_HOURS * 3600
+    client_type, user_agent, ip_address = _request_session_context(request, client_type="agent")
+    token_pair = session_service.create_session_token_pair(
+        db=db,
+        account_id=user.id,
+        scope="user",
+        client_type=client_type,
+        remember_me=False,
+        user_agent=user_agent,
+        ip_address=ip_address,
+        revoke_same_client=False,
     )
+
+    return TokenResponse(**token_pair)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh(
+    payload: RefreshTokenRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    """使用 refresh token 换取新的 access/refresh token 对。
+
+    refresh token 会在 session_service 中被轮换；旧 refresh token 成功使用后立即失效。
+    """
+    _, user_agent, ip_address = _request_session_context(request)
+    token_pair = session_service.refresh_token_pair(
+        db=db,
+        refresh_token=payload.refresh_token,
+        expected_scope="user",
+        user_agent=user_agent,
+        ip_address=ip_address,
+    )
+    return TokenResponse(**token_pair)
+
+
+@router.post("/logout")
+def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """撤销当前 sid 对应的 user session。
+
+    因为 access token 每次鉴权都会回查 session，撤销后当前 access token 也会失效。
+    """
+    payload = _current_user_payload(credentials, db)
+    session = session_service.get_active_session(db, payload["sid"], "user")
+    if session is not None:
+        session_service.revoke_session(db, session)
+    return {"message": "登出成功"}
+
+
+@router.post("/logout-all")
+def logout_all(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """撤销当前用户除本 session 外的其他 active sessions。"""
+    payload = _current_user_payload(credentials, db)
+    count = session_service.revoke_other_sessions(db, int(payload["sub"]), "user", payload["sid"])
+    return {"message": "其他会话已撤销", "revoked_count": count}
+
+
+@router.get("/sessions", response_model=list[SessionResponse])
+def sessions(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> list[SessionResponse]:
+    """列出当前用户可管理的 active sessions。"""
+    payload = _current_user_payload(credentials, db)
+    items = session_service.list_sessions(db, int(payload["sub"]), "user")
+    return [_session_response(item, payload["sid"]) for item in items]
+
+
+@router.delete("/sessions/{session_id}")
+def revoke_session(
+    session_id: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """撤销当前用户的某个非当前 session。
+
+    当前 session 必须通过 logout 撤销，避免前端误删自己后仍以为请求成功可继续操作。
+    """
+    payload = _current_user_payload(credentials, db)
+    if session_id == payload["sid"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能通过该接口撤销当前会话，请使用 logout")
+    revoked = session_service.revoke_session_id(db, int(payload["sub"]), "user", session_id)
+    if not revoked:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在或已失效")
+    return {"message": "会话已撤销"}
 
 
 @router.get("/me", response_model=UserResponse)

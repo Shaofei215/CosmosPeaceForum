@@ -1,5 +1,8 @@
 """
-Management Backend - 请求/响应模型
+Management Backend - 请求/响应模型。
+
+认证响应包含短期 access token、opaque refresh token 和 session_id，
+用于支持 management admin session 撤销和 refresh token 轮换。
 """
 
 from datetime import datetime
@@ -20,19 +23,54 @@ class PaginatedResponse(BaseModel, Generic[T]):
 # ==================== Auth ====================
 
 class LoginRequest(BaseModel):
+    """Management 管理员登录请求，remember_me 控制 refresh/session 生命周期。"""
+
     username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=1)
+    remember_me: bool = False
 
 
 class LoginResponse(BaseModel):
+    """Management 管理员登录/刷新响应，返回新的 token 对和管理员资料。"""
+
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+    expires_in: int
+    refresh_expires_in: int
+    session_id: str
     admin: "AdminUserResponse"
 
 
+class RefreshTokenRequest(BaseModel):
+    """Management refresh 请求体，携带 opaque refresh token。"""
+
+    refresh_token: str = Field(min_length=32)
+
+
+class SessionResponse(BaseModel):
+    """Management 管理员会话列表项。"""
+
+    session_id: str
+    scope: str
+    client_type: str
+    remember_me: bool
+    expires_at: datetime
+    last_seen_at: datetime
+    user_agent: Optional[str] = None
+    ip_address: Optional[str] = None
+    is_current: bool = False
+
+
 class AgentAppLoginResponse(BaseModel):
+    """Agent 角色登录公开平台后的 token 响应透传给管理前端。"""
+
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+    expires_in: int
+    refresh_expires_in: int
+    session_id: str
     app_platform_user_id: int
     username: str
 

@@ -1,7 +1,15 @@
+/**
+ * Management 管理端跳转到公开平台角色账号时的登录桥。
+ *
+ * 管理端会通过 URL hash/search 传入 access_token 和 refresh_token；本页写入
+ * sessionStorage 后立即替换地址栏，避免 token 长时间暴露在浏览器历史中。
+ */
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/features/auth/api';
 import { useAuthStore } from '@/features/auth';
+import { setTokens } from '@/features/auth/tokenStorage';
 import { Card, CardContent } from '@/shared/components/ui';
 import { BigLogo } from '@/shared/components/auth/BigLogo';
 
@@ -21,14 +29,15 @@ export default function ManagementLoginPage() {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const searchParams = new URLSearchParams(window.location.search);
     const token = hashParams.get('token') || searchParams.get('token');
+    const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token');
     const redirect = getSafeRedirect(hashParams.get('redirect') || searchParams.get('redirect'));
 
-    if (!token) {
+    if (!token || !refreshToken) {
       setError('缺少登录令牌，请从管理端重新进入。');
       return;
     }
 
-    localStorage.setItem('token', token);
+    setTokens(token, refreshToken, false);
     window.history.replaceState(null, '', '/management-login');
 
     authApi

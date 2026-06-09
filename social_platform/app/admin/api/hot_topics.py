@@ -22,8 +22,7 @@ from social_platform.app.admin.schemas import (
     PaginatedResponse,
 )
 from social_platform.app.admin.services.permissions import ALL_PERMISSIONS, PERMISSION_MANAGE_HOT_TOPICS
-from social_platform.app.api.deps import get_db
-from social_platform.app.core.security import decode_access_token
+from social_platform.app.api.deps import get_access_payload, get_db
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.services import hot_topic_service
 
@@ -59,11 +58,9 @@ def _run_generation_for_stream() -> dict:
 
 
 def _require_admin_token(token: str, db: Session) -> PlatformAdminUser:
-    payload = decode_access_token(token)
-    if payload is None or payload.get("scope") != "platform_admin":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的管理员认证凭证")
-
+    """校验热门话题 SSE query token 对应 active platform_admin session。"""
     try:
+        payload = get_access_payload(token, db, "platform_admin")
         admin_id = int(payload.get("sub"))
     except (TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的管理员认证凭证")
@@ -240,6 +237,7 @@ async def stream_generate_hot_topics(
     token: str = Query(...),
     db: Session = Depends(get_db),
 ):
+    """流式触发热门话题生成，建立连接前先校验管理员 session。"""
     _require_admin_token(token, db)
 
     async def event_stream():

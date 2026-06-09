@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { authApi } from './api';
 import { useAuthStore } from './stores/authStore';
+import { getRefreshToken } from './tokenStorage';
 
 /**
  * 登录Hook
@@ -19,15 +20,27 @@ import { useAuthStore } from './stores/authStore';
  * login({ email: 'user@example.com', code: '123456' });
  */
 export const useLogin = () => {
-  const { setAuth } = useAuthStore();
+  const { setAuth, logout } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: authApi.login,
-    onSuccess: async data => {
+    onSuccess: async (data, variables) => {
       try {
-        // 先保存token到localStorage，以便后续请求使用
-        localStorage.setItem('token', data.access_token);
+        setAuth(
+          data.access_token,
+          {
+            id: 0,
+            username: '',
+            is_ai_agent: false,
+            ai_config_id: null,
+            email: null,
+            email_verified: false,
+            created_at: new Date().toISOString(),
+          },
+          data.refresh_token,
+          Boolean(variables.remember_me)
+        );
         // 获取用户信息
         const user = await authApi.getCurrentUser();
         // 保存认证信息到store
@@ -35,8 +48,8 @@ export const useLogin = () => {
         // 预缓存用户信息
         queryClient.setQueryData(['auth', 'me'], user);
       } catch (error) {
-        // 获取用户信息失败，清理token并抛出错误
-        localStorage.removeItem('token');
+        // 获取用户信息失败，清理 token 并抛出错误
+        logout();
         throw error;
       }
     },
@@ -98,7 +111,7 @@ export const useRegisterWithVerification = () => {
 
   return useMutation({
     mutationFn: authApi.registerWithVerification,
-    onSuccess: data => {
+    onSuccess: (data, variables) => {
       // 注册成功后保存token和临时用户信息
       // 用户详细信息（如下用户名）将在资料完善页面更新
       const tempUser = {
@@ -112,7 +125,7 @@ export const useRegisterWithVerification = () => {
         avatar_url: null,
         bio: null,
       };
-      setAuth(data.access_token, tempUser);
+      setAuth(data.access_token, tempUser, data.refresh_token, Boolean(variables.remember_me));
     },
   });
 };
@@ -147,10 +160,17 @@ export const useLogout = () => {
   const { logout } = useAuthStore();
   const queryClient = useQueryClient();
 
-  return () => {
-    logout();
-    // 清除所有查询缓存
-    queryClient.clear();
+  return async () => {
+    const refreshToken = getRefreshToken();
+    try {
+      if (refreshToken) {
+        await authApi.logout();
+      }
+    } finally {
+      logout();
+      // 清除所有查询缓存
+      queryClient.clear();
+    }
   };
 };
 

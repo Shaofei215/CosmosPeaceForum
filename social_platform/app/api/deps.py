@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from social_platform.app.core.security import decode_access_token
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.models.user import User
+from social_platform.app.services import session_service
 from social_platform.app.admin.services.moderation_guard import ensure_account_available
 
 
@@ -34,104 +35,77 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def _unauthorized(detail: str = "无效的认证凭证") -> HTTPException:
+    """构造统一的 Bearer 认证失败响应。"""
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def get_access_payload(token: str, db: Session, expected_scope: str) -> dict:
+    """解码 access token，并确认它仍绑定一个 active server-side session。
+
+    只验证 JWT 签名不足以支持立即撤销；因此这里还强制检查 typ=access、
+    scope、sid，以及 sid 对应的 UserSession 是否未撤销且未过期。
+    """
+    payload = decode_access_token(token)
+    if payload is None or payload.get("typ") != "access" or payload.get("scope") != expected_scope:
+        raise _unauthorized()
+
+    session_id = payload.get("sid")
+    if not session_id:
+        raise _unauthorized()
+
+    session = session_service.get_active_session(db, session_id, expected_scope)
+    if session is None:
+        raise _unauthorized("会话已失效，请重新登录")
+
+    user_id_str = payload.get("sub")
+    try:
+        account_id = int(user_id_str)
+    except (ValueError, TypeError):
+        raise _unauthorized()
+
+    if session.account_id != account_id:
+        raise _unauthorized()
+
+    return payload
+
+
+def _get_user_from_payload(db: Session, payload: dict, include_banned: bool = False) -> User:
+    """根据已验证 payload 加载用户，并按需要执行账号可用性检查。"""
+    try:
+        user_id = int(payload.get("sub"))
+    except (ValueError, TypeError):
+        raise _unauthorized()
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise _unauthorized("用户不存在")
+
+    if not include_banned:
+        ensure_account_available(db, user)
+    return user
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    """
-    获取当前登录用户
-
-    从 JWT Token 中解析用户 ID，查询数据库获取用户信息
-
-    Args:
-        credentials: HTTP Bearer Token（依赖注入）
-        db: 数据库会话（依赖注入）
-
-    Returns:
-        User: 当前登录用户模型
-
-    Raises:
-        HTTPException: Token 无效或用户不存在时抛出 401 错误
-    """
-    token = credentials.credentials
-    payload = decode_access_token(token)
-
-    if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的认证凭证",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user_id_str = payload.get("sub")
-    if user_id_str is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的认证凭证",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    try:
-        user_id = int(user_id_str)
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的认证凭证",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户不存在",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    ensure_account_available(db, user)
-    return user
+    """获取当前登录用户；access token 必须属于 active user session。"""
+    payload = get_access_payload(credentials.credentials, db, "user")
+    return _get_user_from_payload(db, payload)
 
 
 def get_current_user_including_banned(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    token = credentials.credentials
-    payload = decode_access_token(token)
-
-    if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的认证凭证",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user_id_str = payload.get("sub")
-    if user_id_str is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的认证凭证",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    try:
-        user_id = int(user_id_str)
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的认证凭证",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户不存在",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return user
+    """加载当前用户但跳过封禁态拦截，供账号状态相关内部接口使用。"""
+    payload = get_access_payload(credentials.credentials, db, "user")
+    return _get_user_from_payload(db, payload, include_banned=True)
 
 
 def get_current_user_optional(
@@ -140,41 +114,12 @@ def get_current_user_optional(
     ),
     db: Session = Depends(get_db)
 ) -> Optional[User]:
-    """
-    获取当前用户（可选）
-
-    如果提供了有效的 Token 则返回用户，否则返回 None
-    适用于某些 API 在有/无 Token 时返回不同数据
-
-    Args:
-        credentials: HTTP Bearer Token（可选，依赖注入）
-        db: 数据库会话（依赖注入）
-
-    Returns:
-        Optional[User]: 当前登录用户，未登录则返回 None
-    """
+    """可选读取当前用户；无 token 或 session 失效时都按匿名访问处理。"""
     if credentials is None:
         return None
 
-    token = credentials.credentials
-    payload = decode_access_token(token)
-
-    if payload is None:
-        return None
-
-    user_id_str = payload.get("sub")
-    if user_id_str is None:
-        return None
-
     try:
-        user_id = int(user_id_str)
-    except (ValueError, TypeError):
+        payload = get_access_payload(credentials.credentials, db, "user")
+        return _get_user_from_payload(db, payload)
+    except HTTPException:
         return None
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is not None:
-        try:
-            ensure_account_available(db, user)
-        except HTTPException:
-            return None
-    return user

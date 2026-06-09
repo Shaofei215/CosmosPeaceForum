@@ -1,3 +1,9 @@
+/**
+ * Management 管理员登录页。
+ *
+ * remember_me 默认不勾选，选择后延长 refresh/session 生命周期。
+ */
+
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLogin } from '@/features/auth';
@@ -10,6 +16,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const { mutate: login, isPending } = useLogin();
 
   const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/';
@@ -28,7 +35,7 @@ export default function LoginPage() {
     }
 
     login(
-      { username: username.trim(), password },
+      { username: username.trim(), password, remember_me: rememberMe },
       {
         onSuccess: () => {
           navigate(from, { replace: true });
@@ -80,6 +87,17 @@ export default function LoginPage() {
                 autoComplete="current-password"
               />
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isPending}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              记住我
+            </label>
 
             <Button type="submit" className="w-full" disabled={isPending}>
               {isPending ? '登录中...' : '登录'}
