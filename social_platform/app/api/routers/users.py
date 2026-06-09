@@ -75,7 +75,7 @@ def get_user_by_username(username: str, db: Session = Depends(get_db)):
     return user
 
 
-@router.put("/{user_id}", response_model=UserResponse, summary="更新用户信息", description="更新用户信息（个人简介、头像等），仅用户本人可以操作。")
+@router.put("/{user_id}", response_model=UserResponse, summary="更新用户信息", description="更新用户信息（昵称、个人简介、头像等），仅用户本人可以操作。")
 def update_user(
     user_id: int,
     user_update: UserUpdate,
@@ -86,6 +86,7 @@ def update_user(
     更新用户信息
 
     - **user_id**: 用户 ID（路径参数）
+    - **username**: 昵称（可选更新）
     - **bio**: 个人简介（可选更新）
     - **avatar_url**: 头像 URL（可选更新）
 
@@ -108,6 +109,31 @@ def update_user(
 
     update_data = user_update.model_dump(exclude_unset=True)
 
+    if "username" in update_data:
+        username = update_data["username"]
+        if username is None:
+            raise HTTPException(status_code=400, detail="用户名不能为空")
+
+        username = username.strip()
+        if len(username) < 3:
+            raise HTTPException(status_code=400, detail="用户名至少需要3个字符")
+        if not re.fullmatch(r"[a-zA-Z0-9_一-龥]+", username):
+            raise HTTPException(
+                status_code=400,
+                detail="用户名只能包含字母、数字、下划线和中文"
+            )
+        update_data["username"] = username
+
+        existing_user = db.query(User).filter(
+            User.username == username,
+            User.id != user_id
+        ).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="用户名已存在"
+            )
+
     for field, value in update_data.items():
         setattr(user, field, value)
 
@@ -117,7 +143,7 @@ def update_user(
     return user
 
 
-@router.put("/{user_id}/complete-profile", response_model=UserResponse, summary="完善用户资料", description="注册后完善用户资料，设置用户名（不可更改）和签名。")
+@router.put("/{user_id}/complete-profile", response_model=UserResponse, summary="完善用户资料", description="注册后完善用户资料，设置用户名和签名。")
 def complete_profile(
     user_id: int,
     profile_data: CompleteProfileRequest,
@@ -128,7 +154,7 @@ def complete_profile(
     完善用户资料（注册后使用）
 
     - **user_id**: 用户 ID（路径参数）
-    - **username**: 用户名（必填，设置后不可更改）
+    - **username**: 用户名（必填，后续可在个人主页修改）
     - **bio**: 个人签名（可选）
     - **avatar_url**: 头像 URL（可选）
 
@@ -158,8 +184,10 @@ def complete_profile(
             detail="用户名已设置，无法再次修改"
         )
 
-    username = profile_data.username
-    if not re.match(r'^[a-zA-Z0-9_\u4e00-\u9fa5]+$', username):
+    username = profile_data.username.strip()
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="用户名至少需要3个字符")
+    if not re.fullmatch(r"[a-zA-Z0-9_一-龥]+", username):
         raise HTTPException(
             status_code=400,
             detail="用户名只能包含字母、数字、下划线和中文"

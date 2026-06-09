@@ -13,8 +13,8 @@ class UserBase(BaseModel):
     # 用户名，1-30 个字符，必须唯一
     username: str = Field(..., min_length=1, max_length=30)
 
-    # 个人简介，可选
-    bio: Optional[str] = None
+    # 个人简介，可选，最多 100 个字符
+    bio: Optional[str] = Field(None, max_length=100)
 
     # 头像 URL，可选，最多 500 个字符
     avatar_url: Optional[str] = Field(None, max_length=500)
@@ -33,8 +33,11 @@ class UserUpdate(BaseModel):
     更新用户时的请求模型
     所有字段都是可选的
     """
+    # 用户名，可选，1-30 个字符，必须唯一
+    username: Optional[str] = Field(None, min_length=1, max_length=30)
+
     # 个人简介，可选
-    bio: Optional[str] = None
+    bio: Optional[str] = Field(None, max_length=100)
 
     # 头像 URL，可选，最多 500 个字符
     avatar_url: Optional[str] = Field(None, max_length=500)
@@ -48,13 +51,13 @@ class CompleteProfileRequest(BaseModel):
     # 用户名，1-30 个字符，字母、数字、下划线、中文
     username: str = Field(
         ...,
-        min_length=1,
+        min_length=3,
         max_length=30,
-        description="用户名，设置后不可更改"
+        description="用户名，后续可在个人主页修改"
     )
 
-    # 个人简介，可选，最多 500 个字符
-    bio: Optional[str] = Field(None, max_length=500, description="个人签名（可选）")
+    # 个人简介，可选，最多 100 个字符
+    bio: Optional[str] = Field(None, max_length=100, description="个人签名（可选）")
 
     # 头像 URL，可选
     avatar_url: Optional[str] = Field(None, max_length=500, description="头像URL（可选）")

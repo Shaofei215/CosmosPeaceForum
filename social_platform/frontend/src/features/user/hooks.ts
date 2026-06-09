@@ -61,13 +61,19 @@ export const useUserByUsername = (username: string) => {
  */
 export const useUpdateUser = () => {
   const queryClient = useQueryClient();
+  const { setAuth } = useAuthStore();
 
   return useMutation({
     mutationFn: ({ userId, data }: { userId: number; data: UpdateUserData }) =>
       userApi.updateUser(userId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['user', variables.userId] });
+    onSuccess: updatedUser => {
+      queryClient.setQueryData(['user', updatedUser.id], updatedUser);
+      queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      const token = getAccessToken();
+      if (token) {
+        setAuth(token, toAuthUser(updatedUser));
+      }
     },
   });
 };
@@ -102,6 +108,7 @@ export const useCompleteProfile = () => {
     mutationFn: ({ userId, data }: { userId: number; data: CompleteProfileData }) =>
       userApi.completeProfile(userId, data),
     onSuccess: updatedUser => {
+      queryClient.setQueryData(['user', updatedUser.id], updatedUser);
       queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       const token = getAccessToken();
@@ -126,6 +133,7 @@ export const useUploadAvatar = () => {
   return useMutation({
     mutationFn: (file: File) => userApi.uploadAvatar(file),
     onSuccess: updatedUser => {
+      queryClient.setQueryData(['user', updatedUser.id], updatedUser);
       queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       const token = getAccessToken();
@@ -150,6 +158,7 @@ export const useDeleteAvatar = () => {
   return useMutation({
     mutationFn: () => userApi.deleteAvatar(),
     onSuccess: updatedUser => {
+      queryClient.setQueryData(['user', updatedUser.id], updatedUser);
       queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
       const token = getAccessToken();

@@ -48,7 +48,7 @@ export function Header() {
                 {user?.username}
               </Link>
               <Button variant="ghost" size="sm" onClick={handleLogout}>
-                退出
+                登出
               </Button>
             </>
           ) : (

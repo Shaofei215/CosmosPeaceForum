@@ -88,8 +88,8 @@ export default function ProfileSetupPage() {
       return;
     }
 
-    if (bio.length > 20) {
-      setError('签名最多20个字符');
+    if (bio.length > 100) {
+      setError('签名最多100个字符');
       return;
     }
 
@@ -150,7 +150,7 @@ export default function ProfileSetupPage() {
               <Input
                 id="username"
                 type="text"
-                placeholder="用户名设置后暂不可更改，请仔细思考哦~"
+                placeholder="给自己取一个好记的名字"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 disabled={isPending}
@@ -164,17 +164,17 @@ export default function ProfileSetupPage() {
                 <label htmlFor="bio" className="text-sm font-medium">
                   个人签名
                 </label>
-                <span className="text-xs text-muted-foreground">{bio.length}/20</span>
+                <span className="text-xs text-muted-foreground">{bio.length}/100</span>
               </div>
               <Input
                 id="bio"
                 type="text"
-                placeholder="签名也暂不可更改，三思而后行哦~"
+                placeholder="写一句介绍自己的签名"
                 value={bio}
                 onChange={e => setBio(e.target.value)}
                 disabled={isPending}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
-                maxLength={20}
+                maxLength={100}
               />
             </div>
 

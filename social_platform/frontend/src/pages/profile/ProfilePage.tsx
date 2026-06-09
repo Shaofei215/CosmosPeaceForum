@@ -3,14 +3,39 @@
  */
 
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
-import { useUser } from '@/features/user';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useUpdateUser, useUploadAvatar, useUser } from '@/features/user';
 import { useInfiniteUserFeed } from '@/features/feed';
 import { useToggleFollow, useFollowStatus } from '@/features/follow';
 import { useAuthStore, useLogout } from '@/features/auth';
 import { PostCard } from '@/widgets/post-card';
-import { Avatar, Skeleton, Button } from '@/shared/components/ui';
-import { LogOut } from 'lucide-react';
+import { Avatar, Skeleton, Button, Input } from '@/shared/components/ui';
+import { Camera, MoreVertical, Pencil, Save, X } from 'lucide-react';
+
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+const MAX_USERNAME_LENGTH = 30;
+const MAX_BIO_LENGTH = 100;
+
+/**
+ * 从 API 或运行时错误中提取可展示的中文错误信息。
+ */
+function extractErrorMessage(err: unknown): string | null {
+  if (typeof err === 'object' && err !== null) {
+    const e = err as Record<string, unknown>;
+    if (typeof e.message === 'string') {
+      return e.message;
+    }
+    if (Array.isArray(e.message)) {
+      return (e.message as Array<Record<string, unknown>>)
+        .map(item => (typeof item.msg === 'string' ? item.msg : JSON.stringify(item)))
+        .join(', ');
+    }
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return null;
+}
 
 /**
  * 用户资料页面组件
@@ -21,6 +46,20 @@ export default function ProfilePage() {
   const logout = useLogout();
   const navigate = useNavigate();
   const userIdNum = Number(userId);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftUsername, setDraftUsername] = useState('');
+  const [draftBio, setDraftBio] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [editError, setEditError] = useState('');
+  const [avatarError, setAvatarError] = useState('');
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const usernameInputRef = useRef<HTMLInputElement>(null);
+
+  const updateUser = useUpdateUser();
+  const uploadAvatar = useUploadAvatar();
 
   const toggleFollow = useToggleFollow();
   const { data: followStatus } = useFollowStatus(userIdNum);
@@ -50,9 +89,37 @@ export default function ProfilePage() {
     isLoading: isFeedLoading,
   } = useInfiniteUserFeed(userIdNum, currentUser?.id);
 
+  const isSaving = updateUser.isPending || uploadAvatar.isPending;
+
   // 无限滚动监听
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (user && !isEditing) {
+      setDraftUsername(user.username);
+      setDraftBio(user.bio ?? '');
+      setAvatarFile(null);
+      setAvatarPreviewUrl(null);
+      setEditError('');
+      setAvatarError('');
+    }
+  }, [isEditing, user]);
+
+  useEffect(() => {
+    if (isEditing) {
+      usernameInputRef.current?.focus();
+      usernameInputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) {
+        URL.revokeObjectURL(avatarPreviewUrl);
+      }
+    };
+  }, [avatarPreviewUrl]);
 
   useEffect(() => {
     if (observerRef.current) {
@@ -75,6 +142,100 @@ export default function ProfilePage() {
   // 合并所有页面的帖子
   const posts = data?.pages.flatMap(page => page.data) || [];
 
+  /** 进入资料编辑模式，并以当前用户资料初始化草稿。 */
+  const handleEnterEdit = () => {
+    if (user == null) return;
+    setDraftUsername(user.username);
+    setDraftBio(user.bio ?? '');
+    setAvatarFile(null);
+    setAvatarPreviewUrl(null);
+    setEditError('');
+    setAvatarError('');
+    setIsUserMenuOpen(false);
+    setIsEditing(true);
+  };
+
+  /** 放弃本次编辑并恢复进入编辑前的展示状态。 */
+  const handleCancelEdit = () => {
+    if (user == null) return;
+    setDraftUsername(user.username);
+    setDraftBio(user.bio ?? '');
+    setAvatarFile(null);
+    setAvatarPreviewUrl(null);
+    setEditError('');
+    setAvatarError('');
+    setIsUserMenuOpen(false);
+    setIsEditing(false);
+  };
+
+  /** 校验头像文件并生成本地预览，真正上传会在保存时执行。 */
+  const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file == null) return;
+
+    setAvatarError('');
+    if (file.type.startsWith('image/') === false) {
+      setAvatarError('请选择图片文件');
+      return;
+    }
+    if (file.size > MAX_AVATAR_SIZE) {
+      setAvatarError('图片大小不能超过 5MB');
+      return;
+    }
+
+    setAvatarFile(file);
+    setAvatarPreviewUrl(URL.createObjectURL(file));
+  };
+
+  /** 保存昵称、签名和头像草稿，并同步远端与本地缓存。 */
+  const handleSave = async () => {
+    if (user == null) return;
+
+    const username = draftUsername.trim();
+    const bio = draftBio.trim();
+    const usernamePattern = new RegExp('^[a-zA-Z0-9_\u4e00-\u9fa5]+' + String.fromCharCode(36));
+    setEditError('');
+    setAvatarError('');
+
+    if (username === '') {
+      setEditError('请输入昵称');
+      return;
+    }
+    if (username.length < 3) {
+      setEditError('昵称至少需要3个字符');
+      return;
+    }
+    if (username.length > MAX_USERNAME_LENGTH) {
+      setEditError('昵称最多30个字符');
+      return;
+    }
+    if (bio.length > MAX_BIO_LENGTH) {
+      setEditError('签名最多100个字符');
+      return;
+    }
+    if (usernamePattern.test(username) === false) {
+      setEditError('昵称只能包含字母、数字、下划线和中文');
+      return;
+    }
+
+    try {
+      await updateUser.mutateAsync({
+        userId: user.id,
+        data: { username, bio },
+      });
+      if (avatarFile) {
+        await uploadAvatar.mutateAsync(avatarFile);
+      }
+      setAvatarFile(null);
+      setAvatarPreviewUrl(null);
+      setIsUserMenuOpen(false);
+      setIsEditing(false);
+    } catch (err) {
+      setEditError(extractErrorMessage(err) || '保存失败，请稍后重试');
+    }
+  };
+
   if (isUserLoading) {
     return <ProfileSkeleton />;
   }
@@ -96,31 +257,91 @@ export default function ProfilePage() {
     <div className="space-y-3">
       {/* 用户资料卡片 */}
       <div className="rounded-lg bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <Avatar src={user.avatar_url} alt={user.username} size="xl" />
-          <div className="flex-1 min-w-0">
-            <h1 className="min-w-0 truncate text-xl font-bold sm:text-2xl">{user.username}</h1>
-            {user.bio && (
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{user.bio}</p>
+        <div className="flex min-h-[84px] items-center gap-3 sm:gap-4">
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => isEditing && avatarInputRef.current?.click()}
+              disabled={isSaving || isEditing === false}
+              className="group relative block rounded-full disabled:cursor-default"
+              aria-label="上传头像"
+            >
+              <Avatar
+                src={avatarPreviewUrl ?? user.avatar_url}
+                alt={draftUsername || user.username}
+                size="xl"
+              />
+              {isEditing && (
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm">
+                    {isSaving ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                      <Camera className="h-4 w-4" />
+                    )}
+                  </span>
+                </span>
+              )}
+            </button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              className="hidden"
+              disabled={isSaving}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            {isEditing ? (
+              <Input
+                ref={usernameInputRef}
+                value={draftUsername}
+                onChange={event => setDraftUsername(event.target.value)}
+                disabled={isSaving}
+                maxLength={MAX_USERNAME_LENGTH}
+                aria-label="昵称"
+                className="h-auto truncate border-0 bg-transparent px-0 py-0 text-xl font-bold shadow-none focus-visible:ring-1 sm:text-2xl"
+              />
+            ) : (
+              <h1 className="min-w-0 truncate text-xl font-bold sm:text-2xl">{user.username}</h1>
+            )}
+            {isEditing ? (
+              <Input
+                value={draftBio}
+                onChange={event => setDraftBio(event.target.value)}
+                disabled={isSaving}
+                maxLength={MAX_BIO_LENGTH}
+                aria-label="签名"
+                placeholder="写一句签名"
+                className="mt-1 h-5 truncate border-0 bg-transparent px-0 py-0 text-sm text-muted-foreground shadow-none focus-visible:ring-1"
+              />
+            ) : (
+              user.bio && (
+                <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{user.bio}</p>
+              )
+            )}
+            {(editError ? editError : avatarError) && (
+              <p className="mt-2 text-xs text-destructive">{editError ? editError : avatarError}</p>
             )}
             <div className="mt-3 flex items-center gap-4">
               <Link
-                to={`/user/${user.id}/following`}
-                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                to={'/user/' + user.id + '/following'}
+                className="text-sm text-muted-foreground transition-colors hover:text-primary"
               >
                 <span className="font-medium text-foreground">{user.following_count ?? 0}</span>{' '}
                 关注
               </Link>
               <Link
-                to={`/user/${user.id}/followers`}
-                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                to={'/user/' + user.id + '/followers'}
+                className="text-sm text-muted-foreground transition-colors hover:text-primary"
               >
                 <span className="font-medium text-foreground">{user.followers_count ?? 0}</span>{' '}
                 粉丝
               </Link>
             </div>
           </div>
-          {!isCurrentUser && (
+          {isCurrentUser === false && (
             <Button
               variant={followStatus?.is_following ? 'outline' : 'default'}
               size="sm"
@@ -143,22 +364,83 @@ export default function ProfilePage() {
               )}
             </Button>
           )}
-          {/* 登出按钮 - 仅当前用户可见 */}
-          {isCurrentUser && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="shrink-0 gap-2 px-2 sm:px-3"
-              aria-label="退出登录"
+          <div className="relative flex shrink-0 items-center self-center">
+            {isCurrentUser && (
+              <div className="flex items-center gap-2">
+                {isEditing ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="gap-1 px-2 text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground sm:px-3"
+                      aria-label="保存资料"
+                    >
+                      {isSaving ? (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent sm:hidden" />
+                      ) : (
+                        <Save className="h-4 w-4 sm:hidden" />
+                      )}
+                      <span className="hidden sm:inline">保存</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      disabled={isSaving}
+                      className="gap-1 px-2 text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground sm:px-3"
+                      aria-label="退出编辑"
+                    >
+                      <X className="h-4 w-4 sm:hidden" />
+                      <span className="hidden sm:inline">退出</span>
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEnterEdit}
+                    className="gap-1 px-2 text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground sm:px-3"
+                    aria-label="编辑资料"
+                  >
+                    <Pencil className="h-4 w-4 sm:hidden" />
+                    <span className="hidden sm:inline">编辑</span>
+                  </Button>
+                )}
+              </div>
+            )}
+            <button
+              type="button"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+              onClick={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                setIsUserMenuOpen(value => !value);
+              }}
+              aria-label="更多操作"
             >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">退出</span>
-            </Button>
-          )}
+              <MoreVertical className="h-4 w-4" />
+            </button>
+            {isUserMenuOpen && (
+              <div
+                className="absolute right-0 top-8 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
+                onClick={event => event.stopPropagation()}
+              >
+                {isCurrentUser && (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={handleLogout}
+                  >
+                    登出
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
       {/* 用户帖子列表 - 包含在大容器中 */}
       <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
         <h2 className="text-lg font-semibold px-3 pt-3">

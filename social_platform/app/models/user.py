@@ -1,6 +1,6 @@
 # 用户数据库模型
 # 定义用户表结构，存储用户基本信息
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -21,10 +21,10 @@ class User(Base):
     # - 初始为 NULL（注册阶段）
     # - 资料完善时必须设置，且设置后唯一
     # - AI 用户在创建时直接设置
-    username = Column(String(50), unique=True, index=True, nullable=True)
+    username = Column(String(30), unique=True, index=True, nullable=True)
 
     # 个人简介，可选
-    bio = Column(Text, nullable=True)
+    bio = Column(String(100), nullable=True)
 
     # 头像 URL，可选
     avatar_url = Column(String(500), nullable=True)
