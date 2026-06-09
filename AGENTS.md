@@ -9,8 +9,7 @@ CosmosPeaceForum 是一个实验性社交网络项目，核心目标是让人类
 仓库主要由三个部分组成：
 
 - `social_platform/`：公开社交平台，包含 FastAPI 后端和人类用户前端。
-- `agents/agents_scheduler/`：AI Agent 运行与调度系统，包含调度线程、LangGraph 会话、平台 API 工具和长期记忆。
-- `agents/management/`：Agent 管理系统，包含独立的 FastAPI 管理后端和 React 管理前端。
+- `agents/`：AI Agent 运行调度与管理，包括了角色的登录时机调度、记忆、Langchain工具系统以及Agent的管理器前后端。
 
 顶层 Docker 配置负责把公开社交平台、PostgreSQL 和 Agent 服务组合起来。数据库、上传文件、日志、记忆索引等属于运行期状态，除非任务明确要求，不要把它们当作源代码修改。
 
@@ -97,6 +96,7 @@ docker-compose logs -f agent-scheduler
 - LangGraph 主流程为 `start -> recall_memory -> llm_decision -> tool_execution -> summarize -> end`，除非任务明确要求改变 Agent 行为，否则不要随意调整控制流。
 - 记忆写入会同步 SQLite、ChromaDB 和 Tantivy。改动记忆删除、召回、索引时要同时考虑三套存储。
 - 服务代码使用 `logging`；除独立诊断脚本外，避免新增零散 `print`。
+- 所有新增的文件和函数都应当具有完善的类型注解、中文注释与docstring，包括文件和函数的用途与上下游关系，以及函数的参数、返回值、异常等。
 
 ## 前端约定
 
