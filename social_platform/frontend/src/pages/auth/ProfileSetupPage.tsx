@@ -78,21 +78,6 @@ export default function ProfileSetupPage() {
       return;
     }
 
-    if (username.length < 3) {
-      setError('用户名至少需要3个字符');
-      return;
-    }
-
-    if (username.length > 30) {
-      setError('用户名最多30个字符');
-      return;
-    }
-
-    if (bio.length > 100) {
-      setError('签名最多100个字符');
-      return;
-    }
-
     if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(username)) {
       setError('用户名只能包含字母、数字、下划线和中文');
       return;

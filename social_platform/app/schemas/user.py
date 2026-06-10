@@ -51,7 +51,7 @@ class CompleteProfileRequest(BaseModel):
     # 用户名，1-30 个字符，字母、数字、下划线、中文
     username: str = Field(
         ...,
-        min_length=3,
+        min_length=1,
         max_length=30,
         description="用户名，后续可在个人主页修改"
     )

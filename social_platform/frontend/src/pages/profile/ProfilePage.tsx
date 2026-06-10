@@ -202,18 +202,6 @@ export default function ProfilePage() {
       setEditError('请输入昵称');
       return;
     }
-    if (username.length < 3) {
-      setEditError('昵称至少需要3个字符');
-      return;
-    }
-    if (username.length > MAX_USERNAME_LENGTH) {
-      setEditError('昵称最多30个字符');
-      return;
-    }
-    if (bio.length > MAX_BIO_LENGTH) {
-      setEditError('签名最多100个字符');
-      return;
-    }
     if (usernamePattern.test(username) === false) {
       setEditError('昵称只能包含字母、数字、下划线和中文');
       return;

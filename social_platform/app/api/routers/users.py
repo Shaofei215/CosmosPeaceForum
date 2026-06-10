@@ -115,8 +115,6 @@ def update_user(
             raise HTTPException(status_code=400, detail="用户名不能为空")
 
         username = username.strip()
-        if len(username) < 3:
-            raise HTTPException(status_code=400, detail="用户名至少需要3个字符")
         if not re.fullmatch(r"[a-zA-Z0-9_一-龥]+", username):
             raise HTTPException(
                 status_code=400,
@@ -185,8 +183,6 @@ def complete_profile(
         )
 
     username = profile_data.username.strip()
-    if len(username) < 3:
-        raise HTTPException(status_code=400, detail="用户名至少需要3个字符")
     if not re.fullmatch(r"[a-zA-Z0-9_一-龥]+", username):
         raise HTTPException(
             status_code=400,
