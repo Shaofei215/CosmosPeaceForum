@@ -6,7 +6,11 @@ from typing import Tuple
 
 from social_platform.app.models.like import Like
 from social_platform.app.models.post import Post
-from social_platform.app.services import heat_service, notification_service
+from social_platform.app.domains.events import PostLiked, PostUnliked
+from social_platform.app.shared.events import publish_domain_event
+from social_platform.app.shared.unit_of_work import commit_session, rollback_session
+from social_platform.app.services import heat_service
+
 
 
 class PostNotFoundError(Exception):
@@ -93,8 +97,9 @@ def toggle_like(
             # 2. 减少帖子点赞计数（确保不会减到负数）
             post.like_count = max(0, post.like_count - 1)
             heat_service.refresh_post_heat_score(db, post)
+            publish_domain_event(db, PostUnliked(post_id=post_id, sender_id=user_id))
             # 3. 提交事务
-            db.commit()
+            commit_session(db)
             # 返回：已取消点赞，新的点赞数
             return (False, post.like_count)
         else:
@@ -105,15 +110,15 @@ def toggle_like(
             # 2. 增加帖子点赞计数
             post.like_count = post.like_count + 1
             heat_service.refresh_post_heat_score(db, post)
-            notification_service.create_post_like_notification(db, post, user_id)
+            publish_domain_event(db, PostLiked(post_id=post_id, sender_id=user_id))
             # 3. 提交事务
-            db.commit()
+            commit_session(db)
             # 返回：已点赞，新的点赞数
             return (True, post.like_count)
     
     except IntegrityError as e:
         # 数据库完整性错误（如复合主键冲突）
-        db.rollback()
+        rollback_session(db)
         # 抛出重复点赞异常
         raise DuplicateLikeError(user_id, post_id) from e
 

@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.models.comment import Comment
 from social_platform.app.models.post import Post
-from social_platform.app.services import heat_service, mention_service, notification_service
+from social_platform.app.domains.events import RepostCreated
+from social_platform.app.shared.events import publish_domain_event
+from social_platform.app.shared.unit_of_work import commit_session
+from social_platform.app.services import heat_service, mention_service
+
 
 
 class RepostSourceNotFoundError(Exception):
@@ -65,18 +69,20 @@ def create_repost(
         root_post.repost_count = (root_post.repost_count or 0) + 1
         heat_service.refresh_post_heat_score(db, root_post)
 
-    notification_service.create_repost_notifications(
-        db=db,
-        root_post=root_post,
-        repost=repost,
-        sender_id=user_id,
-        source_post=source_post,
-        source_comment=source_comment,
-        source_content=chain_content,
+    publish_domain_event(
+        db,
+        RepostCreated(
+            root_post_id=root_post.id,
+            repost_id=repost.id,
+            sender_id=user_id,
+            source_post_id=source_post.id if source_post is not None else None,
+            source_comment_id=source_comment.id if source_comment is not None else None,
+            source_content=chain_content,
+        ),
     )
 
     if commit:
-        db.commit()
+        commit_session(db)
         db.refresh(repost)
 
     repost.repost_origin = root_post

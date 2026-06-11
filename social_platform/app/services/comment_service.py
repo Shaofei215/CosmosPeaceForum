@@ -11,7 +11,11 @@ from typing import Tuple, List, Optional
 from social_platform.app.models.comment import Comment, CommentLike
 from social_platform.app.models.post import Post
 from social_platform.app.models.user import User
-from social_platform.app.services import heat_service, mention_service, notification_service, repost_service
+from social_platform.app.domains.events import CommentCreated, CommentDeleted, CommentLiked, CommentUnliked
+from social_platform.app.shared.events import publish_domain_event
+from social_platform.app.shared.unit_of_work import commit_session, rollback_session
+from social_platform.app.services import heat_service, mention_service, repost_service
+
 
 MIN_COMMENT_POOL_SIZE = 40
 COMMENT_POOL_PAGE_MULTIPLIER = 4
@@ -306,12 +310,14 @@ def create_comment(
             root_comment.reply_count = root_comment.reply_count + 1
             heat_service.refresh_comment_heat_score(db, root_comment)
         
-        notification_service.create_comment_notifications(
-            db=db,
-            post=post,
-            comment=new_comment,
-            sender_id=user_id,
-            parent_comment=parent_comment,
+        publish_domain_event(
+            db,
+            CommentCreated(
+                post_id=post_id,
+                comment_id=new_comment.id,
+                sender_id=user_id,
+                parent_comment_id=parent_comment.id if parent_comment is not None else None,
+            ),
         )
 
         if repost:
@@ -325,14 +331,14 @@ def create_comment(
             )
 
         # 4. 提交事务
-        db.commit()
+        commit_session(db)
         db.refresh(new_comment)
         mention_service.attach_mention_users(db, new_comment)
         
         return new_comment
     
     except Exception as e:
-        db.rollback()
+        rollback_session(db)
         raise e
 
 
@@ -383,8 +389,9 @@ def toggle_like(
             # 2. 减少评论点赞计数（确保不会减到负数）
             comment.like_count = max(0, comment.like_count - 1)
             heat_service.refresh_comment_heat_score(db, comment)
+            publish_domain_event(db, CommentUnliked(comment_id=comment_id, sender_id=user_id))
             # 3. 提交事务
-            db.commit()
+            commit_session(db)
             db.refresh(comment)
             # 返回：已取消点赞，新的点赞数
             return (False, comment.like_count)
@@ -396,16 +403,16 @@ def toggle_like(
             # 2. 增加评论点赞计数
             comment.like_count = comment.like_count + 1
             heat_service.refresh_comment_heat_score(db, comment)
-            notification_service.create_comment_like_notification(db, comment, user_id)
+            publish_domain_event(db, CommentLiked(comment_id=comment_id, sender_id=user_id))
             # 3. 提交事务
-            db.commit()
+            commit_session(db)
             db.refresh(comment)
             # 返回：已点赞，新的点赞数
             return (True, comment.like_count)
     
     except IntegrityError:
         # 数据库完整性错误（如复合主键冲突）
-        db.rollback()
+        rollback_session(db)
         # 重新查询状态
         comment = db.query(Comment).filter(Comment.id == comment_id).first()
         like_exists = db.query(CommentLike).filter(
@@ -740,13 +747,15 @@ def delete_comment(
                 root.reply_count = max(0, root.reply_count - 1)
                 heat_service.refresh_comment_heat_score(db, root)
         
+        publish_domain_event(db, CommentDeleted(comment_id=comment_id, post_id=post_id, owner_id=user_id))
+
         # 4. 提交事务
-        db.commit()
+        commit_session(db)
         
         return True
     
     except Exception as e:
-        db.rollback()
+        rollback_session(db)
         raise e
 
 
@@ -792,8 +801,9 @@ def delete_comment_precise(
                 root.reply_count = max(0, root.reply_count - count_to_subtract)
                 heat_service.refresh_comment_heat_score(db, root)
 
-        db.commit()
+        publish_domain_event(db, CommentDeleted(comment_id=comment_id, post_id=post_id, owner_id=user_id))
+        commit_session(db)
         return True
     except Exception:
-        db.rollback()
+        rollback_session(db)
         raise

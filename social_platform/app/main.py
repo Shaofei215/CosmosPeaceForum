@@ -12,6 +12,7 @@ from social_platform.app.core.config import get_settings
 from social_platform.app.core.paths import get_avatar_upload_dir, get_frontend_dist_dir
 from social_platform.app.core.static_files import RaceSafeStaticFiles, SPAStaticFiles
 from social_platform.app.db.session import SessionLocal
+from social_platform.app.domains.bootstrap import ensure_domain_event_handlers_registered
 from social_platform.app.admin.api import admin_router
 from social_platform.app.admin.services.auth_service import ensure_initial_admin
 from social_platform.app.admin.services.terminal_log_service import terminal_log_capture
@@ -100,6 +101,7 @@ async def lifespan(app: FastAPI):
 
     在应用启动时启动调度器，关闭时停止调度器
     """
+    ensure_domain_event_handlers_registered()
     terminal_log_capture.start()
     initialize_admin_manager()
     start_scheduler()

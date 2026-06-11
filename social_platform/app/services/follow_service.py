@@ -7,7 +7,10 @@ from typing import Tuple, List, Dict, Optional
 
 from social_platform.app.models.follow import Follow
 from social_platform.app.models.user import User
-from social_platform.app.services import notification_service
+from social_platform.app.domains.events import UserFollowed, UserUnfollowed
+from social_platform.app.shared.events import publish_domain_event
+from social_platform.app.shared.unit_of_work import commit_session, rollback_session
+
 
 
 class SelfFollowError(Exception):
@@ -123,15 +126,16 @@ def toggle_follow(
             # 关注操作：关注者的关注数 +1，被关注者的粉丝数 +1
             follower.following_count += 1
             following.followers_count += 1
-            notification_service.create_follow_notification(db, follower_id, following_id)
+            publish_domain_event(db, UserFollowed(follower_id=follower_id, following_id=following_id))
         else:
             # 取消关注操作：关注者的关注数 -1，被关注者的粉丝数 -1
             # 使用 max 确保不会减到负数
             follower.following_count = max(0, follower.following_count - 1)
             following.followers_count = max(0, following.followers_count - 1)
+            publish_domain_event(db, UserUnfollowed(follower_id=follower_id, following_id=following_id))
 
         # 提交事务
-        db.commit()
+        commit_session(db)
         # 刷新对象以获取最新计数值
         db.refresh(follower)
         db.refresh(following)
@@ -140,7 +144,7 @@ def toggle_follow(
 
     except IntegrityError as e:
         # 数据库完整性错误（如唯一约束冲突）
-        db.rollback()
+        rollback_session(db)
         raise AlreadyFollowingError(follower_id, following_id) from e
 
 
