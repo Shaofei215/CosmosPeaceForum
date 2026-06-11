@@ -32,6 +32,7 @@ import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
 import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer';
+import { LinkedMentions as MentionText } from '@/shared/components/mention/LinkedMentions';
 import { stripMarkdown } from '@/shared/components/markdown/markdownUtils';
 
 interface PostCardProps {
@@ -75,6 +76,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
     'author_is_ai_agent' in post ? post.author_is_ai_agent : Boolean(post.author?.is_ai_agent);
   const isCurrentUser = user?.id === post.author_id;
   const isArticle = post.type === 'article';
+  const mentionUsers = post.mention_users || post.repost_chain_authors || [];
   const hasAuthorFollowStatus =
     'author_is_following' in post || 'author_is_followed_by' in post || 'author_is_mutual' in post;
   const initialFollowStatus: FollowStatusResponse | undefined = hasAuthorFollowStatus
@@ -258,7 +260,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               <h1 className="text-xl font-semibold leading-8 text-foreground sm:text-2xl sm:leading-9">
                 {post.title}
               </h1>
-              <MarkdownRenderer content={post.content} />
+              <MarkdownRenderer content={post.content} mentionUsers={mentionUsers} />
             </div>
           ) : (
             <Link
@@ -286,7 +288,11 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                 isContentExpanded ? '' : 'line-clamp-3'
               }`}
             >
-              <LinkedMentions text={post.content} authors={post.repost_chain_authors || []} />
+              <MentionText
+                text={post.content}
+                users={mentionUsers}
+                onMentionClick={event => event.stopPropagation()}
+              />
             </p>
           </>
         )}
@@ -607,48 +613,6 @@ function MissingRepostOriginBlock() {
   );
 }
 
-function LinkedMentions({
-  text,
-  authors,
-}: {
-  text: string;
-  authors: { user_id: number; username: string }[];
-}) {
-  if (!authors.length) {
-    return <>{text}</>;
-  }
-
-  const authorByName = new Map(authors.map(author => [author.username, author]));
-  const parts = text.split(/(@[^:\s/]+)/g);
-
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (!part.startsWith('@')) {
-          return <span key={`${part}-${index}`}>{part}</span>;
-        }
-
-        const username = part.slice(1);
-        const author = authorByName.get(username);
-        if (!author) {
-          return <span key={`${part}-${index}`}>{part}</span>;
-        }
-
-        return (
-          <Link
-            key={`${part}-${index}`}
-            to={`/user/${author.user_id}`}
-            className="font-medium text-primary hover:text-primary/80"
-            onClick={event => event.stopPropagation()}
-          >
-            {part}
-          </Link>
-        );
-      })}
-    </>
-  );
-}
-
 function ReportDialog({
   targetLabel,
   saving,
@@ -711,7 +675,6 @@ function CommentSkeleton() {
     </div>
   );
 }
-
 interface CommentItemProps {
   comment: Comment;
   postId: number;
@@ -892,7 +855,11 @@ function CommentItem({
             </div>
           )}
           <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-foreground/85">
-            {comment.content}
+            <MentionText
+              text={comment.content}
+              users={comment.mention_users || []}
+              onMentionClick={event => event.stopPropagation()}
+            />
           </p>
 
           <div className="comment-action-row ml-1 mt-1 flex items-center gap-4">

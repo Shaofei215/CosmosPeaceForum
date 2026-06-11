@@ -207,13 +207,13 @@ def _build_feed_items(
         [post.author_id for post in posts],
         current_user_id,
     )
-    repost_chain_authors = repost_service.build_repost_chain_authors_for_contents(
+    mention_users_by_post = repost_service.build_mention_users_for_contents(
         db,
         [post.content for post in posts],
     )
 
     feed_items: List[PostFeedItem] = []
-    for post, chain_authors in zip(posts, repost_chain_authors):
+    for post, mention_users in zip(posts, mention_users_by_post):
         author_follow_status = follow_status_map.get(post.author_id, {})
         feed_item = PostFeedItem(
             id=post.id,
@@ -238,7 +238,8 @@ def _build_feed_items(
             repost_source_id=post.repost_source_id,
             repost_root_post_id=post.repost_root_post_id,
             repost_chain=post.repost_chain,
-            repost_chain_authors=chain_authors,
+            repost_chain_authors=mention_users,
+            mention_users=mention_users,
             repost_origin=post.repost_root_post if post.repost_root_post_id else None,
             repost_origin_missing=repost_service.is_repost_origin_missing(post),
         )

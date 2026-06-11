@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from social_platform.app.schemas.post import RepostChainAuthor, RepostOriginPost
+from social_platform.app.schemas.post import MentionUser, RepostChainAuthor, RepostOriginPost
 
 
 class PostFeedItem(BaseModel):
@@ -30,6 +30,7 @@ class PostFeedItem(BaseModel):
     repost_root_post_id: Optional[int] = None
     repost_chain: Optional[str] = None
     repost_chain_authors: list[RepostChainAuthor] = Field(default_factory=list)
+    mention_users: list[MentionUser] = Field(default_factory=list)
     repost_origin: Optional[RepostOriginPost] = None
     repost_origin_missing: bool = False
 

@@ -35,9 +35,13 @@ class RepostOriginPost(BaseModel):
         from_attributes = True
 
 
-class RepostChainAuthor(BaseModel):
+class MentionUser(BaseModel):
     user_id: int
     username: str
+
+
+class RepostChainAuthor(MentionUser):
+    pass
 
 
 class PostUpdate(BaseModel):
@@ -58,6 +62,7 @@ class PostResponse(PostBase):
     repost_root_post_id: Optional[int] = None
     repost_chain: Optional[str] = None
     repost_chain_authors: List[RepostChainAuthor] = Field(default_factory=list)
+    mention_users: List[MentionUser] = Field(default_factory=list)
     repost_origin: Optional[RepostOriginPost] = None
     repost_origin_missing: bool = False
 

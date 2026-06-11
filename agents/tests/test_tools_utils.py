@@ -292,7 +292,7 @@ class TestStandardizePost:
         ):
             result = _standardize_post(post_data, current_user_id=99)
             assert result["content"] == (
-                "我转发了B //@B[作者ID 11]: 我转发了C //@C[作者ID 12]: 原文"
+                "我转发了B //@B(ID: 11): 我转发了C //@C(ID: 12): 原文"
             )
             assert result["repost_chain"] == result["content"]
 
