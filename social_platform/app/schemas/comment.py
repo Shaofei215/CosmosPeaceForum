@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from social_platform.app.schemas.post import MentionUser
 from social_platform.app.schemas.user import UserResponse
 
 
@@ -42,6 +43,7 @@ class CommentResponse(CommentBase):
     is_liked: bool = False
     owner: Optional[UserResponse] = None
     parent: Optional[CommentParentResponse] = None
+    mention_users: List[MentionUser] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

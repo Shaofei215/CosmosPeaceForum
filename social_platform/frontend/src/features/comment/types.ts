@@ -2,6 +2,7 @@
  * 评论模块类型定义
  */
 
+import type { MentionUser } from '@/features/post/types';
 import type { UserProfile } from '@/features/user/types';
 
 export type CommentSort = 'default' | 'latest';
@@ -34,6 +35,8 @@ export interface Comment {
   is_liked: boolean;
   /** 评论者信息 */
   owner: UserProfile;
+  /** 正文中可跳转的提及用户 */
+  mention_users?: MentionUser[];
   /** 被回复的评论（仅用于展示“回复 @某人”） */
   parent?: {
     id: number;

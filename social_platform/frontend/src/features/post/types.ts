@@ -39,14 +39,17 @@ export interface Post {
   repost_root_post_id?: number | null;
   repost_chain?: string | null;
   repost_chain_authors?: RepostChainAuthor[];
+  mention_users?: MentionUser[];
   repost_origin?: RepostOriginPost | null;
   repost_origin_missing?: boolean;
 }
 
-export interface RepostChainAuthor {
+export interface MentionUser {
   user_id: number;
   username: string;
 }
+
+export interface RepostChainAuthor extends MentionUser {}
 
 export interface RepostOriginPost {
   id: number;

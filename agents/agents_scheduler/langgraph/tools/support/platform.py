@@ -253,6 +253,34 @@ def _expand_content_mentions_by_relation(
         return content
 
 
+def _format_content_mentions_for_llm(
+    content: str,
+    mention_users: List[Dict[str, Any]],
+    current_user_id: Optional[int],
+) -> str:
+    """把正文中的提及格式化为 Agent 可直接引用的用户 ID 形式。"""
+    if not content:
+        return content
+
+    mention_by_name = {
+        str(item.get("username")): item.get("user_id")
+        for item in (mention_users or [])
+        if item.get("username")
+    }
+    if not mention_by_name:
+        return _expand_content_mentions_by_relation(content, current_user_id)
+
+    def replace(match: re.Match[str]) -> str:
+        raw_username = match.group(1)
+        user_id = mention_by_name.get(raw_username)
+        if not user_id:
+            return _expand_content_mentions_by_relation(match.group(0), current_user_id)
+        display_username = _expand_username_by_relation(raw_username, user_id, current_user_id)
+        return f"@{display_username}(ID: {user_id})"
+
+    return re.sub(r"@([a-zA-Z0-9_一-龥]+)", replace, content)
+
+
 def _format_repost_chain_for_llm(
     repost_chain: str,
     repost_chain_authors: List[Dict[str, Any]],
@@ -293,7 +321,7 @@ def _format_repost_chain_for_llm(
         user_id = author_id_map.get(raw_username)
         if user_id:
             formatted_segments.append(
-                f"@{display_username}[作者ID {user_id}]: {display_body}"
+                f"@{display_username}(ID: {user_id}): {display_body}"
             )
         else:
             formatted_segments.append(f"@{display_username}: {display_body}")
@@ -379,9 +407,10 @@ def _standardize_post(
     post_type = post_data.get("type", "post") or "post"
     raw_repost_chain = post_data.get("repost_chain")
     repost_chain_authors = post_data.get("repost_chain_authors", [])
+    mention_users = post_data.get("mention_users") or repost_chain_authors
 
     author_username = _expand_username_by_relation(raw_username, author_id, current_user_id)
-    content = _expand_content_mentions_by_relation(raw_content, current_user_id)
+    content = _format_content_mentions_for_llm(raw_content, mention_users, current_user_id)
     if post_type == "article" and not raw_repost_chain:
         content = _format_article_content_for_llm(
             post_data.get("id"),
@@ -425,6 +454,7 @@ def _standardize_post(
         "repost_root_post_id": post_data.get("repost_root_post_id"),
         "repost_chain": formatted_repost_chain or raw_repost_chain,
         "repost_chain_authors": repost_chain_authors,
+        "mention_users": mention_users,
         "repost_origin_missing": post_data.get("repost_origin_missing", False),
     }
 
@@ -492,9 +522,10 @@ def _standardize_comment(
     author_id = comment_data.get("owner_id") or owner.get("id")
     raw_username = owner.get("username", "")
     raw_content = comment_data.get("content", "")
+    mention_users = comment_data.get("mention_users", [])
 
     author_username = _expand_username_by_relation(raw_username, author_id, current_user_id)
-    content = _expand_content_mentions_by_relation(raw_content, current_user_id)
+    content = _format_content_mentions_for_llm(raw_content, mention_users, current_user_id)
 
     return {
         "id": comment_data.get("id"),
@@ -514,6 +545,7 @@ def _standardize_comment(
         "like_count": comment_data.get("like_count", 0),
         "reply_count": comment_data.get("reply_count", 0),
         "is_liked": comment_data.get("is_liked", False),
+        "mention_users": mention_users,
         "children": _standardize_comments_list(
             comment_data.get("children", []),
             current_user_id,

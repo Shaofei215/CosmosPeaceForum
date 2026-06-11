@@ -11,7 +11,7 @@ from typing import Tuple, List, Optional
 from social_platform.app.models.comment import Comment, CommentLike
 from social_platform.app.models.post import Post
 from social_platform.app.models.user import User
-from social_platform.app.services import heat_service, notification_service, repost_service
+from social_platform.app.services import heat_service, mention_service, notification_service, repost_service
 
 MIN_COMMENT_POOL_SIZE = 40
 COMMENT_POOL_PAGE_MULTIPLIER = 4
@@ -327,6 +327,7 @@ def create_comment(
         # 4. 提交事务
         db.commit()
         db.refresh(new_comment)
+        mention_service.attach_mention_users(db, new_comment)
         
         return new_comment
     
@@ -527,6 +528,7 @@ def get_comment_tree(
     
     # 获取所有一级评论的 ID
     root_comment_ids = [c.id for c in root_comments]
+    mention_service.attach_mention_users_for_items(db, root_comments)
 
     for root_comment in root_comments:
         set_committed_value(root_comment, "reply_count", root_comment.reply_count or 0)
@@ -591,6 +593,8 @@ def get_comment_replies(
     if not replies:
         return ([], total)
 
+    mention_service.attach_mention_users_for_items(db, replies)
+
     for reply in replies:
         _set_response_children_empty(reply)
 
@@ -638,6 +642,8 @@ def get_comment_by_id(
     ).filter(Comment.id == comment_id).first()
     if not comment:
         return None
+
+    mention_service.attach_mention_users(db, comment)
 
     if comment.parent_id is not None and comment.root_comment_id is None:
         set_committed_value(

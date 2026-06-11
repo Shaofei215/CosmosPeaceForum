@@ -207,6 +207,10 @@ def _serialize_post(db: Session, post, current_user_id: int):
             object_session(post),
             post.content,
         ) if object_session(post) else [],
+        "mention_users": repost_service.build_mention_users(
+            object_session(post),
+            post.content,
+        ) if object_session(post) else [],
         "repost_origin": _serialize_post(db, post.repost_root_post, current_user_id)
         if getattr(post, "repost_root_post_id", None) and getattr(post, "repost_root_post", None)
         else None,
@@ -231,6 +235,7 @@ def _serialize_comment(db: Session, comment, current_user_id: int):
         "like_count": comment.like_count,
         "reply_count": comment.reply_count,
         "is_liked": is_liked,
+        "mention_users": repost_service.build_mention_users(db, comment.content),
     }
 
 

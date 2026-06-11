@@ -54,6 +54,7 @@ def create_post(
     heat_service.refresh_post_heat_score(db, db_post)
     db.commit()
     db.refresh(db_post)
+    db_post.mention_users = repost_service.build_mention_users(db, db_post.content)
     search_service.index_post(db_post)
     return db_post
 
@@ -156,6 +157,7 @@ def get_post(
         repost_root_post_id=post.repost_root_post_id,
         repost_chain=post.repost_chain,
         repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
+        mention_users=repost_service.build_mention_users(db, post.content),
         repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         repost_origin_missing=repost_service.is_repost_origin_missing(post),
         is_liked_by_current_user=is_liked
@@ -199,6 +201,7 @@ def update_post(
 
     db.commit()
     db.refresh(post)
+    repost_service.attach_repost_metadata(db, post)
     search_service.index_post(post)
     return post
 

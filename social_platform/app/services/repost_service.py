@@ -5,8 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.models.comment import Comment
 from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
-from social_platform.app.services import heat_service, notification_service
+from social_platform.app.services import heat_service, mention_service, notification_service
 
 
 class RepostSourceNotFoundError(Exception):
@@ -82,6 +81,7 @@ def create_repost(
 
     repost.repost_origin = root_post
     repost.repost_chain_authors = build_repost_chain_authors(db, repost.content)
+    repost.mention_users = build_mention_users(db, repost.content)
     return repost
 
 
@@ -89,6 +89,7 @@ def attach_repost_metadata(db: Session, post: Post) -> Post:
     post.repost_origin = post.repost_root_post if post.repost_root_post_id else None
     post.repost_origin_missing = _is_repost_origin_missing(post)
     post.repost_chain_authors = build_repost_chain_authors(db, post.content)
+    post.mention_users = build_mention_users(db, post.content)
     return post
 
 
@@ -111,35 +112,27 @@ def _is_repost_origin_missing(post: Post) -> bool:
 
 
 def build_repost_chain_authors(db: Session, content: str) -> list[dict[str, object]]:
-    return build_repost_chain_authors_for_contents(db, [content])[0]
+    return build_mention_users(db, content)
 
 
 def build_repost_chain_authors_for_contents(
     db: Session,
     contents: list[str],
 ) -> list[list[dict[str, object]]]:
-    usernames_by_content = [
-        list(dict.fromkeys(re.findall(r"@([^:\s/]+)", content or "")))
-        for content in contents
-    ]
-    all_usernames = list(dict.fromkeys(
-        username
-        for usernames in usernames_by_content
-        for username in usernames
-    ))
-    if not all_usernames:
-        return [[] for _ in contents]
+    return build_mention_users_for_contents(db, contents)
 
-    users = db.query(User).filter(User.username.in_(all_usernames)).all()
-    user_by_name = {user.username: user for user in users}
-    return [
-        [
-            {"user_id": user_by_name[username].id, "username": username}
-            for username in usernames
-            if username in user_by_name
-        ]
-        for usernames in usernames_by_content
-    ]
+
+def build_mention_users(db: Session, content: str) -> list[dict[str, object]]:
+    """构建正文提及用户列表，供旧转发链入口和新提及入口复用。"""
+    return mention_service.build_mention_users(db, content)
+
+
+def build_mention_users_for_contents(
+    db: Session,
+    contents: list[str],
+) -> list[list[dict[str, object]]]:
+    """批量构建正文提及用户列表，减少信息流组装时的用户表查询次数。"""
+    return mention_service.build_mention_users_for_contents(db, contents)
 
 
 def _build_post_repost(
