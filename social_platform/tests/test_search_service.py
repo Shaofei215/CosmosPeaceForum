@@ -1,5 +1,5 @@
-from social_platform.app.models.post import Post
-from social_platform.app.services.search_service import _rank_content_search_posts
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.search.application import _rank_content_search_posts
 
 
 def _post(post_id: int, title: str, content: str, heat_score: float) -> Post:

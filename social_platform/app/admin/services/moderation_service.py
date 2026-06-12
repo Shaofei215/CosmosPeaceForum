@@ -20,13 +20,15 @@ from social_platform.app.admin.schemas import (
 )
 from social_platform.app.admin.services.announcement_service import create_user_moderation_notice
 from social_platform.app.admin.services.log_service import create_operation_log
-from social_platform.app.models.comment import Comment, CommentLike
+from social_platform.app.domains.comment.models import Comment, CommentLike
 from social_platform.app.models.content_report import ContentReport
-from social_platform.app.models.follow import Follow
-from social_platform.app.models.like import Like
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
-from social_platform.app.services import heat_service, notification_service, search_service
+from social_platform.app.domains.follow.models import Follow
+from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.heat import application as heat_service
+from social_platform.app.domains.notification import application as notification_service
+from social_platform.app.domains.search import application as search_service
 
 
 ContentType = Literal["post", "comment"]

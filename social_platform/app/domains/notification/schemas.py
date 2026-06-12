@@ -3,10 +3,11 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from social_platform.app.schemas.user import UserResponse
+from social_platform.app.domains.user.schemas import UserResponse
 
 
 class NotificationResponse(BaseModel):
+    """通知领域 API schema的响应模型，供 API adapter 做参数校验和响应序列化。"""
     id: int
     type: str
     resource_type: str
@@ -20,10 +21,12 @@ class NotificationResponse(BaseModel):
     sender: Optional[UserResponse] = None
 
     class Config:
+        """通知领域 API schema的Pydantic ORM 映射配置，供 API adapter 做参数校验和响应序列化。"""
         from_attributes = True
 
 
 class NotificationListResponse(BaseModel):
+    """通知领域 API schema的响应模型，供 API adapter 做参数校验和响应序列化。"""
     items: List[NotificationResponse]
     total: int
     unread_count: int
@@ -32,10 +35,12 @@ class NotificationListResponse(BaseModel):
 
 
 class NotificationUnreadCountResponse(BaseModel):
+    """通知领域 API schema的响应模型，供 API adapter 做参数校验和响应序列化。"""
     unread_count: int
 
 
 class NotificationSummaryResponse(BaseModel):
+    """通知领域 API schema的响应模型，供 API adapter 做参数校验和响应序列化。"""
     following_count: int
     followers_count: int
     unread_count: int

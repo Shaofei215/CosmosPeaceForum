@@ -4,11 +4,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from social_platform.app.db.session import Base
-from social_platform.app import models  # noqa: F401
-from social_platform.app.models.comment import Comment
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
-from social_platform.app.services import comment_service
+from social_platform.app.domains import registry as domain_models  # noqa: F401
+from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.comment import application as comment_service
 
 
 @pytest.fixture

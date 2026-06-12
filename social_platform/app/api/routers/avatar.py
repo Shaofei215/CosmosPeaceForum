@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from social_platform.app.api.deps import get_db, get_current_user
-from social_platform.app.models.user import User
-from social_platform.app.schemas.user import UserResponse
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.user.schemas import UserResponse
 from social_platform.app.services.avatar_service import (
     validate_avatar_file,
     save_avatar_file,

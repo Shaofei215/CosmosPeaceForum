@@ -3,9 +3,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from social_platform.app.db.session import Base
-from social_platform.app.models import Comment, Notification, Post, User
+from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.notification.models import Notification
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
 from social_platform.app.admin.services.announcement_service import create_system_notifications
-from social_platform.app.services import notification_service
+from social_platform.app.domains.notification import application as notification_service
 
 
 @pytest.fixture()

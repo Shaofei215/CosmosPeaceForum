@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from social_platform.app.api.deps import get_db, get_current_user
-from social_platform.app.models.user import User
-from social_platform.app.schemas.user import UserResponse, UserUpdate, CompleteProfileRequest
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.user.schemas import UserResponse, UserUpdate, CompleteProfileRequest
 from social_platform.app.domains.user import application as user_application
 
 router = APIRouter()

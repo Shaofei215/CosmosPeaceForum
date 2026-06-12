@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from social_platform.app.api.deps import get_db, get_current_user
-from social_platform.app.models.user import User
-from social_platform.app.schemas.like import LikeToggleResponse
-from social_platform.app.services import like_service
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.reaction.schemas import LikeToggleResponse
+from social_platform.app.domains.reaction import application as like_service
 
 router = APIRouter()
 

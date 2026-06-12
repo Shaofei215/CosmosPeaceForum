@@ -7,18 +7,18 @@ from sqlalchemy.orm import Session, object_session
 
 from social_platform.app.api.deps import get_access_payload, get_db, get_current_user_including_banned
 from social_platform.app.db.session import SessionLocal
-from social_platform.app.models.comment import CommentLike
-from social_platform.app.models.like import Like
-from social_platform.app.models.user import User
-from social_platform.app.schemas.notification import (
+from social_platform.app.domains.comment.models import CommentLike
+from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.notification.schemas import (
     NotificationListResponse,
     NotificationResponse,
     NotificationSummaryResponse,
     NotificationUnreadCountResponse,
 )
-from social_platform.app.services import notification_service
+from social_platform.app.domains.notification import application as notification_service
 from social_platform.app.services import repost_service
-from social_platform.app.services.notification_events import (
+from social_platform.app.domains.notification.stream import (
     get_notification_version,
     wait_for_notification_update,
 )

@@ -154,3 +154,7 @@ class CommentLike(Base):
     
     # 关联关系：被点赞的评论
     comment = relationship("Comment", back_populates="likes")
+
+# 导入关系依赖模型，确保单独导入 Comment 时 SQLAlchemy 字符串关系可解析。
+from social_platform.app.domains.post import models as _post_models  # noqa: E402,F401
+from social_platform.app.domains.user import models as _user_models  # noqa: E402,F401

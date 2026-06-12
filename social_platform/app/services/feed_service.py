@@ -5,10 +5,10 @@ from typing import List, Optional, Dict
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
-from social_platform.app.models.follow import Follow
-from social_platform.app.models.post import Post
-from social_platform.app.models.like import Like
-from social_platform.app.models.user import User
+from social_platform.app.domains.follow.models import Follow
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.user.models import User
 from social_platform.app.schemas.feed import PostFeedItem
 from social_platform.app.schemas.response import PaginationInfo, APIResponse
 from social_platform.app.services import repost_service

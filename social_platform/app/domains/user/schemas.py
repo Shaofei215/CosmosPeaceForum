@@ -88,4 +88,5 @@ class UserResponse(UserBase):
 
     # 配置：允许从 ORM 模型读取数据
     class Config:
+        """用户领域 API schema的Pydantic ORM 映射配置，供 API adapter 做参数校验和响应序列化。"""
         from_attributes = True

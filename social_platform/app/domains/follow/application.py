@@ -5,9 +5,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from typing import Tuple, List, Dict, Optional
 
-from social_platform.app.models.follow import Follow
-from social_platform.app.models.user import User
-from social_platform.app.domains.events import UserFollowed, UserUnfollowed
+from social_platform.app.domains.follow.models import Follow
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.follow.events import FollowChanged
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.shared.unit_of_work import commit_session, rollback_session
 
@@ -21,6 +21,7 @@ class SelfFollowError(Exception):
     """
 
     def __init__(self):
+        """初始化关注领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         super().__init__("不能关注自己")
 
 
@@ -35,6 +36,7 @@ class UserNotFoundError(Exception):
     """
 
     def __init__(self, user_id: int):
+        """初始化关注领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         self.user_id = user_id
         super().__init__(f"用户不存在 (ID: {user_id})")
 
@@ -48,6 +50,7 @@ class AlreadyFollowingError(Exception):
     """
 
     def __init__(self, follower_id: int, following_id: int):
+        """初始化关注领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         self.follower_id = follower_id
         self.following_id = following_id
         super().__init__(f"已关注此用户")
@@ -126,13 +129,29 @@ def toggle_follow(
             # 关注操作：关注者的关注数 +1，被关注者的粉丝数 +1
             follower.following_count += 1
             following.followers_count += 1
-            publish_domain_event(db, UserFollowed(follower_id=follower_id, following_id=following_id))
+            publish_domain_event(
+                db,
+                FollowChanged(
+                    follower_id=follower_id,
+                    following_id=following_id,
+                    previous_state=False,
+                    current_state=True,
+                ),
+            )
         else:
             # 取消关注操作：关注者的关注数 -1，被关注者的粉丝数 -1
             # 使用 max 确保不会减到负数
             follower.following_count = max(0, follower.following_count - 1)
             following.followers_count = max(0, following.followers_count - 1)
-            publish_domain_event(db, UserUnfollowed(follower_id=follower_id, following_id=following_id))
+            publish_domain_event(
+                db,
+                FollowChanged(
+                    follower_id=follower_id,
+                    following_id=following_id,
+                    previous_state=True,
+                    current_state=False,
+                ),
+            )
 
         # 提交事务
         commit_session(db)

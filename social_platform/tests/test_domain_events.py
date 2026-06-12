@@ -7,18 +7,24 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from social_platform.app import models  # noqa: F401
+from social_platform.app.domains import registry as domain_models  # noqa: F401
 from social_platform.app.admin.models import admin_user  # noqa: F401
 from social_platform.app.db.session import Base
-from social_platform.app.domains.events import PostCreated
+from social_platform.app.domains.post.events import PostCreated
 from social_platform.app.domains.search import subscribers as search_subscribers
-from social_platform.app.models.comment import Comment
-from social_platform.app.models.follow import Follow
-from social_platform.app.models.notification import Notification
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
-from social_platform.app.services import comment_service, follow_service, like_service, repost_service
-from social_platform.app.shared.events import DomainEvent, EventBus
+from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.follow.models import Follow
+from social_platform.app.domains.notification.models import Notification
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.comment import application as comment_service
+from social_platform.app.domains.follow import application as follow_service
+from social_platform.app.domains.reaction import application as like_service
+from social_platform.app.domains.reaction.events import LikeChanged
+from social_platform.app.domains.follow.events import FollowChanged
+from social_platform.app.shared.events import subscribe_domain_event
+from social_platform.app.services import repost_service
+from social_platform.app.shared.events import DomainEvent, EventBus, domain_event_bus
 
 
 @dataclass(frozen=True)
@@ -176,6 +182,38 @@ def test_follow_notification_only_created_on_follow(db_session):
     assert db_session.query(Notification).count() == 1
     assert db_session.query(Follow).count() == 0
 
+
+
+def test_like_changed_event_carries_previous_and_current_state(db_session):
+    captured: list[LikeChanged] = []
+    domain_event_bus.subscribe(LikeChanged, lambda _, event: captured.append(event))
+    _, actor, post = _seed_users_and_post(db_session)
+
+    like_service.toggle_like(post.id, actor.id, db_session)
+    like_service.toggle_like(post.id, actor.id, db_session)
+
+    assert [(event.previous_state, event.current_state) for event in captured[-2:]] == [
+        (False, True),
+        (True, False),
+    ]
+    assert captured[-1].target_type == "post"
+
+
+def test_follow_changed_event_carries_previous_and_current_state(db_session):
+    captured: list[FollowChanged] = []
+    domain_event_bus.subscribe(FollowChanged, lambda _, event: captured.append(event))
+    follower = User(username="event_follower")
+    following = User(username="event_following")
+    db_session.add_all([follower, following])
+    db_session.commit()
+
+    follow_service.toggle_follow(db_session, follower.id, following.id)
+    follow_service.toggle_follow(db_session, follower.id, following.id)
+
+    assert [(event.previous_state, event.current_state) for event in captured[-2:]] == [
+        (False, True),
+        (True, False),
+    ]
 
 def test_repost_notification_is_event_driven(db_session):
     author, actor, post = _seed_users_and_post(db_session)

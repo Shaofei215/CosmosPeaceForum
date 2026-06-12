@@ -9,10 +9,10 @@ from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.services import auth_service, log_service, moderation_service
 from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_CONTENT
 from social_platform.app.db.session import SessionLocal
-from social_platform.app.models.comment import Comment
+from social_platform.app.domains.comment.models import Comment
 from social_platform.app.models.content_moderation_llm import ContentModerationLLMSettings
 from social_platform.app.models.content_report import ContentReport
-from social_platform.app.models.post import Post
+from social_platform.app.domains.post.models import Post
 
 logger = logging.getLogger(__name__)
 

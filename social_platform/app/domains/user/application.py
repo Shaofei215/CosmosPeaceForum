@@ -6,10 +6,10 @@ import re
 
 from sqlalchemy.orm import Session
 
-from social_platform.app.domains.events import UserDeleted, UserUpdated
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
-from social_platform.app.schemas.user import CompleteProfileRequest, UserUpdate
+from social_platform.app.domains.user.events import UserDeleted, UserUpdated
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.user.schemas import CompleteProfileRequest, UserUpdate
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.shared.unit_of_work import commit_session
 
@@ -19,6 +19,7 @@ class UserNotFoundError(Exception):
     """用户不存在异常。"""
 
     def __init__(self) -> None:
+        """初始化用户领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         super().__init__("用户不存在")
 
 
@@ -26,6 +27,7 @@ class UserPermissionError(Exception):
     """用户权限异常。"""
 
     def __init__(self) -> None:
+        """初始化用户领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         super().__init__("无权修改此用户")
 
 
@@ -33,6 +35,7 @@ class UsernameValidationError(Exception):
     """用户名校验异常。"""
 
     def __init__(self, message: str) -> None:
+        """初始化用户领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         super().__init__(message)
 
 
@@ -40,6 +43,7 @@ class ProfileAlreadyCompletedError(Exception):
     """资料已经完善异常。"""
 
     def __init__(self) -> None:
+        """初始化用户领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         super().__init__("用户名已设置，无法再次修改")
 
 

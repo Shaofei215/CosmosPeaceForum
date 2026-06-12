@@ -9,18 +9,12 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from social_platform.app.db.session import SessionLocal
-from social_platform.app.domains.events import (
-    PostCreated,
-    PostDeleted,
-    PostUpdated,
-    RepostCreated,
-    UserDeleted,
-    UserUpdated,
-)
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
+from social_platform.app.domains.post.events import PostCreated, PostDeleted, PostUpdated, RepostCreated
+from social_platform.app.domains.user.events import UserDeleted, UserUpdated
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
 from social_platform.app.shared.events import subscribe_domain_event
-from social_platform.app.services import search_service
+from social_platform.app.domains.search import application as search_service
 
 
 def _index_post_by_id(post_id: int) -> None:

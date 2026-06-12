@@ -35,4 +35,5 @@ def tokenize_username(username: str) -> List[str]:
 
 
 def tokens_to_tantivy_text(tokens: List[str]) -> str:
+    """将分词结果拼接为 Tantivy 查询文本。"""
     return " ".join(tokens)

@@ -69,3 +69,8 @@ class Post(Base):
     # 关联关系：帖子的评论列表
     # cascade="all, delete-orphan" 表示删除帖子时自动删除其所有评论
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
+
+# 导入关系依赖模型，确保单独导入 Post 时 SQLAlchemy 字符串关系可解析。
+from social_platform.app.domains.comment import models as _comment_models  # noqa: E402,F401
+from social_platform.app.domains.reaction import models as _reaction_models  # noqa: E402,F401
+from social_platform.app.domains.user import models as _user_models  # noqa: E402,F401

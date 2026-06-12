@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from social_platform.app.schemas.post import MentionUser, RepostChainAuthor, RepostOriginPost
+from social_platform.app.domains.post.schemas import MentionUser, RepostChainAuthor, RepostOriginPost
 
 
 class PostFeedItem(BaseModel):

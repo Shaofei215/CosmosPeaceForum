@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from social_platform.app.api.deps import get_current_user, get_db
-from social_platform.app.models.user import User
+from social_platform.app.domains.user.models import User
 from social_platform.app.schemas.report import ContentReportCreate, ContentReportResponse
 from social_platform.app.services import content_moderation_llm_service, report_service
 

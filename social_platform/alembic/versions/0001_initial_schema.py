@@ -8,6 +8,7 @@ Create Date: 2026-05-22
 from alembic import op
 
 from social_platform.app.db.session import Base
+from social_platform.app.domains import registry as domain_models  # noqa: F401
 from social_platform.app import models  # noqa: F401
 from social_platform.app.admin import models as admin_models  # noqa: F401
 

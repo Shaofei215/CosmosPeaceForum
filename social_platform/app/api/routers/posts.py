@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from social_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
-from social_platform.app.models.like import Like
-from social_platform.app.schemas.post import (
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.post.schemas import (
     PostCreate,
     PostResponse,
     PostUpdate,

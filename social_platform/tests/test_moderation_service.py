@@ -18,7 +18,11 @@ from social_platform.app.admin.services.moderation_service import (
     update_user_moderation,
 )
 from social_platform.app.db.session import Base
-from social_platform.app.models import Comment, ContentReport, Notification, Post, User
+from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.notification.models import Notification
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.models.content_report import ContentReport
 
 
 @pytest.fixture()

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from social_platform.app.core.security import decode_access_token
 from social_platform.app.db.session import SessionLocal
-from social_platform.app.models.user import User
+from social_platform.app.domains.user.models import User
 from social_platform.app.services import session_service
 from social_platform.app.admin.services.moderation_guard import ensure_account_available
 

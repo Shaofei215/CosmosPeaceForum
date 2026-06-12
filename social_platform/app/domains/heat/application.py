@@ -5,19 +5,21 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from social_platform.app.db.session import SessionLocal
-from social_platform.app.models.comment import Comment
-from social_platform.app.models.post import Post
+from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.post.models import Post
 
 logger = logging.getLogger(__name__)
 
 
 def _age_hours(created_at: Optional[datetime], now: datetime) -> float:
+    """计算对象创建至今的小时数，供热度衰减公式使用。"""
     if created_at is None:
         return 0.0
     return max((now - created_at).total_seconds() / 3600, 0)
 
 
 def calculate_post_heat_score(post: Post, now: Optional[datetime] = None) -> float:
+    """计算帖子热度分数，综合互动计数和时间衰减。"""
     now = now or datetime.utcnow()
     age_hours = _age_hours(post.created_at, now)
     # 帖子热度只保存可解释的稳定质量分；请求层再做 Top-N 候选重排。
@@ -32,6 +34,7 @@ def calculate_post_heat_score(post: Post, now: Optional[datetime] = None) -> flo
 
 
 def calculate_comment_heat_score(comment: Comment, now: Optional[datetime] = None) -> float:
+    """计算评论热度分数，综合点赞、回复和时间衰减。"""
     now = now or datetime.utcnow()
     age_hours = _age_hours(comment.created_at, now)
     base_score = (comment.like_count or 0) * 1 + (comment.reply_count or 0) * 3

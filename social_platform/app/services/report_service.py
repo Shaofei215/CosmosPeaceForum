@@ -3,10 +3,10 @@ from typing import Literal
 
 from sqlalchemy.orm import Session
 
-from social_platform.app.models.comment import Comment
+from social_platform.app.domains.comment.models import Comment
 from social_platform.app.models.content_report import ContentReport
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
 
 
 ReportTargetType = Literal["post", "comment"]

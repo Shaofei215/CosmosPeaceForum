@@ -3,12 +3,12 @@ from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session, joinedload
 
-from social_platform.app.models.comment import Comment
-from social_platform.app.models.post import Post
-from social_platform.app.domains.events import RepostCreated
+from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.post.events import RepostCreated
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.shared.unit_of_work import commit_session
-from social_platform.app.services import heat_service, mention_service
+from social_platform.app.services import mention_service
 
 
 
@@ -60,14 +60,11 @@ def create_repost(
     )
     db.add(repost)
     db.flush()
-    heat_service.refresh_post_heat_score(db, repost)
 
     if source_post is not None:
         source_post.repost_count = (source_post.repost_count or 0) + 1
-        heat_service.refresh_post_heat_score(db, source_post)
     if root_post.id != getattr(source_post, "id", None):
         root_post.repost_count = (root_post.repost_count or 0) + 1
-        heat_service.refresh_post_heat_score(db, root_post)
 
     publish_domain_event(
         db,

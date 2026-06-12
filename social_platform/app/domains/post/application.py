@@ -9,13 +9,13 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
-from social_platform.app.domains.events import PostCreated, PostDeleted, PostUpdated
-from social_platform.app.models.comment import Comment
-from social_platform.app.models.like import Like
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
-from social_platform.app.schemas.post import PostCreate, PostUpdate, RepostCreate
-from social_platform.app.services import heat_service, repost_service
+from social_platform.app.domains.post.events import PostCreated, PostDeleted, PostUpdated
+from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.post.schemas import PostCreate, PostUpdate, RepostCreate
+from social_platform.app.services import repost_service
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.shared.unit_of_work import commit_session
 
@@ -25,6 +25,7 @@ class ArticleTitleRequiredError(Exception):
     """文章标题缺失异常。"""
 
     def __init__(self) -> None:
+        """初始化帖子领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         super().__init__("Article title is required")
 
 
@@ -36,6 +37,7 @@ class PostNotFoundError(Exception):
     """
 
     def __init__(self, post_id: int) -> None:
+        """初始化帖子领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         self.post_id = post_id
         super().__init__("帖子不存在")
 
@@ -44,6 +46,7 @@ class PostPermissionError(Exception):
     """帖子权限异常。"""
 
     def __init__(self, message: str) -> None:
+        """初始化帖子领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
         super().__init__(message)
 
 
@@ -74,7 +77,6 @@ def create_post(db: Session, current_user: User, post_data: PostCreate) -> Post:
     )
     db.add(post)
     db.flush()
-    heat_service.refresh_post_heat_score(db, post)
     publish_domain_event(db, PostCreated(post_id=post.id, author_id=current_user.id))
     commit_session(db)
     db.refresh(post)

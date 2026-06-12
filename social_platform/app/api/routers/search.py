@@ -4,12 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from social_platform.app.api.deps import get_current_user_optional, get_db
-from social_platform.app.models.user import User
+from social_platform.app.domains.user.models import User
 from social_platform.app.schemas.feed import PostFeedItem
 from social_platform.app.schemas.response import APIResponse
-from social_platform.app.schemas.search import SearchType
-from social_platform.app.schemas.user import UserResponse
-from social_platform.app.services import search_service
+from social_platform.app.domains.search.schemas import SearchType
+from social_platform.app.domains.user.schemas import UserResponse
+from social_platform.app.domains.search import application as search_service
 
 
 router = APIRouter()

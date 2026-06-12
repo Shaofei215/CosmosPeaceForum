@@ -77,6 +77,7 @@ class FollowUserItem(BaseModel):
     created_at: datetime = Field(..., description="关注时间")
 
     class Config:
+        """关注领域 API schema的Pydantic ORM 映射配置，供 API adapter 做参数校验和响应序列化。"""
         from_attributes = True
 
 

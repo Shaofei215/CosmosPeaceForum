@@ -5,12 +5,12 @@ from sqlalchemy import func
 from sqlalchemy import event
 from sqlalchemy.orm import Session, joinedload
 
-from social_platform.app.models.comment import Comment
-from social_platform.app.models.follow import Follow
-from social_platform.app.models.notification import Notification
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
-from social_platform.app.services.notification_events import publish_notification_update
+from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.follow.models import Follow
+from social_platform.app.domains.notification.models import Notification
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.notification.stream import publish_notification_update
 
 
 LIKE_TYPES = {"post_like", "comment_like"}
@@ -22,6 +22,7 @@ _PENDING_NOTIFICATION_RECIPIENTS_KEY = "pending_notification_recipient_ids"
 
 @event.listens_for(Session, "after_commit")
 def _publish_pending_notification_updates(session: Session) -> None:
+    """事务提交后发布通知版本更新，供 SSE 客户端刷新未读状态。"""
     recipient_ids = session.info.pop(_PENDING_NOTIFICATION_RECIPIENTS_KEY, set())
     for recipient_id in recipient_ids:
         publish_notification_update(recipient_id)
@@ -29,6 +30,7 @@ def _publish_pending_notification_updates(session: Session) -> None:
 
 @event.listens_for(Session, "after_rollback")
 def _clear_pending_notification_updates(session: Session) -> None:
+    """事务回滚时清理待发布通知状态，避免失败事务产生外部副作用。"""
     session.info.pop(_PENDING_NOTIFICATION_RECIPIENTS_KEY, None)
 
 
@@ -44,6 +46,7 @@ def create_notification(
     source_content: Optional[str] = None,
     truncate_source_content: bool = True,
 ) -> Optional[Notification]:
+    """创建通知记录并登记提交后的实时推送更新。"""
     if not recipient_id or recipient_id == sender_id:
         return None
 
@@ -65,6 +68,7 @@ def create_notification(
 
 
 def create_post_like_notification(db: Session, post: Post, sender_id: int) -> None:
+    """为帖子点赞事件创建通知，由 notification 订阅 reaction 事件后调用。"""
     create_notification(
         db=db,
         recipient_id=post.author_id,
@@ -78,6 +82,7 @@ def create_post_like_notification(db: Session, post: Post, sender_id: int) -> No
 
 
 def create_comment_like_notification(db: Session, comment: Comment, sender_id: int) -> None:
+    """为评论点赞事件创建通知，由 notification 订阅 reaction 事件后调用。"""
     create_notification(
         db=db,
         recipient_id=comment.owner_id,
@@ -98,6 +103,7 @@ def create_comment_notifications(
     sender_id: int,
     parent_comment: Optional[Comment] = None,
 ) -> None:
+    """为评论或回复事件创建对应通知，保持通知生成逻辑归属通知领域。"""
     if parent_comment is not None:
         create_notification(
             db=db,
@@ -126,6 +132,7 @@ def create_comment_notifications(
 
 
 def create_follow_notification(db: Session, follower_id: int, following_id: int) -> None:
+    """为关注状态开启事件创建通知，由 notification 订阅 follow 事件后调用。"""
     create_notification(
         db=db,
         recipient_id=following_id,
@@ -145,6 +152,7 @@ def create_repost_notifications(
     source_comment: Optional[Comment] = None,
     source_content: Optional[str] = None,
 ) -> None:
+    """为转发事件创建通知，并去重原作者、源作者等可能重复的接收者。"""
     recipients = []
     if source_comment is not None:
         recipients.append(source_comment.owner_id)
@@ -183,6 +191,7 @@ def get_notifications(
     notification_type: Optional[str] = None,
     mark_read: bool = True,
 ) -> Tuple[List[Notification], int, int]:
+    """分页查询用户通知，并按需要将已拉取通知标记为已读。"""
     query = db.query(Notification).filter(Notification.recipient_id == user_id)
     if notification_type:
         query = query.filter(Notification.type == notification_type)
@@ -205,6 +214,7 @@ def get_notifications(
 
 
 def get_notification(db: Session, user_id: int, notification_id: int) -> Optional[Notification]:
+    """按用户和通知 ID 查询单条通知，防止跨用户读取。"""
     return db.query(Notification).options(joinedload(Notification.sender)).filter(
         Notification.id == notification_id,
         Notification.recipient_id == user_id,
@@ -212,6 +222,7 @@ def get_notification(db: Session, user_id: int, notification_id: int) -> Optiona
 
 
 def get_unread_count(db: Session, user_id: int) -> int:
+    """统计用户未读通知数量，供导航徽标和 summary 接口使用。"""
     return db.query(func.count(Notification.id)).filter(
         Notification.recipient_id == user_id,
         Notification.is_read == 0,
@@ -219,6 +230,7 @@ def get_unread_count(db: Session, user_id: int) -> int:
 
 
 def mark_all_as_read(db: Session, user_id: int) -> int:
+    """将用户未读通知批量标记为已读，并发布实时更新信号。"""
     updated = db.query(Notification).filter(
         Notification.recipient_id == user_id,
         Notification.is_read == 0,
@@ -230,6 +242,7 @@ def mark_all_as_read(db: Session, user_id: int) -> int:
 
 
 def get_summary(db: Session, user_id: int) -> Dict[str, int]:
+    """汇总关注计数和未读通知计数，供通知中心头部使用。"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return {"following_count": 0, "followers_count": 0, "unread_count": 0}
@@ -242,6 +255,7 @@ def get_summary(db: Session, user_id: int) -> Dict[str, int]:
 
 
 def get_origin(db: Session, notification: Notification) -> Dict[str, object]:
+    """解析通知来源对象，供 API 层组装跳转和展示上下文。"""
     if notification.post_id:
         post = db.query(Post).options(
             joinedload(Post.author),
@@ -266,6 +280,7 @@ def get_origin(db: Session, notification: Notification) -> Dict[str, object]:
 
 
 def format_post_source_content(post: Post, max_len: int = 500) -> str:
+    """格式化帖子来源摘要，供通知列表展示被互动内容。"""
     if getattr(post, "type", "post") == "article":
         title = (post.title or "Untitled").strip()
         body = _plain_markdown(post.content)
@@ -274,6 +289,7 @@ def format_post_source_content(post: Post, max_len: int = 500) -> str:
 
 
 def _plain_markdown(content: Optional[str]) -> str:
+    """将 Markdown 内容压缩为纯文本摘要，避免通知中暴露格式标记。"""
     text = content or ""
     text = re.sub(r"```[\s\S]*?```", " ", text)
     text = re.sub(r"`([^`]*)`", r"\1", text)
@@ -285,6 +301,7 @@ def _plain_markdown(content: Optional[str]) -> str:
 
 
 def _truncate(content: Optional[str], max_len: int = 500) -> Optional[str]:
+    """截断通知来源文本，控制存储和响应体大小。"""
     if content is None:
         return None
     return content[:max_len]

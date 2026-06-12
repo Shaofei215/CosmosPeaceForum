@@ -6,15 +6,15 @@ from typing import Optional
 
 from social_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
-from social_platform.app.models.user import User
-from social_platform.app.schemas.comment import (
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.comment.schemas import (
     CommentCreate,
     CommentResponse,
     CommentTreeResponse,
     CommentLikeToggleResponse,
     CommentListResponse
 )
-from social_platform.app.services import comment_service
+from social_platform.app.domains.comment import application as comment_service
 
 router = APIRouter()
 
