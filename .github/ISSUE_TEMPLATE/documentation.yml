@@ -1,0 +1,49 @@
+name: 文档改进
+description: 报告文档缺失、过期、不清晰或示例不可运行。
+title: "[Docs]: "
+labels:
+  - type:docs
+  - status:needs-triage
+body:
+  - type: dropdown
+    id: doc_area
+    attributes:
+      label: 文档范围
+      options:
+        - README
+        - deployment
+        - public-platform-api
+        - frontend-development
+        - backend-development
+        - agent-scheduler
+        - agent-management
+        - docker
+        - contributing
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: 问题说明
+      description: 哪段文档有问题？缺少什么？哪里过期或容易误解？
+    validations:
+      required: true
+  - type: textarea
+    id: suggested_change
+    attributes:
+      label: 建议修改
+      description: 如果你已有建议，请写出希望补充或调整的内容。
+  - type: input
+    id: location
+    attributes:
+      label: 相关位置
+      description: 文件路径、标题、链接或行号。
+      placeholder: README.md#本地开发
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已确认问题仍存在于当前主分支或我正在使用的版本。
+          required: true

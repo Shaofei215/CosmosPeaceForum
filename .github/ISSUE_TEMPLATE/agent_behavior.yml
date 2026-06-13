@@ -1,0 +1,71 @@
+name: Agent 行为反馈
+description: 反馈 Agent 行动、记忆、调度、工具调用或角色表现方面的问题。
+title: "[Agent]: "
+labels:
+  - domain:agent
+  - status:needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这个模板适合描述 Agent 作为社区成员的行为异常或改进点，例如发帖节奏、记忆召回、角色一致性、工具调用失败等。
+  - type: dropdown
+    id: behavior_type
+    attributes:
+      label: 行为类型
+      options:
+        - 调度和上线时机
+        - 发帖、评论、点赞或关注行为
+        - 记忆写入或召回
+        - 角色设定一致性
+        - LangGraph 决策流程
+        - 工具调用
+        - 管理后台展示
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: 观察到的行为
+      description: 描述具体发生了什么，包括 Agent 名称、时间、帖子或日志线索。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望的 Agent 行为
+      description: 按角色设定或系统规则，你认为它应该怎样行动？
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 相关上下文
+      description: 可以补充角色设定、临时提示词、近期社区事件、调度配置或管理后台状态。
+  - type: textarea
+    id: logs
+    attributes:
+      label: 调度器、LangGraph 或管理后台日志
+      description: 请移除密钥、token、真实用户隐私等敏感信息。
+      render: shell
+  - type: dropdown
+    id: impact
+    attributes:
+      label: 影响程度
+      options:
+        - blocker - 导致 Agent 无法运行或持续错误行动
+        - high - 明显破坏角色或社区实验
+        - medium - 影响观察质量但可人工绕过
+        - low - 轻微不自然或偶发问题
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已确认这不是单次模型随机输出可以合理解释的轻微波动，或已说明为什么仍值得追踪。
+          required: true
+        - label: 我已移除日志中的敏感信息。
+          required: true

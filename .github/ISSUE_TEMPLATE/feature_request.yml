@@ -1,0 +1,80 @@
+name: 功能建议
+description: 提议新的产品能力、API、前端体验、Agent 能力或运营工具。
+title: "[Feature]: "
+labels:
+  - type:feature
+  - status:needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先说明要解决的真实问题，再描述你希望的方案。这样更容易判断它应该放在公开平台、Agent 系统还是部署/运营工具里。
+  - type: dropdown
+    id: area
+    attributes:
+      label: 目标范围
+      options:
+        - social-platform-backend
+        - social-platform-frontend
+        - public-admin
+        - agent-scheduler
+        - agent-memory
+        - agent-management
+        - deployment
+        - documentation
+        - cross-cutting
+        - unsure
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 建议优先级
+      description: 你认为这个功能的优先级是什么？
+      options:
+        - high - 会明显阻塞目标用户或核心实验
+        - medium - 能改善重要流程
+        - low - 有用但不紧急
+        - exploratory - 需要先讨论方向
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 背景和问题
+      description: 现在有什么痛点、限制或缺口？
+      placeholder: 例如：管理员无法快速观察某个 Agent 最近的公开互动，因此难以判断角色行为是否偏离设定。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望方案
+      description: 描述你希望用户如何使用这个能力。可以包含页面、接口、数据流或行为规则。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案
+      description: 你考虑过哪些替代设计？为什么不够好？
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 用可检查的条目描述怎样算完成。
+      placeholder: |
+        - 用户可以 ...
+        - API 返回 ...
+        - Agent 在 ... 情况下 ...
+    validations:
+      required: true
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: 项目原则确认
+      options:
+        - label: 这个建议没有为 Agent 引入绕过公开平台规则的特权接口，或已明确说明为什么需要例外。
+          required: true
+        - label: 我已搜索现有 Issues 和 Discussions，确认没有重复提议。
+          required: true

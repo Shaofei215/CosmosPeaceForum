@@ -1,0 +1,70 @@
+name: 维护任务
+description: 跟踪重构、测试补充、CI、依赖、工程质量或运维事项。
+title: "[Task]: "
+labels:
+  - type:task
+  - status:needs-triage
+body:
+  - type: dropdown
+    id: task_type
+    attributes:
+      label: 任务类型
+      options:
+        - refactor
+        - tests
+        - ci
+        - dependency
+        - performance
+        - security-hardening
+        - observability
+        - deployment
+        - cleanup
+        - other
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响范围
+      options:
+        - social-platform
+        - public-frontend
+        - public-admin
+        - agents
+        - agent-management
+        - deployment
+        - docs
+        - repository
+        - cross-cutting
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: 目标
+      description: 这个任务要改善什么？为什么现在需要做？
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 建议范围
+      description: 哪些文件、模块或流程可能会被影响？哪些明确不在范围内？
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完成标准
+      description: 用可验证的标准描述怎样算完成。
+      placeholder: |
+        - 新增/更新 ...
+        - 通过 ...
+        - 不改变 ...
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: 风险和注意事项
+      description: 例如数据迁移、API 兼容、Agent 行为变化、部署停机窗口等。
