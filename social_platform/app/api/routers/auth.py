@@ -18,7 +18,7 @@ from social_platform.app.core.security import (
     verify_password,
     verify_admin_key,
 )
-from social_platform.app.models.user import User
+from social_platform.app.domains.user.models import User
 from social_platform.app.models.email_verification import EmailVerificationCode
 from social_platform.app.models.session import UserSession
 from social_platform.app.schemas.auth import (
@@ -38,7 +38,8 @@ from social_platform.app.schemas.email_verification import (
     PasswordResetConfirmRequest,
 )
 from social_platform.app.services.email_service import email_service
-from social_platform.app.services import search_service, session_service
+from social_platform.app.domains.search import application as search_service
+from social_platform.app.services import session_service
 
 
 router = APIRouter()

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.models.user_moderation import UserModeration
-from social_platform.app.models.user import User
+from social_platform.app.domains.user.models import User
 
 
 RestrictionAction = Literal["publish", "comment", "interaction"]

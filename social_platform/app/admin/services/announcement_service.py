@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.schemas import AdminAnnouncementRequest
 from social_platform.app.admin.services.log_service import create_operation_log
-from social_platform.app.models.user import User
-from social_platform.app.services import notification_service
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.notification import application as notification_service
 
 
 def create_system_notifications(

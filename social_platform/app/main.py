@@ -12,6 +12,7 @@ from social_platform.app.core.config import get_settings
 from social_platform.app.core.paths import get_avatar_upload_dir, get_frontend_dist_dir
 from social_platform.app.core.static_files import RaceSafeStaticFiles, SPAStaticFiles
 from social_platform.app.db.session import SessionLocal
+from social_platform.app.domains.bootstrap import ensure_domain_event_handlers_registered
 from social_platform.app.admin.api import admin_router
 from social_platform.app.admin.services.auth_service import ensure_initial_admin
 from social_platform.app.admin.services.terminal_log_service import terminal_log_capture
@@ -46,7 +47,7 @@ def start_scheduler():
     定期清理过期的验证码记录，防止数据库膨胀
     - 每6小时执行一次
     """
-    from social_platform.app.services.heat_service import refresh_all_heat_scores
+    from social_platform.app.domains.heat.application import refresh_all_heat_scores
     from social_platform.app.services.hot_topic_service import register_hot_topic_scheduler
     from social_platform.app.tasks import cleanup_expired_verification_codes
 
@@ -75,7 +76,7 @@ def ensure_search_indexes():
     """
     启动时确保平台搜索索引存在；索引是运行期投影，可由数据库重建。
     """
-    from social_platform.app.services.search_service import ensure_search_indexes as ensure_indexes
+    from social_platform.app.domains.search.application import ensure_search_indexes as ensure_indexes
 
     db = SessionLocal()
     try:
@@ -100,6 +101,7 @@ async def lifespan(app: FastAPI):
 
     在应用启动时启动调度器，关闭时停止调度器
     """
+    ensure_domain_event_handlers_registered()
     terminal_log_capture.start()
     initialize_admin_manager()
     start_scheduler()

@@ -10,7 +10,7 @@ from typing import Any, TypedDict
 
 from sqlalchemy.orm import Session
 
-from social_platform.app.models.user import User
+from social_platform.app.domains.user.models import User
 
 
 class MentionUser(TypedDict):

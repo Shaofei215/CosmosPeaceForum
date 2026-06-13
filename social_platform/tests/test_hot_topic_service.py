@@ -3,7 +3,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from social_platform.app.db.session import Base
-from social_platform.app.models import HotTopic, HotTopicGeneration, Post, User
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.models.hot_topic import HotTopic, HotTopicGeneration
 from social_platform.app.services import hot_topic_service
 
 

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.models.hot_topic import HotTopic, HotTopicGeneration, HotTopicSettings
-from social_platform.app.models.post import Post
+from social_platform.app.domains.post.models import Post
 
 logger = logging.getLogger(__name__)
 

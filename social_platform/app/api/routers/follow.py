@@ -7,15 +7,15 @@ from typing import Optional
 
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from social_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
-from social_platform.app.models.user import User
-from social_platform.app.models.follow import Follow
-from social_platform.app.schemas.follow import (
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.follow.models import Follow
+from social_platform.app.domains.follow.schemas import (
     FollowToggleResponse,
     FollowStatusResponse,
     FollowUserItem,
 )
 from social_platform.app.schemas.response import PaginationInfo, APIResponse
-from social_platform.app.services import follow_service
+from social_platform.app.domains.follow import application as follow_service
 
 router = APIRouter()
 

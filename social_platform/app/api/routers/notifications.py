@@ -7,18 +7,19 @@ from sqlalchemy.orm import Session, object_session
 
 from social_platform.app.api.deps import get_access_payload, get_db, get_current_user_including_banned
 from social_platform.app.db.session import SessionLocal
-from social_platform.app.models.comment import CommentLike
-from social_platform.app.models.like import Like
-from social_platform.app.models.user import User
-from social_platform.app.schemas.notification import (
+from social_platform.app.domains.comment.models import CommentLike
+from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.notification.schemas import (
     NotificationListResponse,
     NotificationResponse,
     NotificationSummaryResponse,
     NotificationUnreadCountResponse,
 )
-from social_platform.app.services import notification_service
-from social_platform.app.services import repost_service
-from social_platform.app.services.notification_events import (
+from social_platform.app.domains.notification import application as notification_service
+from social_platform.app.domains.post import queries as post_queries
+from social_platform.app.services import mention_service
+from social_platform.app.domains.notification.stream import (
     get_notification_version,
     wait_for_notification_update,
 )
@@ -203,11 +204,11 @@ def _serialize_post(db: Session, post, current_user_id: int):
         "repost_source_id": getattr(post, "repost_source_id", None),
         "repost_root_post_id": getattr(post, "repost_root_post_id", None),
         "repost_chain": getattr(post, "repost_chain", None),
-        "repost_chain_authors": repost_service.build_repost_chain_authors(
+        "repost_chain_authors": post_queries.build_repost_chain_authors(
             object_session(post),
             post.content,
         ) if object_session(post) else [],
-        "mention_users": repost_service.build_mention_users(
+        "mention_users": post_queries.build_mention_users(
             object_session(post),
             post.content,
         ) if object_session(post) else [],
@@ -235,7 +236,7 @@ def _serialize_comment(db: Session, comment, current_user_id: int):
         "like_count": comment.like_count,
         "reply_count": comment.reply_count,
         "is_liked": is_liked,
-        "mention_users": repost_service.build_mention_users(db, comment.content),
+        "mention_users": mention_service.build_mention_users(db, comment.content),
     }
 
 

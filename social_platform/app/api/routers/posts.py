@@ -5,19 +5,18 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from social_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
-from social_platform.app.models.post import Post
-from social_platform.app.models.user import User
-from social_platform.app.models.like import Like
-from social_platform.app.models.comment import Comment
-from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
-from social_platform.app.schemas.post import (
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
+from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.post.schemas import (
     PostCreate,
     PostResponse,
     PostUpdate,
     PostResponseWithLikeStatus,
     RepostCreate,
 )
-from social_platform.app.services import heat_service, repost_service, search_service
+from social_platform.app.domains.post import application as post_application
+from social_platform.app.domains.post import queries as post_queries
 
 router = APIRouter()
 
@@ -39,24 +38,12 @@ def create_post(
 
     返回：创建的帖子信息，包含 id、author_id、title、content、created_at 等字段
     """
-    ensure_action_allowed(db, current_user, "publish")
-    if post.type == "article" and not (post.title or "").strip():
-        raise HTTPException(status_code=400, detail="Article title is required")
-
-    db_post = Post(
-        author_id=current_user.id,
-        title=post.title,
-        type=post.type,
-        content=post.content
-    )
-    db.add(db_post)
-    db.flush()
-    heat_service.refresh_post_heat_score(db, db_post)
-    db.commit()
-    db.refresh(db_post)
-    db_post.mention_users = repost_service.build_mention_users(db, db_post.content)
-    search_service.index_post(db_post)
-    return db_post
+    try:
+        db_post = post_application.create_post(db, current_user, post)
+        db_post.mention_users = post_queries.build_mention_users(db, db_post.content)
+        return db_post
+    except post_application.ArticleTitleRequiredError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/repost", response_model=PostResponse, summary="转发帖子或评论")
@@ -65,21 +52,12 @@ def repost(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    ensure_action_allowed(db, current_user, "publish")
-    ensure_action_allowed(db, current_user, "interaction")
     try:
-        created_post = repost_service.create_repost(
-            db=db,
-            user_id=current_user.id,
-            source_type=data.source_type,
-            source_id=data.source_id,
-            content=data.content,
-        )
-        search_service.index_post(created_post)
+        created_post = post_application.create_repost_for_user(db, current_user, data)
         return created_post
-    except repost_service.RepostSourceNotFoundError as e:
+    except post_application.RepostSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except repost_service.InvalidRepostSourceError as e:
+    except post_application.InvalidRepostSourceError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -104,7 +82,7 @@ def get_posts(
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     for post in posts:
-        repost_service.attach_repost_metadata(db, post)
+        post_queries.attach_repost_metadata(db, post)
     return posts
 
 
@@ -156,10 +134,10 @@ def get_post(
         repost_source_id=post.repost_source_id,
         repost_root_post_id=post.repost_root_post_id,
         repost_chain=post.repost_chain,
-        repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
-        mention_users=repost_service.build_mention_users(db, post.content),
+        repost_chain_authors=post_queries.build_repost_chain_authors(db, post.content),
+        mention_users=post_queries.build_mention_users(db, post.content),
         repost_origin=post.repost_root_post if post.repost_root_post_id else None,
-        repost_origin_missing=repost_service.is_repost_origin_missing(post),
+        repost_origin_missing=post_queries.is_repost_origin_missing(post),
         is_liked_by_current_user=is_liked
     )
 
@@ -188,22 +166,12 @@ def update_post(
     - 404：帖子不存在
     - 403：不是帖子作者，无权修改
     """
-    post = db.query(Post).filter(Post.id == post_id).first()
-    if not post:
+    try:
+        return post_application.update_post(db, current_user, post_id, post_update)
+    except post_application.PostNotFoundError:
         raise HTTPException(status_code=404, detail="帖子不存在")
-
-    if post.author_id != current_user.id:
-        raise HTTPException(status_code=403, detail="无权修改此帖子")
-
-    update_data = post_update.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(post, field, value)
-
-    db.commit()
-    db.refresh(post)
-    repost_service.attach_repost_metadata(db, post)
-    search_service.index_post(post)
-    return post
+    except post_application.PostPermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.delete("/{post_id}", summary="删除帖子", description="删除指定帖子，仅帖子作者可以操作。")
@@ -227,23 +195,13 @@ def delete_post(
     - 404：帖子不存在
     - 403：不是帖子作者，无权删除
     """
-    post = db.query(Post).filter(Post.id == post_id).first()
-    if not post:
+    try:
+        post_application.delete_post(db, current_user, post_id)
+        return {"message": "帖子删除成功"}
+    except post_application.PostNotFoundError:
         raise HTTPException(status_code=404, detail="帖子不存在")
-
-    if post.author_id != current_user.id:
-        raise HTTPException(status_code=403, detail="无权删除此帖子")
-
-    db.query(Post).filter(Post.repost_root_post_id == post_id).update(
-        {Post.repost_root_post_id: None},
-        synchronize_session=False
-    )
-    db.query(Like).filter(Like.post_id == post_id).delete(synchronize_session=False)
-    db.query(Comment).filter(Comment.post_id == post_id).delete(synchronize_session=False)
-    db.delete(post)
-    db.commit()
-    search_service.delete_post(post_id)
-    return {"message": "帖子删除成功"}
+    except post_application.PostPermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.get("/user/{user_id}", response_model=List[PostResponse], summary="获取用户帖子", description="获取指定用户发布的所有帖子列表，支持分页。")
@@ -276,5 +234,5 @@ def get_user_posts(
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     for post in posts:
-        repost_service.attach_repost_metadata(db, post)
+        post_queries.attach_repost_metadata(db, post)
     return posts
