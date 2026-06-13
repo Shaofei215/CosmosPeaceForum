@@ -1,0 +1,312 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-backend-and-agents:
+    name: Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}
+      PROJECT_NAME: CosmosPeaceForum Social Platform
+      VERSION: 0.1.0
+      API_V1_PREFIX: /api/v1
+      DEBUG: "false"
+      DATABASE_URL: sqlite:////tmp/cosmos-peace-forum-social-platform-ci.db
+      JWT_SECRET_KEY: ci-jwt-secret
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_HOURS: "24"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "15"
+      REFRESH_TOKEN_EXPIRE_HOURS: "12"
+      REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS: "30"
+      ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES: "10"
+      ADMIN_REFRESH_TOKEN_EXPIRE_HOURS: "8"
+      ADMIN_REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS: "7"
+      AI_ACCESS_TOKEN_EXPIRE_HOURS: "24"
+      AI_REFRESH_TOKEN_EXPIRE_HOURS: "24"
+      ADMIN_KEY: ci-admin-key
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: "465"
+      SMTP_USER: ci@example.com
+      SMTP_PASSWORD: ci-password
+      SMTP_USE_SSL: "true"
+      SMTP_SENDER_NAME: CosmosPeaceForum
+      SMTP_SENDER_EMAIL: ci@example.com
+      EMAIL_CODE_EXPIRE_MINUTES: "10"
+      EMAIL_CODE_SEND_INTERVAL_MINUTES: "1"
+      EMAIL_CODE_DAILY_LIMIT: "10"
+      EMAIL_CODE_MAX_ATTEMPTS: "5"
+      AVATAR_STORAGE_STRATEGY: local
+      AVATAR_UPLOAD_DIR: /tmp/cosmos-peace-forum-social-platform-uploads
+      SERVER_HOST: 127.0.0.1
+      SERVER_PORT: "8000"
+      MANAGEMENT_SERVER_HOST: 127.0.0.1
+      MANAGEMENT_SERVER_PORT: "8001"
+      MANAGEMENT_DATABASE_URL: sqlite:////tmp/cosmos-peace-forum-management-ci.db
+      MANAGEMENT_JWT_SECRET_KEY: ci-management-jwt-secret
+      MANAGEMENT_JWT_ALGORITHM: HS256
+      MANAGEMENT_ACCESS_TOKEN_EXPIRE_HOURS: "720"
+      MANAGEMENT_ACCESS_TOKEN_EXPIRE_MINUTES: "10"
+      MANAGEMENT_REFRESH_TOKEN_EXPIRE_HOURS: "8"
+      MANAGEMENT_REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS: "7"
+      MANAGEMENT_ADMIN_INITIAL_USERNAME: management_admin
+      MANAGEMENT_ADMIN_INITIAL_PASSWORD: ChangeMe123!
+      AI_USER_PASSWORD: ChangeMe123!
+      APP_PLATFORM_API_BASE_URL: http://127.0.0.1:8000/api/v1
+      SCHEDULER_INTERNAL_HOST: 127.0.0.1
+      SCHEDULER_INTERNAL_PORT: "8002"
+      SCHEDULER_INTERNAL_BASE_URL: http://127.0.0.1:8002
+      LOG_LEVEL: INFO
+      MEMORY_DIR: /tmp/cosmos-peace-forum-agent-memory
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config libsqlite3-dev
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+
+      - name: Run agent test suite
+        run: python -m pytest agents/tests
+
+      - name: Run focused memory tests
+        run: python -m pytest agents/tests/test_memory.py
+
+      - name: Run focused LangGraph node tests
+        run: python -m pytest agents/tests/test_langgraph_nodes.py
+
+      - name: Prepare public platform database
+        run: python -m alembic -c social_platform/alembic.ini upgrade head
+
+      - name: Smoke test public platform entrypoint
+        run: |
+          set -euo pipefail
+
+          python -m social_platform --reload --host 127.0.0.1 --port 8000 &
+          server_pid=$!
+          trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
+
+          for _ in {1..45}; do
+            if curl -fsS http://127.0.0.1:8000/api/v1/openapi.json >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              wait "${server_pid}"
+            fi
+            sleep 1
+          done
+
+          echo "social_platform did not become ready in time" >&2
+          exit 1
+
+      - name: Smoke test management backend entrypoint
+        run: |
+          set -euo pipefail
+
+          uvicorn agents.management.backend.main:app --reload --host 127.0.0.1 --port 8001 &
+          server_pid=$!
+          trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
+
+          for _ in {1..45}; do
+            if curl -fsS http://127.0.0.1:8001/openapi.json >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              wait "${server_pid}"
+            fi
+            sleep 1
+          done
+
+          echo "management backend did not become ready in time" >&2
+          exit 1
+
+      - name: Smoke test agent scheduler entrypoint
+        env:
+          SCHEDULER_INTERNAL_PORT: "8012"
+          SCHEDULER_INTERNAL_BASE_URL: http://127.0.0.1:8012
+        run: |
+          set -euo pipefail
+
+          python -m agents.agents_scheduler &
+          server_pid=$!
+          trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
+
+          for _ in {1..45}; do
+            if curl -fsS http://127.0.0.1:8012/health >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              wait "${server_pid}"
+            fi
+            sleep 1
+          done
+
+          echo "agent scheduler did not become ready in time" >&2
+          exit 1
+
+      - name: Smoke test combined agents entrypoint
+        env:
+          MANAGEMENT_SERVER_PORT: "8011"
+          SCHEDULER_INTERNAL_PORT: "8013"
+          SCHEDULER_INTERNAL_BASE_URL: http://127.0.0.1:8013
+        run: |
+          set -euo pipefail
+
+          python -m agents &
+          server_pid=$!
+          trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
+
+          for _ in {1..45}; do
+            if curl -fsS http://127.0.0.1:8011/openapi.json >/dev/null \
+              && curl -fsS http://127.0.0.1:8013/health >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              wait "${server_pid}"
+            fi
+            sleep 1
+          done
+
+          echo "combined agents entrypoint did not become ready in time" >&2
+          exit 1
+
+  public-frontend:
+    name: Public frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: social_platform/frontend
+
+    env:
+      HUSKY: "0"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 11
+          run_install: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: social_platform/frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Smoke test dev server
+        run: |
+          set -euo pipefail
+
+          pnpm dev -- --host 127.0.0.1 --port 5173 &
+          server_pid=$!
+          trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
+
+          for _ in {1..45}; do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              wait "${server_pid}"
+            fi
+            sleep 1
+          done
+
+          echo "public frontend dev server did not become ready in time" >&2
+          exit 1
+
+      - name: Build
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type-check
+        run: pnpm type-check
+
+  management-frontend:
+    name: Management frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: agents/management/frontend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: agents/management/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Smoke test dev server
+        run: |
+          set -euo pipefail
+
+          npm run dev -- --host 127.0.0.1 --port 5174 &
+          server_pid=$!
+          trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
+
+          for _ in {1..45}; do
+            if curl -fsS http://127.0.0.1:5174 >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              wait "${server_pid}"
+            fi
+            sleep 1
+          done
+
+          echo "management frontend dev server did not become ready in time" >&2
+          exit 1
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run type-check
