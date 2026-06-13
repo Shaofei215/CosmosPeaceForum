@@ -93,5 +93,6 @@ def register_search_subscribers() -> None:
     subscribe_domain_event(PostCreated, handle_post_created, phase="after_commit")
     subscribe_domain_event(PostUpdated, handle_post_updated, phase="after_commit")
     subscribe_domain_event(PostDeleted, handle_post_deleted, phase="after_commit")
+    subscribe_domain_event(RepostCreated, handle_repost_created, phase="after_commit")
     subscribe_domain_event(UserUpdated, handle_user_updated, phase="after_commit")
     subscribe_domain_event(UserDeleted, handle_user_deleted, phase="after_commit")

@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from social_platform.app.domains import registry as domain_models  # noqa: F401
 from social_platform.app.admin.models import admin_user  # noqa: F401
 from social_platform.app.db.session import Base
-from social_platform.app.domains.post.events import PostCreated
+from social_platform.app.domains.post.events import PostCreated, RepostCreated
 from social_platform.app.domains.search import subscribers as search_subscribers
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.follow.models import Follow
@@ -19,11 +19,11 @@ from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.comment import application as comment_service
 from social_platform.app.domains.follow import application as follow_service
+from social_platform.app.domains.post import application as post_application
 from social_platform.app.domains.reaction import application as like_service
 from social_platform.app.domains.reaction.events import LikeChanged
 from social_platform.app.domains.follow.events import FollowChanged
 from social_platform.app.shared.events import subscribe_domain_event
-from social_platform.app.services import repost_service
 from social_platform.app.shared.events import DomainEvent, EventBus, domain_event_bus
 
 
@@ -218,7 +218,7 @@ def test_follow_changed_event_carries_previous_and_current_state(db_session):
 def test_repost_notification_is_event_driven(db_session):
     author, actor, post = _seed_users_and_post(db_session)
 
-    repost = repost_service.create_repost(
+    repost = post_application.create_repost(
         db=db_session,
         user_id=actor.id,
         source_type="post",
@@ -241,3 +241,16 @@ def test_search_projection_subscriber_indexes_post_after_commit(monkeypatch, db_
     search_subscribers.handle_post_created(db_session, PostCreated(post_id=42, author_id=1))
 
     assert indexed_post_ids == [42]
+
+
+def test_search_projection_subscriber_indexes_repost_after_commit(monkeypatch, db_session):
+    indexed_post_ids: list[int] = []
+
+    monkeypatch.setattr(search_subscribers, "_index_post_by_id", indexed_post_ids.append)
+
+    search_subscribers.handle_repost_created(
+        db_session,
+        RepostCreated(root_post_id=1, repost_id=43, sender_id=2, source_post_id=1),
+    )
+
+    assert indexed_post_ids == [43]

@@ -1,3 +1,4 @@
+from social_platform.app.admin.models.admin_user import PlatformAdminUser  # noqa: F401
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.search.application import _rank_content_search_posts
 

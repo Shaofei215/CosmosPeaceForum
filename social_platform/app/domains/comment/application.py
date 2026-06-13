@@ -15,7 +15,8 @@ from social_platform.app.domains.comment.events import CommentCreated, CommentDe
 from social_platform.app.domains.reaction.events import LikeChanged
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.shared.unit_of_work import commit_session, rollback_session
-from social_platform.app.services import mention_service, repost_service
+from social_platform.app.domains.post import application as post_application
+from social_platform.app.services import mention_service
 
 
 MIN_COMMENT_POOL_SIZE = 40
@@ -327,7 +328,7 @@ def create_comment(
         )
 
         if repost:
-            repost_service.create_repost(
+            post_application.create_repost(
                 db=db,
                 user_id=user_id,
                 source_type="comment",

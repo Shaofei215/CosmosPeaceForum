@@ -11,7 +11,7 @@ from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.user.models import User
 from social_platform.app.schemas.feed import PostFeedItem
 from social_platform.app.schemas.response import PaginationInfo, APIResponse
-from social_platform.app.services import repost_service
+from social_platform.app.domains.post import queries as post_queries
 
 MIN_RECOMMENDATION_POOL_SIZE = 80
 POOL_PAGE_MULTIPLIER = 4
@@ -207,7 +207,7 @@ def _build_feed_items(
         [post.author_id for post in posts],
         current_user_id,
     )
-    mention_users_by_post = repost_service.build_mention_users_for_contents(
+    mention_users_by_post = post_queries.build_mention_users_for_contents(
         db,
         [post.content for post in posts],
     )
@@ -241,7 +241,7 @@ def _build_feed_items(
             repost_chain_authors=mention_users,
             mention_users=mention_users,
             repost_origin=post.repost_root_post if post.repost_root_post_id else None,
-            repost_origin_missing=repost_service.is_repost_origin_missing(post),
+            repost_origin_missing=post_queries.is_repost_origin_missing(post),
         )
         feed_items.append(feed_item)
 

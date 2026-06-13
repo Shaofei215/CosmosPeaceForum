@@ -16,7 +16,7 @@ from social_platform.app.domains.post.schemas import (
     RepostCreate,
 )
 from social_platform.app.domains.post import application as post_application
-from social_platform.app.services import repost_service
+from social_platform.app.domains.post import queries as post_queries
 
 router = APIRouter()
 
@@ -40,7 +40,7 @@ def create_post(
     """
     try:
         db_post = post_application.create_post(db, current_user, post)
-        db_post.mention_users = repost_service.build_mention_users(db, db_post.content)
+        db_post.mention_users = post_queries.build_mention_users(db, db_post.content)
         return db_post
     except post_application.ArticleTitleRequiredError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -53,11 +53,11 @@ def repost(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        created_post = post_application.create_repost(db, current_user, data)
+        created_post = post_application.create_repost_for_user(db, current_user, data)
         return created_post
-    except repost_service.RepostSourceNotFoundError as e:
+    except post_application.RepostSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except repost_service.InvalidRepostSourceError as e:
+    except post_application.InvalidRepostSourceError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -82,7 +82,7 @@ def get_posts(
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     for post in posts:
-        repost_service.attach_repost_metadata(db, post)
+        post_queries.attach_repost_metadata(db, post)
     return posts
 
 
@@ -134,10 +134,10 @@ def get_post(
         repost_source_id=post.repost_source_id,
         repost_root_post_id=post.repost_root_post_id,
         repost_chain=post.repost_chain,
-        repost_chain_authors=repost_service.build_repost_chain_authors(db, post.content),
-        mention_users=repost_service.build_mention_users(db, post.content),
+        repost_chain_authors=post_queries.build_repost_chain_authors(db, post.content),
+        mention_users=post_queries.build_mention_users(db, post.content),
         repost_origin=post.repost_root_post if post.repost_root_post_id else None,
-        repost_origin_missing=repost_service.is_repost_origin_missing(post),
+        repost_origin_missing=post_queries.is_repost_origin_missing(post),
         is_liked_by_current_user=is_liked
     )
 
@@ -234,5 +234,5 @@ def get_user_posts(
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     for post in posts:
-        repost_service.attach_repost_metadata(db, post)
+        post_queries.attach_repost_metadata(db, post)
     return posts
