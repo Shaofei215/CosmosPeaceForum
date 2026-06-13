@@ -13,18 +13,14 @@ body:
     id: area
     attributes:
       label: 影响范围
-      description: 选择最接近的模块，便于分流。
+      description: 选择最接近的领域。GitHub 不会根据这个下拉框自动加标签，创建后可按此字段手动补充对应 domain 标签。
       options:
-        - social-platform-backend
-        - social-platform-frontend
-        - public-admin
-        - agent-scheduler
-        - agent-memory
-        - agent-management-backend
-        - agent-management-frontend
-        - deployment
-        - documentation
-        - unsure
+        - domain:social
+        - domain:agent
+        - domain:frontend
+        - domain:backend
+        - domain:data
+        - domain:logging
     validations:
       required: true
   - type: dropdown

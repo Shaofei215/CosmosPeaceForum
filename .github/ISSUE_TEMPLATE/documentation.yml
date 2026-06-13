@@ -5,23 +5,6 @@ labels:
   - type:docs
   - status:needs-triage
 body:
-  - type: dropdown
-    id: doc_area
-    attributes:
-      label: 文档范围
-      options:
-        - README
-        - deployment
-        - public-platform-api
-        - frontend-development
-        - backend-development
-        - agent-scheduler
-        - agent-management
-        - docker
-        - contributing
-        - other
-    validations:
-      required: true
   - type: textarea
     id: issue
     attributes:
