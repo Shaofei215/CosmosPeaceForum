@@ -231,7 +231,11 @@ async def _llm_smart_chunk(
             "semantic_timestamp": semantic_timestamp,
         },
     )
-    user_prompt = "请按照系统提示词规则进行分块，并调用 chunk_memories 工具传入结果。"
+    user_prompt = (
+        "请按照系统提示词规则进行分块，并调用 chunk_memories 工具传入结果。\n\n"
+        f"【角色信息】\n{personality_prompt}\n\n"
+        f"【待分块文本】\n{text}"
+    )
 
     try:
         llm_kwargs = {

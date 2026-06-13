@@ -37,9 +37,8 @@ function getReviewTargetType(item: ContentItem) {
   return item.type === 'comment' ? 'comment' : 'post';
 }
 
-
 const reportPromptPlaceholders = [
-  { token: "{context_json}", description: "被举报内容、举报原因、所属帖子和父评论 JSON。" },
+  { token: '{context_json}', description: '被举报内容、举报原因、所属帖子和父评论 JSON。' },
 ];
 
 function reportSettingsToForm(
@@ -47,9 +46,9 @@ function reportSettingsToForm(
 ): ContentModerationLLMSettingsUpdate {
   return {
     enabled: settings.enabled,
-    llm_base_url: settings.llm_base_url || "",
-    llm_model_name: settings.llm_model_name || "",
-    llm_api_key: settings.llm_api_key || "",
+    llm_base_url: settings.llm_base_url || '',
+    llm_model_name: settings.llm_model_name || '',
+    llm_api_key: settings.llm_api_key || '',
   };
 }
 
@@ -58,9 +57,9 @@ function normalizeReportSettingsForm(
 ): ContentModerationLLMSettingsUpdate {
   return {
     enabled: !!form.enabled,
-    llm_base_url: form.llm_base_url || "",
-    llm_model_name: form.llm_model_name || "",
-    llm_api_key: form.llm_api_key || "",
+    llm_base_url: form.llm_base_url || '',
+    llm_model_name: form.llm_model_name || '',
+    llm_api_key: form.llm_api_key || '',
   };
 }
 
@@ -68,7 +67,10 @@ function reportSettingsFormsEqual(
   left: ContentModerationLLMSettingsUpdate,
   right: ContentModerationLLMSettingsUpdate
 ) {
-  return JSON.stringify(normalizeReportSettingsForm(left)) === JSON.stringify(normalizeReportSettingsForm(right));
+  return (
+    JSON.stringify(normalizeReportSettingsForm(left)) ===
+    JSON.stringify(normalizeReportSettingsForm(right))
+  );
 }
 
 function getContentPath(item: ContentItem): string | null {
@@ -110,7 +112,9 @@ export default function AdminContentPage() {
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [releasingKey, setReleasingKey] = useState<string | null>(null);
-  const [reportSettingsForm, setReportSettingsForm] = useState<ContentModerationLLMSettingsUpdate>({});
+  const [reportSettingsForm, setReportSettingsForm] = useState<ContentModerationLLMSettingsUpdate>(
+    {}
+  );
   const [reportPromptDraft, setReportPromptDraft] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -155,14 +159,13 @@ export default function AdminContentPage() {
   const selectedItems = items.filter(item => selectedKeys.includes(getContentKey(item)));
   const allPageSelected =
     items.length > 0 && items.every(item => selectedKeys.includes(getContentKey(item)));
-  const reportPromptValue = reportPromptDraft ?? reportPromptConfig?.value ?? "";
-  const isReportPromptDirty = !!reportPromptConfig && reportPromptValue !== reportPromptConfig.value;
+  const reportPromptValue = reportPromptDraft ?? reportPromptConfig?.value ?? '';
+  const isReportPromptDirty =
+    !!reportPromptConfig && reportPromptValue !== reportPromptConfig.value;
   const reportSettingsDirty = useMemo(() => {
     if (!reportSettings) return false;
     return !reportSettingsFormsEqual(reportSettingsForm, reportSettingsToForm(reportSettings));
   }, [reportSettings, reportSettingsForm]);
-
-
 
   useEffect(() => {
     if (reportSettings) {
@@ -400,7 +403,7 @@ export default function AdminContentPage() {
             promptResetting={resetReportPromptMutation.isPending}
             onSettingsChange={setReportSettingsForm}
             onPromptDraftChange={setReportPromptDraft}
-            onPromptCancel={() => setReportPromptDraft(reportPromptConfig?.value ?? "")}
+            onPromptCancel={() => setReportPromptDraft(reportPromptConfig?.value ?? '')}
             onPromptReset={() => resetReportPromptMutation.mutate()}
             onPromptSave={() => updateReportPromptMutation.mutate(reportPromptValue)}
           />
@@ -634,7 +637,6 @@ function ReportedContentTable({
   );
 }
 
-
 function ReportModerationLLMPanel({
   settingsForm,
   settingsDirty,
@@ -660,7 +662,9 @@ function ReportModerationLLMPanel({
   promptDirty: boolean;
   promptSaving: boolean;
   promptResetting: boolean;
-  onSettingsChange: (updater: (current: ContentModerationLLMSettingsUpdate) => ContentModerationLLMSettingsUpdate) => void;
+  onSettingsChange: (
+    updater: (current: ContentModerationLLMSettingsUpdate) => ContentModerationLLMSettingsUpdate
+  ) => void;
   onPromptDraftChange: (value: string) => void;
   onPromptCancel: () => void;
   onPromptReset: () => void;
@@ -685,14 +689,14 @@ function ReportModerationLLMPanel({
 
           {settingsDirty && (
             <div className="text-xs text-muted-foreground">
-              {settingsSaving ? "保存中" : "待自动保存"}
+              {settingsSaving ? '保存中' : '待自动保存'}
             </div>
           )}
 
-          <fieldset className={!enabled ? "pointer-events-none space-y-3 opacity-50" : "space-y-3"}>
+          <fieldset className={!enabled ? 'pointer-events-none space-y-3 opacity-50' : 'space-y-3'}>
             <CompactField label="Base URL">
               <Input
-                value={settingsForm.llm_base_url || ""}
+                value={settingsForm.llm_base_url || ''}
                 onChange={event =>
                   onSettingsChange(current => ({ ...current, llm_base_url: event.target.value }))
                 }
@@ -701,7 +705,7 @@ function ReportModerationLLMPanel({
             </CompactField>
             <CompactField label="API Key">
               <Input
-                value={settingsForm.llm_api_key || ""}
+                value={settingsForm.llm_api_key || ''}
                 onChange={event =>
                   onSettingsChange(current => ({ ...current, llm_api_key: event.target.value }))
                 }
@@ -711,7 +715,7 @@ function ReportModerationLLMPanel({
             </CompactField>
             <CompactField label="模型名称">
               <Input
-                value={settingsForm.llm_model_name || ""}
+                value={settingsForm.llm_model_name || ''}
                 onChange={event =>
                   onSettingsChange(current => ({ ...current, llm_model_name: event.target.value }))
                 }
@@ -727,7 +731,7 @@ function ReportModerationLLMPanel({
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2 font-semibold">
               <ScrollText size={17} className="text-muted-foreground" />
-              <span className="truncate">{prompt?.name ?? "审查提示词"}</span>
+              <span className="truncate">{prompt?.name ?? '审查提示词'}</span>
             </div>
             {promptDirty && <CompactBadge>未保存</CompactBadge>}
           </div>
@@ -735,7 +739,11 @@ function ReportModerationLLMPanel({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Braces size={14} />
             {reportPromptPlaceholders.map(placeholder => (
-              <CompactBadge key={placeholder.token} title={placeholder.description} variant="outline">
+              <CompactBadge
+                key={placeholder.token}
+                title={placeholder.description}
+                variant="outline"
+              >
                 {placeholder.token}
               </CompactBadge>
             ))}
@@ -797,22 +805,28 @@ function CompactField({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-function CompactSwitch({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+function CompactSwitch({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       className={
-        "relative h-6 w-11 rounded-full transition-colors " +
-        (checked ? "bg-[var(--theme-accent-bg)]" : "bg-muted")
+        'relative h-6 w-11 rounded-full transition-colors ' +
+        (checked ? 'bg-[var(--theme-accent-bg)]' : 'bg-muted')
       }
       onClick={() => onChange(!checked)}
     >
       <span
         className={
-          "absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform " +
-          (checked ? "translate-x-5" : "translate-x-0")
+          'absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ' +
+          (checked ? 'translate-x-5' : 'translate-x-0')
         }
       />
     </button>
@@ -822,20 +836,20 @@ function CompactSwitch({ checked, onChange }: { checked: boolean; onChange: (che
 function CompactBadge({
   children,
   title,
-  variant = "secondary",
+  variant = 'secondary',
 }: {
   children: ReactNode;
   title?: string;
-  variant?: "secondary" | "outline";
+  variant?: 'secondary' | 'outline';
 }) {
   return (
     <span
       title={title}
       className={
-        "inline-flex h-6 items-center rounded-md px-2 text-xs font-medium " +
-        (variant === "outline"
-          ? "border border-border bg-background font-mono text-muted-foreground"
-          : "bg-muted text-muted-foreground")
+        'inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ' +
+        (variant === 'outline'
+          ? 'border border-border bg-background font-mono text-muted-foreground'
+          : 'bg-muted text-muted-foreground')
       }
     >
       {children}
