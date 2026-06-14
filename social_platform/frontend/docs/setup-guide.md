@@ -13,8 +13,8 @@
 
 | 环境 | 版本要求 | 说明 |
 |------|----------|------|
-| Node.js | 18.0+ | 推荐使用 LTS 版本 |
-| pnpm | 8.0+ | 推荐包管理器 |
+| Node.js | 24.x | 当前 `pnpm@11.0.9` 需要 Node.js 22.13+，推荐直接使用 24 |
+| pnpm | 11.0.9 | 推荐包管理器 |
 | Git | 任意稳定版本 | 代码版本控制 |
 
 ### 推荐开发环境
@@ -38,35 +38,32 @@
 # macOS/Linux: 使用 nvm
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 
-# 安装 Node.js 20 LTS
-nvm install 20
-nvm use 20
-nvm alias default 20
+# 安装 Node.js 24
+nvm install 24
+nvm use 24
+nvm alias default 24
 ```
 
 验证安装：
 
 ```bash
 node --version
-# v20.x.x
+# v24.x.x
 
 npm --version
-# 10.x.x
+# 11.x.x
 ```
 
 ### 2. 安装 pnpm
 
 ```bash
-# 使用 npm 安装
-npm install -g pnpm
-
-# 或使用 Corepack（Node.js 18+ 内置）
+# 使用 Corepack（Node.js 内置）
 corepack enable
-corepack prepare pnpm@latest --activate
+corepack prepare pnpm@11.0.9 --activate
 
 # 验证安装
 pnpm --version
-# 9.x.x
+# 11.0.9
 ```
 
 ### 3. 克隆项目

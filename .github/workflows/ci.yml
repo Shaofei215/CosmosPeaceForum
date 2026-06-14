@@ -215,7 +215,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v5
         with:
-          version: 11
+          version: 11.0.9
           run_install: false
 
       - name: Set up Node.js 24
@@ -267,25 +267,34 @@ jobs:
       run:
         working-directory: agents/management/frontend
 
+    env:
+      HUSKY: "0"
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 11.0.9
+          run_install: false
 
       - name: Set up Node.js 24
         uses: actions/setup-node@v6
         with:
           node-version: "24"
-          cache: npm
-          cache-dependency-path: agents/management/frontend/package-lock.json
+          cache: pnpm
+          cache-dependency-path: agents/management/frontend/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Smoke test dev server
         run: |
           set -euo pipefail
 
-          npm run dev -- --host 127.0.0.1 --port 5174 &
+          pnpm dev -- --host 127.0.0.1 --port 5174 &
           server_pid=$!
           trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
 
@@ -303,10 +312,10 @@ jobs:
           exit 1
 
       - name: Build
-        run: npm run build
+        run: pnpm build
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
       - name: Type-check
-        run: npm run type-check
+        run: pnpm type-check

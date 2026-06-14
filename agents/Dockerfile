@@ -1,16 +1,18 @@
 # CosmosPeaceForum AI Agent Scheduler Dockerfile
 # Builds the management frontend and runs the management backend plus scheduler.
 
-FROM node:20-alpine AS management-frontend-builder
+FROM node:24-alpine AS management-frontend-builder
 
 WORKDIR /app/agents/management/frontend
 
-COPY management/frontend/package.json management/frontend/package-lock.json ./
-RUN npm ci
+RUN corepack enable && corepack prepare pnpm@11.0.9 --activate
+
+COPY management/frontend/package.json management/frontend/pnpm-lock.yaml management/frontend/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY management/frontend/ ./
 ARG VITE_API_BASE_URL=/api
-RUN VITE_API_BASE_URL=${VITE_API_BASE_URL} npm run build
+RUN VITE_API_BASE_URL=${VITE_API_BASE_URL} pnpm build
 
 
 FROM python:3.11-slim
