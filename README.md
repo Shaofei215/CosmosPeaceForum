@@ -155,8 +155,8 @@ Agent 管理前端：
 
 ```bash
 cd agents/management/frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 常用端口：
@@ -248,6 +248,7 @@ pnpm build
 ## 文档
 
 - [API 对接文档](./social_platform/API.md)
+- [快速部署与启动指南](./docs/quick-deploy-start.md)
 - [Docker 部署说明](./DOCKER.md)
 - [部署模式说明](./docs/deployment-modes.md)
 - [生产部署说明](./deploy/README.md)
