@@ -62,11 +62,11 @@ pnpm type-check
 
 ```bash
 cd agents/management/frontend
-npm install
-npm run dev
-npm run build
-npm run lint
-npm run type-check
+pnpm install
+pnpm dev
+pnpm build
+pnpm lint
+pnpm type-check
 ```
 
 Docker：
@@ -143,7 +143,7 @@ docker-compose logs -f agent-scheduler
 - 改行为前先读本地代码；本项目的公开后端、Scheduler、管理系统存在概念重叠。
 - 保持改动归属于拥有该行为的服务或前端。
 - 不要静默修改端口、API 前缀、认证语义、数据库路径或调度时间行为。
-- 不要引入新的包管理器。`social_platform/frontend/` 使用 `pnpm`；`agents/management/frontend/` 当前有 `package-lock.json` 和 npm scripts。
+- 不要引入新的包管理器。两套前端都使用 `pnpm`，新增或更新依赖时同步更新对应的 `pnpm-lock.yaml`。
 - 如需新增依赖，更新最近的 manifest 和 lockfile。
 - 如果修改后端契约，同步更新对应前端类型、hooks 和相关文档。
 - 如果修改 Scheduler 或记忆行为，运行最相关的 `agents/tests` 子集。

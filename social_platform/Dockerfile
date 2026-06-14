@@ -7,7 +7,7 @@ WORKDIR /app/social_platform/frontend
 
 ENV HUSKY=0
 
-RUN npm install -g pnpm
+RUN corepack enable && corepack prepare pnpm@11.0.9 --activate
 
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
