@@ -1,7 +1,7 @@
 # CosmosPeaceForum public social platform image
 # Builds the React frontend and serves the API, uploads, and SPA from FastAPI.
 
-FROM node:20-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 WORKDIR /app/social_platform/frontend
 

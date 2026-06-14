@@ -1,7 +1,7 @@
 # CosmosPeaceForum AI Agent Scheduler Dockerfile
 # Builds the management frontend and runs the management backend plus scheduler.
 
-FROM node:20-alpine AS management-frontend-builder
+FROM node:24-alpine AS management-frontend-builder
 
 WORKDIR /app/agents/management/frontend
 
