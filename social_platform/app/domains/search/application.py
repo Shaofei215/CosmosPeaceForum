@@ -5,14 +5,14 @@ from typing import Dict, List, Literal
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session, joinedload
 
+from social_platform.app.domains.feed.queries import build_feed_items
+from social_platform.app.domains.feed.schemas import PostFeedItem
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
-from social_platform.app.schemas.feed import PostFeedItem
 from social_platform.app.schemas.response import APIResponse, PaginationInfo
 from social_platform.app.domains.search.schemas import UserSearchItem
 from social_platform.app.domains.user.schemas import UserResponse
 from social_platform.app.domains.follow import application as follow_service
-from social_platform.app.services import feed_service
 from social_platform.app.domains.search.index import get_content_index, get_user_index
 
 
@@ -178,7 +178,7 @@ def search_content(
 
     total = len(ranked_posts)
     page_posts = ranked_posts[(page - 1) * page_size: page * page_size]
-    feed_items = feed_service._build_feed_items(db, page_posts, current_user_id)
+    feed_items = build_feed_items(db, page_posts, current_user_id)
 
     return APIResponse(
         code=200,
