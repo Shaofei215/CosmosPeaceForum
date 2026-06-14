@@ -119,4 +119,4 @@ from social_platform.app.domains.follow import models as _follow_models  # noqa:
 from social_platform.app.domains.notification import models as _notification_models  # noqa: E402,F401
 from social_platform.app.domains.post import models as _post_models  # noqa: E402,F401
 from social_platform.app.domains.reaction import models as _reaction_models  # noqa: E402,F401
-from social_platform.app.models.email_verification import EmailVerificationCode as _EmailVerificationCode  # noqa: E402,F401
+from social_platform.app.domains.identity.models import EmailVerificationCode as _EmailVerificationCode  # noqa: E402,F401

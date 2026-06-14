@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from social_platform.app.models.email_verification import EmailVerificationCode
 from social_platform.app.db.session import SessionLocal
+from social_platform.app.domains.identity.models import EmailVerificationCode
 
 
 def cleanup_expired_verification_codes():
@@ -26,7 +26,7 @@ def cleanup_expired_verification_codes():
         expired_codes = db.query(EmailVerificationCode).filter(
             and_(
                 (
-                    EmailVerificationCode.used == True
+                    EmailVerificationCode.used.is_(True)
                 ) | (
                     EmailVerificationCode.expires_at < datetime.utcnow()
                 ),

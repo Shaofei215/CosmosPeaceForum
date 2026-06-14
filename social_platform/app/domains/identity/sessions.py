@@ -1,42 +1,77 @@
-"""服务端会话与 refresh token 轮换逻辑。
+"""身份安全领域的 session 与 refresh token 应用服务。
 
-这个模块是公开平台认证升级的中心：access token 只表达短期身份，
-是否仍然有效由这里维护的 UserSession 决定；refresh token 明文只交给客户端，
-数据库只保存哈希并在每次刷新时轮换。
+本模块负责服务端可撤销 session、access token 签发和 refresh token 单次轮换；
+调用方只需要提供适配层提取出的 User-Agent 与 IP 字符串。
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Mapping
 from uuid import uuid4
 
-from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from social_platform.app.core.config import get_settings
 from social_platform.app.core.security import create_access_token, create_refresh_token, hash_refresh_token
-from social_platform.app.models.session import UserSession
+from social_platform.app.domains.identity.models import UserSession
 
 
 settings = get_settings()
 
 
+class RefreshTokenInvalidError(Exception):
+    """refresh token 无效或已过期异常。"""
+
+    def __init__(self) -> None:
+        """初始化 refresh token 无效异常。"""
+
+        super().__init__("refresh token 无效或已过期")
+
+
 def detect_client_type(user_agent: str | None) -> str:
-    """把 User-Agent 粗分为 mobile/desktop，用于真人同端互斥策略。"""
+    """把 User-Agent 粗分为 mobile/desktop，用于真人同端互斥策略。
+
+    Args:
+        user_agent: HTTP User-Agent 头内容。
+
+    Returns:
+        str: ``mobile`` 或 ``desktop``。
+    """
+
     ua = (user_agent or "").lower()
     mobile_markers = ("mobile", "android", "iphone", "ipad", "ipod", "windows phone")
     return "mobile" if any(marker in ua for marker in mobile_markers) else "desktop"
 
 
-def get_request_ip(request) -> Optional[str]:
-    """提取客户端 IP，优先信任反向代理传入的 X-Forwarded-For 首段。"""
-    forwarded = request.headers.get("x-forwarded-for")
+def extract_client_ip(headers: Mapping[str, str], client_host: str | None) -> str | None:
+    """从适配层提供的请求信息中提取客户端 IP。
+
+    Args:
+        headers: 请求头映射。
+        client_host: ASGI 连接对象上的客户端主机地址。
+
+    Returns:
+        str | None: 优先返回 ``X-Forwarded-For`` 首段，否则返回客户端主机地址。
+    """
+
+    forwarded = headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",", 1)[0].strip()
-    return request.client.host if request.client else None
+    return client_host
 
 
 def access_delta_for(scope: str, client_type: str) -> timedelta:
-    """根据账号 scope 与 client_type 选择短期 access token 有效期。"""
+    """根据账号 scope 与 client_type 选择短期 access token 有效期。
+
+    Args:
+        scope: 身份作用域，例如 ``user`` 或 ``platform_admin``。
+        client_type: 客户端类型，例如 ``desktop``、``mobile`` 或 ``agent``。
+
+    Returns:
+        timedelta: access token 有效期。
+    """
+
     if client_type == "agent":
         return timedelta(hours=settings.AI_ACCESS_TOKEN_EXPIRE_HOURS)
     if scope == "platform_admin":
@@ -45,7 +80,17 @@ def access_delta_for(scope: str, client_type: str) -> timedelta:
 
 
 def refresh_delta_for(scope: str, client_type: str, remember_me: bool) -> timedelta:
-    """计算服务端 session/refresh token 生命周期，remember_me 只影响 refresh 窗口。"""
+    """计算服务端 session/refresh token 生命周期。
+
+    Args:
+        scope: 身份作用域。
+        client_type: 客户端类型。
+        remember_me: 是否启用更长 refresh 窗口。
+
+    Returns:
+        timedelta: refresh token 与 session 的有效期。
+    """
+
     if client_type == "agent":
         return timedelta(hours=settings.AI_REFRESH_TOKEN_EXPIRE_HOURS)
     if scope == "platform_admin":
@@ -57,14 +102,30 @@ def refresh_delta_for(scope: str, client_type: str, remember_me: bool) -> timede
     return timedelta(hours=settings.REFRESH_TOKEN_EXPIRE_HOURS)
 
 
-def _active_query(db: Session):
-    """返回只包含未撤销且未过期 session 的基础查询。"""
+def _active_query(db: Session) -> Query[UserSession]:
+    """返回只包含未撤销且未过期 session 的基础查询。
+
+    Args:
+        db: 当前数据库会话。
+
+    Returns:
+        Query[UserSession]: 可继续追加过滤条件的 SQLAlchemy 查询。
+    """
+
     now = datetime.utcnow()
     return db.query(UserSession).filter(UserSession.revoked_at.is_(None), UserSession.expires_at > now)
 
 
 def _issue_access_token(session: UserSession) -> tuple[str, int]:
-    """为指定 session 签发带 sid/scope 的短期 access token。"""
+    """为指定 session 签发带 sid/scope 的短期 access token。
+
+    Args:
+        session: 已创建且未撤销的会话记录。
+
+    Returns:
+        tuple[str, int]: access token 与有效秒数。
+    """
+
     delta = access_delta_for(session.scope, session.client_type)
     token = create_access_token(
         data={
@@ -89,9 +150,20 @@ def create_session_token_pair(
 ) -> dict[str, object]:
     """创建服务端 session，并返回初始 access/refresh token 对。
 
-    revoke_same_client 只给真人公开平台登录使用，用来保证同一用户同一端类型
-    只有一个 active session；AI Agent 和管理员会话不会走这个互斥策略。
+    Args:
+        db: 当前数据库会话。
+        account_id: 账号 ID，真人/AI 用户和平台管理员各自在自己的 scope 下解释。
+        scope: 身份作用域。
+        client_type: 客户端类型。
+        remember_me: 是否启用更长 refresh 窗口。
+        user_agent: 创建会话时的 User-Agent。
+        ip_address: 创建会话时的客户端 IP。
+        revoke_same_client: 是否撤销同账号同端类型的旧 active session。
+
+    Returns:
+        dict[str, object]: access/refresh token、过期秒数和 session_id。
     """
+
     now = datetime.utcnow()
     if revoke_same_client:
         _active_query(db).filter(
@@ -137,15 +209,26 @@ def refresh_token_pair(
 ) -> dict[str, object]:
     """校验 refresh token 并轮换为新的 refresh token。
 
-    refresh token 只能使用一次；成功刷新后同一 session 保持不变，但数据库中的
-    refresh_token_hash 会被替换，旧 refresh token 随即失效。
+    Args:
+        db: 当前数据库会话。
+        refresh_token: 客户端提交的 opaque refresh token。
+        expected_scope: 期望的身份作用域。
+        user_agent: 本次刷新请求的 User-Agent。
+        ip_address: 本次刷新请求的客户端 IP。
+
+    Returns:
+        dict[str, object]: 新 access/refresh token、过期秒数和 session_id。
+
+    Raises:
+        RefreshTokenInvalidError: refresh token 不存在、已过期或 scope 不匹配。
     """
+
     session = _active_query(db).filter(
         UserSession.refresh_token_hash == hash_refresh_token(refresh_token),
         UserSession.scope == expected_scope,
     ).first()
     if session is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="refresh token 无效或已过期")
+        raise RefreshTokenInvalidError()
 
     now = datetime.utcnow()
     next_refresh_token = create_refresh_token()
@@ -169,8 +252,18 @@ def refresh_token_pair(
     }
 
 
-def get_active_session(db: Session, session_id: str, scope: str) -> Optional[UserSession]:
-    """按 sid 和 scope 查找仍可用于 access token 鉴权的 session。"""
+def get_active_session(db: Session, session_id: str, scope: str) -> UserSession | None:
+    """按 sid 和 scope 查找仍可用于 access token 鉴权的 session。
+
+    Args:
+        db: 当前数据库会话。
+        session_id: access token payload 中的 sid。
+        scope: 期望的身份作用域。
+
+    Returns:
+        UserSession | None: active session；不存在则返回 None。
+    """
+
     return _active_query(db).filter(
         UserSession.session_id == session_id,
         UserSession.scope == scope,
@@ -178,7 +271,13 @@ def get_active_session(db: Session, session_id: str, scope: str) -> Optional[Use
 
 
 def revoke_session(db: Session, session: UserSession) -> None:
-    """撤销单个 session，使其 access token 与 refresh token 同时失效。"""
+    """撤销单个 session，使其 access token 与 refresh token 同时失效。
+
+    Args:
+        db: 当前数据库会话。
+        session: 待撤销的 active session。
+    """
+
     if session.revoked_at is None:
         session.revoked_at = datetime.utcnow()
         db.add(session)
@@ -186,7 +285,18 @@ def revoke_session(db: Session, session: UserSession) -> None:
 
 
 def revoke_session_id(db: Session, account_id: int, scope: str, session_id: str) -> bool:
-    """撤销当前账号名下指定 session_id 的 active session。"""
+    """撤销当前账号名下指定 session_id 的 active session。
+
+    Args:
+        db: 当前数据库会话。
+        account_id: 账号 ID。
+        scope: 身份作用域。
+        session_id: 待撤销的 session_id。
+
+    Returns:
+        bool: 成功撤销返回 True；不存在或已失效返回 False。
+    """
+
     session = _active_query(db).filter(
         UserSession.account_id == account_id,
         UserSession.scope == scope,
@@ -199,7 +309,18 @@ def revoke_session_id(db: Session, account_id: int, scope: str, session_id: str)
 
 
 def revoke_other_sessions(db: Session, account_id: int, scope: str, current_session_id: str) -> int:
-    """撤销当前账号除 current_session_id 外的其他 active session。"""
+    """撤销当前账号除 current_session_id 外的其他 active sessions。
+
+    Args:
+        db: 当前数据库会话。
+        account_id: 账号 ID。
+        scope: 身份作用域。
+        current_session_id: 需要保留的当前 session_id。
+
+    Returns:
+        int: 被撤销的会话数量。
+    """
+
     now = datetime.utcnow()
     count = _active_query(db).filter(
         UserSession.account_id == account_id,
@@ -211,7 +332,17 @@ def revoke_other_sessions(db: Session, account_id: int, scope: str, current_sess
 
 
 def list_sessions(db: Session, account_id: int, scope: str) -> list[UserSession]:
-    """列出当前账号可管理的 active sessions，最近使用的排在前面。"""
+    """列出当前账号可管理的 active sessions，最近使用的排在前面。
+
+    Args:
+        db: 当前数据库会话。
+        account_id: 账号 ID。
+        scope: 身份作用域。
+
+    Returns:
+        list[UserSession]: active session 列表。
+    """
+
     return _active_query(db).filter(
         UserSession.account_id == account_id,
         UserSession.scope == scope,
