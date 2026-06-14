@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from social_platform.app.api.deps import get_db, get_current_user_optional
+from social_platform.app.domains.feed import queries as feed_queries
+from social_platform.app.domains.feed.schemas import PostFeedItem
 from social_platform.app.domains.user.models import User
-from social_platform.app.schemas.feed import PostFeedItem
 from social_platform.app.schemas.response import APIResponse
-from social_platform.app.services import feed_service
 
 router = APIRouter()
 
@@ -55,7 +55,7 @@ def get_global_feed(
     """
     try:
         current_user_id = current_user.id if current_user else None
-        response = feed_service.get_feed(
+        response = feed_queries.get_feed(
             db=db,
             page=page,
             page_size=page_size,
@@ -102,7 +102,7 @@ def get_user_feed(
     """
     try:
         current_user_id = current_user.id if current_user else None
-        response = feed_service.get_user_feed(
+        response = feed_queries.get_user_feed(
             db=db,
             user_id=user_id,
             page=page,
