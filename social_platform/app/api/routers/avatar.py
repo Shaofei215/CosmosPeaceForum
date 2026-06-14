@@ -1,28 +1,27 @@
 # 头像上传路由控制器
 # 处理用户头像上传相关的 API 请求
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from social_platform.app.api.deps import get_db, get_current_user
+from social_platform.app.domains.user import application as user_application
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.user.schemas import UserResponse
-from social_platform.app.services.avatar_service import (
-    validate_avatar_file,
-    save_avatar_file,
-    delete_avatar_file,
-)
-from social_platform.app.core.config import get_settings
 
 router = APIRouter()
-settings = get_settings()
 
 
-@router.post("/avatar", response_model=UserResponse, summary="上传用户头像", description="上传并更新当前用户的头像图片。")
+@router.post(
+    "/avatar",
+    response_model=UserResponse,
+    summary="上传用户头像",
+    description="上传并更新当前用户的头像图片。",
+)
 async def upload_avatar(
     file: UploadFile = File(..., description="头像图片文件"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> User:
     """
     上传用户头像
 
@@ -39,36 +38,25 @@ async def upload_avatar(
     - 500：文件保存失败
     """
     try:
-        validate_avatar_file(file)
-    except HTTPException:
-        raise
-    except Exception as e:
+        return await user_application.upload_user_avatar(db, current_user, file)
+    except user_application.AvatarValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    old_avatar_url = current_user.avatar_url
-
-    try:
-        avatar_url = await save_avatar_file(file, current_user.id)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"头像上传失败：{str(e)}")
-
-    if old_avatar_url:
-        await delete_avatar_file(old_avatar_url)
-
-    current_user.avatar_url = avatar_url
-    db.commit()
-    db.refresh(current_user)
-
-    return current_user
+    except user_application.UserNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except user_application.AvatarStorageError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/avatar", response_model=UserResponse, summary="删除用户头像", description="删除当前用户的头像，恢复为默认状态。")
+@router.delete(
+    "/avatar",
+    response_model=UserResponse,
+    summary="删除用户头像",
+    description="删除当前用户的头像，恢复为默认状态。",
+)
 async def delete_avatar(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> User:
     """
     删除用户头像
 
@@ -79,13 +67,7 @@ async def delete_avatar(
     错误：
     - 500：删除失败
     """
-    old_avatar_url = current_user.avatar_url
-
-    if old_avatar_url:
-        await delete_avatar_file(old_avatar_url)
-
-    current_user.avatar_url = None
-    db.commit()
-    db.refresh(current_user)
-
-    return current_user
+    try:
+        return await user_application.delete_user_avatar(db, current_user)
+    except user_application.UserNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
