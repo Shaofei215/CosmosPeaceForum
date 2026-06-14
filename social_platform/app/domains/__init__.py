@@ -1,5 +1,5 @@
 """公开社交平台领域模块包。
 
-领域模块按业务能力组织应用服务、事件定义和订阅处理器；数据库模型暂保留在
-``social_platform.app.models``，以降低第一阶段重构风险。
+领域模块按业务能力组织模型、DTO、应用服务、事件定义和订阅处理器；需要让
+SQLAlchemy metadata 发现已迁移模型时，请导入 ``social_platform.app.domains.registry``。
 """

@@ -1,26 +1,30 @@
 # 认证路由控制器
 # 处理用户注册、登录、获取当前用户信息等认证相关 API 请求
-import random
-import string
-from datetime import datetime, timedelta
-from typing import Optional
+
+from typing import NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
 
 from social_platform.app.admin.services.moderation_guard import ensure_account_available
 from social_platform.app.api.deps import get_access_payload, get_db, get_current_user, security
-from social_platform.app.core.config import get_settings
 from social_platform.app.core.security import (
     get_password_hash,
     verify_password,
     verify_admin_key,
 )
+from social_platform.app.domains.identity import application as identity_service
+from social_platform.app.domains.identity import sessions as session_service
+from social_platform.app.domains.identity import verification as verification_service
+from social_platform.app.domains.identity.models import UserSession
+from social_platform.app.domains.identity.schemas import (
+    EmailCodeSendRequest,
+    EmailCodeSendResponse,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+)
 from social_platform.app.domains.user.models import User
-from social_platform.app.models.email_verification import EmailVerificationCode
-from social_platform.app.models.session import UserSession
 from social_platform.app.schemas.auth import (
     UserRegister,
     UserLogin,
@@ -31,25 +35,22 @@ from social_platform.app.schemas.auth import (
     RefreshTokenRequest,
     SessionResponse,
 )
-from social_platform.app.schemas.email_verification import (
-    EmailCodeSendRequest,
-    EmailCodeSendResponse,
-    PasswordResetRequest,
-    PasswordResetConfirmRequest,
-)
 from social_platform.app.services.email_service import email_service
 from social_platform.app.domains.search import application as search_service
-from social_platform.app.services import session_service
 
 
 router = APIRouter()
-settings = get_settings()
 
 
 def _request_session_context(request: Request, client_type: str | None = None) -> tuple[str, str | None, str | None]:
     """收集创建/刷新 session 所需的端类型、User-Agent 和 IP。"""
     user_agent = request.headers.get("user-agent")
-    return (client_type or session_service.detect_client_type(user_agent), user_agent, session_service.get_request_ip(request))
+    client_host = request.client.host if request.client else None
+    return (
+        client_type or session_service.detect_client_type(user_agent),
+        user_agent,
+        session_service.extract_client_ip(request.headers, client_host),
+    )
 
 
 def _session_response(session: UserSession, current_session_id: str | None = None) -> SessionResponse:
@@ -72,79 +73,19 @@ def _current_user_payload(credentials: HTTPAuthorizationCredentials, db: Session
     return get_access_payload(credentials.credentials, db, "user")
 
 
-def generate_verification_code(length: int = 6) -> str:
-    """
-    生成随机数字验证码
-
-    Args:
-        length: 验证码长度，默认6位
-
-    Returns:
-        str: 随机数字验证码字符串
-    """
-    return ''.join(random.choices(string.digits, k=length))
-
-
-def check_send_frequency_by_email(
-    db: Session,
-    email: str,
-    purpose: str
-) -> Optional[int]:
-    """
-    检查发送频率限制
-
-    检查同一邮箱在指定时间间隔内是否已发送过同类验证码
-
-    Args:
-        db: 数据库会话
-        email: 邮箱地址
-        purpose: 验证码用途，用于区分注册和密码重置
-
-    Returns:
-        Optional[int]: 如果发送过于频繁，返回还需等待的秒数；否则返回 None
-    """
-    interval = timedelta(minutes=settings.EMAIL_CODE_SEND_INTERVAL_MINUTES)
-
-    latest_code = db.query(EmailVerificationCode).filter(
-        and_(
-            EmailVerificationCode.email == email,
-            EmailVerificationCode.purpose == purpose
-        )
-    ).order_by(EmailVerificationCode.created_at.desc()).first()
-
-    if latest_code:
-        time_since_last = datetime.utcnow() - latest_code.created_at
-        if time_since_last < interval:
-            return int((interval - time_since_last).total_seconds())
-
-    return None
-
-
-def check_daily_limit_by_email(db: Session, email: str) -> bool:
-    """
-    检查每日发送次数限制
-
-    检查同一邮箱今日已发送验证码次数是否达到上限
-
-    Args:
-        db: 数据库会话
-        email: 邮箱地址
-
-    Returns:
-        bool: 未达上限返回 True，已达上限返回 False
-    """
-    today_start = datetime.utcnow().replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-
-    count = db.query(func.count(EmailVerificationCode.id)).filter(
-        and_(
-            EmailVerificationCode.email == email,
-            EmailVerificationCode.created_at >= today_start
-        )
-    ).scalar()
-
-    return count < settings.EMAIL_CODE_DAILY_LIMIT
+def _raise_send_code_http_error(exc: Exception) -> NoReturn:
+    """把 identity 验证码发送异常映射成 HTTP 错误。"""
+    if isinstance(exc, verification_service.VerificationCodeFrequencyError):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.wait_seconds)},
+        ) from exc
+    if isinstance(exc, verification_service.VerificationCodeDailyLimitError):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
+    if isinstance(exc, verification_service.EmailDeliveryError):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 # ========== 邮箱验证码发送 ==========
@@ -158,7 +99,7 @@ def check_daily_limit_by_email(db: Session, email: str) -> bool:
 def send_register_verification_code(
     request: EmailCodeSendRequest,
     db: Session = Depends(get_db)
-):
+) -> EmailCodeSendResponse:
     """
     发送注册邮箱验证码
 
@@ -179,65 +120,20 @@ def send_register_verification_code(
         HTTPException 429: 发送过于频繁或已达每日上限
         HTTPException 500: 邮件发送失败
     """
-    email = request.email.lower()
-
-    # 检查邮箱是否已被注册
-    existing_user = db.query(User).filter(User.email == email).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该邮箱已被注册"
+    try:
+        return verification_service.send_register_verification_code(
+            db,
+            request.email,
+            email_service,
         )
-
-    # 检查发送频率限制
-    remaining = check_send_frequency_by_email(db, email, "register")
-    if remaining:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"发送过于频繁，请 {remaining} 秒后再试",
-            headers={"Retry-After": str(remaining)}
-        )
-
-    # 检查每日发送次数限制
-    if not check_daily_limit_by_email(db, email):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="今日发送次数已达上限，请明天再试"
-        )
-
-    # 生成验证码
-    code = generate_verification_code()
-
-    # 创建验证码记录
-    expires_at = datetime.utcnow() + timedelta(
-        minutes=settings.EMAIL_CODE_EXPIRE_MINUTES
-    )
-    verification = EmailVerificationCode(
-        user_id=None,  # 注册阶段用户尚未创建
-        email=email,
-        code=code,
-        purpose="register",
-        expires_at=expires_at
-    )
-
-    db.add(verification)
-    db.commit()
-
-    # 发送邮件
-    success = email_service.send_verification_email(email, code, "register")
-
-    if not success:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="邮件发送失败，请稍后重试"
-        )
-
-    return EmailCodeSendResponse(
-        message="验证码已发送至您的邮箱",
-        email=email,
-        expires_in=settings.EMAIL_CODE_EXPIRE_MINUTES * 60
-    )
+    except (
+        verification_service.EmailAlreadyRegisteredError,
+        verification_service.VerifiedHumanUserNotFoundError,
+        verification_service.VerificationCodeFrequencyError,
+        verification_service.VerificationCodeDailyLimitError,
+        verification_service.EmailDeliveryError,
+    ) as exc:
+        _raise_send_code_http_error(exc)
 
 
 @router.post(
@@ -248,7 +144,7 @@ def send_register_verification_code(
 def send_login_verification_code(
     request: EmailCodeSendRequest,
     db: Session = Depends(get_db)
-):
+) -> EmailCodeSendResponse:
     """
     发送登录邮箱验证码
 
@@ -269,72 +165,20 @@ def send_login_verification_code(
         HTTPException 429: 发送过于频繁或已达每日上限
         HTTPException 500: 邮件发送失败
     """
-    email = request.email.lower()
-
-    # 查找已验证的真人用户
-    user = db.query(User).filter(
-        and_(
-            User.email == email,
-            User.email_verified == True,
-            User.is_ai_agent == False
+    try:
+        return verification_service.send_login_verification_code(
+            db,
+            request.email,
+            email_service,
         )
-    ).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该邮箱未绑定任何已验证账号"
-        )
-
-    # 检查发送频率限制
-    remaining = check_send_frequency_by_email(db, email, "login")
-    if remaining:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"发送过于频繁，请 {remaining} 秒后再试",
-            headers={"Retry-After": str(remaining)}
-        )
-
-    # 检查每日发送次数限制
-    if not check_daily_limit_by_email(db, email):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="今日发送次数已达上限，请明天再试"
-        )
-
-    # 生成验证码
-    code = generate_verification_code()
-
-    # 创建验证码记录
-    expires_at = datetime.utcnow() + timedelta(
-        minutes=settings.EMAIL_CODE_EXPIRE_MINUTES
-    )
-    verification = EmailVerificationCode(
-        user_id=user.id,
-        email=email,
-        code=code,
-        purpose="login",
-        expires_at=expires_at
-    )
-
-    db.add(verification)
-    db.commit()
-
-    # 发送邮件
-    success = email_service.send_verification_email(email, code, "login")
-
-    if not success:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="邮件发送失败，请稍后重试"
-        )
-
-    return EmailCodeSendResponse(
-        message="验证码已发送至您的邮箱",
-        email=email,
-        expires_in=settings.EMAIL_CODE_EXPIRE_MINUTES * 60
-    )
+    except (
+        verification_service.EmailAlreadyRegisteredError,
+        verification_service.VerifiedHumanUserNotFoundError,
+        verification_service.VerificationCodeFrequencyError,
+        verification_service.VerificationCodeDailyLimitError,
+        verification_service.EmailDeliveryError,
+    ) as exc:
+        _raise_send_code_http_error(exc)
 
 
 # ========== 用户注册（AI 用户直接注册） ==========
@@ -476,71 +320,20 @@ def verify_and_register(
             detail="真人用户注册必须提供邮箱地址"
         )
 
-    email = user_data.email.lower()
-
-    # 检查邮箱是否已被注册
-    existing_email = db.query(User).filter(User.email == email).first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该邮箱已被注册"
+    try:
+        db_user = identity_service.register_human_user_with_code(
+            db,
+            user_data.email,
+            user_data.password,
+            code,
         )
-
-    # 查询最新的有效验证码（未使用且未过期）
-    verification = db.query(EmailVerificationCode).filter(
-        and_(
-            EmailVerificationCode.email == email,
-            EmailVerificationCode.purpose == "register",
-            EmailVerificationCode.used == False,
-            EmailVerificationCode.expires_at > datetime.utcnow()
-        )
-    ).order_by(EmailVerificationCode.created_at.desc()).first()
-
-    if not verification:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="注册信息无效，请重新获取验证码"
-        )
-
-    if not verification.can_attempt(settings.EMAIL_CODE_MAX_ATTEMPTS):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证失败次数过多，请重新获取验证码"
-        )
-
-    # 验证验证码
-    if verification.code != code:
-        verification.attempt_count += 1
-        db.commit()
-        remaining = settings.EMAIL_CODE_MAX_ATTEMPTS - verification.attempt_count
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"验证码错误，还剩 {remaining} 次尝试机会"
-        )
-
-    # 验证码验证成功，标记为已使用
-    verification.used = True
-    verification.used_at = datetime.utcnow()
-
-    # 创建用户（暂时使用临时用户名，后续在资料完善页面更新）
-    password_hash = get_password_hash(user_data.password)
-
-    db_user = User(
-        username=f"用户_{verification.id}",  # 临时用户名，后续需在资料完善页面更新
-        password_hash=password_hash,
-        is_ai_agent=False,
-        ai_config_id=None,
-        email=email,
-        email_verified=True,
-        email_verified_at=datetime.utcnow(),
-    )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-
-    # 建立验证码与用户的关联
-    verification.user_id = db_user.id
-    db.commit()
+    except (
+        verification_service.EmailAlreadyRegisteredError,
+        verification_service.VerificationCodeNotFoundError,
+        verification_service.VerificationCodeAttemptsExceededError,
+        verification_service.VerificationCodeMismatchError,
+    ) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     client_type, user_agent, ip_address = _request_session_context(request)
     token_pair = session_service.create_session_token_pair(
@@ -610,13 +403,10 @@ def login(
 
     email = user_data.email.lower()
 
-    # 查找已验证的真人用户
     user = db.query(User).filter(
-        and_(
-            User.email == email,
-            User.email_verified == True,
-            User.is_ai_agent == False
-        )
+        User.email == email,
+        User.email_verified.is_(True),
+        User.is_ai_agent.is_(False),
     ).first()
 
     if not user:
@@ -635,52 +425,19 @@ def login(
                 detail="邮箱或密码错误"
             )
 
-    # 验证码登录方式
     else:
-        # 查询最新的有效登录验证码
-        verification = db.query(EmailVerificationCode).filter(
-            and_(
-                EmailVerificationCode.user_id == user.id,
-                EmailVerificationCode.email == email,
-                EmailVerificationCode.purpose == "login",
-                EmailVerificationCode.used == False
+        try:
+            identity_service.validate_login_verification_code(
+                db,
+                user,
+                email,
+                user_data.code or "",
             )
-        ).order_by(EmailVerificationCode.created_at.desc()).first()
-
-        # 统一错误信息，避免泄露验证码状态（无效、过期、尝试次数过多）
-        INVALID_CODE_MESSAGE = "验证码错误"
-
-        # 检查验证码是否存在、是否过期、是否超过尝试次数
-        if not verification:
+        except verification_service.VerificationCodeInvalidError as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=INVALID_CODE_MESSAGE
-            )
-
-        if verification.is_expired():
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=INVALID_CODE_MESSAGE
-            )
-
-        if not verification.can_attempt(settings.EMAIL_CODE_MAX_ATTEMPTS):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=INVALID_CODE_MESSAGE
-            )
-
-        if verification.code != user_data.code:
-            verification.attempt_count += 1
-            db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=INVALID_CODE_MESSAGE
-            )
-
-        # 验证成功，标记验证码已使用
-        verification.used = True
-        verification.used_at = datetime.utcnow()
-        db.commit()
+                detail=str(exc),
+            ) from exc
 
     ensure_account_available(db, user)
     client_type, user_agent, ip_address = _request_session_context(request)
@@ -785,13 +542,16 @@ def refresh(
     refresh token 会在 session_service 中被轮换；旧 refresh token 成功使用后立即失效。
     """
     _, user_agent, ip_address = _request_session_context(request)
-    token_pair = session_service.refresh_token_pair(
-        db=db,
-        refresh_token=payload.refresh_token,
-        expected_scope="user",
-        user_agent=user_agent,
-        ip_address=ip_address,
-    )
+    try:
+        token_pair = session_service.refresh_token_pair(
+            db=db,
+            refresh_token=payload.refresh_token,
+            expected_scope="user",
+            user_agent=user_agent,
+            ip_address=ip_address,
+        )
+    except session_service.RefreshTokenInvalidError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     return TokenResponse(**token_pair)
 
 
@@ -881,7 +641,7 @@ def get_current_user_info(
 def send_password_reset_code(
     request: PasswordResetRequest,
     db: Session = Depends(get_db)
-):
+) -> EmailCodeSendResponse:
     """
     发送密码重置验证码
 
@@ -900,79 +660,27 @@ def send_password_reset_code(
         HTTPException 429: 发送过于频繁或已达每日上限
         HTTPException 500: 邮件发送失败
     """
-    email = request.email.lower()
-
-    # 查找已验证的真人用户
-    user = db.query(User).filter(
-        and_(
-            User.email == email,
-            User.email_verified == True,
-            User.is_ai_agent == False
+    try:
+        return verification_service.send_password_reset_code(
+            db,
+            request.email,
+            email_service,
         )
-    ).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该邮箱未绑定任何已验证账号"
-        )
-
-    # 检查发送频率
-    remaining = check_send_frequency_by_email(db, email, "reset_password")
-    if remaining:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"发送过于频繁，请 {remaining} 秒后再试",
-            headers={"Retry-After": str(remaining)}
-        )
-
-    # 检查每日限制
-    if not check_daily_limit_by_email(db, email):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="今日发送次数已达上限，请明天再试"
-        )
-
-    # 生成验证码
-    code = generate_verification_code()
-
-    # 创建验证码记录
-    expires_at = datetime.utcnow() + timedelta(
-        minutes=settings.EMAIL_CODE_EXPIRE_MINUTES
-    )
-    verification = EmailVerificationCode(
-        user_id=user.id,
-        email=email,
-        code=code,
-        purpose="reset_password",
-        expires_at=expires_at
-    )
-
-    db.add(verification)
-    db.commit()
-
-    # 发送邮件
-    success = email_service.send_verification_email(email, code, "reset_password")
-
-    if not success:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="邮件发送失败，请稍后重试"
-        )
-
-    return EmailCodeSendResponse(
-        message="验证码已发送至您的邮箱",
-        email=email,
-        expires_in=settings.EMAIL_CODE_EXPIRE_MINUTES * 60
-    )
+    except (
+        verification_service.EmailAlreadyRegisteredError,
+        verification_service.VerifiedHumanUserNotFoundError,
+        verification_service.VerificationCodeFrequencyError,
+        verification_service.VerificationCodeDailyLimitError,
+        verification_service.EmailDeliveryError,
+    ) as exc:
+        _raise_send_code_http_error(exc)
 
 
 @router.post("/password-reset/confirm")
 def confirm_password_reset(
     request: PasswordResetConfirmRequest,
     db: Session = Depends(get_db)
-):
+) -> dict[str, str]:
     """
     确认密码重置
 
@@ -992,62 +700,19 @@ def confirm_password_reset(
         HTTPException 400: 验证码无效、已过期或尝试次数过多
         HTTPException 400: 验证码错误
     """
-    email = request.email.lower()
-
-    # 查找已验证的真人用户
-    user = db.query(User).filter(
-        and_(
-            User.email == email,
-            User.email_verified == True,
-            User.is_ai_agent == False
+    try:
+        identity_service.reset_password_with_code(
+            db,
+            request.email,
+            request.code,
+            request.new_password,
         )
-    ).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该邮箱未绑定任何已验证账号"
-        )
-
-    # 查询最新未使用的重置验证码（未使用且未过期）
-    verification = db.query(EmailVerificationCode).filter(
-        and_(
-            EmailVerificationCode.user_id == user.id,
-            EmailVerificationCode.email == email,
-            EmailVerificationCode.purpose == "reset_password",
-            EmailVerificationCode.used == False,
-            EmailVerificationCode.expires_at > datetime.utcnow()
-        )
-    ).order_by(EmailVerificationCode.created_at.desc()).first()
-
-    if not verification:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证码无效，请重新获取"
-        )
-
-    if not verification.can_attempt(settings.EMAIL_CODE_MAX_ATTEMPTS):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证失败次数过多，请重新获取验证码"
-        )
-
-    if verification.code != request.code:
-        verification.attempt_count += 1
-        db.commit()
-        remaining = settings.EMAIL_CODE_MAX_ATTEMPTS - verification.attempt_count
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"验证码错误，还剩 {remaining} 次尝试机会"
-        )
-
-    # 验证成功，标记验证码已使用
-    verification.used = True
-    verification.used_at = datetime.utcnow()
-
-    # 更新密码
-    user.password_hash = get_password_hash(request.new_password)
-
-    db.commit()
+    except (
+        verification_service.VerifiedHumanUserNotFoundError,
+        verification_service.VerificationCodeNotFoundError,
+        verification_service.VerificationCodeAttemptsExceededError,
+        verification_service.VerificationCodeMismatchError,
+    ) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return {"message": "密码重置成功，请使用新密码登录"}

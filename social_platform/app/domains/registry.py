@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from social_platform.app.domains.comment.models import Comment, CommentLike
 from social_platform.app.domains.follow.models import Follow
+from social_platform.app.domains.identity.models import EmailVerificationCode, UserSession
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.models import Like
@@ -17,8 +18,10 @@ __all__ = [
     "Comment",
     "CommentLike",
     "Follow",
+    "EmailVerificationCode",
     "Like",
     "Notification",
     "Post",
     "User",
+    "UserSession",
 ]

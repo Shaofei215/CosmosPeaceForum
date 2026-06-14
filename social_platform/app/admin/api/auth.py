@@ -16,8 +16,8 @@ from social_platform.app.admin.schemas import (
 )
 from social_platform.app.admin.services import auth_service
 from social_platform.app.api.deps import get_access_payload, get_db
-from social_platform.app.models.session import UserSession
-from social_platform.app.services import session_service
+from social_platform.app.domains.identity import sessions as session_service
+from social_platform.app.domains.identity.models import UserSession
 
 router = APIRouter(prefix="/auth", tags=["platform-admin-auth"])
 
@@ -25,7 +25,12 @@ router = APIRouter(prefix="/auth", tags=["platform-admin-auth"])
 def _request_session_context(request: Request) -> tuple[str, str | None, str | None]:
     """收集平台管理员 session 的端类型、User-Agent 和 IP。"""
     user_agent = request.headers.get("user-agent")
-    return session_service.detect_client_type(user_agent), user_agent, session_service.get_request_ip(request)
+    client_host = request.client.host if request.client else None
+    return (
+        session_service.detect_client_type(user_agent),
+        user_agent,
+        session_service.extract_client_ip(request.headers, client_host),
+    )
 
 
 def _session_response(session: UserSession, current_session_id: str | None = None) -> AdminSessionResponse:
@@ -74,13 +79,16 @@ async def login(request: AdminLoginRequest, http_request: Request, db: Session =
 async def refresh(request: AdminRefreshTokenRequest, http_request: Request, db: Session = Depends(get_db)):
     """轮换平台管理员 refresh token，并返回新的短期 access token。"""
     _, user_agent, ip_address = _request_session_context(http_request)
-    token_pair = session_service.refresh_token_pair(
-        db=db,
-        refresh_token=request.refresh_token,
-        expected_scope="platform_admin",
-        user_agent=user_agent,
-        ip_address=ip_address,
-    )
+    try:
+        token_pair = session_service.refresh_token_pair(
+            db=db,
+            refresh_token=request.refresh_token,
+            expected_scope="platform_admin",
+            user_agent=user_agent,
+            ip_address=ip_address,
+        )
+    except session_service.RefreshTokenInvalidError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     admin = auth_service.get_admin_by_id(db, int(get_access_payload(token_pair["access_token"], db, "platform_admin")["sub"]))
     if admin is None or not admin.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员不存在或已停用")
