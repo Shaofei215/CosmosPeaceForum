@@ -24,7 +24,7 @@ from social_platform.app.admin.schemas import (
 from social_platform.app.admin.services.permissions import ALL_PERMISSIONS, PERMISSION_MANAGE_HOT_TOPICS
 from social_platform.app.api.deps import get_access_payload, get_db
 from social_platform.app.db.session import SessionLocal
-from social_platform.app.services import hot_topic_service
+from social_platform.app.domains.hot_topic import application as hot_topic_service
 
 router = APIRouter(prefix="/hot-topics", tags=["platform-admin-hot-topics"])
 logger = logging.getLogger(__name__)

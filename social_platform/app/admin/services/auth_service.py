@@ -1,3 +1,5 @@
+"""管理端认证与管理员账号服务。"""
+
 import json
 from datetime import datetime
 from typing import Optional
@@ -12,6 +14,8 @@ from social_platform.app.core.security import create_access_token, get_password_
 
 
 def parse_permissions(raw_permissions: str | None) -> list[str]:
+    """解析管理员权限 JSON 字符串并过滤未知权限。"""
+
     try:
         value = json.loads(raw_permissions or "[]")
     except json.JSONDecodeError:
@@ -22,10 +26,14 @@ def parse_permissions(raw_permissions: str | None) -> list[str]:
 
 
 def dump_permissions(permissions: list[str] | None) -> str:
+    """把管理员权限列表序列化为稳定 JSON 字符串。"""
+
     return json.dumps(normalize_permissions(permissions), ensure_ascii=False)
 
 
 def admin_to_response(admin: PlatformAdminUser) -> AdminResponse:
+    """把管理员模型转换为管理端资料响应。"""
+
     permissions = ALL_PERMISSIONS if admin.is_super_admin else parse_permissions(admin.permissions)
     return AdminResponse(
         id=admin.id,
@@ -42,14 +50,20 @@ def admin_to_response(admin: PlatformAdminUser) -> AdminResponse:
 
 
 def get_admin_by_username(db: Session, username: str) -> Optional[PlatformAdminUser]:
+    """按用户名读取管理员账号。"""
+
     return db.query(PlatformAdminUser).filter(PlatformAdminUser.username == username).first()
 
 
 def get_admin_by_id(db: Session, admin_id: int) -> Optional[PlatformAdminUser]:
+    """按 ID 读取管理员账号。"""
+
     return db.query(PlatformAdminUser).filter(PlatformAdminUser.id == admin_id).first()
 
 
 def authenticate_admin(db: Session, username: str, password: str) -> Optional[PlatformAdminUser]:
+    """校验管理员用户名、密码和启用状态。"""
+
     admin = get_admin_by_username(db, username)
     if not admin or not admin.is_active:
         return None
@@ -59,6 +73,8 @@ def authenticate_admin(db: Session, username: str, password: str) -> Optional[Pl
 
 
 def create_admin_token(admin: PlatformAdminUser) -> str:
+    """为管理员创建带 platform_admin scope 的访问令牌。"""
+
     return create_access_token(
         data={
             "sub": str(admin.id),
@@ -88,6 +104,8 @@ def ensure_initial_admin(db: Session) -> bool:
 
 
 def update_last_login(db: Session, admin: PlatformAdminUser) -> None:
+    """更新管理员最近登录时间。"""
+
     admin.last_login = datetime.utcnow()
     db.add(admin)
     db.commit()
@@ -98,6 +116,8 @@ def update_profile(
     admin: PlatformAdminUser,
     request: AdminProfileUpdateRequest,
 ) -> PlatformAdminUser:
+    """更新管理员自己的用户名或密码。"""
+
     if not verify_password(request.current_password, admin.password_hash):
         raise ValueError("当前密码不正确")
 

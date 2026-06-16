@@ -1,3 +1,5 @@
+"""内容安全领域的被举报内容 LLM 自动审核用例。"""
+
 import json
 import logging
 from datetime import datetime
@@ -6,12 +8,13 @@ from typing import Any, Callable, Literal, Optional
 from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
-from social_platform.app.admin.services import auth_service, log_service, moderation_service
+from social_platform.app.admin.services import auth_service, log_service
 from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_CONTENT
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.comment.models import Comment
-from social_platform.app.models.content_moderation_llm import ContentModerationLLMSettings
-from social_platform.app.models.content_report import ContentReport
+from social_platform.app.domains.content_safety import admin_application as moderation_service
+from social_platform.app.domains.content_safety.models import ContentModerationLLMSettings
+from social_platform.app.domains.content_safety.models import ContentReport
 from social_platform.app.domains.post.models import Post
 
 logger = logging.getLogger(__name__)
@@ -51,10 +54,14 @@ Decision = Literal["pass", "delete", "drop"]
 
 
 def _now() -> datetime:
+    """返回当前 UTC 时间，便于统一写入更新时间。"""
+
     return datetime.utcnow()
 
 
 def _normalize_text(value: str | None) -> str | None:
+    """清理可选文本字段，空字符串按 ``None`` 处理。"""
+
     if value is None:
         return None
     stripped = value.strip()
@@ -62,10 +69,14 @@ def _normalize_text(value: str | None) -> str | None:
 
 
 def _mask_secret(value: str | None) -> str | None:
+    """对外序列化密钥字段时返回固定掩码。"""
+
     return SECRET_MASK if value else None
 
 
 def get_content_moderation_llm_settings(db: Session) -> ContentModerationLLMSettings:
+    """读取或创建被举报内容 LLM 审核单例配置。"""
+
     settings = db.query(ContentModerationLLMSettings).filter(ContentModerationLLMSettings.id == 1).first()
     if settings:
         return settings
@@ -77,6 +88,8 @@ def get_content_moderation_llm_settings(db: Session) -> ContentModerationLLMSett
 
 
 def serialize_settings(settings: ContentModerationLLMSettings) -> dict[str, Any]:
+    """序列化 LLM 审核配置并隐藏 API Key。"""
+
     return {
         "id": settings.id,
         "enabled": settings.enabled,
@@ -88,6 +101,8 @@ def serialize_settings(settings: ContentModerationLLMSettings) -> dict[str, Any]
 
 
 def update_content_moderation_llm_settings(db: Session, payload: dict[str, Any]) -> ContentModerationLLMSettings:
+    """应用管理端提交的 LLM 审核配置局部更新。"""
+
     settings = get_content_moderation_llm_settings(db)
     string_fields = {"llm_base_url", "llm_model_name", "llm_api_key"}
     for field, value in payload.items():
@@ -107,6 +122,8 @@ def update_content_moderation_llm_settings(db: Session, payload: dict[str, Any])
 
 
 def serialize_prompt_config(settings: ContentModerationLLMSettings) -> dict[str, Any]:
+    """序列化当前提示词、默认提示词和元信息。"""
+
     value = settings.prompt_template or DEFAULT_CONTENT_MODERATION_LLM_PROMPT
     return {
         "key": CONTENT_MODERATION_LLM_PROMPT_KEY,
@@ -119,6 +136,8 @@ def serialize_prompt_config(settings: ContentModerationLLMSettings) -> dict[str,
 
 
 def update_prompt_template(db: Session, value: str) -> ContentModerationLLMSettings:
+    """保存自定义 LLM 审核提示词模板。"""
+
     normalized = (value or "").strip()
     if not normalized:
         raise ValueError("提示词模板不能为空")
@@ -132,6 +151,8 @@ def update_prompt_template(db: Session, value: str) -> ContentModerationLLMSetti
 
 
 def reset_prompt_template(db: Session) -> ContentModerationLLMSettings:
+    """恢复 LLM 审核默认提示词模板。"""
+
     settings = get_content_moderation_llm_settings(db)
     settings.prompt_template = DEFAULT_CONTENT_MODERATION_LLM_PROMPT
     settings.updated_at = _now()
@@ -142,6 +163,8 @@ def reset_prompt_template(db: Session) -> ContentModerationLLMSettings:
 
 
 def build_prompt(context: dict[str, Any], template: str | None = None) -> str:
+    """把举报上下文渲染进审核提示词。"""
+
     context_json = json.dumps(context, ensure_ascii=False, indent=2)
     prompt = (template or DEFAULT_CONTENT_MODERATION_LLM_PROMPT).strip()
     if "{context_json}" in prompt:
@@ -150,6 +173,8 @@ def build_prompt(context: dict[str, Any], template: str | None = None) -> str:
 
 
 def parse_llm_decision(raw_output: str) -> tuple[Decision, str | None]:
+    """解析模型输出为审核决策和可选删除原因。"""
+
     first_line = (raw_output or "").strip().splitlines()[0].strip() if (raw_output or "").strip() else ""
     lowered = first_line.lower()
     if lowered == "pass":
@@ -169,6 +194,8 @@ def review_report(
     report_id: int,
     llm_factory: Optional[Callable[[ContentModerationLLMSettings], Any]] = None,
 ) -> tuple[Decision, str | None]:
+    """执行单条待审举报的 LLM 自动审核流程。"""
+
     settings = get_content_moderation_llm_settings(db)
     if not settings.enabled:
         return "drop", "LLM 审查未启用"
@@ -207,6 +234,8 @@ def review_report(
 
 
 def review_report_in_background(report_id: int) -> None:
+    """在后台任务中使用独立数据库会话审核举报。"""
+
     db = SessionLocal()
     try:
         review_report(db, report_id)
@@ -224,6 +253,8 @@ def apply_llm_decision(
     decision: Decision,
     reason: str | None,
 ) -> None:
+    """把 LLM 决策应用到被举报内容。"""
+
     admin = get_or_create_llm_moderator_admin(db)
     content_type = report.target_type
     content_id = report.post_id if content_type == "post" else report.comment_id
@@ -264,6 +295,8 @@ def apply_llm_decision(
 
 
 def build_report_context(db: Session, report: ContentReport) -> dict[str, Any]:
+    """构建单条举报的 LLM 审核上下文。"""
+
     target_type = report.target_type
     content_id = report.post_id if target_type == "post" else report.comment_id
     reports = _pending_reports_for_same_target(db, target_type, content_id)
@@ -302,6 +335,8 @@ def build_report_context(db: Session, report: ContentReport) -> dict[str, Any]:
 
 
 def get_or_create_llm_moderator_admin(db: Session) -> PlatformAdminUser:
+    """读取或创建代表自动审核系统的禁用管理员账号。"""
+
     admin = auth_service.get_admin_by_username(db, LLM_MODERATOR_USERNAME)
     if admin:
         return admin
@@ -320,6 +355,8 @@ def get_or_create_llm_moderator_admin(db: Session) -> PlatformAdminUser:
 
 
 def _get_pending_report(db: Session, report_id: int) -> ContentReport | None:
+    """读取指定待审举报。"""
+
     return db.query(ContentReport).filter(
         ContentReport.id == report_id,
         ContentReport.status == "pending",
@@ -331,6 +368,8 @@ def _pending_reports_for_same_target(
     target_type: str,
     content_id: int | None,
 ) -> list[ContentReport]:
+    """读取同一目标内容下的全部待审举报。"""
+
     if content_id is None:
         return []
     query = db.query(ContentReport).filter(
@@ -345,6 +384,8 @@ def _pending_reports_for_same_target(
 
 
 def _post_payload(post: Post | None) -> dict[str, Any] | None:
+    """把帖子压缩为 LLM 审核上下文中的 JSON 片段。"""
+
     if post is None:
         return None
     return {
@@ -361,6 +402,8 @@ def _post_payload(post: Post | None) -> dict[str, Any] | None:
 
 
 def _comment_payload(comment: Comment | None) -> dict[str, Any] | None:
+    """把评论压缩为 LLM 审核上下文中的 JSON 片段。"""
+
     if comment is None:
         return None
     return {
@@ -378,6 +421,8 @@ def _comment_payload(comment: Comment | None) -> dict[str, Any] | None:
 
 
 def _log_llm_failure(db: Session, report_id: int, exc: BaseException) -> None:
+    """记录 LLM 审核失败的管理员操作日志。"""
+
     try:
         admin = get_or_create_llm_moderator_admin(db)
         log_service.create_operation_log(

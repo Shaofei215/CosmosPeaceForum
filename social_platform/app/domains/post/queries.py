@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from social_platform.app.domains.post.models import Post
-from social_platform.app.services import mention_service
+from social_platform.app.domains.mention import application as mention_service
 
 
 MentionUserData = dict[str, object]

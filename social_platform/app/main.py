@@ -48,7 +48,7 @@ def start_scheduler():
     - 每6小时执行一次
     """
     from social_platform.app.domains.heat.application import refresh_all_heat_scores
-    from social_platform.app.services.hot_topic_service import register_hot_topic_scheduler
+    from social_platform.app.domains.hot_topic.application import register_hot_topic_scheduler
     from social_platform.app.tasks import cleanup_expired_verification_codes
 
     scheduler.add_job(

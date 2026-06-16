@@ -13,7 +13,10 @@ from social_platform.app.admin.schemas import (
     PaginatedResponse,
     ReportedContentItemResponse,
 )
-from social_platform.app.admin.services.moderation_service import (
+from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_CONTENT
+from social_platform.app.api.deps import get_db
+from social_platform.app.domains.content_safety import llm_moderation as content_moderation_llm_service
+from social_platform.app.domains.content_safety.admin_application import (
     ContentType,
     delete_comment_as_admin,
     delete_post_as_admin,
@@ -23,9 +26,6 @@ from social_platform.app.admin.services.moderation_service import (
     list_reported_content,
     release_reported_content,
 )
-from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_CONTENT
-from social_platform.app.api.deps import get_db
-from social_platform.app.services import content_moderation_llm_service
 
 router = APIRouter(prefix="/content", tags=["platform-admin-content"])
 
@@ -41,7 +41,6 @@ async def content(
 ):
     items, total = list_content(db, content_type=content_type, skip=skip, limit=limit, keyword=keyword)
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
-
 
 
 @router.get("/report-moderation/settings", response_model=ContentModerationLLMSettingsResponse)
@@ -204,4 +203,3 @@ async def delete_comment(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return None
-

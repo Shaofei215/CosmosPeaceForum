@@ -1,58 +1,36 @@
-from typing import Iterable, Optional
+"""通知领域的公告发布用例。"""
+
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
-from social_platform.app.admin.schemas import AdminAnnouncementRequest
 from social_platform.app.admin.services.log_service import create_operation_log
+from social_platform.app.domains.notification.system import create_system_notifications
 from social_platform.app.domains.user.models import User
-from social_platform.app.domains.notification import application as notification_service
-
-
-def create_system_notifications(
-    db: Session,
-    recipient_ids: Iterable[int],
-    content: str,
-    notification_type: str,
-    resource_type: str = "system",
-    resource_id: int = 0,
-) -> int:
-    unique_recipient_ids = list(dict.fromkeys(recipient_ids))
-    for recipient_id in unique_recipient_ids:
-        notification_service.create_notification(
-            db=db,
-            recipient_id=recipient_id,
-            sender_id=None,
-            notification_type=notification_type,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            source_content=content,
-            truncate_source_content=False,
-        )
-    return len(unique_recipient_ids)
-
-
-def create_user_moderation_notice(
-    db: Session,
-    user_id: int,
-    content: str,
-) -> None:
-    create_system_notifications(
-        db=db,
-        recipient_ids=[user_id],
-        content=content,
-        notification_type="moderation",
-        resource_type="user",
-        resource_id=user_id,
-    )
 
 
 def publish_announcement(
     db: Session,
-    request: AdminAnnouncementRequest,
+    content: str,
     admin: PlatformAdminUser,
     recipient_ids: Optional[list[int]] = None,
 ) -> int:
+    """发布系统公告并记录管理员操作日志。
+
+    Args:
+        db: SQLAlchemy 数据库会话。
+        content: 公告正文。
+        admin: 执行发布的管理员。
+        recipient_ids: 可选接收人 ID；为空时发送给所有用户。
+
+    Returns:
+        int: 实际接收公告的用户数量。
+
+    Raises:
+        ValueError: 指定接收人中存在不存在的用户时抛出。
+    """
+
     if recipient_ids is None:
         recipient_ids = [row[0] for row in db.query(User.id).all()]
     else:
@@ -69,7 +47,7 @@ def publish_announcement(
     recipient_count = create_system_notifications(
         db=db,
         recipient_ids=recipient_ids,
-        content=request.content,
+        content=content,
         notification_type="announcement",
     )
     create_operation_log(

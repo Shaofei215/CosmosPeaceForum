@@ -16,7 +16,7 @@ from social_platform.app.domains.reaction.events import LikeChanged
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.shared.unit_of_work import commit_session, rollback_session
 from social_platform.app.domains.post import application as post_application
-from social_platform.app.services import mention_service
+from social_platform.app.domains.mention import application as mention_service
 
 
 MIN_COMMENT_POOL_SIZE = 40

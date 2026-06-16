@@ -1,6 +1,12 @@
+"""内容安全领域持久化模型。
+
+本模块拥有用户举报记录和被举报内容 LLM 自动审查配置。表结构保持与迁移前一致，
+供公开举报 API、管理端内容审核和后台 LLM 审核流程共同使用。
+"""
+
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from social_platform.app.db.session import Base
@@ -39,3 +45,17 @@ class ContentReport(Base):
         Index("idx_content_reports_reporter_post_status", "reporter_id", "post_id", "status"),
         Index("idx_content_reports_reporter_comment_status", "reporter_id", "comment_id", "status"),
     )
+
+
+class ContentModerationLLMSettings(Base):
+    """被举报内容 LLM 自动审查配置。"""
+
+    __tablename__ = "content_moderation_llm_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+    enabled = Column(Boolean, nullable=False, default=False, server_default="0")
+    llm_base_url = Column(String(500), nullable=True)
+    llm_model_name = Column(String(120), nullable=True)
+    llm_api_key = Column(String(500), nullable=True)
+    prompt_template = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)

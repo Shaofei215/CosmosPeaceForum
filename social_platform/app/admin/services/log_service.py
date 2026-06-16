@@ -1,3 +1,5 @@
+"""管理端操作日志服务。"""
+
 import json
 from typing import Any, Optional
 
@@ -15,6 +17,8 @@ def create_operation_log(
     target_id: Optional[int] = None,
     details: Optional[dict[str, Any]] = None,
 ) -> PlatformAdminOperationLog:
+    """创建一条管理员操作日志但不主动提交事务。"""
+
     log = PlatformAdminOperationLog(
         operator_id=admin.id if admin else None,
         operator_username=admin.username if admin else None,
@@ -34,6 +38,8 @@ def list_operation_logs(
     action: Optional[str] = None,
     target_type: Optional[str] = None,
 ) -> tuple[list[PlatformAdminOperationLog], int]:
+    """分页读取管理员操作日志。"""
+
     query = db.query(PlatformAdminOperationLog)
     if action:
         query = query.filter(PlatformAdminOperationLog.action == action)
@@ -47,4 +53,3 @@ def list_operation_logs(
         .all()
     )
     return items, total
-

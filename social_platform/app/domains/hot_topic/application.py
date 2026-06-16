@@ -1,4 +1,4 @@
-"""热榜服务，被公开 API、管理 API 和后台调度共同使用。
+"""热榜领域应用服务，被公开 API、管理 API 和后台调度共同使用。
 
 本模块把热榜生命周期收束在一处：人工编辑、Agent 生成草稿、发布归档、
 LLM 工具编排和 APScheduler 注册都复用同一套持久化规则。
@@ -16,7 +16,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.db.session import SessionLocal
-from social_platform.app.models.hot_topic import HotTopic, HotTopicGeneration, HotTopicSettings
+from social_platform.app.domains.hot_topic.models import HotTopic, HotTopicGeneration, HotTopicSettings
 from social_platform.app.domains.post.models import Post
 
 logger = logging.getLogger(__name__)
@@ -397,10 +397,14 @@ def delete_hot_topic(db: Session, topic_id: int) -> None:
 
 
 def publish_hot_topic(db: Session, topic_id: int) -> HotTopic:
+    """把单条热榜发布到 active 状态。"""
+
     return update_hot_topic(db, topic_id, {"status": "active"})
 
 
 def archive_hot_topic(db: Session, topic_id: int) -> HotTopic:
+    """把单条热榜归档到 archived 状态。"""
+
     return update_hot_topic(db, topic_id, {"status": "archived"})
 
 

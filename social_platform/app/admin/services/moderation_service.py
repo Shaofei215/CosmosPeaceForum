@@ -1,16 +1,15 @@
+"""管理端用户处罚与仪表盘统计服务。"""
+
 from datetime import datetime, timedelta
-from typing import Literal, Optional
+from typing import Optional
 
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.models.user_moderation import UserModeration
 from social_platform.app.admin.schemas import (
-    ContentItemResponse,
-    ContentReportReasonResponse,
     DashboardStatsResponse,
-    ReportedContentItemResponse,
     UserModerationBatchUpdateRequest,
     UserModerationBatchUpdateResponse,
     UserModerationResponse,
@@ -18,20 +17,14 @@ from social_platform.app.admin.schemas import (
     UserModerationUpdateRequest,
     UserWithModerationResponse,
 )
-from social_platform.app.admin.services.announcement_service import create_user_moderation_notice
 from social_platform.app.admin.services.log_service import create_operation_log
 from social_platform.app.domains.comment.models import Comment, CommentLike
-from social_platform.app.models.content_report import ContentReport
 from social_platform.app.domains.follow.models import Follow
-from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.notification.system import create_user_moderation_notice
 from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.user.models import User
-from social_platform.app.domains.heat import application as heat_service
-from social_platform.app.domains.notification import application as notification_service
-from social_platform.app.domains.search import application as search_service
 
-
-ContentType = Literal["post", "comment"]
 
 _RESTRICTION_LABELS = {
     "publish": "发帖功能",
@@ -45,6 +38,8 @@ _last_cpu_snapshot: tuple[int, int] | None = None
 def moderation_to_status(
     moderation: Optional[UserModeration],
 ) -> UserModerationStatusResponse:
+    """把用户处罚模型转换为管理端响应状态。"""
+
     if moderation is None:
         return UserModerationStatusResponse()
     return UserModerationStatusResponse(
@@ -62,6 +57,8 @@ def moderation_to_status(
 
 
 def get_or_create_moderation(db: Session, user_id: int, admin_id: int) -> UserModeration:
+    """读取或创建用户处罚状态记录。"""
+
     moderation = db.query(UserModeration).filter(UserModeration.user_id == user_id).first()
     if moderation is not None:
         return moderation
@@ -77,6 +74,8 @@ def update_user_moderation(
     request: UserModerationUpdateRequest,
     admin: PlatformAdminUser,
 ) -> UserModeration:
+    """更新单个用户的处罚状态并记录操作日志。"""
+
     moderation = _apply_user_moderation_update(db, user_id, request, admin)
     create_operation_log(
         db,
@@ -96,6 +95,8 @@ def update_users_moderation(
     request: UserModerationBatchUpdateRequest,
     admin: PlatformAdminUser,
 ) -> UserModerationBatchUpdateResponse:
+    """批量更新用户处罚状态并返回更新摘要。"""
+
     existing_user_ids = {
         row[0]
         for row in db.query(User.id).filter(User.id.in_(request.user_ids)).all()
@@ -138,6 +139,8 @@ def _apply_user_moderation_update(
     request: UserModerationUpdateRequest,
     admin: PlatformAdminUser,
 ) -> UserModeration:
+    """应用用户处罚字段变更并生成必要通知。"""
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise ValueError("用户不存在")
@@ -181,16 +184,22 @@ def _apply_user_moderation_update(
 
 
 def _format_until(value: datetime) -> str:
+    """格式化临时限制截止时间。"""
+
     return value.strftime("%Y-%m-%d %H:%M")
 
 
 def _append_reason(content: str, reason: Optional[str]) -> str:
+    """在通知正文中附加处罚原因。"""
+
     if reason:
         return f"{content}\n原因：{reason}"
     return content
 
 
 def _append_appeal_email(content: str, admin: PlatformAdminUser) -> str:
+    """在通知正文中附加管理员申诉邮箱。"""
+
     if admin.email:
         return f"{content}\n如有异议，请向{admin.email}申诉。"
     return content
@@ -201,6 +210,8 @@ def _create_user_moderation_notification(
     user_id: int,
     content: str,
 ) -> None:
+    """创建用户处罚系统通知。"""
+
     create_user_moderation_notice(db, user_id, content)
 
 
@@ -213,6 +224,8 @@ def _notify_user_moderation_changes(
     previous_restrictions: dict[str, tuple[Optional[datetime], Optional[str]]],
     admin: PlatformAdminUser,
 ) -> None:
+    """根据处罚前后状态差异向用户发送通知。"""
+
     if request.account_banned is not None:
         current_reason = request.account_ban_reason if request.account_banned else None
         if request.account_banned and (
@@ -264,6 +277,8 @@ def list_users(
     limit: int,
     keyword: Optional[str] = None,
 ) -> tuple[list[UserWithModerationResponse], int]:
+    """分页读取用户列表，并附加内容数量和处罚状态。"""
+
     query = db.query(User)
     if keyword:
         like = f"%{keyword.strip()}%"
@@ -307,379 +322,9 @@ def list_users(
     ], total
 
 
-def _notify_moderation_action(
-    db: Session,
-    recipient_id: int,
-    resource_type: str,
-    resource_id: int,
-    reason: Optional[str],
-) -> None:
-    content = "你的内容因违反社区规则已被管理端处理。"
-    if reason:
-        content = f"{content}\n原因：{reason}"
-    notification_service.create_notification(
-        db=db,
-        recipient_id=recipient_id,
-        sender_id=None,
-        notification_type="moderation",
-        resource_type=resource_type,
-        resource_id=resource_id,
-        source_content=content,
-        truncate_source_content=False,
-    )
-
-
-def delete_post_as_admin(
-    db: Session,
-    post_id: int,
-    admin: PlatformAdminUser,
-    reason: Optional[str] = None,
-    notify_author: bool = True,
-) -> None:
-    post = db.query(Post).filter(Post.id == post_id).first()
-    if not post:
-        raise ValueError("帖子不存在")
-
-    author_id = post.author_id
-    db.query(Post).filter(Post.repost_root_post_id == post_id).update(
-        {Post.repost_root_post_id: None},
-        synchronize_session=False,
-    )
-    db.query(Like).filter(Like.post_id == post_id).delete(synchronize_session=False)
-    db.query(Comment).filter(Comment.post_id == post_id).delete(synchronize_session=False)
-    if notify_author:
-        _notify_moderation_action(db, author_id, "post", post_id, reason)
-    create_operation_log(
-        db,
-        admin,
-        action="delete_post",
-        target_type="post",
-        target_id=post_id,
-        details={"reason": reason, "notify_author": notify_author},
-    )
-    db.delete(post)
-    db.commit()
-    search_service.delete_post(post_id)
-
-
-def _get_descendant_comment_ids(db: Session, comment_id: int) -> list[int]:
-    return [
-        row[0]
-        for row in db.query(Comment.id).filter(Comment.root_comment_id == comment_id).all()
-    ]
-
-
-def delete_comment_as_admin(
-    db: Session,
-    comment_id: int,
-    admin: PlatformAdminUser,
-    reason: Optional[str] = None,
-    notify_author: bool = True,
-) -> None:
-    comment = db.query(Comment).filter(Comment.id == comment_id).first()
-    if not comment:
-        raise ValueError("评论不存在")
-
-    post_id = comment.post_id
-    parent_id = comment.parent_id
-    root_comment_id = comment.root_comment_id
-    owner_id = comment.owner_id
-    if parent_id is None:
-        count_to_subtract = 1 + len(_get_descendant_comment_ids(db, comment_id))
-    else:
-        count_to_subtract = 1
-        db.query(Comment).filter(Comment.parent_id == comment_id).update(
-            {Comment.parent_id: parent_id},
-            synchronize_session=False,
-        )
-        db.flush()
-
-    db.query(CommentLike).filter(CommentLike.comment_id == comment_id).delete(
-        synchronize_session=False
-    )
-    post = db.query(Post).filter(Post.id == post_id).first()
-    if post:
-        post.comment_count = max(0, post.comment_count - count_to_subtract)
-        heat_service.refresh_post_heat_score(db, post)
-
-    if parent_id is not None:
-        root = db.query(Comment).filter(Comment.id == root_comment_id).first()
-        if root:
-            root.reply_count = max(0, root.reply_count - count_to_subtract)
-            heat_service.refresh_comment_heat_score(db, root)
-
-    if notify_author:
-        _notify_moderation_action(db, owner_id, "comment", comment_id, reason)
-    create_operation_log(
-        db,
-        admin,
-        action="delete_comment",
-        target_type="comment",
-        target_id=comment_id,
-        details={"reason": reason, "notify_author": notify_author},
-    )
-    db.delete(comment)
-    db.commit()
-
-
-def list_content(
-    db: Session,
-    content_type: Optional[ContentType],
-    skip: int,
-    limit: int,
-    keyword: Optional[str] = None,
-) -> tuple[list[ContentItemResponse], int]:
-    items: list[ContentItemResponse] = []
-    if content_type in (None, "post"):
-        query = db.query(Post).options(joinedload(Post.author))
-        if keyword:
-            like = f"%{keyword.strip()}%"
-            query = query.filter(or_(Post.title.like(like), Post.content.like(like)))
-        posts = query.order_by(Post.created_at.desc()).all()
-        items.extend(
-            ContentItemResponse(
-                id=post.id,
-                type=post.type,
-                post_id=post.id,
-                author_id=post.author_id,
-                author_username=post.author.username if post.author else None,
-                title=post.title,
-                content=post.content,
-                created_at=post.created_at,
-                like_count=post.like_count,
-                comment_count=post.comment_count,
-            )
-            for post in posts
-        )
-    if content_type in (None, "comment"):
-        query = db.query(Comment).join(Post, Comment.post_id == Post.id).options(
-            joinedload(Comment.owner)
-        )
-        if keyword:
-            query = query.filter(Comment.content.like(f"%{keyword.strip()}%"))
-        comments = query.order_by(Comment.created_at.desc()).all()
-        items.extend(
-            ContentItemResponse(
-                id=comment.id,
-                type="comment",
-                post_id=comment.post_id,
-                author_id=comment.owner_id,
-                author_username=comment.owner.username if comment.owner else None,
-                content=comment.content,
-                created_at=comment.created_at,
-                like_count=comment.like_count,
-                reply_count=comment.reply_count,
-            )
-            for comment in comments
-        )
-    items.sort(key=lambda item: item.created_at, reverse=True)
-    total = len(items)
-    return items[skip:skip + limit], total
-
-
-def list_reported_content(
-    db: Session,
-    content_type: Optional[ContentType],
-    skip: int,
-    limit: int,
-    keyword: Optional[str] = None,
-) -> tuple[list[ReportedContentItemResponse], int]:
-    reports = _pending_reports_query(db, content_type).all()
-    keyword_value = keyword.strip() if keyword else None
-    grouped: dict[tuple[str, int], dict[str, object]] = {}
-
-    for report in reports:
-        if report.target_type == "post":
-            target = report.post
-            target_id = report.post_id
-        else:
-            target = report.comment
-            target_id = report.comment_id
-        if target is None or target_id is None:
-            continue
-
-        key = (report.target_type, target_id)
-        group = grouped.setdefault(
-            key,
-            {"target": target, "reports": []},
-        )
-        group_reports = group["reports"]
-        assert isinstance(group_reports, list)
-        group_reports.append(report)
-
-    items: list[ReportedContentItemResponse] = []
-    for (target_type, _), group in grouped.items():
-        target = group["target"]
-        group_reports = group["reports"]
-        assert isinstance(group_reports, list)
-        if not group_reports:
-            continue
-
-        item = _reported_content_item_from_group(target_type, target, group_reports)
-        if keyword_value and keyword_value not in (item.title or "") and keyword_value not in item.content:
-            continue
-        items.append(item)
-
-    items.sort(key=lambda item: (item.report_count, item.last_reported_at), reverse=True)
-    total = len(items)
-    return items[skip:skip + limit], total
-
-
-def release_reported_content(
-    db: Session,
-    content_type: ContentType,
-    content_id: int,
-    admin: PlatformAdminUser,
-) -> int:
-    reports = _pending_reports_for_target(db, content_type, content_id).all()
-    if not reports:
-        raise ValueError("待审举报不存在")
-
-    now = datetime.utcnow()
-    for report in reports:
-        report.status = "released"
-        report.reviewed_at = now
-        report.reviewed_by_admin_id = admin.id
-    create_operation_log(
-        db,
-        admin,
-        action="release_reported_content",
-        target_type=content_type,
-        target_id=content_id,
-        details={"report_count": len(reports)},
-    )
-    db.commit()
-    return len(reports)
-
-
-def delete_reported_post_as_admin(
-    db: Session,
-    post_id: int,
-    admin: PlatformAdminUser,
-    reason: Optional[str] = None,
-    notify_author: bool = True,
-) -> None:
-    post = db.query(Post).filter(Post.id == post_id).first()
-    if not post:
-        raise ValueError("帖子不存在")
-    reporter_ids = _pending_reporter_ids(db, "post", post_id)
-    _notify_reporters_content_deleted(db, reporter_ids, "post", post_id)
-    delete_post_as_admin(db, post_id, admin, reason=reason, notify_author=notify_author)
-
-
-def delete_reported_comment_as_admin(
-    db: Session,
-    comment_id: int,
-    admin: PlatformAdminUser,
-    reason: Optional[str] = None,
-    notify_author: bool = True,
-) -> None:
-    comment = db.query(Comment).filter(Comment.id == comment_id).first()
-    if not comment:
-        raise ValueError("评论不存在")
-    reporter_ids = _pending_reporter_ids(db, "comment", comment_id)
-    _notify_reporters_content_deleted(db, reporter_ids, "comment", comment_id)
-    delete_comment_as_admin(db, comment_id, admin, reason=reason, notify_author=notify_author)
-
-
-def _pending_reports_query(db: Session, content_type: Optional[ContentType]):
-    query = db.query(ContentReport).options(
-        joinedload(ContentReport.post).joinedload(Post.author),
-        joinedload(ContentReport.comment).joinedload(Comment.owner),
-    ).filter(ContentReport.status == "pending")
-    if content_type:
-        query = query.filter(ContentReport.target_type == content_type)
-    return query
-
-
-def _pending_reports_for_target(db: Session, content_type: ContentType, content_id: int):
-    query = db.query(ContentReport).filter(
-        ContentReport.status == "pending",
-        ContentReport.target_type == content_type,
-    )
-    if content_type == "post":
-        return query.filter(ContentReport.post_id == content_id)
-    return query.filter(ContentReport.comment_id == content_id)
-
-
-def _pending_reporter_ids(db: Session, content_type: ContentType, content_id: int) -> list[int]:
-    return sorted({
-        row[0]
-        for row in _pending_reports_for_target(db, content_type, content_id)
-        .with_entities(ContentReport.reporter_id)
-        .all()
-    })
-
-
-def _reported_content_item_from_group(
-    target_type: str,
-    target: Post | Comment,
-    reports: list[ContentReport],
-) -> ReportedContentItemResponse:
-    reason_counts: dict[str, int] = {}
-    for report in reports:
-        reason_counts[report.reason] = reason_counts.get(report.reason, 0) + 1
-    report_reasons = [
-        ContentReportReasonResponse(reason=reason, count=count)
-        for reason, count in sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)
-    ]
-    last_reported_at = max(report.created_at for report in reports)
-
-    if target_type == "post":
-        assert isinstance(target, Post)
-        return ReportedContentItemResponse(
-            id=target.id,
-            type=target.type,
-            post_id=target.id,
-            author_id=target.author_id,
-            author_username=target.author.username if target.author else None,
-            title=target.title,
-            content=target.content,
-            created_at=target.created_at,
-            like_count=target.like_count,
-            comment_count=target.comment_count,
-            report_count=len({report.reporter_id for report in reports}),
-            report_reasons=report_reasons,
-            last_reported_at=last_reported_at,
-        )
-
-    assert isinstance(target, Comment)
-    return ReportedContentItemResponse(
-        id=target.id,
-        type="comment",
-        post_id=target.post_id,
-        author_id=target.owner_id,
-        author_username=target.owner.username if target.owner else None,
-        content=target.content,
-        created_at=target.created_at,
-        like_count=target.like_count,
-        reply_count=target.reply_count,
-        report_count=len({report.reporter_id for report in reports}),
-        report_reasons=report_reasons,
-        last_reported_at=last_reported_at,
-    )
-
-
-def _notify_reporters_content_deleted(
-    db: Session,
-    reporter_ids: list[int],
-    resource_type: str,
-    resource_id: int,
-) -> None:
-    for reporter_id in reporter_ids:
-        notification_service.create_notification(
-            db=db,
-            recipient_id=reporter_id,
-            sender_id=None,
-            notification_type="moderation",
-            resource_type=resource_type,
-            resource_id=resource_id,
-            source_content="你举报的内容存在违规，已被管理端处理。",
-            truncate_source_content=False,
-        )
-
-
 def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
+    """读取管理端 dashboard 汇总统计。"""
+
     since = datetime.utcnow() - timedelta(days=1)
     active_user_ids = set()
     for rows in (
@@ -723,6 +368,8 @@ def _read_process_cpu_usage_percent() -> float:
 
 
 def _read_process_cpu_ticks() -> int:
+    """读取当前进程累计 CPU tick。"""
+
     with open("/proc/self/stat", "r", encoding="utf-8") as f:
         content = f.read()
     fields = content.rsplit(")", 1)[1].split()
@@ -730,11 +377,15 @@ def _read_process_cpu_ticks() -> int:
 
 
 def _read_system_cpu_ticks() -> int:
+    """读取系统累计 CPU tick。"""
+
     with open("/proc/stat", "r", encoding="utf-8") as f:
         return sum(int(value) for value in f.readline().split()[1:])
 
 
 def _read_process_average_cpu_usage_percent(process_ticks: int, cpu_count: int) -> float:
+    """按进程启动以来的平均值估算 CPU 使用率。"""
+
     clock_ticks = _clock_ticks()
     with open("/proc/self/stat", "r", encoding="utf-8") as f:
         fields = f.read().rsplit(")", 1)[1].split()
@@ -774,12 +425,16 @@ def _read_process_memory_usage_percent() -> float:
 
 
 def _clock_ticks() -> int:
+    """读取系统每秒 clock tick 数。"""
+
     import os
 
     return int(os.sysconf(os.sysconf_names["SC_CLK_TCK"]))
 
 
 def _cpu_count() -> int:
+    """读取可用 CPU 核心数。"""
+
     import os
 
     return os.cpu_count() or 1
