@@ -9,12 +9,17 @@ from sqlalchemy.orm import Session
 
 from social_platform.app.domains.comment.events import CommentCreated
 from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.content_safety.events import (
+    ContentModerationActionApplied,
+    ReportedContentViolationConfirmed,
+)
 from social_platform.app.domains.follow.events import FollowChanged
 from social_platform.app.domains.post.events import RepostCreated
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.events import LikeChanged
 from social_platform.app.shared.events import subscribe_domain_event
 from social_platform.app.domains.notification import application as notification_service
+from social_platform.app.domains.notification.system import create_system_notifications
 
 
 def handle_like_changed(db: Session, event: LikeChanged) -> None:
@@ -90,6 +95,41 @@ def handle_repost_created(db: Session, event: RepostCreated) -> None:
     )
 
 
+def handle_content_moderation_action_applied(
+    db: Session,
+    event: ContentModerationActionApplied,
+) -> None:
+    """处理内容安全处罚事件并通知内容作者。"""
+
+    content = "你的内容因违反社区规则已被管理端处理。"
+    if event.reason:
+        content = f"{content}\n原因：{event.reason}"
+    create_system_notifications(
+        db=db,
+        recipient_ids=[event.recipient_id],
+        content=content,
+        notification_type="moderation",
+        resource_type=event.resource_type,
+        resource_id=event.resource_id,
+    )
+
+
+def handle_reported_content_violation_confirmed(
+    db: Session,
+    event: ReportedContentViolationConfirmed,
+) -> None:
+    """处理举报确认违规事件并通知举报人。"""
+
+    create_system_notifications(
+        db=db,
+        recipient_ids=event.reporter_ids,
+        content="你举报的内容存在违规，已被管理端处理。",
+        notification_type="moderation",
+        resource_type=event.resource_type,
+        resource_id=event.resource_id,
+    )
+
+
 def register_notification_subscribers() -> None:
     """注册通知领域事件订阅器。"""
 
@@ -97,3 +137,8 @@ def register_notification_subscribers() -> None:
     subscribe_domain_event(CommentCreated, handle_comment_created)
     subscribe_domain_event(FollowChanged, handle_follow_changed)
     subscribe_domain_event(RepostCreated, handle_repost_created)
+    subscribe_domain_event(ContentModerationActionApplied, handle_content_moderation_action_applied)
+    subscribe_domain_event(
+        ReportedContentViolationConfirmed,
+        handle_reported_content_violation_confirmed,
+    )

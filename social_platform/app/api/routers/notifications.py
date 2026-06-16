@@ -18,7 +18,7 @@ from social_platform.app.domains.notification.schemas import (
 )
 from social_platform.app.domains.notification import application as notification_service
 from social_platform.app.domains.post import queries as post_queries
-from social_platform.app.services import mention_service
+from social_platform.app.domains.mention import application as mention_service
 from social_platform.app.domains.notification.stream import (
     get_notification_version,
     wait_for_notification_update,

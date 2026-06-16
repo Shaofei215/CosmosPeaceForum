@@ -8,21 +8,21 @@ from sqlalchemy.orm import sessionmaker
 from social_platform.app.admin.models import PlatformAdminOperationLog, PlatformAdminUser, UserModeration
 from social_platform.app.admin.schemas import UserModerationUpdateRequest
 from social_platform.app.admin.services.moderation_guard import ensure_account_available
-from social_platform.app.services.report_service import create_content_report
-from social_platform.app.services import content_moderation_llm_service
-from social_platform.app.admin.services.moderation_service import (
+from social_platform.app.admin.services.moderation_service import update_user_moderation
+from social_platform.app.domains.content_safety.application import create_content_report
+from social_platform.app.domains.content_safety import llm_moderation as content_moderation_llm_service
+from social_platform.app.domains.content_safety.admin_application import (
     delete_post_as_admin,
     delete_reported_post_as_admin,
     list_reported_content,
     release_reported_content,
-    update_user_moderation,
 )
 from social_platform.app.db.session import Base
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
-from social_platform.app.models.content_report import ContentReport
+from social_platform.app.domains.content_safety.models import ContentReport
 
 
 @pytest.fixture()

@@ -1,3 +1,5 @@
+"""管理端权限常量与归一化工具。"""
+
 PERMISSION_VIEW_DASHBOARD = "view_dashboard"
 PERMISSION_MANAGE_USERS = "manage_users"
 PERMISSION_MANAGE_CONTENT = "manage_content"
@@ -21,4 +23,3 @@ def normalize_permissions(permissions: list[str] | None) -> list[str]:
     """过滤未知权限并保持稳定顺序。"""
     allowed = set(permissions or [])
     return [permission for permission in ALL_PERMISSIONS if permission in allowed]
-

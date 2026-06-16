@@ -7,7 +7,7 @@ from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
-from social_platform.app.admin.services.announcement_service import create_system_notifications
+from social_platform.app.domains.notification.system import create_system_notifications
 from social_platform.app.domains.notification import application as notification_service
 
 

@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from social_platform.app.api.deps import get_db
-from social_platform.app.schemas.hot_topic import HotTopicResponse
-from social_platform.app.services import hot_topic_service
+from social_platform.app.domains.hot_topic.schemas import HotTopicResponse
+from social_platform.app.domains.hot_topic import application as hot_topic_service
 
 router = APIRouter()
 

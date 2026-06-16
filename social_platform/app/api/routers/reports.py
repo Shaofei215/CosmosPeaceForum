@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 
 from social_platform.app.api.deps import get_current_user, get_db
 from social_platform.app.domains.user.models import User
-from social_platform.app.schemas.report import ContentReportCreate, ContentReportResponse
-from social_platform.app.services import content_moderation_llm_service, report_service
+from social_platform.app.domains.content_safety.schemas import ContentReportCreate, ContentReportResponse
+from social_platform.app.domains.content_safety import application as report_service
+from social_platform.app.domains.content_safety import llm_moderation as content_moderation_llm_service
 
 
 router = APIRouter()
