@@ -48,6 +48,7 @@ def create_agent(db: Session, agent_in: AgentCreate) -> AgentConfig:
         personal_signature=agent_in.personal_signature,
         personality_prompt=agent_in.personality_prompt,
         is_active=agent_in.is_active,
+        model_config_id=agent_in.model_config_id,
     )
     db.add(db_agent)
     db.commit()
@@ -154,6 +155,7 @@ def agent_to_response(agent: AgentConfig) -> dict:
         "personality_prompt": agent.personality_prompt,
         "knows_ids": parse_knows_ids(agent),
         "is_active": agent.is_active,
+        "model_config_id": agent.model_config_id,
         "app_platform_user_id": agent.app_platform_user_id,
         "last_login_at": agent.last_login_at,
         "last_login_timestamp": agent.last_login_timestamp,

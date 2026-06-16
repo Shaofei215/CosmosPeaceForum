@@ -344,7 +344,7 @@ class LLMRegistry:
     LLM 调用器注册表
 
     提供 LLM 调用器的缓存和热更新功能。
-    所有 Agent 共用一个活跃模型，缓存基于 SessionConfig 的全部参数。
+    缓存基于 SessionConfig 的模型参数与绑定工具。
     """
     _cache = {}
     _lock = threading.Lock()
@@ -362,6 +362,7 @@ class LLMRegistry:
             Callable: LLM 调用器
         """
         cache_key = (
+            config.model_config_id,
             config.llm_provider,
             config.openai_api_key,
             config.openai_base_url,

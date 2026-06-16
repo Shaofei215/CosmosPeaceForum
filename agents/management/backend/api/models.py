@@ -36,9 +36,12 @@ def create_model_config(
     current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MODELS)),
 ):
     """创建模型配置"""
+    has_assignment_update = config_in.assigned_agent_ids is not None
     config = model_service.create_model_config(db, config_in)
 
-    if config.is_active:
+    if has_assignment_update:
+        notify_scheduler_reload("all")
+    elif config.is_active:
         notify_scheduler_reload("model", config.id)
 
     create_log(db, current_admin, "create_model_config", "model", config.id)
@@ -71,10 +74,14 @@ def update_model_config(
     if not config:
         raise HTTPException(status_code=404, detail="模型配置不存在")
 
+    has_assignment_update = config_in.assigned_agent_ids is not None
     updated = model_service.update_model_config(db, config_id, config_in)
 
-    # 通知 scheduler 热更新模型
-    notify_scheduler_reload("model", config_id)
+    # 角色归属变更需要刷新调度线程中的 Agent 配置快照。
+    if has_assignment_update:
+        notify_scheduler_reload("all")
+    else:
+        notify_scheduler_reload("model", config_id)
 
     # 记录操作日志
     create_log(db, current_admin, "update_model_config", "model", config_id)
@@ -93,11 +100,9 @@ def delete_model_config(
     if not config:
         raise HTTPException(status_code=404, detail="模型配置不存在")
 
-    was_active = config.is_active
     model_service.delete_model_config(db, config_id)
 
-    if was_active:
-        notify_scheduler_reload("model")
+    notify_scheduler_reload("all")
 
     create_log(db, current_admin, "delete_model_config", "model", config_id)
 

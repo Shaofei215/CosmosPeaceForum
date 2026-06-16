@@ -23,7 +23,7 @@ from typing import Dict, Optional, List, Iterable
 
 from agents.agents_scheduler.scheduler.config import get_scheduler_config
 from agents.agents_scheduler.langgraph.executor import SessionExecutor, run_session
-from agents.agents_scheduler.langgraph.config import AgentConfig as SessionAgentConfig
+from agents.agents_scheduler.langgraph.config import AgentConfig as SessionAgentConfig, SessionConfig
 from agents.agents_scheduler.scheduler.context import (
     AgentContext,
     get_current_context,
@@ -257,8 +257,13 @@ class AIUserScheduler(threading.Thread):
                 session_prompt_injection=session_prompt_injection,
             )
 
+            model_config_id = self.agent_data.get("model_config_id")
+            if model_config_id is None:
+                raise RuntimeError(f"Agent {self.username} 未分配模型配置")
+            llm_config = SessionConfig.from_db(model_config_id=int(model_config_id))
+
             logger.info(f"[{self.username}] 开始 LangGraph 会话")
-            result = run_session(session_cfg, self.relation_map)
+            result = run_session(session_cfg, self.relation_map, config=llm_config)
             logger.info(
                 f"[{self.username}] 会话完成: "
                 f"步骤={result.step_count}, "

@@ -23,5 +23,6 @@ class ModelConfig(SQLModel, table=True):
     temperature: float = Field(default=0.7)
     is_active: bool = Field(default=True)
     max_token: int = Field(default=4096)
+    color: str = Field(default="#10A37F", max_length=20)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

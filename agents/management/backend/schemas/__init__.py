@@ -119,6 +119,7 @@ class AgentCreate(BaseModel):
     personal_signature: str = ""
     personality_prompt: str = ""
     is_active: bool = True
+    model_config_id: Optional[int] = None
 
 
 class AgentUpdate(BaseModel):
@@ -127,6 +128,7 @@ class AgentUpdate(BaseModel):
     personal_signature: Optional[str] = None
     personality_prompt: Optional[str] = None
     is_active: Optional[bool] = None
+    model_config_id: Optional[int] = None
 
 
 class AgentResponse(BaseModel):
@@ -138,6 +140,7 @@ class AgentResponse(BaseModel):
     personality_prompt: str
     knows_ids: List[int]
     is_active: bool
+    model_config_id: Optional[int] = None
     app_platform_user_id: Optional[int] = None
     last_login_at: Optional[datetime] = None
     last_login_timestamp: Optional[float] = None
@@ -193,6 +196,8 @@ class ModelConfigCreate(BaseModel):
     temperature: float = 1.2
     is_active: bool = True
     max_token: int = 4096
+    color: str = "#10A37F"
+    assigned_agent_ids: Optional[List[int]] = None
 
 
 class ModelConfigUpdate(BaseModel):
@@ -204,6 +209,8 @@ class ModelConfigUpdate(BaseModel):
     temperature: Optional[float] = None
     is_active: Optional[bool] = None
     max_token: Optional[int] = None
+    color: Optional[str] = None
+    assigned_agent_ids: Optional[List[int]] = None
 
 
 class ModelConfigResponse(BaseModel):
@@ -215,6 +222,7 @@ class ModelConfigResponse(BaseModel):
     temperature: float
     is_active: bool
     max_token: int
+    color: str
     created_at: datetime
     updated_at: datetime
 
