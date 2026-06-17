@@ -13,6 +13,23 @@ from pathlib import Path
 from typing import List, Optional
 
 
+def restore_agents_loggers() -> None:
+    """
+    恢复 agents 命名空间下被外部 logging 配置禁用的 logger。
+
+    Alembic 的 fileConfig 默认会禁用已存在但未在配置中声明的 logger。
+    agents 主入口会在运行迁移前导入 scheduler 模块，因此角色行为 logger
+    可能被迁移流程禁用，导致终端与管理前端都看不到角色行为日志。
+    """
+    manager = logging.Logger.manager
+    for name, logger_obj in manager.loggerDict.items():
+        if not isinstance(logger_obj, logging.Logger):
+            continue
+        if name == "agents" or name.startswith("agents."):
+            logger_obj.disabled = False
+            logger_obj.propagate = True
+
+
 def get_default_terminal_log_path() -> Path:
     return Path(
         os.environ.get(
@@ -55,6 +72,7 @@ class TerminalLogCapture:
         return [logging.getLogger(), logging.getLogger("agents")]
 
     def start(self):
+        restore_agents_loggers()
         if self._handler is None:
             self._handler = TerminalLogHandler(self)
             self._handler.setFormatter(

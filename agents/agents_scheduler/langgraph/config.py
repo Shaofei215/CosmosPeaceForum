@@ -6,8 +6,27 @@ LLM 模型配置从 model_configs 表加载，Agent 会话按角色绑定的模�
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 from agents.management.backend.db_client import get_db_client
+
+
+def _model_value(model_config: dict[str, Any], key: str, default: str = "") -> str:
+    """
+    安全读取模型配置中的字符串字段。
+
+    Args:
+        model_config: 从 management 数据库读取的模型配置字典。
+        key: 需要读取的字段名。
+        default: 字段缺失或为空时返回的默认值。
+
+    Returns:
+        str: 去除首尾空白后的字段值。
+    """
+    value = model_config.get(key, default)
+    if value is None:
+        return default
+    return str(value).strip()
 
 
 @dataclass
@@ -63,31 +82,40 @@ class SessionConfig:
                 )
             active_model = model_config[0]
 
-        api_key = active_model["api_key"]
-        provider = active_model["provider"]
-        model_name = active_model["model_name"]
-        openai_api_key = api_key if provider == "openai" else ""
-        openai_base_url = active_model["base_url"] if provider == "openai" else ""
-        openai_model_name = model_name if provider == "openai" else ""
-        anthropic_api_key = api_key if provider == "anthropic" else ""
-        anthropic_model_name = model_name if provider == "anthropic" else ""
-        temperature = float(active_model["temperature"])
+        api_key = _model_value(active_model, "api_key")
+        provider = _model_value(active_model, "provider", "openai").lower()
+        is_anthropic_provider = provider == "anthropic"
+        model_name = _model_value(active_model, "model_name")
+        openai_api_key = "" if is_anthropic_provider else api_key
+        openai_base_url = (
+            "" if is_anthropic_provider else _model_value(active_model, "base_url")
+        )
+        openai_model_name = "" if is_anthropic_provider else model_name
+        anthropic_api_key = api_key if is_anthropic_provider else ""
+        anthropic_model_name = model_name if is_anthropic_provider else ""
+        temperature = float(active_model.get("temperature") or 1.2)
 
         return cls(
-            model_config_id=model_config_id or active_model.get("id"),
+            model_config_id=int(model_config_id or active_model.get("id")),
             max_steps=int(_get("LANGGRAPH_MAX_STEPS", "20")),
             max_consecutive_errors=int(_get("LANGGRAPH_MAX_CONSECUTIVE_ERRORS", "3")),
             tool_timeout=int(_get("LANGGRAPH_TOOL_TIMEOUT", "30")),
             temperature=temperature,
             model_name=model_name,
-            enable_checkpointer=_get("LANGGRAPH_CHECKPOINTER_ENABLED", "true").lower() in ("true", "1", "yes"),
+            enable_checkpointer=_get(
+                "LANGGRAPH_CHECKPOINTER_ENABLED",
+                "true",
+            ).lower() in ("true", "1", "yes"),
             llm_provider=provider,
             openai_api_key=openai_api_key,
             openai_base_url=openai_base_url,
             openai_model_name=openai_model_name,
             anthropic_api_key=anthropic_api_key,
             anthropic_model_name=anthropic_model_name,
-            web_search_enabled=_get("WEB_SEARCH_ENABLED", "false").lower() in ("true", "1", "yes"),
+            web_search_enabled=_get(
+                "WEB_SEARCH_ENABLED",
+                "false",
+            ).lower() in ("true", "1", "yes"),
             tavily_api_key=_get("TAVILY_API_KEY", ""),
         )
 

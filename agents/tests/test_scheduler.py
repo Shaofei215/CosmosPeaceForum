@@ -58,9 +58,11 @@ class TestAIUserScheduler:
             personality_prompt="friendly",
             personal_signature="sig",
             time_system=MagicMock(),
+            model_config_id=2,
         )
         assert scheduler.user_id == 1
         assert scheduler.username == "test_user"
+        assert scheduler.model_config_id == 2
         assert scheduler.monthly_logins == 30
         assert scheduler._is_active is True
         assert scheduler.is_logged_in is False
