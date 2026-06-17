@@ -100,11 +100,13 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             from agents.agents_scheduler.langgraph.config import reload_session_config
             from agents.agents_scheduler.memory.config import reload_memory_config
             from agents.agents_scheduler.langgraph.executor import reload_llm_registry
+            from agents.agents_scheduler.scheduler.time_system import reload_time_scale
 
             reload_scheduler_config()
             reload_session_config()
             reload_memory_config()
             reload_llm_registry()
+            reload_time_scale()
 
             logger.info("[热更新] 系统配置已重载")
             self._send_json_response(200, {"message": "system config reloaded"})
@@ -215,11 +217,13 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             from agents.agents_scheduler.memory.config import reload_memory_config
             from agents.agents_scheduler.scheduler.relation_map import rebuild_relation_maps
             from agents.agents_scheduler.langgraph.executor import reload_llm_registry
+            from agents.agents_scheduler.scheduler.time_system import reload_time_scale
 
             reload_scheduler_config()
             reload_session_config()
             reload_memory_config()
             reload_llm_registry()
+            reload_time_scale()
             rebuild_relation_maps()
 
             if self.scheduler_manager:

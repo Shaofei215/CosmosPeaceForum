@@ -10,10 +10,21 @@ from agents.agents_scheduler.scheduler.time_system import (
     get_scaled_timestamp,
     set_time_scale,
     get_time_scale,
+    load_time_scale_from_db,
+    parse_time_scale,
+    reload_time_scale,
 )
 
 
 class TestTimeSystemBasic:
+    @pytest.fixture(autouse=True)
+    def default_time_scale(self, monkeypatch):
+        """让直接重建 TimeSystem 的单测不依赖本地 management 数据库状态。"""
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.load_time_scale_from_db",
+            lambda db_client=None: 1.0,
+        )
+
     def test_singleton(self):
         ts1 = get_time_system()
         ts2 = get_time_system()
@@ -23,7 +34,7 @@ class TestTimeSystemBasic:
         ts = TimeSystem.__new__(TimeSystem)
         ts._initialized = False
         ts.__init__()
-        assert ts.get_scale() == 100
+        assert ts.get_scale() == 1.0
 
     def test_set_scale(self):
         ts = TimeSystem.__new__(TimeSystem)
@@ -140,3 +151,34 @@ class TestTimeSystemConvenienceFunctions:
             assert get_time_scale() == 50.0
         finally:
             set_time_scale(old_scale)
+
+    def test_reload_time_scale_reads_management_config(self):
+        old_scale = get_time_scale()
+        db = MagicMock()
+        db.get_system_config.return_value = "12.5"
+        try:
+            with patch(
+                "agents.agents_scheduler.scheduler.time_system.get_db_client",
+                return_value=db,
+            ):
+                result = reload_time_scale()
+
+            assert result == 12.5
+            assert get_time_scale() == 12.5
+            db.get_system_config.assert_called_once_with("SCHEDULER_TIME_SCALE", "1.0")
+        finally:
+            set_time_scale(old_scale)
+
+    def test_parse_time_scale_rejects_invalid_values(self):
+        with pytest.raises(ValueError):
+            parse_time_scale("0")
+        with pytest.raises(ValueError):
+            parse_time_scale("-2")
+        with pytest.raises(ValueError):
+            parse_time_scale("not-a-number")
+
+    def test_load_time_scale_falls_back_on_invalid_db_value(self):
+        db = MagicMock()
+        db.get_system_config.return_value = "invalid"
+
+        assert load_time_scale_from_db(db) == 1.0

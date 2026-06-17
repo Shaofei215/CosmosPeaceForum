@@ -24,6 +24,7 @@ ENV_MANAGED_CONFIG_KEYS = {
 }
 
 DEFAULT_SYSTEM_CONFIGS = [
+    ("SCHEDULER_TIME_SCALE", "1.0", "Scheduler 时间倍率（1.0 为现实时间）"),
     ("LANGGRAPH_MAX_STEPS", "20", "LangGraph 最大决策步数"),
     ("LANGGRAPH_MAX_CONSECUTIVE_ERRORS", "3", "最大连续错误次数"),
     ("LANGGRAPH_TOOL_TIMEOUT", "30", "工具调用超时时间（秒）"),
@@ -37,6 +38,29 @@ DEFAULT_SYSTEM_CONFIGS = [
     ("MEMORY_BOOST_FACTOR", "0.3", "唤醒时系数增量"),
     ("MEMORY_DECAY_RATE", "0.01", "衰减率（每日）"),
 ]
+
+
+def validate_system_config_value(key: str, value: str) -> None:
+    """
+    校验系统配置值是否符合该配置项的业务约束。
+
+    Args:
+        key: 系统配置键。
+        value: 待写入系统配置表的字符串值。
+
+    Returns:
+        None: 校验通过时不返回业务数据。
+
+    Raises:
+        ValueError: 配置值格式非法或超出允许范围。
+    """
+    if key == "SCHEDULER_TIME_SCALE":
+        try:
+            scale = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Scheduler 时间倍率必须是数字") from exc
+        if scale <= 0:
+            raise ValueError("Scheduler 时间倍率必须大于 0")
 
 
 def list_system_configs(db: Session) -> List[SystemConfig]:
@@ -67,6 +91,7 @@ def update_system_config(db: Session, key: str, value: str) -> Optional[SystemCo
     db_config = get_system_config(db, key)
     if not db_config:
         return None
+    validate_system_config_value(key, value)
 
     db_config.value = value
     db_config.updated_at = datetime.utcnow()
@@ -124,6 +149,7 @@ def get_config_value(db: Session, key: str, default: str = "") -> str:
         return config.value
 
     fallback_map = {
+        "SCHEDULER_TIME_SCALE": "1.0",
         "LANGGRAPH_MAX_STEPS": "20",
         "LANGGRAPH_MAX_CONSECUTIVE_ERRORS": "3",
         "LANGGRAPH_TOOL_TIMEOUT": "30",
