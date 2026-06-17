@@ -10,7 +10,10 @@ from agents.management.backend.schemas import (
     TerminalLogResponse,
     TerminalLogListResponse,
 )
-from agents.management.backend.services.terminal_log_service import TerminalLogCapture
+from agents.management.backend.services.terminal_log_service import (
+    TerminalLogCapture,
+    restore_agents_loggers,
+)
 
 
 class TestTerminalLogSchemas:
@@ -186,6 +189,33 @@ class TestTerminalLogCapture:
 
         capture.stop()
         root.setLevel(old_level)
+
+    def test_start_restores_disabled_agents_loggers(self, capture):
+        test_logger = logging.getLogger("agents.agents_scheduler.scheduler.scheduler")
+        original_disabled = test_logger.disabled
+        original_propagate = test_logger.propagate
+        try:
+            test_logger.disabled = True
+            test_logger.propagate = False
+
+            capture.start()
+
+            assert test_logger.disabled is False
+            assert test_logger.propagate is True
+        finally:
+            test_logger.disabled = original_disabled
+            test_logger.propagate = original_propagate
+            capture.stop()
+
+    def test_restore_agents_loggers_does_not_touch_other_loggers(self):
+        test_logger = logging.getLogger("external.scheduler")
+        original_disabled = test_logger.disabled
+        try:
+            test_logger.disabled = True
+            restore_agents_loggers()
+            assert test_logger.disabled is True
+        finally:
+            test_logger.disabled = original_disabled
 
     def test_stop_removes_handler(self, capture):
         root = logging.getLogger()

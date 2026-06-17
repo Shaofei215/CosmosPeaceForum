@@ -1,18 +1,50 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { modelApi, embeddingApi, chunkModelApi } from '@/shared/api/modules';
-import type { ModelConfigCreate, ModelConfigUpdate, EmbeddingConfigUpdate, ChunkModelConfigCreate, ChunkModelConfigUpdate } from '@/shared/types/api';
+import { agentApi, modelApi, embeddingApi, chunkModelApi } from '@/shared/api/modules';
+import type {
+  AgentConfig,
+  ModelConfig,
+  ModelConfigCreate,
+  ModelConfigUpdate,
+  EmbeddingConfigUpdate,
+  ChunkModelConfigCreate,
+  ChunkModelConfigUpdate,
+} from '@/shared/types/api';
 import {
   Button, Input, Card, CardContent,
   Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription, Switch, Label, Separator,
 } from '@/shared/components/ui';
-import { Plus, Edit, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, EyeOff, Loader2, Search } from 'lucide-react';
 
 const modelProviderOptions = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
 ];
+
+const modelColorPresets = [
+  { label: 'ChatGPT', value: '#10A37F', match: ['openai', 'chatgpt', 'gpt'] },
+  { label: 'Claude', value: '#D97745', match: ['anthropic', 'claude'] },
+  { label: 'DeepSeek', value: '#2563EB', match: ['deepseek'] },
+  { label: 'Qwen', value: '#1677FF', match: ['qwen', '通义'] },
+  { label: 'Grok', value: '#111827', match: ['grok', 'xai'] },
+  { label: 'Kimi', value: '#1E3A8A', match: ['kimi', 'moonshot'] },
+  { label: 'MiniMax', value: '#DC2626', match: ['minimax'] },
+];
+
+/**
+ * 根据模型提供商、模型名和配置名推断默认颜色。
+ *
+ * @param provider 模型提供商。
+ * @param modelName 实际模型名称。
+ * @param name 管理端配置名称。
+ * @returns 匹配到的预设 HEX 色值，未匹配时返回 ChatGPT 绿色。
+ */
+function inferModelColor(provider: string, modelName: string, name: string): string {
+  const text = `${provider} ${modelName} ${name}`.toLowerCase();
+  return modelColorPresets.find((preset) => preset.match.some((key) => text.includes(key)))?.value
+    ?? modelColorPresets[0].value;
+}
 
 export default function ModelListPage() {
   const queryClient = useQueryClient();
@@ -26,6 +58,11 @@ export default function ModelListPage() {
   const { data: models, isLoading } = useQuery({
     queryKey: ['models'],
     queryFn: modelApi.list,
+  });
+
+  const { data: agentsData } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => agentApi.list(0, 1000),
   });
 
   const { data: embeddingConfig } = useQuery({
@@ -42,6 +79,7 @@ export default function ModelListPage() {
     mutationFn: (data: ModelConfigCreate) => modelApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['models'] });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
       setCreating(false);
     },
   });
@@ -51,6 +89,7 @@ export default function ModelListPage() {
       modelApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['models'] });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
       setEditingModel(null);
     },
   });
@@ -59,6 +98,7 @@ export default function ModelListPage() {
     mutationFn: (id: number) => modelApi.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['models'] });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
       setDeleteId(null);
     },
   });
@@ -149,11 +189,25 @@ export default function ModelListPage() {
 
       <div className="space-y-4">
         {models?.map((model) => (
-          <Card key={model.id}>
+          <Card
+            key={model.id}
+            className="overflow-hidden"
+            style={{
+              borderLeftColor: model.color,
+              borderRightColor: model.color,
+              borderLeftWidth: 4,
+              borderRightWidth: 4,
+              boxShadow: `inset 12px 0 18px -18px ${model.color}, inset -12px 0 18px -18px ${model.color}`,
+            }}
+          >
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
+                    <span
+                      className="h-3 w-3 rounded-full border"
+                      style={{ backgroundColor: model.color }}
+                    />
                     <h3 className="font-semibold">{model.name}</h3>
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -284,6 +338,8 @@ export default function ModelListPage() {
         onOpenChange={setCreating}
         onSubmit={(data) => createMutation.mutate(data)}
         isPending={createMutation.isPending}
+        agents={agentsData?.items ?? []}
+        models={models ?? []}
       />
 
       {editingModel && (
@@ -293,6 +349,8 @@ export default function ModelListPage() {
           onSubmit={(data) => updateMutation.mutate({ id: editingModel, data })}
           isPending={updateMutation.isPending}
           model={models?.find((m) => m.id === editingModel)}
+          agents={agentsData?.items ?? []}
+          models={models ?? []}
         />
       )}
 
@@ -478,6 +536,8 @@ interface BaseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isPending: boolean;
+  agents: AgentConfig[];
+  models: ModelConfig[];
 }
 
 interface CreateDialogProps extends BaseDialogProps {
@@ -487,7 +547,7 @@ interface CreateDialogProps extends BaseDialogProps {
 
 interface EditDialogProps extends BaseDialogProps {
   onSubmit: (data: ModelConfigUpdate) => void;
-  model?: { name: string; provider: string; base_url: string; model_name: string; temperature: number; max_token: number; is_active: boolean };
+  model?: ModelConfig;
 }
 
 function ProviderSelect({
@@ -512,7 +572,170 @@ function ProviderSelect({
   );
 }
 
-function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDialogProps) {
+/**
+ * 模型颜色选择器，提供品牌预设与自定义色值输入。
+ *
+ * @param value 当前色值。
+ * @param onChange 色值变更回调。
+ * @returns 颜色选择 UI。
+ */
+function ModelColorPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">模型颜色</label>
+      <div className="flex flex-wrap gap-2">
+        {modelColorPresets.map((preset) => (
+          <button
+            key={preset.value}
+            type="button"
+            onClick={() => onChange(preset.value)}
+            className="h-8 w-8 rounded-full border p-0.5 transition-transform hover:scale-105"
+            title={preset.label}
+          >
+            <span
+              className="block h-full w-full rounded-full"
+              style={{ backgroundColor: preset.value }}
+            />
+          </button>
+        ))}
+        <div
+          className="inline-flex h-8 items-center rounded-full border bg-background p-0.5"
+          style={{ width: `${Math.max(value.length, 7) + 7}ch` }}
+        >
+          <span
+            className="h-full w-7 shrink-0 rounded-full"
+            style={{ backgroundColor: value }}
+          />
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="#10A37F"
+            className="h-7 min-w-0 border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-0"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 角色模型归属选择器，以胶囊形式展示角色并支持搜索、全选与切换归属。
+ *
+ * @param agents 可分配的角色列表。
+ * @param models 当前模型配置列表，用于显示已有归属颜色。
+ * @param currentModelId 当前正在创建或编辑的模型 ID，创建时为空。
+ * @param currentModelColor 当前正在创建或编辑的模型色值，用于即时预览未保存颜色。
+ * @param selectedIds 当前将归属到本模型的角色 ID 集合。
+ * @param onChange 角色归属集合变更回调。
+ * @returns 角色胶囊选择 UI。
+ */
+function RoleAssignmentSelector({
+  agents,
+  models,
+  currentModelId,
+  currentModelColor,
+  selectedIds,
+  onChange,
+}: {
+  agents: AgentConfig[];
+  models: ModelConfig[];
+  currentModelId?: number;
+  currentModelColor: string;
+  selectedIds: Set<number>;
+  onChange: (ids: Set<number>) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const modelById = new Map(models.map((model) => [model.id, model]));
+  const filtered = agents.filter((agent) => agent.name.toLowerCase().includes(search.toLowerCase()));
+  const isAllSelected = filtered.length > 0 && filtered.every((agent) => selectedIds.has(agent.id));
+
+  const toggleAgent = (agentId: number) => {
+    const next = new Set(selectedIds);
+    if (next.has(agentId)) {
+      next.delete(agentId);
+    } else {
+      next.add(agentId);
+    }
+    onChange(next);
+  };
+
+  const toggleAll = () => {
+    const next = new Set(selectedIds);
+    if (isAllSelected) {
+      filtered.forEach((agent) => next.delete(agent.id));
+    } else {
+      filtered.forEach((agent) => next.add(agent.id));
+    }
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <label className="text-sm font-medium">角色分配</label>
+        <Button type="button" variant="outline" size="sm" onClick={toggleAll}>
+          {isAllSelected ? '取消全选' : '全选'}
+        </Button>
+      </div>
+      <div className="flex h-9 items-center gap-2 rounded-md border px-2">
+        <Search size={15} className="text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="搜索角色名称"
+          className="h-7 border-0 px-0 shadow-none focus-visible:ring-0"
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {filtered.map((agent) => {
+          const wasAssignedToCurrentModel = currentModelId !== undefined
+            && agent.model_config_id === currentModelId;
+          const isSelected = selectedIds.has(agent.id);
+          const assignedModel = isSelected
+            ? models.find((model) => model.id === currentModelId)
+            : wasAssignedToCurrentModel
+              ? undefined
+              : modelById.get(agent.model_config_id ?? -1);
+          const color = isSelected ? currentModelColor : assignedModel?.color;
+
+          return (
+            <button
+              key={agent.id}
+              type="button"
+              onClick={() => toggleAgent(agent.id)}
+              className="inline-flex max-w-full items-center gap-2 rounded-full border px-4 py-1.5 text-sm transition-colors hover:bg-muted"
+              style={{
+                backgroundColor: color,
+                borderColor: color ?? undefined,
+                color: color ? '#FFFFFF' : undefined,
+              }}
+            >
+              <span className="max-w-[14rem] truncate font-medium">{agent.name}</span>
+            </button>
+          );
+        })}
+        {filtered.length === 0 && (
+          <div className="py-3 text-sm text-muted-foreground">未找到匹配角色</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CreateModelDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  isPending,
+  agents,
+  models,
+}: CreateDialogProps) {
   const [name, setName] = useState('');
   const [provider, setProvider] = useState('openai');
   const [apiKey, setApiKey] = useState('');
@@ -521,8 +744,17 @@ function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDi
   const [temperature, setTemperature] = useState(1.2);
   const [maxToken, setMaxToken] = useState(4096);
   const [isActive] = useState(true);
+  const [color, setColor] = useState(modelColorPresets[0].value);
+  const [colorTouched, setColorTouched] = useState(false);
+  const [assignedAgentIds, setAssignedAgentIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
+
+  const updateAutoColor = (nextProvider: string, nextModelName: string, nextName: string) => {
+    if (!colorTouched) {
+      setColor(inferModelColor(nextProvider, nextModelName, nextName));
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -542,12 +774,14 @@ function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDi
       temperature,
       max_token: maxToken,
       is_active: isActive,
+      color,
+      assigned_agent_ids: Array.from(assignedAgentIds),
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>创建模型配置</DialogTitle>
         </DialogHeader>
@@ -559,17 +793,37 @@ function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDi
 
             <div className="space-y-2">
               <label className="text-sm font-medium">配置名称 *</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：OpenAI GPT-4" />
+              <Input
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  updateAutoColor(provider, modelName, e.target.value);
+                }}
+                placeholder="例如：OpenAI GPT-4"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">提供商 *</label>
-                <ProviderSelect value={provider} onChange={setProvider} />
+                <ProviderSelect
+                  value={provider}
+                  onChange={(value) => {
+                    setProvider(value);
+                    updateAutoColor(value, modelName, name);
+                  }}
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
-                <Input value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="gpt-4o" />
+                <Input
+                  value={modelName}
+                  onChange={(e) => {
+                    setModelName(e.target.value);
+                    updateAutoColor(provider, e.target.value, name);
+                  }}
+                  placeholder="gpt-4o"
+                />
               </div>
             </div>
 
@@ -607,6 +861,20 @@ function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDi
                 <Input type="number" min="1" value={maxToken} onChange={(e) => setMaxToken(Number(e.target.value))} />
               </div>
             </div>
+            <ModelColorPicker
+              value={color}
+              onChange={(value) => {
+                setColorTouched(true);
+                setColor(value);
+              }}
+            />
+            <RoleAssignmentSelector
+              agents={agents}
+              models={models}
+              currentModelColor={color}
+              selectedIds={assignedAgentIds}
+              onChange={setAssignedAgentIds}
+            />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
@@ -621,7 +889,15 @@ function CreateModelDialog({ open, onOpenChange, onSubmit, isPending }: CreateDi
   );
 }
 
-function EditModelDialog({ open, onOpenChange, onSubmit, isPending, model }: EditDialogProps) {
+function EditModelDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  isPending,
+  model,
+  agents,
+  models,
+}: EditDialogProps) {
   const [name, setName] = useState(model?.name ?? '');
   const [provider, setProvider] = useState(model?.provider ?? 'openai');
   const [apiKey, setApiKey] = useState('');
@@ -630,6 +906,10 @@ function EditModelDialog({ open, onOpenChange, onSubmit, isPending, model }: Edi
   const [temperature, setTemperature] = useState(model?.temperature ?? 1.2);
   const [maxToken, setMaxToken] = useState(model?.max_token ?? 4096);
   const [isActive] = useState(model?.is_active ?? true);
+  const [color, setColor] = useState(model?.color ?? modelColorPresets[0].value);
+  const [assignedAgentIds, setAssignedAgentIds] = useState<Set<number>>(
+    new Set(agents.filter((agent) => agent.model_config_id === model?.id).map((agent) => agent.id)),
+  );
   const [error, setError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -649,6 +929,8 @@ function EditModelDialog({ open, onOpenChange, onSubmit, isPending, model }: Edi
       temperature,
       max_token: maxToken,
       is_active: isActive,
+      color,
+      assigned_agent_ids: Array.from(assignedAgentIds),
     };
 
     if (apiKey.trim()) {
@@ -660,7 +942,7 @@ function EditModelDialog({ open, onOpenChange, onSubmit, isPending, model }: Edi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>编辑模型配置</DialogTitle>
         </DialogHeader>
@@ -720,6 +1002,15 @@ function EditModelDialog({ open, onOpenChange, onSubmit, isPending, model }: Edi
                 <Input type="number" min="1" value={maxToken} onChange={(e) => setMaxToken(Number(e.target.value))} />
               </div>
             </div>
+            <ModelColorPicker value={color} onChange={setColor} />
+            <RoleAssignmentSelector
+              agents={agents}
+              models={models}
+              currentModelId={model?.id}
+              currentModelColor={color}
+              selectedIds={assignedAgentIds}
+              onChange={setAssignedAgentIds}
+            />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>取消</Button>

@@ -23,7 +23,7 @@ from typing import Dict, Optional, List, Iterable
 
 from agents.agents_scheduler.scheduler.config import get_scheduler_config
 from agents.agents_scheduler.langgraph.executor import SessionExecutor, run_session
-from agents.agents_scheduler.langgraph.config import AgentConfig as SessionAgentConfig
+from agents.agents_scheduler.langgraph.config import AgentConfig as SessionAgentConfig, SessionConfig
 from agents.agents_scheduler.scheduler.context import (
     AgentContext,
     get_current_context,
@@ -102,6 +102,7 @@ class AIUserScheduler(threading.Thread):
         time_system,
         relation_map=None,
         pre_registered_user_id: Optional[int] = None,
+        model_config_id: Optional[int] = None,
     ):
         super().__init__(daemon=True, name=f"AIUser-{username}")
         self.user_id = user_id
@@ -115,6 +116,7 @@ class AIUserScheduler(threading.Thread):
         self.time_system = time_system
         self.relation_map = relation_map
         self.pre_registered_user_id = pre_registered_user_id
+        self.model_config_id = model_config_id
 
         self._stop_event = threading.Event()
         self._stop_requested_at: Optional[datetime] = None
@@ -257,8 +259,13 @@ class AIUserScheduler(threading.Thread):
                 session_prompt_injection=session_prompt_injection,
             )
 
+            if self.model_config_id is None:
+                raise RuntimeError(f"Agent {self.username} 未分配模型配置")
+            logger.info("[%s] 使用模型配置 ID=%d", self.username, self.model_config_id)
+            llm_config = SessionConfig.from_db(model_config_id=int(self.model_config_id))
+
             logger.info(f"[{self.username}] 开始 LangGraph 会话")
-            result = run_session(session_cfg, self.relation_map)
+            result = run_session(session_cfg, self.relation_map, config=llm_config)
             logger.info(
                 f"[{self.username}] 会话完成: "
                 f"步骤={result.step_count}, "
@@ -551,6 +558,7 @@ class AgentSchedulerManager:
         personality_prompt = agent_data.get('personality_prompt', '')
         personal_signature = agent_data.get('personal_signature', '')
         app_platform_user_id = agent_data.get('app_platform_user_id')
+        model_config_id = agent_data.get('model_config_id')
 
         scheduler = AIUserScheduler(
             user_id=agent_id,
@@ -564,6 +572,7 @@ class AgentSchedulerManager:
             time_system=self.time_system,
             relation_map=self._relation_map,
             pre_registered_user_id=app_platform_user_id,
+            model_config_id=model_config_id,
         )
         scheduler.start()
 

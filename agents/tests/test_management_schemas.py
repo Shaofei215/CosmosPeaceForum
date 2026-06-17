@@ -160,6 +160,7 @@ class TestModelConfigSchemas:
             temperature=1.0,
             is_active=True,
             max_token=4096,
+            color="#10A37F",
             created_at=datetime.now(),
             updated_at=datetime.now(),
         )

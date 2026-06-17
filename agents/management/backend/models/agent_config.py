@@ -22,6 +22,7 @@ class AgentConfig(SQLModel, table=True):
     personality_prompt: str = Field(default="", max_length=4000)
     knows_ids: str = Field(default="")
     is_active: bool = Field(default=True)
+    model_config_id: Optional[int] = Field(default=None, foreign_key="model_configs.id")
     app_platform_user_id: Optional[int] = Field(default=None)
     last_login_at: Optional[datetime] = Field(default=None)
     last_login_timestamp: Optional[float] = Field(default=None)

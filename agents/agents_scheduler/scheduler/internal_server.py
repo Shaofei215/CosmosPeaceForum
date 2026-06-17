@@ -223,13 +223,30 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             rebuild_relation_maps()
 
             if self.scheduler_manager:
-                self.scheduler_manager.restart_all()
+                threading.Thread(
+                    target=self._restart_all_agents_in_background,
+                    name="scheduler-reload-all",
+                    daemon=True,
+                ).start()
 
             logger.info("[热更新] 全部配置已重载")
             self._send_json_response(200, {"message": "all config reloaded"})
         except Exception as e:
             logger.error(f"[热更新] 全部配置重载失败: {e}")
             self._send_json_response(500, {"error": str(e)})
+
+    def _restart_all_agents_in_background(self) -> None:
+        """
+        后台重启所有 Agent 调度线程。
+
+        reload/all 由 management 后端同步调用，HTTP 客户端有较短超时时间。
+        将耗时的线程重启动作放到后台，避免调用方先断开导致 Broken pipe。
+        """
+        try:
+            if self.scheduler_manager:
+                self.scheduler_manager.restart_all()
+        except Exception as e:
+            logger.error("[热更新] 后台重启全部 Agent 失败: %s", e)
 
     def _handle_session_injections(self):
         """添加下一次登录会话使用的一次性注入。"""

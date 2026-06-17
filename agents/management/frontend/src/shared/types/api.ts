@@ -71,6 +71,7 @@ export interface AgentConfig {
   personality_prompt: string;
   knows_ids: number[];
   is_active: boolean;
+  model_config_id: number | null;
   app_platform_user_id: number | null;
   last_login_at: string | null;
   last_login_timestamp: number | null;
@@ -86,6 +87,7 @@ export interface AgentCreate {
   personal_signature?: string;
   personality_prompt?: string;
   is_active?: boolean;
+  model_config_id?: number | null;
 }
 
 export interface AgentUpdate {
@@ -94,6 +96,7 @@ export interface AgentUpdate {
   personal_signature?: string;
   personality_prompt?: string;
   is_active?: boolean;
+  model_config_id?: number | null;
 }
 
 export interface AgentRelationUpdate {
@@ -156,6 +159,7 @@ export interface ModelConfig {
   temperature: number;
   is_active: boolean;
   max_token: number;
+  color: string;
   created_at: string;
   updated_at: string;
 }
@@ -169,6 +173,8 @@ export interface ModelConfigCreate {
   temperature?: number;
   is_active?: boolean;
   max_token?: number;
+  color?: string;
+  assigned_agent_ids?: number[];
 }
 
 export interface ModelConfigUpdate {
@@ -180,6 +186,8 @@ export interface ModelConfigUpdate {
   temperature?: number;
   is_active?: boolean;
   max_token?: number;
+  color?: string;
+  assigned_agent_ids?: number[];
 }
 
 export interface SystemConfig {

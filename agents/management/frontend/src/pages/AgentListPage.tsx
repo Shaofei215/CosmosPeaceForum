@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { agentApi } from '@/shared/api/modules';
+import { agentApi, modelApi } from '@/shared/api/modules';
 import { API_CONFIG } from '@/shared/config/api';
 import {
   Button, Input, Textarea, Card, CardContent,
@@ -101,6 +101,11 @@ export default function AgentListPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['agents'],
     queryFn: () => agentApi.list(0, 1000),
+  });
+
+  const { data: models } = useQuery({
+    queryKey: ['models'],
+    queryFn: modelApi.list,
   });
 
   useEffect(() => {
@@ -230,6 +235,7 @@ export default function AgentListPage() {
     (a) => a.name.toLowerCase().includes(search.toLowerCase()) ||
            a.username.toLowerCase().includes(search.toLowerCase())
   ) ?? [];
+  const modelById = new Map((models ?? []).map((model) => [model.id, model]));
 
   const isAllSelected = filtered.length > 0 && selectedIds.size === filtered.length;
   const isSomeSelected = selectedIds.size > 0 && selectedIds.size < filtered.length;
@@ -449,6 +455,7 @@ export default function AgentListPage() {
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">角色</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">用户名</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">模型</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">每月登录</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">ID</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">最后登录时间</th>
@@ -461,6 +468,7 @@ export default function AgentListPage() {
                     const runtime = runtimeStatuses.get(agent.id);
                     const runtimeLabel = getRuntimeLabel(runtime);
                     const isStopping = stoppingId === agent.id || runtime?.status === 'stopping';
+                    const model = modelById.get(agent.model_config_id ?? -1);
 
                     return (
                       <tr key={agent.id} className="border-b border-border hover:bg-muted/50 transition-colors">
@@ -476,6 +484,25 @@ export default function AgentListPage() {
                           <span className="font-medium">{agent.name}</span>
                         </td>
                         <td className="py-3 px-4 text-sm">{agent.username}</td>
+                        <td className="py-3 px-4">
+                          {model ? (
+                            <Badge
+                              variant="outline"
+                              className="px-4"
+                              style={{
+                                backgroundColor: model.color,
+                                borderColor: model.color,
+                                color: '#FFFFFF',
+                              }}
+                            >
+                              {model.name}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              未分配
+                            </Badge>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-sm tabular-nums">{agent.monthly_logins}</td>
                         <td className="py-3 px-4 text-sm">{agent.id}</td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">
