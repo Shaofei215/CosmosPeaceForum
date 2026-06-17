@@ -37,7 +37,10 @@ def update_system_config(
     current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_SYSTEM)),
 ):
     """更新系统配置"""
-    updated = system_service.update_system_config(db, key, config_in.value)
+    try:
+        updated = system_service.update_system_config(db, key, config_in.value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not updated:
         raise HTTPException(status_code=404, detail=f"配置项 '{key}' 不存在")
 

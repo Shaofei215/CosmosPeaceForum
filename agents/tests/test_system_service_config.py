@@ -7,6 +7,7 @@ from agents.management.backend.services.system_service import (
     get_config_value,
     init_default_configs,
     list_system_configs,
+    update_system_config,
 )
 
 
@@ -21,6 +22,12 @@ def test_default_system_configs_include_web_search_keys():
 
     assert "WEB_SEARCH_ENABLED" in default_keys
     assert "TAVILY_API_KEY" in default_keys
+
+
+def test_default_system_configs_include_scheduler_time_scale():
+    default_keys = {key for key, _, _ in DEFAULT_SYSTEM_CONFIGS}
+
+    assert "SCHEDULER_TIME_SCALE" in default_keys
 
 
 def test_init_default_configs_purges_env_managed_values_from_sqlite():
@@ -65,6 +72,29 @@ def test_get_config_value_reads_env_managed_values_from_core_config(monkeypatch)
         assert get_config_value(db, "AI_USER_PASSWORD") == "env-ai-password"
         assert get_config_value(db, "API_BASE_URL") == "http://platform/api/v1"
         assert get_config_value(db, "LOG_LEVEL") == "DEBUG"
+
+
+def test_update_system_config_rejects_invalid_scheduler_time_scale():
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as db:
+        db.add(
+            SystemConfig(
+                key="SCHEDULER_TIME_SCALE",
+                value="1.0",
+                description="Scheduler 时间倍率",
+            )
+        )
+        db.commit()
+
+        for value in ("0", "-1", "invalid"):
+            try:
+                update_system_config(db, "SCHEDULER_TIME_SCALE", value)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"非法时间倍率未被拒绝: {value}")
 
 
 def test_list_system_configs_uses_default_order_and_descriptions():

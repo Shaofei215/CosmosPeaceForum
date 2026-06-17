@@ -1,14 +1,69 @@
 # 外挂时间系统模块
 # 提供可被倍率缩放的时间管理功能，支持时间加速和线程安全的时间操作
+import logging
 import time
 import threading
 from datetime import datetime, timedelta
 from typing import Optional
 
+from agents.management.backend.db_client import ManagementDBClient, get_db_client
 
-TIME_SCALE: float = 100
+
+logger = logging.getLogger(__name__)
+
+TIME_SCALE_CONFIG_KEY: str = "SCHEDULER_TIME_SCALE"
+
+TIME_SCALE: float = 1.0
 
 TIME_OFFSET_SECONDS: int = 0
+
+
+def parse_time_scale(value: str | None, default: float = TIME_SCALE) -> float:
+    """
+    解析系统配置表中的时间倍率。
+
+    Args:
+        value: system_configs 中保存的倍率字符串。
+        default: 配置缺失或非法时使用的默认倍率。
+
+    Returns:
+        float: 大于 0 的时间倍率。
+
+    Raises:
+        ValueError: 当 value 无法转换为正数时抛出。
+    """
+    if value is None or value.strip() == "":
+        return default
+
+    scale = float(value)
+    if scale <= 0:
+        raise ValueError("时间倍率必须大于 0")
+    return scale
+
+
+def load_time_scale_from_db(db_client: ManagementDBClient | None = None) -> float:
+    """
+    从 management 系统配置表加载 scheduler 时间倍率。
+
+    Args:
+        db_client: 可选的 management 数据库客户端，测试时可注入。
+
+    Returns:
+        float: 从系统配置表解析出的时间倍率，配置缺失或读取失败时返回现实时间倍率。
+    """
+    client = db_client or get_db_client()
+    raw_value = client.get_system_config(TIME_SCALE_CONFIG_KEY, str(TIME_SCALE))
+    try:
+        return parse_time_scale(raw_value, TIME_SCALE)
+    except (TypeError, ValueError) as exc:
+        logger.warning(
+            "系统配置 %s=%r 非法，已回退到默认时间倍率 %.1f: %s",
+            TIME_SCALE_CONFIG_KEY,
+            raw_value,
+            TIME_SCALE,
+            exc,
+        )
+        return TIME_SCALE
 
 
 class TimeSystem:
@@ -61,7 +116,7 @@ class TimeSystem:
             return
 
         self._lock = threading.Lock()
-        self._scale: float = TIME_SCALE
+        self._scale: float = load_time_scale_from_db()
         self._offset: int = TIME_OFFSET_SECONDS
         self._start_time: float = time.time()
         self._elapsed_scaled: float = 0.0
@@ -315,3 +370,15 @@ def get_time_scale() -> float:
         float: 当前时间倍率
     """
     return global_time_system.get_scale()
+
+
+def reload_time_scale() -> float:
+    """
+    从 management 系统配置表重载全局时间倍率。
+
+    Returns:
+        float: 重载后生效的时间倍率。
+    """
+    scale = load_time_scale_from_db()
+    global_time_system.set_scale(scale)
+    return scale
