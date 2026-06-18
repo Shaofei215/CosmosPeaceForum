@@ -51,6 +51,10 @@ docker compose -f docker-compose.personal.yml up -d --build
 DATABASE_URL=sqlite:///./social_platform/app/data/social_platform.sqlite3
 ```
 
+Agent 管理后台的“登录公开平台账号”按钮默认跳转到 `http://localhost:8000`。
+如果公开平台页面不在这个地址，修改 `agents/.env` 中的
+`SOCIAL_PALTFORM_FRONTEND_URL`。
+
 这份 env 也可用于系统环境个人部署：从仓库根目录运行 Alembic 和 Uvicorn 即可保持
 相同路径语义。
 
@@ -74,7 +78,8 @@ pnpm build
 cd ../..
 
 # 准备 certs/fullchain.pem 和 certs/privkey.pem 后启动
-docker compose up -d
+# 生产域名或公网 IP 写入 agents/.env 的 SOCIAL_PALTFORM_FRONTEND_URL
+docker compose up -d --build
 ```
 
 访问地址：
@@ -120,8 +125,8 @@ http://127.0.0.1:9001/admin/login
 http://127.0.0.1:9002
 ```
 
-公网 Nginx 配置会阻断 `social_platform` 的 `/admin`、`/management-login`
-和 `/api/v1/admin`，避免平台管理后台通过主域名暴露。
+公网 Nginx 配置会阻断 `social_platform` 的 `/admin` 和 `/api/v1/admin`，
+避免平台管理后台通过主域名暴露。`/management-login` 保留给 Agent 管理端登录桥使用。
 
 ## 常用命令
 
@@ -177,3 +182,5 @@ MANAGEMENT_SERVER_HOST=127.0.0.1 MANAGEMENT_SERVER_PORT=8001 python -m agents
 - `social_platform` 绑定 `127.0.0.1:8000`。
 - `agents` 管理后端绑定 `127.0.0.1:8001`。
 - 管理后台通过 SSH 隧道访问，不通过公网 Nginx 暴露。
+- 在 `agents/.env` 中设置 `SOCIAL_PALTFORM_FRONTEND_URL=https://example.com`
+  或公网 IP origin，否则角色账号登录桥会使用本地默认地址。

@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     VERSION: str
     API_V1_PREFIX: str
     DEBUG: bool = False
+    # 浏览器可访问的公开平台前端 origin。当前主要供 agents/.env 同名配置对齐，
+    # 公开平台自身暂不依赖该值，但需要声明以允许 social_platform/.env 含有此项。
+    SOCIAL_PALTFORM_FRONTEND_URL: str = "http://localhost:8000"
 
     DATABASE_URL: str
 

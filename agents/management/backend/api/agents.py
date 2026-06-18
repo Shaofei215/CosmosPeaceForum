@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from agents.management.backend.core.database import get_db
+from agents.management.backend.core.config import get_config
 from agents.management.backend.api.deps import require_permission
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.agent_config import AgentConfig
@@ -406,6 +407,7 @@ def login_agent_app_platform_account(
         refresh_expires_in=token_response["refresh_expires_in"],
         session_id=token_response["session_id"],
         app_platform_user_id=agent.app_platform_user_id,
+        social_platform_frontend_url=get_config().social_platform_frontend_url,
         username=agent.username,
     )
 

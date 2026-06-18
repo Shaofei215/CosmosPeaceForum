@@ -229,6 +229,9 @@ cd ../..
 docker compose up -d --build
 ```
 
+生产部署时，把 `agents/.env` 中的 `SOCIAL_PALTFORM_FRONTEND_URL` 设置为公网公开平台
+origin，例如 `https://example.com` 或公网 IP；个人模式默认是 `http://localhost:8000`。
+
 查看状态：
 
 ```bash

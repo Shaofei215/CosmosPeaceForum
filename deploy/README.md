@@ -48,8 +48,8 @@ http://127.0.0.1:9001/admin/login
 http://127.0.0.1:9002
 ```
 
-公网 Nginx 会阻断 `social_platform` 的 `/admin`、`/management-login` 和 `/api/v1/admin`
-路径；这些入口只应通过 SSH 隧道访问。
+公网 Nginx 会阻断 `social_platform` 的 `/admin` 和 `/api/v1/admin` 路径；
+`/management-login` 保留给 Agent 管理端跳转公开平台角色账号时使用。
 
 ## Systemd + Host Nginx
 
@@ -63,10 +63,15 @@ systemd 模板默认使用 `cosmos-peace-forum` 用户和用户组。部署前�
 或把 `deploy/systemd/*.service` 中的 `User`、`Group` 和 `/srv/cosmos-peace-forum`
 改成服务器实际配置。
 
-生产前端由 Nginx 静态托管：
+公开平台生产前端由 Nginx 静态托管；Agent 管理前端由 `agents` 管理后端托管。
+`agents/.env` 中的 `SOCIAL_PALTFORM_FRONTEND_URL` 必须写成公网公开平台 origin：
 
 ```bash
 cd /srv/cosmos-peace-forum/social_platform/frontend
+pnpm install
+pnpm build
+
+cd /srv/cosmos-peace-forum/agents/management/frontend
 pnpm install
 pnpm build
 ```

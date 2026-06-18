@@ -121,6 +121,10 @@ APP_PLATFORM_API_BASE_URL = _get_env(
     "APP_PLATFORM_API_BASE_URL",
     _get_env("API_BASE_URL", "http://localhost:8000/api/v1"),
 ).rstrip("/")
+SOCIAL_PALTFORM_FRONTEND_URL = _get_env(
+    "SOCIAL_PALTFORM_FRONTEND_URL",
+    "http://localhost:8000",
+).rstrip("/")
 ADMIN_KEY = _get_env("ADMIN_KEY", "")
 AI_USER_PASSWORD = _get_env("AI_USER_PASSWORD", "ChangeMe123!")
 LOG_LEVEL = _get_env("LOG_LEVEL", "INFO")
@@ -159,6 +163,7 @@ class Settings:
 
     # app_platform 连接与 AI 用户基础配置
     app_platform_api_base_url: str = APP_PLATFORM_API_BASE_URL
+    social_platform_frontend_url: str = SOCIAL_PALTFORM_FRONTEND_URL
     admin_key: str = ADMIN_KEY
     ai_user_password: str = AI_USER_PASSWORD
     log_level: str = LOG_LEVEL
