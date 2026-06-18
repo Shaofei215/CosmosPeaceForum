@@ -12,7 +12,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY management/frontend/ ./
 ARG VITE_API_BASE_URL=/api
-RUN VITE_API_BASE_URL=${VITE_API_BASE_URL} pnpm build
+RUN VITE_API_BASE_URL="${VITE_API_BASE_URL}" pnpm build
 
 
 FROM python:3.11-slim

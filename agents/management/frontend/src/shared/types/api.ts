@@ -117,6 +117,7 @@ export interface AgentAppLoginResponse {
   refresh_expires_in: number;
   session_id: string;
   app_platform_user_id: number;
+  social_platform_frontend_url: string;
   username: string;
 }
 

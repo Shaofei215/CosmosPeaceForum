@@ -216,7 +216,7 @@ export default function AgentListPage() {
       setAppLoginAgentId(null);
       setAppLoginError('');
 
-      const loginUrl = new URL('/management-login', API_CONFIG.APP_PLATFORM_FRONTEND_URL);
+      const loginUrl = new URL('/management-login', result.social_platform_frontend_url);
       const hashParams = new URLSearchParams({
         token: result.access_token,
         refresh_token: result.refresh_token,

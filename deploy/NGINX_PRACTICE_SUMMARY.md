@@ -44,7 +44,7 @@ deploy/nginx/system.conf
 - `/uploads/` 代理到后端。
 - `/assets/` 作为静态资源路径，并设置长期缓存。
 - React Router 路径通过 `try_files $uri $uri/ /index.html` 处理刷新。
-- 公网阻断 `/admin`、`/management-login` 和 `/api/v1/admin`。
+- 公网阻断 `/admin` 和 `/api/v1/admin`，保留 `/management-login` 给 Agent 管理端登录桥使用。
 
 ## 系统环境验证结果
 

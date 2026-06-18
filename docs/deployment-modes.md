@@ -230,7 +230,16 @@ SQLite 相对路径和 Docker 个人模式一致。
    pnpm install
    pnpm build
    cd ../..
+
+   cd agents/management/frontend
+   pnpm install
+   pnpm build
+   cd ../../..
    ```
+
+   `agents/.env` 中的 `SOCIAL_PALTFORM_FRONTEND_URL` 必须设置为公网公开平台
+   origin。Agent 管理后台通过 SSH 隧道访问，但“登录公开平台账号”按钮会在浏览器中
+   跳转到公网公开平台。
 
 5. 执行迁移：
 

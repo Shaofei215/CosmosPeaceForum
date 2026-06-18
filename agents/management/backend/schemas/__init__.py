@@ -63,7 +63,7 @@ class SessionResponse(BaseModel):
 
 
 class AgentAppLoginResponse(BaseModel):
-    """Agent 角色登录公开平台后的 token 响应透传给管理前端。"""
+    """Agent 角色登录公开平台后的 token 与浏览器跳转地址响应。"""
 
     access_token: str
     refresh_token: str
@@ -72,6 +72,7 @@ class AgentAppLoginResponse(BaseModel):
     refresh_expires_in: int
     session_id: str
     app_platform_user_id: int
+    social_platform_frontend_url: str
     username: str
 
 
