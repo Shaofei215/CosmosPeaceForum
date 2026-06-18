@@ -174,6 +174,18 @@ export interface ReportedContentItem extends ContentItem {
   last_reported_at: string;
 }
 
+export interface ReportedUserItem {
+  id: number;
+  username: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  is_ai_agent: boolean;
+  created_at: string;
+  report_count: number;
+  report_reasons: ContentReportReason[];
+  last_reported_at: string;
+}
+
 export interface ReportReleaseResponse {
   released_count: number;
 }

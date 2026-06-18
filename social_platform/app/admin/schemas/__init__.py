@@ -22,6 +22,7 @@ from social_platform.app.admin.schemas.content import (
     ContentModerationLLMSettingsUpdateRequest,
     ContentReportReasonResponse,
     ReportedContentItemResponse,
+    ReportedUserItemResponse,
 )
 from social_platform.app.admin.schemas.hot_topic import (
     HotTopicCreateRequest,
@@ -78,6 +79,7 @@ __all__ = [
     "OperationLogListResponse",
     "OperationLogResponse",
     "ReportedContentItemResponse",
+    "ReportedUserItemResponse",
     "PaginatedResponse",
     "TerminalLogListResponse",
     "TerminalLogResponse",

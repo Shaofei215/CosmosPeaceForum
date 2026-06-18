@@ -15,6 +15,8 @@ from social_platform.app.admin.schemas import (
     ContentItemResponse,
     ContentReportReasonResponse,
     ReportedContentItemResponse,
+    ReportedUserItemResponse,
+    UserModerationUpdateRequest,
 )
 from social_platform.app.admin.services.log_service import create_operation_log
 from social_platform.app.domains.comment.models import Comment, CommentLike
@@ -28,6 +30,7 @@ from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.search import application as search_service
 from social_platform.app.shared.events import publish_domain_event
+from social_platform.app.domains.user.models import User
 
 
 ContentType = Literal["post", "comment"]
@@ -420,12 +423,145 @@ def delete_reported_comment_as_admin(
     delete_comment_as_admin(db, comment_id, admin, reason=reason, notify_author=notify_author)
 
 
-def _pending_reports_query(db: Session, content_type: Optional[ContentType]) -> Query[ContentReport]:
+def list_reported_users(
+    db: Session,
+    skip: int,
+    limit: int,
+    keyword: Optional[str] = None,
+) -> tuple[list[ReportedUserItemResponse], int]:
+    """分页读取管理端待审举报用户聚合列表。
+
+    Args:
+        db: SQLAlchemy 数据库会话。
+        skip: 分页偏移。
+        limit: 分页大小。
+        keyword: 可选用户名或签名关键词。
+
+    Returns:
+        tuple[list[ReportedUserItemResponse], int]: 当前页聚合举报用户和总数。
+    """
+
+    reports = _pending_reports_query(db, "user").all()
+    keyword_value = keyword.strip() if keyword else None
+    grouped: dict[int, list[ContentReport]] = {}
+
+    for report in reports:
+        if report.user is None or report.user_id is None:
+            continue
+        grouped.setdefault(report.user_id, []).append(report)
+
+    items: list[ReportedUserItemResponse] = []
+    for user_id, group_reports in grouped.items():
+        if not group_reports:
+            continue
+        user = group_reports[0].user
+        if user is None:
+            continue
+        item = _reported_user_item_from_group(user, group_reports)
+        if keyword_value and keyword_value not in (item.username or "") and keyword_value not in (item.bio or ""):
+            continue
+        items.append(item)
+
+    items.sort(key=lambda item: (item.report_count, item.last_reported_at), reverse=True)
+    total = len(items)
+    return items[skip:skip + limit], total
+
+
+def release_reported_user(
+    db: Session,
+    user_id: int,
+    admin: PlatformAdminUser,
+) -> int:
+    """放行某个被举报用户下的全部待审举报。
+
+    Args:
+        db: SQLAlchemy 数据库会话。
+        user_id: 被举报用户 ID。
+        admin: 执行操作的管理员。
+
+    Returns:
+        int: 被放行的举报数量。
+
+    Raises:
+        ValueError: 没有待审举报时抛出。
+    """
+
+    reports = _pending_reports_for_target(db, "user", user_id).all()
+    if not reports:
+        raise ValueError("待审举报不存在")
+
+    now = datetime.utcnow()
+    for report in reports:
+        report.status = "released"
+        report.reviewed_at = now
+        report.reviewed_by_admin_id = admin.id
+    create_operation_log(
+        db,
+        admin,
+        action="release_reported_user",
+        target_type="user",
+        target_id=user_id,
+        details={"report_count": len(reports)},
+    )
+    db.commit()
+    return len(reports)
+
+
+def ban_reported_user_as_admin(
+    db: Session,
+    user_id: int,
+    admin: PlatformAdminUser,
+    reason: Optional[str] = None,
+    notify_user: bool = True,
+) -> None:
+    """封禁被举报用户并通知举报人。
+
+    Args:
+        db: SQLAlchemy 数据库会话。
+        user_id: 被举报用户 ID。
+        admin: 执行操作的管理员。
+        reason: 可选封禁原因。
+        notify_user: 是否通知被封禁用户；当前用户处罚流程会始终发送处罚通知。
+
+    Raises:
+        ValueError: 用户或待审举报不存在时抛出。
+    """
+
+    if db.query(User).filter(User.id == user_id).first() is None:
+        raise ValueError("用户不存在")
+    reports = _pending_reports_for_target(db, "user", user_id).all()
+    if not reports:
+        raise ValueError("待审举报不存在")
+
+    reporter_ids = sorted({report.reporter_id for report in reports})
+    from social_platform.app.admin.services.moderation_service import update_user_moderation
+
+    update_user_moderation(
+        db,
+        user_id,
+        UserModerationUpdateRequest(
+            account_banned=True,
+            account_ban_reason=reason or "账号因违反社区规则被封禁",
+        ),
+        admin,
+    )
+
+    now = datetime.utcnow()
+    for report in reports:
+        report.status = "confirmed"
+        report.reviewed_at = now
+        report.reviewed_by_admin_id = admin.id
+    _notify_reporters_content_deleted(db, reporter_ids, "user", user_id)
+    db.commit()
+
+
+def _pending_reports_query(db: Session, content_type: Optional[str]) -> Query[ContentReport]:
     """构建待审举报查询，预加载被举报内容作者。"""
 
     query = db.query(ContentReport).options(
         joinedload(ContentReport.post).joinedload(Post.author),
         joinedload(ContentReport.comment).joinedload(Comment.owner),
+        joinedload(ContentReport.user),
     ).filter(ContentReport.status == "pending")
     if content_type:
         query = query.filter(ContentReport.target_type == content_type)
@@ -434,7 +570,7 @@ def _pending_reports_query(db: Session, content_type: Optional[ContentType]) -> 
 
 def _pending_reports_for_target(
     db: Session,
-    content_type: ContentType,
+    content_type: str,
     content_id: int,
 ) -> Query[ContentReport]:
     """构建指定内容的待审举报查询。"""
@@ -445,6 +581,8 @@ def _pending_reports_for_target(
     )
     if content_type == "post":
         return query.filter(ContentReport.post_id == content_id)
+    if content_type == "user":
+        return query.filter(ContentReport.user_id == content_id)
     return query.filter(ContentReport.comment_id == content_id)
 
 
@@ -457,6 +595,32 @@ def _pending_reporter_ids(db: Session, content_type: ContentType, content_id: in
         .with_entities(ContentReport.reporter_id)
         .all()
     })
+
+
+def _reported_user_item_from_group(
+    user: User,
+    reports: list[ContentReport],
+) -> ReportedUserItemResponse:
+    """把同一用户的多条举报聚合为管理端响应项。"""
+
+    reason_counts: dict[str, int] = {}
+    for report in reports:
+        reason_counts[report.reason] = reason_counts.get(report.reason, 0) + 1
+    report_reasons = [
+        ContentReportReasonResponse(reason=reason, count=count)
+        for reason, count in sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)
+    ]
+    return ReportedUserItemResponse(
+        id=user.id,
+        username=user.username,
+        bio=user.bio,
+        avatar_url=user.avatar_url,
+        is_ai_agent=user.is_ai_agent,
+        created_at=user.created_at,
+        report_count=len({report.reporter_id for report in reports}),
+        report_reasons=report_reasons,
+        last_reported_at=max(report.created_at for report in reports),
+    )
 
 
 def _reported_content_item_from_group(

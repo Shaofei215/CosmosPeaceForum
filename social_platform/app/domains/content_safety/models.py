@@ -13,7 +13,7 @@ from social_platform.app.db.session import Base
 
 
 class ContentReport(Base):
-    """用户对帖子或评论的举报记录。"""
+    """用户对帖子、评论或用户主页的举报记录。"""
 
     __tablename__ = "content_reports"
 
@@ -22,6 +22,7 @@ class ContentReport(Base):
     target_type = Column(String(20), nullable=False, index=True)
     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True, index=True)
     comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     reason = Column(Text, nullable=False)
     status = Column(String(30), nullable=False, default="pending", server_default="pending", index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -34,16 +35,19 @@ class ContentReport(Base):
         index=True,
     )
 
-    reporter = relationship("User")
+    reporter = relationship("User", foreign_keys=[reporter_id])
     post = relationship("Post")
     comment = relationship("Comment")
+    user = relationship("User", foreign_keys=[user_id])
     reviewed_by_admin = relationship("PlatformAdminUser")
 
     __table_args__ = (
         Index("idx_content_reports_post_status", "post_id", "status"),
         Index("idx_content_reports_comment_status", "comment_id", "status"),
+        Index("idx_content_reports_user_status", "user_id", "status"),
         Index("idx_content_reports_reporter_post_status", "reporter_id", "post_id", "status"),
         Index("idx_content_reports_reporter_comment_status", "reporter_id", "comment_id", "status"),
+        Index("idx_content_reports_reporter_user_status", "reporter_id", "user_id", "status"),
     )
 
 

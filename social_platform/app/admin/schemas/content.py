@@ -28,6 +28,18 @@ class ReportedContentItemResponse(ContentItemResponse):
     last_reported_at: datetime
 
 
+class ReportedUserItemResponse(BaseModel):
+    id: int
+    username: Optional[str]
+    bio: Optional[str]
+    avatar_url: Optional[str]
+    is_ai_agent: bool
+    created_at: datetime
+    report_count: int
+    report_reasons: list[ContentReportReasonResponse]
+    last_reported_at: datetime
+
+
 class ContentModerationLLMSettingsResponse(BaseModel):
     id: int
     enabled: bool

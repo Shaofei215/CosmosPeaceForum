@@ -9,13 +9,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.services import auth_service, log_service
-from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_CONTENT
+from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_CONTENT, PERMISSION_MANAGE_USERS
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.content_safety import admin_application as moderation_service
 from social_platform.app.domains.content_safety.models import ContentModerationLLMSettings
 from social_platform.app.domains.content_safety.models import ContentReport
 from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.user.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +28,13 @@ CONTENT_MODERATION_LLM_TIMEOUT_SECONDS = 60
 CONTENT_MODERATION_LLM_MAX_RETRIES = 1
 LLM_MODERATOR_USERNAME = "llm_moderator"
 
-DEFAULT_CONTENT_MODERATION_LLM_PROMPT = """你是 CosmosPeaceForum 的内容安全审查员。你每次只审查一条被举报内容，不保留任何历史对话，也不得参考上下文以外的信息。
+DEFAULT_CONTENT_MODERATION_LLM_PROMPT = """你是 CosmosPeaceForum 的内容安全审查员。你每次只审查一条被举报内容或用户账号，不保留任何历史对话，也不得参考上下文以外的信息。
 
 审查目标：
-- 判断被举报内容是否应在平台继续展示。
+- 判断被举报内容是否应在平台继续展示，或被举报用户是否应被封禁。
 - 只根据提供的 JSON 上下文判断；不要编造未提供的事实。
 - 对评论进行判断时，应同时参考所属帖子和父评论，区分引用、反驳、玩笑、上下文承接和真实违规表达。
+- 对用户进行判断时，应同时参考用户资料、举报原因和最近内容，区分偶发争执与账号级持续违规。
 - 对存在明显违法犯罪、色情低俗、暴力威胁、仇恨歧视、人身攻击、诈骗广告、恶意刷屏、隐私泄露或平台规则显著不允许的内容，应删除。
 - 对表达正常观点、事实讨论、轻微争执、可解释的讽刺或证据不足的内容，不要轻易删除。
 - 如果内容存在争议、语义不清、需要人工结合更多背景判断，输出 drop。
@@ -44,7 +46,7 @@ DEFAULT_CONTENT_MODERATION_LLM_PROMPT = """你是 CosmosPeaceForum 的内容安�
 
 输出约束：
 - pass 表示通过，放行内容。
-- delete 后必须跟一段简短中文处理原因，原因会通知作者。
+- delete 后必须跟一段简短中文处理原因；内容举报会删除内容，用户举报会封禁账号，原因会通知作者或用户。
 - drop 表示放弃自动判断，保留在人工待审队列。
 
 待审上下文 JSON：
@@ -257,15 +259,31 @@ def apply_llm_decision(
 
     admin = get_or_create_llm_moderator_admin(db)
     content_type = report.target_type
-    content_id = report.post_id if content_type == "post" else report.comment_id
+    if content_type == "post":
+        content_id = report.post_id
+    elif content_type == "comment":
+        content_id = report.comment_id
+    else:
+        content_id = report.user_id
     if content_id is None:
         return
 
     if decision == "pass":
-        moderation_service.release_reported_content(db, content_type, content_id, admin)
+        if content_type == "user":
+            moderation_service.release_reported_user(db, content_id, admin)
+        else:
+            moderation_service.release_reported_content(db, content_type, content_id, admin)
         return
     if decision == "delete":
-        if content_type == "comment":
+        if content_type == "user":
+            moderation_service.ban_reported_user_as_admin(
+                db,
+                user_id=content_id,
+                admin=admin,
+                reason=reason,
+                notify_user=True,
+            )
+        elif content_type == "comment":
             moderation_service.delete_reported_comment_as_admin(
                 db,
                 comment_id=content_id,
@@ -298,7 +316,12 @@ def build_report_context(db: Session, report: ContentReport) -> dict[str, Any]:
     """构建单条举报的 LLM 审核上下文。"""
 
     target_type = report.target_type
-    content_id = report.post_id if target_type == "post" else report.comment_id
+    if target_type == "post":
+        content_id = report.post_id
+    elif target_type == "comment":
+        content_id = report.comment_id
+    else:
+        content_id = report.user_id
     reports = _pending_reports_for_same_target(db, target_type, content_id)
     context: dict[str, Any] = {
         "report": {
@@ -323,6 +346,12 @@ def build_report_context(db: Session, report: ContentReport) -> dict[str, Any]:
         context["target_post"] = _post_payload(post) if post else None
         return context
 
+    if target_type == "user":
+        user = db.query(User).filter(User.id == report.user_id).first()
+        context["target_user"] = _user_payload(user)
+        context["recent_contents"] = _recent_user_content_payloads(db, report.user_id)
+        return context
+
     comment = db.query(Comment).options(joinedload(Comment.owner)).filter(Comment.id == report.comment_id).first()
     post = db.query(Post).options(joinedload(Post.author)).filter(Post.id == comment.post_id).first() if comment else None
     parent = None
@@ -344,7 +373,7 @@ def get_or_create_llm_moderator_admin(db: Session) -> PlatformAdminUser:
         username=LLM_MODERATOR_USERNAME,
         email=None,
         password_hash="system-managed",
-        permissions=auth_service.dump_permissions([PERMISSION_MANAGE_CONTENT]),
+        permissions=auth_service.dump_permissions([PERMISSION_MANAGE_CONTENT, PERMISSION_MANAGE_USERS]),
         is_active=False,
         is_super_admin=False,
         must_change_credentials=False,
@@ -378,9 +407,62 @@ def _pending_reports_for_same_target(
     )
     if target_type == "post":
         query = query.filter(ContentReport.post_id == content_id)
-    else:
+    elif target_type == "comment":
         query = query.filter(ContentReport.comment_id == content_id)
+    else:
+        query = query.filter(ContentReport.user_id == content_id)
     return query.order_by(ContentReport.created_at.asc(), ContentReport.id.asc()).all()
+
+
+def _user_payload(user: User | None) -> dict[str, Any] | None:
+    """把用户资料压缩为 LLM 审核上下文中的 JSON 片段。"""
+
+    if user is None:
+        return None
+    return {
+        "id": user.id,
+        "username": user.username,
+        "bio": user.bio,
+        "is_ai_agent": user.is_ai_agent,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "followers_count": user.followers_count,
+        "following_count": user.following_count,
+    }
+
+
+def _recent_user_content_payloads(db: Session, user_id: int | None) -> list[dict[str, Any]]:
+    """读取被举报用户最近 10 条帖子或评论作为账号审查上下文。"""
+
+    if user_id is None:
+        return []
+    posts = db.query(Post).filter(Post.author_id == user_id).order_by(Post.created_at.desc()).limit(10).all()
+    comments = db.query(Comment).filter(Comment.owner_id == user_id).order_by(Comment.created_at.desc()).limit(10).all()
+    contents: list[dict[str, Any]] = []
+    contents.extend(
+        {
+            "type": "post",
+            "id": post.id,
+            "title": post.title,
+            "content": post.content,
+            "created_at": post.created_at.isoformat() if post.created_at else None,
+            "like_count": post.like_count,
+            "comment_count": post.comment_count,
+        }
+        for post in posts
+    )
+    contents.extend(
+        {
+            "type": "comment",
+            "id": comment.id,
+            "post_id": comment.post_id,
+            "content": comment.content,
+            "created_at": comment.created_at.isoformat() if comment.created_at else None,
+            "like_count": comment.like_count,
+            "reply_count": comment.reply_count,
+        }
+        for comment in comments
+    )
+    return sorted(contents, key=lambda item: item["created_at"] or "", reverse=True)[:10]
 
 
 def _post_payload(post: Post | None) -> dict[str, Any] | None:

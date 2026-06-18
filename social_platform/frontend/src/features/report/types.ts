@@ -1,4 +1,4 @@
-export type ReportTargetType = 'post' | 'comment';
+export type ReportTargetType = 'post' | 'comment' | 'user';
 
 export interface ContentReportRequest {
   target_type: ReportTargetType;

@@ -21,6 +21,7 @@ import type {
   ContentModerationLLMSettings,
   ContentModerationLLMSettingsUpdate,
   ReportedContentItem,
+  ReportedUserItem,
   ReportReleaseResponse,
   DashboardStats,
   HotTopic,
@@ -154,6 +155,24 @@ export const adminApi = {
   dashboardStats: () => client.get<unknown, DashboardStats>('/dashboard/stats'),
   users: (params: { skip?: number; limit?: number; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<UserWithModeration>>('/users/', { params }),
+  reportedUsers: (params: { skip?: number; limit?: number; keyword?: string }) =>
+    client.get<unknown, PaginatedResponse<ReportedUserItem>>('/users/reports', { params }),
+  releaseReportedUser: (userId: number) =>
+    client.post<unknown, ReportReleaseResponse>('/users/reports/' + userId + '/release'),
+  banReportedUser: (userId: number, request: ContentDeleteRequest) =>
+    client.delete<unknown, void>('/users/reports/' + userId, { data: request }),
+  userReportModerationSettings: () =>
+    client.get<unknown, ContentModerationLLMSettings>('/users/report-moderation/settings'),
+  updateUserReportModerationSettings: (request: ContentModerationLLMSettingsUpdate) =>
+    client.put<unknown, ContentModerationLLMSettings>('/users/report-moderation/settings', request),
+  userReportModerationPrompt: () =>
+    client.get<unknown, ContentModerationLLMPromptConfig>('/users/report-moderation/prompt'),
+  updateUserReportModerationPrompt: (value: string) =>
+    client.put<unknown, ContentModerationLLMPromptConfig>('/users/report-moderation/prompt', {
+      value,
+    }),
+  resetUserReportModerationPrompt: () =>
+    client.post<unknown, ContentModerationLLMPromptConfig>('/users/report-moderation/prompt/reset'),
   updateUserModeration: (userId: number, request: UserModerationUpdateRequest) =>
     client.put<unknown, UserModerationResponse>(`/users/${userId}/moderation`, request),
   updateUsersModeration: (request: UserModerationBatchUpdateRequest) =>
