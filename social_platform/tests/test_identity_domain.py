@@ -17,6 +17,9 @@ from sqlalchemy.pool import StaticPool
 
 from social_platform.app.core import security as core_security
 from social_platform.app.db.session import Base
+from social_platform.app.domains.email.application import VerificationEmailSenderAdapter
+from social_platform.app.domains.email.sender import EmailMessage
+from social_platform.app.domains.email.templates import build_verification_email
 from social_platform.app.domains import registry as domain_models  # noqa: F401
 from social_platform.app.domains.identity import application, sessions, verification
 from social_platform.app.domains.identity.models import EmailVerificationCode
@@ -51,6 +54,27 @@ class FakeEmailSender:
         """
 
         self.sent.append(SentVerificationEmail(email=email, code=code, purpose=purpose))
+        return self.should_succeed
+
+
+@dataclass
+class FakeGenericEmailSender:
+    """测试用通用邮件发件器，记录已渲染邮件但不连接 SMTP。"""
+
+    sent: list[EmailMessage] = field(default_factory=list)
+    should_succeed: bool = True
+
+    def send_email(self, message: EmailMessage) -> bool:
+        """记录邮件发送请求。
+
+        Args:
+            message: 已渲染完成的邮件消息。
+
+        Returns:
+            bool: 预设的发送结果。
+        """
+
+        self.sent.append(message)
         return self.should_succeed
 
 
@@ -132,6 +156,32 @@ def test_register_code_send_persists_record_and_enforces_frequency(db_session: S
 
     with pytest.raises(verification.VerificationCodeFrequencyError):
         verification.send_register_verification_code(db_session, "test@example.com", sender)
+
+
+def test_verification_email_sender_adapter_renders_template_and_delegates() -> None:
+    """验证码邮件适配器会渲染业务模板，再委托通用发件器发送。"""
+
+    sender = FakeGenericEmailSender()
+    adapter = VerificationEmailSenderAdapter(
+        email_sender=sender,
+        settings=SimpleNamespace(EMAIL_CODE_EXPIRE_MINUTES=7),
+    )
+
+    assert adapter.send_verification_email("person@example.com", "123456", "login") is True
+
+    assert len(sender.sent) == 1
+    message = sender.sent[0]
+    assert message.recipient_email == "person@example.com"
+    assert message.subject == "【CosmosPeaceForum】登录验证码"
+    assert "123456 是您的登录验证码" in message.text_body
+    assert "7 分钟后过期" in message.text_body
+
+
+def test_build_verification_email_rejects_unknown_purpose() -> None:
+    """未知验证码用途不会落到默认模板。"""
+
+    with pytest.raises(ValueError):
+        build_verification_email("person@example.com", "123456", "unknown", 10)
 
 
 def test_register_human_user_with_code_consumes_verification(db_session: Session) -> None:

@@ -58,6 +58,7 @@ social_platform/app/domains/
 - `follow`：关注关系、关注/粉丝列表；发布 `FollowChanged`。
 - `user`：用户公开资料、头像、公开用户信息；发布用户资料变化事件。
 - `identity`：注册、登录、session、邮箱验证、密码重置、AI 登录。
+- `email`：公共邮件模板、邮件内容组装和通用发件器。
 - `notification`：消费互动、关注、评论、转发事件，生成通知。
 - `heat`：消费互动、评论、转发、帖子事件，维护热度分数和排序值。
 - `search`：消费帖子/用户变化事件，维护搜索索引投影。
