@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.domains.comment.models import Comment, CommentLike
 from social_platform.app.domains.content_safety.models import ContentModerationLLMSettings, ContentReport
 from social_platform.app.domains.follow.models import Follow
@@ -28,6 +29,7 @@ __all__ = [
     "EmailVerificationCode",
     "Like",
     "Notification",
+    "PlatformAdminUser",
     "Post",
     "User",
     "UserSession",

@@ -24,6 +24,7 @@ from social_platform.app.domains.identity.schemas import (
     PasswordResetConfirmRequest,
     PasswordResetRequest,
 )
+from social_platform.app.domains.email.application import verification_email_sender
 from social_platform.app.domains.user.models import User
 from social_platform.app.schemas.auth import (
     UserRegister,
@@ -35,7 +36,6 @@ from social_platform.app.schemas.auth import (
     RefreshTokenRequest,
     SessionResponse,
 )
-from social_platform.app.services.email_service import email_service
 from social_platform.app.domains.search import application as search_service
 
 
@@ -124,7 +124,7 @@ def send_register_verification_code(
         return verification_service.send_register_verification_code(
             db,
             request.email,
-            email_service,
+            verification_email_sender,
         )
     except (
         verification_service.EmailAlreadyRegisteredError,
@@ -169,7 +169,7 @@ def send_login_verification_code(
         return verification_service.send_login_verification_code(
             db,
             request.email,
-            email_service,
+            verification_email_sender,
         )
     except (
         verification_service.EmailAlreadyRegisteredError,
@@ -664,7 +664,7 @@ def send_password_reset_code(
         return verification_service.send_password_reset_code(
             db,
             request.email,
-            email_service,
+            verification_email_sender,
         )
     except (
         verification_service.EmailAlreadyRegisteredError,
