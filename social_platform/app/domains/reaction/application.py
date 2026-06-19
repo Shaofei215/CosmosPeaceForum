@@ -78,7 +78,7 @@ def toggle_like(
         >>> print(f"点赞状态：{is_liked}, 点赞数：{like_count}")
     """
     # 检查帖子是否存在
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.id == post_id, Post.moderation_status == "active").first()
     if not post:
         raise PostNotFoundError(post_id)
     
@@ -171,7 +171,7 @@ def get_like_status(
         ...     print("您已点赞此帖子")
     """
     # 检查帖子是否存在
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.id == post_id, Post.moderation_status == "active").first()
     if not post:
         raise PostNotFoundError(post_id)
     
@@ -202,7 +202,7 @@ def get_post_like_count(
     Raises:
         PostNotFoundError: 当帖子不存在时抛出
     """
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.id == post_id, Post.moderation_status == "active").first()
     if not post:
         raise PostNotFoundError(post_id)
     
@@ -229,7 +229,7 @@ def is_user_liked(
         PostNotFoundError: 当帖子不存在时抛出
     """
     # 检查帖子是否存在
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.id == post_id, Post.moderation_status == "active").first()
     if not post:
         raise PostNotFoundError(post_id)
     

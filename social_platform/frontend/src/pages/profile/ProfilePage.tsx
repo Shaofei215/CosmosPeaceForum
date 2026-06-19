@@ -8,9 +8,10 @@ import { useUpdateUser, useUploadAvatar, useUser } from '@/features/user';
 import { useInfiniteUserFeed } from '@/features/feed';
 import { useToggleFollow, useFollowStatus } from '@/features/follow';
 import { useAuthStore, useLogout } from '@/features/auth';
+import { useCreateReport } from '@/features/report';
 import { PostCard } from '@/widgets/post-card';
-import { Avatar, Skeleton, Button, Input } from '@/shared/components/ui';
-import { Camera, MoreVertical, Pencil, Save, X } from 'lucide-react';
+import { Avatar, Skeleton, Button, Input, Textarea } from '@/shared/components/ui';
+import { Camera, Flag, MoreVertical, Pencil, Save, X } from 'lucide-react';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const MAX_USERNAME_LENGTH = 30;
@@ -55,11 +56,15 @@ export default function ProfilePage() {
   const [editError, setEditError] = useState('');
   const [avatarError, setAvatarError] = useState('');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportError, setReportError] = useState('');
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const usernameInputRef = useRef<HTMLInputElement>(null);
 
   const updateUser = useUpdateUser();
   const uploadAvatar = useUploadAvatar();
+  const createReport = useCreateReport();
 
   const toggleFollow = useToggleFollow();
   const { data: followStatus } = useFollowStatus(userIdNum);
@@ -78,6 +83,40 @@ export default function ProfilePage() {
       return;
     }
     toggleFollow.mutate(userIdNum);
+  };
+
+  /** 打开用户举报弹窗，未登录用户先进入登录页。 */
+  const handleOpenReport = () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    setReportReason('');
+    setReportError('');
+    setIsUserMenuOpen(false);
+    setReportOpen(true);
+  };
+
+  /** 提交用户举报，管理端会在用户审查队列中聚合处理。 */
+  const handleSubmitReport = async () => {
+    if (!user) return;
+    const reason = reportReason.trim();
+    if (!reason) {
+      setReportError('请填写举报原因');
+      return;
+    }
+    setReportError('');
+    try {
+      await createReport.mutateAsync({
+        target_type: 'user',
+        target_id: user.id,
+        reason,
+      });
+      setReportOpen(false);
+      setReportReason('');
+    } catch (err) {
+      setReportError(extractErrorMessage(err) || '举报提交失败，请稍后重试');
+    }
   };
 
   const { data: user, isLoading: isUserLoading } = useUser(userIdNum);
@@ -415,6 +454,16 @@ export default function ProfilePage() {
                 className="absolute right-0 top-8 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
                 onClick={event => event.stopPropagation()}
               >
+                {isCurrentUser === false && (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={handleOpenReport}
+                  >
+                    <Flag className="h-3.5 w-3.5" />
+                    举报
+                  </button>
+                )}
                 {isCurrentUser && (
                   <button
                     type="button"
@@ -429,6 +478,17 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+      {reportOpen && (
+        <ReportUserDialog
+          username={user.username}
+          reason={reportReason}
+          error={reportError}
+          saving={createReport.isPending}
+          onReasonChange={setReportReason}
+          onClose={() => setReportOpen(false)}
+          onSubmit={handleSubmitReport}
+        />
+      )}
       {/* 用户帖子列表 - 包含在大容器中 */}
       <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
         <h2 className="text-lg font-semibold px-3 pt-3">
@@ -461,6 +521,53 @@ export default function ProfilePage() {
           {!hasNextPage && posts.length > 0 && (
             <span className="text-muted-foreground text-sm">没有更多内容了</span>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportUserDialog({
+  username,
+  reason,
+  error,
+  saving,
+  onReasonChange,
+  onClose,
+  onSubmit,
+}: {
+  username: string;
+  reason: string;
+  error: string;
+  saving: boolean;
+  onReasonChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-lg bg-background p-5 shadow-xl">
+        <div>
+          <h2 className="text-lg font-semibold">举报用户</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            @{username} 的资料和最近内容会进入管理端审查。
+          </p>
+        </div>
+        <Textarea
+          value={reason}
+          onChange={event => onReasonChange(event.target.value)}
+          placeholder="填写举报原因"
+          className="mt-4 min-h-28"
+          maxLength={1000}
+        />
+        {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" className="rounded-md" onClick={onClose} disabled={saving}>
+            取消
+          </Button>
+          <Button className="rounded-md" onClick={onSubmit} disabled={saving || !reason.trim()}>
+            {saving ? '提交中...' : '提交举报'}
+          </Button>
         </div>
       </div>
     </div>

@@ -41,7 +41,7 @@ def _calculate_pagination(page: int, page_size: int, total: int) -> PaginationIn
 def rebuild_search_indexes(db: Session) -> None:
     """从数据库事实表重建搜索投影索引，供启动修复和维护任务使用。"""
     try:
-        get_content_index().rebuild(db.query(Post).all())
+        get_content_index().rebuild(db.query(Post).filter(Post.moderation_status == "active").all())
         get_user_index().rebuild(db.query(User).filter(User.username.isnot(None)).all())
     except Exception as exc:
         logger.warning("重建平台搜索索引失败: %s", exc)
@@ -170,7 +170,10 @@ def search_content(
             pagination=_calculate_pagination(page, page_size, 0),
         )
 
-    posts = db.query(Post).filter(Post.id.in_(post_ids)).options(
+    posts = db.query(Post).filter(
+        Post.id.in_(post_ids),
+        Post.moderation_status == "active",
+    ).options(
         joinedload(Post.author),
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).all()

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 class ContentReportCreate(BaseModel):
     """创建举报请求。"""
 
-    target_type: Literal["post", "comment"]
+    target_type: Literal["post", "comment", "user"]
     target_id: int = Field(gt=0)
     reason: str = Field(min_length=1, max_length=1000)
 

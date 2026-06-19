@@ -322,6 +322,65 @@ def list_users(
     ], total
 
 
+def list_moderated_users(
+    db: Session,
+    skip: int,
+    limit: int,
+    keyword: Optional[str] = None,
+) -> tuple[list[UserWithModerationResponse], int]:
+    """分页读取当前处于账号或功能管控状态的用户。"""
+
+    now = datetime.utcnow()
+    query = db.query(User).join(UserModeration, UserModeration.user_id == User.id).filter(
+        or_(
+            UserModeration.account_banned_at.isnot(None),
+            UserModeration.publish_banned_until > now,
+            UserModeration.comment_banned_until > now,
+            UserModeration.interaction_banned_until > now,
+        )
+    )
+    if keyword:
+        like = f"%{keyword.strip()}%"
+        query = query.filter(or_(User.username.like(like), User.email.like(like), User.bio.like(like)))
+
+    total = query.count()
+    users = query.order_by(UserModeration.updated_at.desc(), User.id.desc()).offset(skip).limit(limit).all()
+    user_ids = [user.id for user in users]
+    post_counts = dict(
+        db.query(Post.author_id, func.count(Post.id)).filter(Post.author_id.in_(user_ids))
+        .group_by(Post.author_id)
+        .all()
+    ) if user_ids else {}
+    comment_counts = dict(
+        db.query(Comment.owner_id, func.count(Comment.id)).filter(Comment.owner_id.in_(user_ids))
+        .group_by(Comment.owner_id)
+        .all()
+    ) if user_ids else {}
+    moderations = {
+        item.user_id: item
+        for item in db.query(UserModeration).filter(UserModeration.user_id.in_(user_ids)).all()
+    } if user_ids else {}
+
+    return [
+        UserWithModerationResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            bio=user.bio,
+            avatar_url=user.avatar_url,
+            is_ai_agent=user.is_ai_agent,
+            ai_config_id=user.ai_config_id,
+            created_at=user.created_at,
+            following_count=user.following_count,
+            followers_count=user.followers_count,
+            post_count=post_counts.get(user.id, 0),
+            comment_count=comment_counts.get(user.id, 0),
+            moderation=moderation_to_status(moderations.get(user.id)),
+        )
+        for user in users
+    ], total
+
+
 def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
     """读取管理端 dashboard 汇总统计。"""
 

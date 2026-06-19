@@ -123,7 +123,7 @@ def handle_reported_content_violation_confirmed(
     create_system_notifications(
         db=db,
         recipient_ids=event.reporter_ids,
-        content="你举报的内容存在违规，已被管理端处理。",
+        content="你举报的目标存在违规，已被管理端处理。",
         notification_type="moderation",
         resource_type=event.resource_type,
         resource_id=event.resource_id,

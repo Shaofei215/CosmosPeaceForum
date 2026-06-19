@@ -12,9 +12,15 @@ export const adminKeys = {
   me: ['admin', 'me'] as const,
   stats: ['admin', 'stats'] as const,
   users: (keyword: string) => ['admin', 'users', keyword] as const,
+  reportedUsers: (keyword: string) => ['admin', 'users', 'reports', keyword] as const,
+  moderatedUsers: (keyword: string) => ['admin', 'users', 'moderated', keyword] as const,
+  userReportModerationSettings: ['admin', 'users', 'report-moderation-settings'] as const,
+  userReportModerationPrompt: ['admin', 'users', 'report-moderation-prompt'] as const,
   content: (type: string, keyword: string) => ['admin', 'content', type, keyword] as const,
   reportedContent: (type: string, keyword: string) =>
     ['admin', 'content', 'reports', type, keyword] as const,
+  archivedContent: (type: string, keyword: string) =>
+    ['admin', 'content', 'archived', type, keyword] as const,
   reportModerationSettings: ['admin', 'content', 'report-moderation-settings'] as const,
   reportModerationPrompt: ['admin', 'content', 'report-moderation-prompt'] as const,
   hotTopics: (status: string, source: string) => ['admin', 'hot-topics', status, source] as const,

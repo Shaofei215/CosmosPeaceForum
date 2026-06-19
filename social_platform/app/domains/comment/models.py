@@ -50,6 +50,7 @@ class Comment(Base):
             "created_at",
             "id",
         ),
+        Index("idx_comments_moderation_status", "moderation_status", "created_at", "id"),
     )
 
     # 评论唯一标识符（全局唯一，使用自增）
@@ -83,6 +84,12 @@ class Comment(Base):
     # 评论推荐流热度分数，由定时任务和互动操作刷新
     heat_score = Column(Float, default=0.0, nullable=False, server_default="0")
     heat_score_updated_at = Column(DateTime, nullable=True)
+
+    # 管理端内容安全处理状态。archived 评论在公开端不可见，但保留以便恢复。
+    moderation_status = Column(String(20), nullable=False, default="active", server_default="active")
+    archived_at = Column(DateTime, nullable=True)
+    archived_by_admin_id = Column(Integer, nullable=True)
+    archive_reason = Column(Text, nullable=True)
 
     # 关联关系：评论所属的帖子
     post = relationship("Post", back_populates="comments")

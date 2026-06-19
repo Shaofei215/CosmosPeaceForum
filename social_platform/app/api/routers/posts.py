@@ -77,7 +77,7 @@ def get_posts(
 
     返回：帖子列表，按创建时间倒序排列
     """
-    posts = db.query(Post).options(
+    posts = db.query(Post).filter(Post.moderation_status == "active").options(
         joinedload(Post.author),
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
@@ -107,7 +107,7 @@ def get_post(
     post = db.query(Post).options(
         joinedload(Post.author),
         joinedload(Post.repost_root_post).joinedload(Post.author),
-    ).filter(Post.id == post_id).first()
+    ).filter(Post.id == post_id, Post.moderation_status == "active").first()
     if not post:
         raise HTTPException(status_code=404, detail="帖子不存在")
 
@@ -229,7 +229,10 @@ def get_user_posts(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    posts = db.query(Post).filter(Post.author_id == user_id).options(
+    posts = db.query(Post).filter(
+        Post.author_id == user_id,
+        Post.moderation_status == "active",
+    ).options(
         joinedload(Post.author),
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()

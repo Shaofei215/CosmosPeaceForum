@@ -62,7 +62,7 @@ def get_feed(
             pagination=calculate_pagination(page, page_size, 0),
         )
 
-    query = db.query(Post)
+    query = db.query(Post).filter(Post.moderation_status == "active")
     if normalized_feed_type == "following":
         query = query.join(Follow, Follow.following_id == Post.author_id).filter(
             Follow.follower_id == current_user_id,
@@ -114,9 +114,15 @@ def get_user_feed(
     if not user:
         raise ValueError(f"用户不存在 (ID: {user_id})")
 
-    total = db.query(func.count(Post.id)).filter(Post.author_id == user_id).scalar() or 0
+    total = db.query(func.count(Post.id)).filter(
+        Post.author_id == user_id,
+        Post.moderation_status == "active",
+    ).scalar() or 0
     offset = (page - 1) * page_size
-    posts = db.query(Post).filter(Post.author_id == user_id).options(
+    posts = db.query(Post).filter(
+        Post.author_id == user_id,
+        Post.moderation_status == "active",
+    ).options(
         joinedload(Post.author),
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(

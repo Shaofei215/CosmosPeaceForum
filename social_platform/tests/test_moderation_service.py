@@ -12,10 +12,13 @@ from social_platform.app.admin.services.moderation_service import update_user_mo
 from social_platform.app.domains.content_safety.application import create_content_report
 from social_platform.app.domains.content_safety import llm_moderation as content_moderation_llm_service
 from social_platform.app.domains.content_safety.admin_application import (
+    ban_reported_user_as_admin,
     delete_post_as_admin,
     delete_reported_post_as_admin,
     list_reported_content,
+    list_reported_users,
     release_reported_content,
+    release_reported_user,
 )
 from social_platform.app.db.session import Base
 from social_platform.app.domains.comment.models import Comment
@@ -253,10 +256,86 @@ def test_delete_reported_content_notifies_author_with_reason_and_reporters_witho
     notifications = db_session.query(Notification).order_by(Notification.recipient_id).all()
     by_recipient = {notification.recipient_id: notification.source_content for notification in notifications}
     assert "原因：广告引流" in by_recipient[author.id]
-    assert by_recipient[reporter_a.id] == "你举报的内容存在违规，已被管理端处理。"
-    assert by_recipient[reporter_b.id] == "你举报的内容存在违规，已被管理端处理。"
+    assert by_recipient[reporter_a.id] == "你举报的目标存在违规，已被管理端处理。"
+    assert by_recipient[reporter_b.id] == "你举报的目标存在违规，已被管理端处理。"
     assert "广告引流" not in by_recipient[reporter_a.id]
     assert db_session.query(Post).filter(Post.id == post.id).first() is None
+
+
+def test_create_user_report_deduplicates_pending_report(db_session):
+    target, _ = _seed_user_and_admin(db_session)
+    reporter = User(username="user_reporter")
+    db_session.add(reporter)
+    db_session.commit()
+
+    first = create_content_report(db_session, reporter, "user", target.id, "资料违规")
+    second = create_content_report(db_session, reporter, "user", target.id, "持续骚扰")
+
+    assert first.id == second.id
+    assert second.user_id == target.id
+    assert second.reason == "持续骚扰"
+    assert db_session.query(ContentReport).filter(ContentReport.status == "pending").count() == 1
+
+
+def test_reported_users_list_groups_by_user_and_sorts_by_report_count(db_session):
+    target_one, _ = _seed_user_and_admin(db_session)
+    target_two = User(username="target_two", bio="待审签名")
+    reporter_a = User(username="user_reporter_a")
+    reporter_b = User(username="user_reporter_b")
+    reporter_c = User(username="user_reporter_c")
+    db_session.add_all([target_two, reporter_a, reporter_b, reporter_c])
+    db_session.commit()
+
+    create_content_report(db_session, reporter_a, "user", target_two.id, "原因 C")
+    create_content_report(db_session, reporter_b, "user", target_one.id, "原因 A")
+    create_content_report(db_session, reporter_c, "user", target_one.id, "原因 B")
+
+    items, total = list_reported_users(db_session, skip=0, limit=10)
+
+    assert total == 2
+    assert items[0].id == target_one.id
+    assert items[0].report_count == 2
+    assert {reason.reason for reason in items[0].report_reasons} == {"原因 A", "原因 B"}
+    assert items[1].id == target_two.id
+    assert items[1].bio == "待审签名"
+
+
+def test_release_reported_user_removes_item_from_pending_review(db_session):
+    target, admin = _seed_user_and_admin(db_session)
+    reporter = User(username="release_user_reporter")
+    db_session.add(reporter)
+    db_session.commit()
+    create_content_report(db_session, reporter, "user", target.id, "误报用户")
+
+    released_count = release_reported_user(db_session, target.id, admin)
+    items, total = list_reported_users(db_session, skip=0, limit=10)
+
+    assert released_count == 1
+    assert total == 0
+    assert items == []
+    assert db_session.query(User).filter(User.id == target.id).first() is not None
+    report = db_session.query(ContentReport).one()
+    assert report.status == "released"
+    assert report.reviewed_by_admin_id == admin.id
+
+
+def test_ban_reported_user_confirms_reports_and_notifies(db_session):
+    target, admin = _seed_user_and_admin(db_session)
+    reporter = User(username="ban_user_reporter")
+    db_session.add(reporter)
+    db_session.commit()
+    create_content_report(db_session, reporter, "user", target.id, "账号违规")
+
+    ban_reported_user_as_admin(db_session, target.id, admin, reason="持续骚扰", notify_user=True)
+
+    report = db_session.query(ContentReport).one()
+    assert report.status == "confirmed"
+    moderation = db_session.query(UserModeration).filter(UserModeration.user_id == target.id).one()
+    assert moderation.account_ban_reason == "持续骚扰"
+    notifications = db_session.query(Notification).order_by(Notification.recipient_id).all()
+    by_recipient = {notification.recipient_id: notification.source_content for notification in notifications}
+    assert "持续骚扰" in by_recipient[target.id]
+    assert by_recipient[reporter.id] == "你举报的目标存在违规，已被管理端处理。"
 
 
 
@@ -382,6 +461,49 @@ def test_content_moderation_llm_comment_context_includes_post_and_parent_comment
     assert context["post"]["content"] == "帖子正文"
     assert context["parent_comment"]["id"] == parent.id
     assert context["parent_comment"]["content"] == "父评论"
+
+
+def test_content_moderation_llm_user_context_includes_recent_contents(db_session):
+    target, _ = _seed_user_and_admin(db_session)
+    reporter = User(username="llm_user_context_reporter")
+    db_session.add(reporter)
+    db_session.commit()
+    post = Post(author_id=target.id, title="近期帖子", content="帖子内容")
+    db_session.add(post)
+    db_session.commit()
+    comment = Comment(post_id=post.id, owner_id=target.id, content="近期评论")
+    db_session.add(comment)
+    db_session.commit()
+    report = create_content_report(db_session, reporter, "user", target.id, "账号违规")
+
+    context = content_moderation_llm_service.build_report_context(db_session, report)
+
+    assert context["target_user"]["id"] == target.id
+    assert context["target_user"]["username"] == "target_user"
+    assert len(context["recent_contents"]) == 2
+    assert {item["type"] for item in context["recent_contents"]} == {"post", "comment"}
+
+
+def test_content_moderation_llm_delete_bans_reported_user(db_session):
+    target, _ = _seed_user_and_admin(db_session)
+    reporter = User(username="llm_user_delete_reporter")
+    db_session.add(reporter)
+    db_session.commit()
+    report = create_content_report(db_session, reporter, "user", target.id, "骚扰")
+    _enable_content_moderation_llm(db_session)
+
+    decision, reason = content_moderation_llm_service.review_report(
+        db_session,
+        report.id,
+        llm_factory=lambda settings: _FakeLLM("delete 持续骚扰用户"),
+    )
+
+    assert decision == "delete"
+    assert reason == "持续骚扰用户"
+    stored_report = db_session.query(ContentReport).filter(ContentReport.id == report.id).one()
+    assert stored_report.status == "confirmed"
+    moderation = db_session.query(UserModeration).filter(UserModeration.user_id == target.id).one()
+    assert moderation.account_ban_reason == "持续骚扰用户"
 
 
 def test_content_moderation_llm_prompt_requires_strict_output():

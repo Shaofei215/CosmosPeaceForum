@@ -68,7 +68,7 @@ def is_repost_origin_missing(post: Post) -> bool:
         return False
     if post.repost_root_post_id is None:
         return True
-    return post.repost_root_post is None
+    return post.repost_root_post is None or post.repost_root_post.moderation_status != "active"
 
 
 def build_repost_chain_authors(db: Session, content: str) -> list[MentionUserData]:

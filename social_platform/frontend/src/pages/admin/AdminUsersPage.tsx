@@ -1,12 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   Ban,
+  Bot,
+  Braces,
+  CheckCircle,
   FileText,
   Heart,
   Megaphone,
   MessageCircle,
+  RotateCcw,
+  Save,
+  ScrollText,
   Search,
   ShieldAlert,
   UserPlus,
@@ -15,6 +22,10 @@ import {
 import {
   adminApi,
   adminKeys,
+  type ContentModerationLLMPromptConfig,
+  type ContentModerationLLMSettings,
+  type ContentModerationLLMSettingsUpdate,
+  type ReportedUserItem,
   type UserModerationUpdateRequest,
   type UserWithModeration,
 } from '@/features/admin';
@@ -70,22 +81,137 @@ function getErrorMessage(error: unknown) {
   return null;
 }
 
+function reportedUserToModerationUser(user: ReportedUserItem): UserWithModeration {
+  return {
+    id: user.id,
+    username: user.username,
+    email: null,
+    bio: user.bio,
+    avatar_url: user.avatar_url,
+    is_ai_agent: user.is_ai_agent,
+    ai_config_id: null,
+    created_at: user.created_at,
+    following_count: 0,
+    followers_count: 0,
+    post_count: 0,
+    comment_count: 0,
+    moderation: {
+      account_banned: false,
+      account_banned_at: null,
+      account_ban_reason: null,
+      publish_banned_until: null,
+      publish_ban_reason: null,
+      comment_banned_until: null,
+      comment_ban_reason: null,
+      interaction_banned_until: null,
+      interaction_ban_reason: null,
+      updated_at: null,
+    },
+  };
+}
+
+type UserMode = 'all' | 'reported';
+
+const userReportPromptPlaceholders = [
+  {
+    token: '{context_json}',
+    description: '被举报用户、最近 5 条帖子、最近 5 条评论和触发审查内容 JSON。',
+  },
+];
+
+function reportSettingsToForm(
+  settings: ContentModerationLLMSettings
+): ContentModerationLLMSettingsUpdate {
+  return {
+    enabled: settings.enabled,
+    llm_base_url: settings.llm_base_url || '',
+    llm_model_name: settings.llm_model_name || '',
+    llm_api_key: settings.llm_api_key || '',
+  };
+}
+
+function normalizeReportSettingsForm(
+  form: ContentModerationLLMSettingsUpdate
+): ContentModerationLLMSettingsUpdate {
+  return {
+    enabled: !!form.enabled,
+    llm_base_url: form.llm_base_url || '',
+    llm_model_name: form.llm_model_name || '',
+    llm_api_key: form.llm_api_key || '',
+  };
+}
+
+function reportSettingsFormsEqual(
+  left: ContentModerationLLMSettingsUpdate,
+  right: ContentModerationLLMSettingsUpdate
+) {
+  return (
+    JSON.stringify(normalizeReportSettingsForm(left)) ===
+    JSON.stringify(normalizeReportSettingsForm(right))
+  );
+}
+
 export default function AdminUsersPage() {
+  const [mode, setMode] = useState<UserMode>('all');
   const [keyword, setKeyword] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserWithModeration | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [batchOpen, setBatchOpen] = useState(false);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
+  const [reportedModerationUser, setReportedModerationUser] = useState<ReportedUserItem | null>(
+    null
+  );
+  const [releasingUserId, setReleasingUserId] = useState<number | null>(null);
+  const [reportSettingsForm, setReportSettingsForm] = useState<ContentModerationLLMSettingsUpdate>(
+    {}
+  );
+  const [reportPromptDraft, setReportPromptDraft] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: adminKeys.users(keyword),
     queryFn: () => adminApi.users({ skip: 0, limit: 80, keyword: keyword.trim() || undefined }),
+    enabled: mode === 'all',
+  });
+
+  const reportedQuery = useQuery({
+    queryKey: adminKeys.reportedUsers(keyword),
+    queryFn: () =>
+      adminApi.reportedUsers({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
+    enabled: mode === 'reported',
+  });
+
+  const moderatedQuery = useQuery({
+    queryKey: adminKeys.moderatedUsers(keyword),
+    queryFn: () =>
+      adminApi.moderatedUsers({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
+    enabled: mode === 'reported',
+  });
+
+  const { data: reportSettings } = useQuery({
+    queryKey: adminKeys.userReportModerationSettings,
+    queryFn: adminApi.userReportModerationSettings,
+    enabled: mode === 'reported',
+  });
+
+  const { data: reportPromptConfig, isLoading: isReportPromptLoading } = useQuery({
+    queryKey: adminKeys.userReportModerationPrompt,
+    queryFn: adminApi.userReportModerationPrompt,
+    enabled: mode === 'reported',
   });
 
   const users = data?.items ?? [];
+  const reportedUsers = reportedQuery.data?.items ?? [];
+  const moderatedUsers = moderatedQuery.data?.items ?? [];
   const selectedUsers = users.filter(user => selectedIds.includes(user.id));
   const allPageSelected = users.length > 0 && users.every(user => selectedIds.includes(user.id));
+  const reportPromptValue = reportPromptDraft ?? reportPromptConfig?.value ?? '';
+  const isReportPromptDirty =
+    !!reportPromptConfig && reportPromptValue !== reportPromptConfig.value;
+  const reportSettingsDirty = useMemo(() => {
+    if (!reportSettings) return false;
+    return !reportSettingsFormsEqual(reportSettingsForm, reportSettingsToForm(reportSettings));
+  }, [reportSettings, reportSettingsForm]);
 
   const updateMutation = useMutation({
     mutationFn: ({ userId, payload }: { userId: number; payload: UserModerationUpdateRequest }) =>
@@ -111,6 +237,77 @@ export default function AdminUsersPage() {
     onSuccess: () => setAnnouncementOpen(false),
   });
 
+  const releaseReportedUserMutation = useMutation({
+    mutationFn: (user: ReportedUserItem) => adminApi.releaseReportedUser(user.id),
+    onMutate: user => setReleasingUserId(user.id),
+    onSettled: () => setReleasingUserId(null),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'reports'] });
+    },
+  });
+
+  const moderateReportedUserMutation = useMutation({
+    mutationFn: ({
+      user,
+      payload,
+    }: {
+      user: ReportedUserItem;
+      payload: UserModerationUpdateRequest;
+    }) => adminApi.moderateReportedUser(user.id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      setReportedModerationUser(null);
+    },
+  });
+
+  const saveReportSettingsMutation = useMutation({
+    mutationFn: adminApi.updateUserReportModerationSettings,
+    onSuccess: nextSettings => {
+      queryClient.setQueryData(adminKeys.userReportModerationSettings, nextSettings);
+    },
+  });
+
+  const updateReportPromptMutation = useMutation({
+    mutationFn: (value: string) => adminApi.updateUserReportModerationPrompt(value),
+    onSuccess: updated => {
+      setReportPromptDraft(updated.value);
+      queryClient.setQueryData(adminKeys.userReportModerationPrompt, updated);
+    },
+  });
+
+  const resetReportPromptMutation = useMutation({
+    mutationFn: adminApi.resetUserReportModerationPrompt,
+    onSuccess: updated => {
+      setReportPromptDraft(updated.value);
+      queryClient.setQueryData(adminKeys.userReportModerationPrompt, updated);
+    },
+  });
+
+  useEffect(() => {
+    if (reportSettings) {
+      setReportSettingsForm(reportSettingsToForm(reportSettings));
+    }
+  }, [reportSettings]);
+
+  useEffect(() => {
+    if (reportPromptConfig && reportPromptDraft === null) {
+      setReportPromptDraft(reportPromptConfig.value);
+    }
+  }, [reportPromptConfig, reportPromptDraft]);
+
+  useEffect(() => {
+    if (!reportSettings || saveReportSettingsMutation.isPending) return;
+    const current = normalizeReportSettingsForm(reportSettingsForm);
+    const persisted = reportSettingsToForm(reportSettings);
+    if (reportSettingsFormsEqual(current, persisted)) return;
+
+    const timeoutId = window.setTimeout(() => {
+      saveReportSettingsMutation.mutate(current);
+    }, 700);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [reportSettings, reportSettingsForm, saveReportSettingsMutation]);
+
   const toggleSelected = (userId: number) => {
     setSelectedIds(current =>
       current.includes(userId) ? current.filter(id => id !== userId) : [...current, userId]
@@ -127,25 +324,54 @@ export default function AdminUsersPage() {
     });
   };
 
+  const switchMode = (nextMode: UserMode) => {
+    setMode(nextMode);
+    setSelectedIds([]);
+  };
+
   return (
     <div>
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h1 className="text-2xl font-bold">用户管理</h1>
+        <div>
+          <h1 className="text-2xl font-bold">用户管理</h1>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant={mode === 'all' ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-md"
+              onClick={() => switchMode('all')}
+            >
+              <UsersRound size={14} className="mr-1" />
+              全部用户
+            </Button>
+            <Button
+              variant={mode === 'reported' ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-md"
+              onClick={() => switchMode('reported')}
+            >
+              <ShieldAlert size={14} className="mr-1" />
+              被举报用户审查
+            </Button>
+          </div>
+        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {selectedIds.length > 0 && (
+          {mode === 'all' && selectedIds.length > 0 && (
             <Button variant="outline" className="rounded-md" onClick={() => setBatchOpen(true)}>
               <UsersRound size={14} className="mr-1" />
               批量封禁
             </Button>
           )}
-          <Button
-            variant="outline"
-            className="rounded-md"
-            onClick={() => setAnnouncementOpen(true)}
-          >
-            <Megaphone size={14} className="mr-1" />
-            发布公告
-          </Button>
+          {mode === 'all' && (
+            <Button
+              variant="outline"
+              className="rounded-md"
+              onClick={() => setAnnouncementOpen(true)}
+            >
+              <Megaphone size={14} className="mr-1" />
+              发布公告
+            </Button>
+          )}
           <div className="relative w-full sm:w-72">
             <Search
               size={14}
@@ -157,135 +383,166 @@ export default function AdminUsersPage() {
                 setKeyword(event.target.value);
                 setSelectedIds([]);
               }}
-              placeholder="搜索用户名或邮箱"
+              placeholder={mode === 'reported' ? '搜索被举报用户' : '搜索用户名或邮箱'}
               className="pl-8"
             />
           </div>
         </div>
       </div>
 
-      <Card className="rounded-lg">
-        <CardContent className="p-0">
-          <div className="overflow-auto">
-            <table className="w-full min-w-[980px] text-sm">
-              <thead className="border-b bg-muted/50 text-left text-muted-foreground">
-                <tr>
-                  <th className="w-10 px-4 py-3 font-medium">
-                    <input
-                      type="checkbox"
-                      checked={allPageSelected}
-                      onChange={toggleAllPage}
-                      aria-label="选择当前页用户"
-                    />
-                  </th>
-                  <th className="px-4 py-3 font-medium">用户</th>
-                  <th className="px-4 py-3 font-medium">类型</th>
-                  <th className="px-4 py-3 font-medium">内容</th>
-                  <th className="px-4 py-3 font-medium">关系</th>
-                  <th className="px-4 py-3 font-medium">状态</th>
-                  <th className="px-4 py-3 text-center font-medium">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map(user => (
-                  <tr key={user.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">
+      {mode === 'all' ? (
+        <Card className="rounded-lg">
+          <CardContent className="p-0">
+            <div className="overflow-auto">
+              <table className="w-full min-w-[980px] text-sm">
+                <thead className="border-b bg-muted/50 text-left text-muted-foreground">
+                  <tr>
+                    <th className="w-10 px-4 py-3 font-medium">
                       <input
                         type="checkbox"
-                        checked={selectedIds.includes(user.id)}
-                        onChange={() => toggleSelected(user.id)}
-                        aria-label={`选择用户 ${user.username || user.id}`}
+                        checked={allPageSelected}
+                        onChange={toggleAllPage}
+                        aria-label="选择当前页用户"
                       />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        to={`/user/${user.id}`}
-                        className="font-medium hover:text-primary hover:underline"
-                      >
-                        @{user.username || `user_${user.id}`}
-                      </Link>
-                      <p className="text-xs text-muted-foreground">
-                        {user.email || `ID ${user.id}`}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">{user.is_ai_agent ? '角色' : '人类'}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="inline-flex items-center gap-1 text-muted-foreground"
-                          title="帖子数"
-                          aria-label={`帖子数 ${user.post_count}`}
-                        >
-                          <FileText size={15} />
-                          <span className="font-medium tabular-nums text-foreground">
-                            {user.post_count}
-                          </span>
-                        </span>
-                        <span
-                          className="inline-flex items-center gap-1 text-muted-foreground"
-                          title="评论数"
-                          aria-label={`评论数 ${user.comment_count}`}
-                        >
-                          <MessageCircle size={15} />
-                          <span className="font-medium tabular-nums text-foreground">
-                            {user.comment_count}
-                          </span>
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="inline-flex items-center gap-1 text-muted-foreground"
-                          title="粉丝数"
-                          aria-label={`粉丝数 ${user.followers_count}`}
-                        >
-                          <UsersRound size={15} />
-                          <span className="font-medium tabular-nums text-foreground">
-                            {user.followers_count}
-                          </span>
-                        </span>
-                        <span
-                          className="inline-flex items-center gap-1 text-muted-foreground"
-                          title="关注数"
-                          aria-label={`关注数 ${user.following_count}`}
-                        >
-                          <UserPlus size={15} />
-                          <span className="font-medium tabular-nums text-foreground">
-                            {user.following_count}
-                          </span>
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <UserStatus user={user} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="mx-auto rounded-md"
-                        onClick={() => setSelectedUser(user)}
-                        title="管理"
-                        aria-label={`管理用户 ${user.username || user.id}`}
-                      >
-                        <ShieldAlert size={16} />
-                      </Button>
-                    </td>
+                    </th>
+                    <th className="px-4 py-3 font-medium">用户</th>
+                    <th className="px-4 py-3 font-medium">类型</th>
+                    <th className="px-4 py-3 font-medium">内容</th>
+                    <th className="px-4 py-3 font-medium">关系</th>
+                    <th className="px-4 py-3 font-medium">状态</th>
+                    <th className="px-4 py-3 text-center font-medium">操作</th>
                   </tr>
-                ))}
-                {!isLoading && users.length === 0 && (
-                  <tr>
-                    <td className="px-4 py-10 text-center text-muted-foreground" colSpan={7}>
-                      暂无用户
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {users.map(user => (
+                    <tr key={user.id} className="border-b last:border-0">
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(user.id)}
+                          onChange={() => toggleSelected(user.id)}
+                          aria-label={`选择用户 ${user.username || user.id}`}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link
+                          to={`/user/${user.id}`}
+                          className="font-medium hover:text-primary hover:underline"
+                        >
+                          @{user.username || `user_${user.id}`}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {user.email || `ID ${user.id}`}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">{user.is_ai_agent ? '角色' : '人类'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="inline-flex items-center gap-1 text-muted-foreground"
+                            title="帖子数"
+                            aria-label={`帖子数 ${user.post_count}`}
+                          >
+                            <FileText size={15} />
+                            <span className="font-medium tabular-nums text-foreground">
+                              {user.post_count}
+                            </span>
+                          </span>
+                          <span
+                            className="inline-flex items-center gap-1 text-muted-foreground"
+                            title="评论数"
+                            aria-label={`评论数 ${user.comment_count}`}
+                          >
+                            <MessageCircle size={15} />
+                            <span className="font-medium tabular-nums text-foreground">
+                              {user.comment_count}
+                            </span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="inline-flex items-center gap-1 text-muted-foreground"
+                            title="粉丝数"
+                            aria-label={`粉丝数 ${user.followers_count}`}
+                          >
+                            <UsersRound size={15} />
+                            <span className="font-medium tabular-nums text-foreground">
+                              {user.followers_count}
+                            </span>
+                          </span>
+                          <span
+                            className="inline-flex items-center gap-1 text-muted-foreground"
+                            title="关注数"
+                            aria-label={`关注数 ${user.following_count}`}
+                          >
+                            <UserPlus size={15} />
+                            <span className="font-medium tabular-nums text-foreground">
+                              {user.following_count}
+                            </span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <UserStatus user={user} />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="mx-auto rounded-md"
+                          onClick={() => setSelectedUser(user)}
+                          title="管理"
+                          aria-label={`管理用户 ${user.username || user.id}`}
+                        >
+                          <ShieldAlert size={16} />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!isLoading && users.length === 0 && (
+                    <tr>
+                      <td className="px-4 py-10 text-center text-muted-foreground" colSpan={7}>
+                        暂无用户
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+          <div className="space-y-4">
+            <ReportedUsersTable
+              items={reportedUsers}
+              releasingUserId={releasingUserId}
+              releasePending={releaseReportedUserMutation.isPending}
+              onRelease={user => releaseReportedUserMutation.mutate(user)}
+              onManage={setReportedModerationUser}
+            />
+            <ModeratedUsersTable items={moderatedUsers} onManage={setSelectedUser} />
           </div>
-        </CardContent>
-      </Card>
+          <UserReportModerationLLMPanel
+            settingsForm={reportSettingsForm}
+            settingsDirty={reportSettingsDirty}
+            settingsSaving={saveReportSettingsMutation.isPending}
+            prompt={reportPromptConfig}
+            promptDraft={reportPromptValue}
+            promptLoading={isReportPromptLoading}
+            promptDirty={isReportPromptDirty}
+            promptSaving={updateReportPromptMutation.isPending}
+            promptResetting={resetReportPromptMutation.isPending}
+            onSettingsChange={setReportSettingsForm}
+            onPromptDraftChange={setReportPromptDraft}
+            onPromptCancel={() => setReportPromptDraft(reportPromptConfig?.value ?? '')}
+            onPromptReset={() => resetReportPromptMutation.mutate()}
+            onPromptSave={() => updateReportPromptMutation.mutate(reportPromptValue)}
+          />
+        </div>
+      )}
 
       {selectedUser && (
         <ModerationEditor
@@ -313,6 +570,17 @@ export default function AdminUsersPage() {
           onSubmit={content => announcementMutation.mutate({ content })}
         />
       )}
+      {reportedModerationUser && (
+        <ModerationEditor
+          user={reportedUserToModerationUser(reportedModerationUser)}
+          saving={moderateReportedUserMutation.isPending}
+          error={getErrorMessage(moderateReportedUserMutation.error)}
+          onClose={() => setReportedModerationUser(null)}
+          onSubmit={payload =>
+            moderateReportedUserMutation.mutate({ user: reportedModerationUser, payload })
+          }
+        />
+      )}
     </div>
   );
 }
@@ -325,6 +593,404 @@ const statusIconMap = {
 };
 
 type StatusIconKey = keyof typeof statusIconMap;
+
+function ReportedUsersTable({
+  items,
+  releasingUserId,
+  releasePending,
+  onRelease,
+  onManage,
+}: {
+  items: ReportedUserItem[];
+  releasingUserId: number | null;
+  releasePending: boolean;
+  onRelease: (user: ReportedUserItem) => void;
+  onManage: (user: ReportedUserItem) => void;
+}) {
+  return (
+    <Card className="rounded-lg">
+      <CardContent className="p-0">
+        <div className="overflow-auto">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead className="border-b bg-muted/50 text-left text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">用户</th>
+                <th className="px-4 py-3 font-medium">签名</th>
+                <th className="px-4 py-3 font-medium">举报人数</th>
+                <th className="px-4 py-3 font-medium">举报原因</th>
+                <th className="px-4 py-3 font-medium">最近举报</th>
+                <th className="px-4 py-3 text-center font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(user => (
+                <tr key={user.id} className="border-b last:border-0">
+                  <td className="px-4 py-3">
+                    <Link
+                      to={`/user/${user.id}`}
+                      className="font-medium hover:text-primary hover:underline"
+                    >
+                      @{user.username || `user_${user.id}`}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      {user.is_ai_agent ? '角色' : '人类'} · ID {user.id}
+                    </p>
+                  </td>
+                  <td className="max-w-xs px-4 py-3 text-muted-foreground">
+                    <p className="line-clamp-2 break-words">{user.bio || '无签名'}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 font-medium tabular-nums">
+                      {user.report_count}
+                    </span>
+                  </td>
+                  <td className="max-w-sm px-4 py-3">
+                    <div className="space-y-1.5">
+                      {user.report_reasons.map(reason => (
+                        <div
+                          key={reason.reason}
+                          className="flex items-start gap-2 rounded-md bg-muted/40 px-2 py-1.5"
+                        >
+                          <span className="shrink-0 rounded bg-background px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
+                            {reason.count}
+                          </span>
+                          <span className="line-clamp-2 break-words text-muted-foreground">
+                            {reason.reason}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">{new Date(user.last_reported_at).toLocaleString()}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md gap-1"
+                        onClick={() => onRelease(user)}
+                        disabled={releasePending && releasingUserId === user.id}
+                      >
+                        <CheckCircle size={14} />
+                        放行
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md gap-1"
+                        onClick={() => onManage(user)}
+                      >
+                        <ShieldAlert size={14} />
+                        管理
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td className="px-4 py-10 text-center text-muted-foreground" colSpan={6}>
+                    暂无待审举报用户
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModeratedUsersTable({
+  items,
+  onManage,
+}: {
+  items: UserWithModeration[];
+  onManage: (user: UserWithModeration) => void;
+}) {
+  return (
+    <Card className="rounded-lg">
+      <CardContent className="p-0">
+        <div className="border-b px-4 py-3">
+          <div className="flex items-center gap-2 font-semibold">
+            <Ban size={16} className="text-muted-foreground" />
+            已管控用户
+          </div>
+        </div>
+        <div className="overflow-auto">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="border-b bg-muted/50 text-left text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">用户</th>
+                <th className="px-4 py-3 font-medium">类型</th>
+                <th className="px-4 py-3 font-medium">状态</th>
+                <th className="px-4 py-3 font-medium">更新时间</th>
+                <th className="px-4 py-3 text-center font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(user => (
+                <tr key={user.id} className="border-b last:border-0">
+                  <td className="px-4 py-3">
+                    <Link
+                      to={`/user/${user.id}`}
+                      className="font-medium hover:text-primary hover:underline"
+                    >
+                      @{user.username || `user_${user.id}`}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">{user.email || `ID ${user.id}`}</p>
+                  </td>
+                  <td className="px-4 py-3">{user.is_ai_agent ? '角色' : '人类'}</td>
+                  <td className="px-4 py-3">
+                    <UserStatus user={user} />
+                  </td>
+                  <td className="px-4 py-3">
+                    {user.moderation.updated_at
+                      ? new Date(user.moderation.updated_at).toLocaleString()
+                      : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md gap-1"
+                      onClick={() => onManage(user)}
+                    >
+                      <ShieldAlert size={14} />
+                      管理
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td className="px-4 py-10 text-center text-muted-foreground" colSpan={5}>
+                    暂无已管控用户
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function UserReportModerationLLMPanel({
+  settingsForm,
+  settingsDirty,
+  settingsSaving,
+  prompt,
+  promptDraft,
+  promptLoading,
+  promptDirty,
+  promptSaving,
+  promptResetting,
+  onSettingsChange,
+  onPromptDraftChange,
+  onPromptCancel,
+  onPromptReset,
+  onPromptSave,
+}: {
+  settingsForm: ContentModerationLLMSettingsUpdate;
+  settingsDirty: boolean;
+  settingsSaving: boolean;
+  prompt?: ContentModerationLLMPromptConfig;
+  promptDraft: string;
+  promptLoading: boolean;
+  promptDirty: boolean;
+  promptSaving: boolean;
+  promptResetting: boolean;
+  onSettingsChange: (
+    updater: (current: ContentModerationLLMSettingsUpdate) => ContentModerationLLMSettingsUpdate
+  ) => void;
+  onPromptDraftChange: (value: string) => void;
+  onPromptCancel: () => void;
+  onPromptReset: () => void;
+  onPromptSave: () => void;
+}) {
+  const enabled = !!settingsForm.enabled;
+
+  return (
+    <aside className="space-y-4 xl:sticky xl:top-20">
+      <Card className="rounded-lg">
+        <CardContent className="space-y-4 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 font-semibold">
+              <Bot size={17} className="text-primary" />
+              LLM审查
+            </div>
+            <CompactSwitch
+              checked={enabled}
+              onChange={checked => onSettingsChange(current => ({ ...current, enabled: checked }))}
+            />
+          </div>
+          {settingsDirty && (
+            <div className="text-xs text-muted-foreground">
+              {settingsSaving ? '保存中' : '待自动保存'}
+            </div>
+          )}
+          <fieldset className={!enabled ? 'pointer-events-none space-y-3 opacity-50' : 'space-y-3'}>
+            <CompactField label="Base URL">
+              <Input
+                value={settingsForm.llm_base_url || ''}
+                onChange={event =>
+                  onSettingsChange(current => ({ ...current, llm_base_url: event.target.value }))
+                }
+                placeholder="OpenAI-compatible API 地址"
+              />
+            </CompactField>
+            <CompactField label="API Key">
+              <Input
+                value={settingsForm.llm_api_key || ''}
+                onChange={event =>
+                  onSettingsChange(current => ({ ...current, llm_api_key: event.target.value }))
+                }
+                placeholder="留空不修改，星号会保留旧值"
+                type="password"
+              />
+            </CompactField>
+            <CompactField label="模型名称">
+              <Input
+                value={settingsForm.llm_model_name || ''}
+                onChange={event =>
+                  onSettingsChange(current => ({ ...current, llm_model_name: event.target.value }))
+                }
+                placeholder="例如 gpt-4.1-mini"
+              />
+            </CompactField>
+          </fieldset>
+        </CardContent>
+      </Card>
+      <Card className="rounded-lg">
+        <CardContent className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2 font-semibold">
+              <ScrollText size={17} className="text-muted-foreground" />
+              <span className="truncate">{prompt?.name ?? '审查提示词'}</span>
+            </div>
+            {promptDirty && <CompactBadge>未保存</CompactBadge>}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Braces size={14} />
+            {userReportPromptPlaceholders.map(placeholder => (
+              <CompactBadge
+                key={placeholder.token}
+                title={placeholder.description}
+                variant="outline"
+              >
+                {placeholder.token}
+              </CompactBadge>
+            ))}
+          </div>
+          {promptLoading ? (
+            <div className="h-40 animate-pulse rounded-md bg-muted" />
+          ) : (
+            <Textarea
+              value={promptDraft}
+              onChange={event => onPromptDraftChange(event.target.value)}
+              className="min-h-[260px] font-mono text-xs leading-relaxed"
+              spellCheck={false}
+            />
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-md"
+              onClick={onPromptCancel}
+              disabled={!promptDirty || promptSaving || promptResetting}
+            >
+              取消
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-md"
+              onClick={onPromptReset}
+              disabled={promptSaving || promptResetting}
+            >
+              <RotateCcw size={14} className="mr-1" />
+              默认
+            </Button>
+            <Button
+              size="sm"
+              className="rounded-md"
+              onClick={onPromptSave}
+              disabled={!promptDraft.trim() || !promptDirty || promptSaving}
+            >
+              <Save size={14} className="mr-1" />
+              保存
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </aside>
+  );
+}
+
+function CompactField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function CompactSwitch({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={
+        'relative h-6 w-11 rounded-full transition-colors ' +
+        (checked ? 'bg-[var(--theme-accent-bg)]' : 'bg-muted')
+      }
+      onClick={() => onChange(!checked)}
+    >
+      <span
+        className={
+          'absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ' +
+          (checked ? 'translate-x-5' : 'translate-x-0')
+        }
+      />
+    </button>
+  );
+}
+
+function CompactBadge({
+  children,
+  title,
+  variant = 'secondary',
+}: {
+  children: ReactNode;
+  title?: string;
+  variant?: 'secondary' | 'outline';
+}) {
+  return (
+    <span
+      title={title}
+      className={
+        'inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ' +
+        (variant === 'outline'
+          ? 'border border-border bg-background font-mono text-muted-foreground'
+          : 'bg-muted text-muted-foreground')
+      }
+    >
+      {children}
+    </span>
+  );
+}
 
 function UserStatus({ user }: { user: UserWithModeration }) {
   const active = useMemo(() => {
@@ -444,7 +1110,7 @@ function ModerationEditor({
               checked={accountBanned}
               onChange={event => setAccountBanned(event.target.checked)}
             />
-            永久封禁账号
+            封禁账号
           </label>
           <Textarea
             value={reason}
@@ -621,7 +1287,7 @@ function BatchModerationEditor({
               checked={accountBanned}
               onChange={event => setAccountBanned(event.target.checked)}
             />
-            永久封禁账号
+            封禁账号
           </label>
           <Textarea
             value={reason}

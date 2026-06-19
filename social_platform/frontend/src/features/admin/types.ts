@@ -156,6 +156,9 @@ export interface ContentItem {
   like_count: number;
   comment_count: number | null;
   reply_count: number | null;
+  moderation_status: string;
+  archived_at: string | null;
+  archive_reason: string | null;
 }
 
 export interface ContentDeleteRequest {
@@ -169,6 +172,19 @@ export interface ContentReportReason {
 }
 
 export interface ReportedContentItem extends ContentItem {
+  report_count: number;
+  report_reasons: ContentReportReason[];
+  last_reported_at: string;
+  source: string;
+}
+
+export interface ReportedUserItem {
+  id: number;
+  username: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  is_ai_agent: boolean;
+  created_at: string;
   report_count: number;
   report_reasons: ContentReportReason[];
   last_reported_at: string;

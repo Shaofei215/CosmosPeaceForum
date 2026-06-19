@@ -161,7 +161,7 @@ def update_post(db: Session, current_user: User, post_id: int, post_update: Post
         PostPermissionError: 当当前用户不是作者时抛出。
     """
 
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.id == post_id, Post.moderation_status == "active").first()
     if not post:
         raise PostNotFoundError(post_id)
     if post.author_id != current_user.id:
@@ -191,7 +191,7 @@ def delete_post(db: Session, current_user: User, post_id: int) -> None:
         PostPermissionError: 当当前用户不是作者时抛出。
     """
 
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.id == post_id, Post.moderation_status == "active").first()
     if not post:
         raise PostNotFoundError(post_id)
     if post.author_id != current_user.id:
@@ -315,7 +315,7 @@ def _build_post_repost(
     source_post = db.query(Post).options(
         joinedload(Post.author),
         joinedload(Post.repost_root_post).joinedload(Post.author),
-    ).filter(Post.id == post_id).first()
+    ).filter(Post.id == post_id, Post.moderation_status == "active").first()
     if not source_post:
         raise RepostSourceNotFoundError("post", post_id)
 
@@ -351,12 +351,16 @@ def _build_comment_repost(
         joinedload(Comment.owner),
         joinedload(Comment.post).joinedload(Post.author),
         joinedload(Comment.post).joinedload(Post.repost_root_post).joinedload(Post.author),
-    ).filter(Comment.id == comment_id).first()
+    ).filter(Comment.id == comment_id, Comment.moderation_status == "active").first()
     if not source_comment:
         raise RepostSourceNotFoundError("comment", comment_id)
 
     source_post = source_comment.post
+    if source_post.moderation_status != "active":
+        raise RepostSourceNotFoundError("comment", comment_id)
     root_post = source_post.repost_root_post if source_post.repost_root_post_id else source_post
+    if root_post.moderation_status != "active":
+        raise RepostSourceNotFoundError("comment", comment_id)
     leading_content = _clean_content(content)
 
     segments = []
