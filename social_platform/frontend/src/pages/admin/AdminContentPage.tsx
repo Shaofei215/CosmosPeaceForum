@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
+  Archive,
+  ArchiveRestore,
   Bot,
   Braces,
   CheckCircle,
@@ -14,7 +16,6 @@ import {
   ScrollText,
   Search,
   ShieldAlert,
-  Trash2,
 } from 'lucide-react';
 import {
   adminApi,
@@ -38,7 +39,10 @@ function getReviewTargetType(item: ContentItem) {
 }
 
 const reportPromptPlaceholders = [
-  { token: '{context_json}', description: '被举报内容、举报原因、所属帖子和父评论 JSON。' },
+  {
+    token: '{context_json}',
+    description: '被举报内容、举报原因、所属帖子和父评论 JSON；处理后会归档。',
+  },
 ];
 
 function reportSettingsToForm(
@@ -74,6 +78,9 @@ function reportSettingsFormsEqual(
 }
 
 function getContentPath(item: ContentItem): string | null {
+  if (item.moderation_status === 'archived') {
+    return null;
+  }
   if (item.type === 'comment' && item.post_id) {
     return '/post/' + item.post_id + '?commentId=' + item.id;
   }
@@ -142,6 +149,18 @@ export default function AdminContentPage() {
     enabled: mode === 'reported',
   });
 
+  const archivedQuery = useQuery({
+    queryKey: adminKeys.archivedContent(type, keyword),
+    queryFn: () =>
+      adminApi.archivedContent({
+        skip: 0,
+        limit: 100,
+        type: type || undefined,
+        keyword: keyword.trim() || undefined,
+      }),
+    enabled: mode === 'reported',
+  });
+
   const { data: reportSettings } = useQuery({
     queryKey: adminKeys.reportModerationSettings,
     queryFn: adminApi.reportModerationSettings,
@@ -156,6 +175,7 @@ export default function AdminContentPage() {
 
   const items = contentQuery.data?.items ?? [];
   const reportedItems = reportedQuery.data?.items ?? [];
+  const archivedItems = archivedQuery.data?.items ?? [];
   const selectedItems = items.filter(item => selectedKeys.includes(getContentKey(item)));
   const allPageSelected =
     items.length > 0 && items.every(item => selectedKeys.includes(getContentKey(item)));
@@ -245,6 +265,14 @@ export default function AdminContentPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'content'] });
       setDeletingReported(null);
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (item: ContentItem) =>
+      item.type === 'comment' ? adminApi.restoreComment(item.id) : adminApi.restorePost(item.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'content'] });
     },
   });
 
@@ -339,8 +367,8 @@ export default function AdminContentPage() {
               className="rounded-md"
               onClick={() => setBatchDeleting(true)}
             >
-              <Trash2 size={14} className="mr-1" />
-              批量删除
+              <Archive size={14} className="mr-1" />
+              批量归档
             </Button>
           )}
           <select
@@ -384,13 +412,21 @@ export default function AdminContentPage() {
         />
       ) : (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
-          <ReportedContentTable
-            items={reportedItems}
-            releasingKey={releasingKey}
-            releasePending={releaseMutation.isPending}
-            onRelease={item => releaseMutation.mutate(item)}
-            onDelete={setDeletingReported}
-          />
+          <div className="space-y-4">
+            <ReportedContentTable
+              items={reportedItems}
+              releasingKey={releasingKey}
+              releasePending={releaseMutation.isPending}
+              onRelease={item => releaseMutation.mutate(item)}
+              onDelete={setDeletingReported}
+            />
+            <ArchivedContentTable
+              items={archivedItems}
+              restoringId={restoreMutation.variables?.id ?? null}
+              restoring={restoreMutation.isPending}
+              onRestore={item => restoreMutation.mutate(item)}
+            />
+          </div>
           <ReportModerationLLMPanel
             settingsForm={reportSettingsForm}
             settingsDirty={reportSettingsDirty}
@@ -508,12 +544,12 @@ function AllContentTable({
                       size="icon"
                       className="mx-auto rounded-md"
                       onClick={() => onDelete(item)}
-                      title="删除"
+                      title="归档"
                       aria-label={
-                        '删除' + (item.type === 'comment' ? '评论' : '帖子') + ' ' + item.id
+                        '归档' + (item.type === 'comment' ? '评论' : '帖子') + ' ' + item.id
                       }
                     >
-                      <Trash2 size={16} />
+                      <Archive size={16} />
                     </Button>
                   </td>
                 </tr>
@@ -615,8 +651,8 @@ function ReportedContentTable({
                         className="rounded-md gap-1"
                         onClick={() => onDelete(item)}
                       >
-                        <Trash2 size={14} />
-                        删除
+                        <Archive size={14} />
+                        归档
                       </Button>
                     </div>
                   </td>
@@ -626,6 +662,85 @@ function ReportedContentTable({
                 <tr>
                   <td className="px-4 py-10 text-center text-muted-foreground" colSpan={7}>
                     暂无待审举报内容
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ArchivedContentTable({
+  items,
+  restoringId,
+  restoring,
+  onRestore,
+}: {
+  items: ContentItem[];
+  restoringId: number | null;
+  restoring: boolean;
+  onRestore: (item: ContentItem) => void;
+}) {
+  return (
+    <Card className="rounded-lg">
+      <CardContent className="p-0">
+        <div className="border-b px-4 py-3">
+          <div className="flex items-center gap-2 font-semibold">
+            <ArchiveRestore size={16} className="text-muted-foreground" />
+            已归档内容
+          </div>
+        </div>
+        <div className="overflow-auto">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead className="border-b bg-muted/50 text-left text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">内容</th>
+                <th className="px-4 py-3 font-medium">作者</th>
+                <th className="px-4 py-3 font-medium">类型</th>
+                <th className="px-4 py-3 font-medium">归档原因</th>
+                <th className="px-4 py-3 font-medium">归档时间</th>
+                <th className="px-4 py-3 text-center font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={getContentKey(item)} className="border-b last:border-0">
+                  <td className="max-w-md px-4 py-3">
+                    <ContentPreview item={item} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <AuthorLink item={item} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <ContentTypeIcon item={item} />
+                  </td>
+                  <td className="max-w-sm px-4 py-3 text-muted-foreground">
+                    <p className="line-clamp-2 break-words">{item.archive_reason || '未填写'}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    {item.archived_at ? new Date(item.archived_at).toLocaleString() : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md gap-1"
+                      onClick={() => onRestore(item)}
+                      disabled={restoring && restoringId === item.id}
+                    >
+                      <ArchiveRestore size={14} />
+                      恢复
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td className="px-4 py-10 text-center text-muted-foreground" colSpan={6}>
+                    暂无已归档内容
                   </td>
                 </tr>
               )}
@@ -912,7 +1027,7 @@ function DeleteContentDialog({
       <Card className="w-full max-w-lg rounded-lg shadow-xl">
         <CardContent className="space-y-4 p-5">
           <div>
-            <h2 className="text-lg font-semibold">删除内容</h2>
+            <h2 className="text-lg font-semibold">归档内容</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {item.type === 'comment' ? '评论' : '帖子'} #{item.id}
             </p>
@@ -920,7 +1035,7 @@ function DeleteContentDialog({
           <Textarea
             value={reason}
             onChange={event => setReason(event.target.value)}
-            placeholder="删除原因，会通过通知发送给作者"
+            placeholder="归档原因，会通过通知发送给作者"
             rows={4}
           />
           <div className="flex justify-end gap-2">
@@ -933,7 +1048,7 @@ function DeleteContentDialog({
               disabled={saving}
               onClick={() => onConfirm(reason)}
             >
-              删除
+              归档
             </Button>
           </div>
         </CardContent>
@@ -962,7 +1077,7 @@ function BatchDeleteContentDialog({
       <Card className="w-full max-w-lg rounded-lg shadow-xl">
         <CardContent className="space-y-4 p-5">
           <div>
-            <h2 className="text-lg font-semibold">批量删除内容</h2>
+            <h2 className="text-lg font-semibold">批量归档内容</h2>
             <p className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <FileText size={14} />
@@ -977,7 +1092,7 @@ function BatchDeleteContentDialog({
           <Textarea
             value={reason}
             onChange={event => setReason(event.target.value)}
-            placeholder="删除原因，会通过通知发送给作者"
+            placeholder="归档原因，会通过通知发送给作者"
             rows={4}
           />
           <div className="flex justify-end gap-2">
@@ -990,7 +1105,7 @@ function BatchDeleteContentDialog({
               disabled={saving || items.length === 0}
               onClick={() => onConfirm(reason)}
             >
-              删除
+              归档
             </Button>
           </div>
         </CardContent>

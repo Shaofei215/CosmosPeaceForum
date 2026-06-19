@@ -18,6 +18,7 @@ from social_platform.app.admin.schemas import (
     UserWithModerationResponse,
 )
 from social_platform.app.admin.services.moderation_service import (
+    list_moderated_users,
     list_users,
     moderation_to_status,
     update_user_moderation,
@@ -29,6 +30,7 @@ from social_platform.app.domains.content_safety import llm_moderation as content
 from social_platform.app.domains.content_safety.admin_application import (
     ban_reported_user_as_admin,
     list_reported_users,
+    moderate_reported_user_as_admin,
     release_reported_user,
 )
 
@@ -127,6 +129,18 @@ async def reported_users(
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
 
 
+@router.get("/moderated", response_model=PaginatedResponse[UserWithModerationResponse])
+async def moderated_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+):
+    items, total = list_moderated_users(db, skip=skip, limit=limit, keyword=keyword)
+    return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
 @router.post("/reports/{user_id}/release")
 async def release_user_report(
     user_id: int,
@@ -159,6 +173,21 @@ async def ban_reported_user(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return None
+
+
+@router.put("/reports/{user_id}/moderation", response_model=UserModerationResponse)
+async def moderate_reported_user(
+    user_id: int,
+    request: UserModerationUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+):
+    try:
+        moderation = moderate_reported_user_as_admin(db, user_id, request, current_admin)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    status_data = moderation_to_status(moderation)
+    return UserModerationResponse(user_id=user_id, **status_data.model_dump())
 
 
 @router.put("/{user_id}/moderation", response_model=UserModerationResponse)

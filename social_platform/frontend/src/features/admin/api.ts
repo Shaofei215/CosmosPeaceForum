@@ -157,10 +157,17 @@ export const adminApi = {
     client.get<unknown, PaginatedResponse<UserWithModeration>>('/users/', { params }),
   reportedUsers: (params: { skip?: number; limit?: number; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<ReportedUserItem>>('/users/reports', { params }),
+  moderatedUsers: (params: { skip?: number; limit?: number; keyword?: string }) =>
+    client.get<unknown, PaginatedResponse<UserWithModeration>>('/users/moderated', { params }),
   releaseReportedUser: (userId: number) =>
     client.post<unknown, ReportReleaseResponse>('/users/reports/' + userId + '/release'),
   banReportedUser: (userId: number, request: ContentDeleteRequest) =>
     client.delete<unknown, void>('/users/reports/' + userId, { data: request }),
+  moderateReportedUser: (userId: number, request: UserModerationUpdateRequest) =>
+    client.put<unknown, UserModerationResponse>(
+      '/users/reports/' + userId + '/moderation',
+      request
+    ),
   userReportModerationSettings: () =>
     client.get<unknown, ContentModerationLLMSettings>('/users/report-moderation/settings'),
   updateUserReportModerationSettings: (request: ContentModerationLLMSettingsUpdate) =>
@@ -183,6 +190,8 @@ export const adminApi = {
     client.get<unknown, PaginatedResponse<ContentItem>>('/content/', { params }),
   reportedContent: (params: { skip?: number; limit?: number; type?: string; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<ReportedContentItem>>('/content/reports', { params }),
+  archivedContent: (params: { skip?: number; limit?: number; type?: string; keyword?: string }) =>
+    client.get<unknown, PaginatedResponse<ContentItem>>('/content/archived', { params }),
   releaseReportedContent: (type: string, id: number) =>
     client.post<unknown, ReportReleaseResponse>('/content/reports/' + type + '/' + id + '/release'),
   deleteReportedContent: (type: string, id: number, request: ContentDeleteRequest) =>
@@ -208,6 +217,9 @@ export const adminApi = {
     client.delete<unknown, void>(`/content/posts/${postId}`, { data: request }),
   deleteComment: (commentId: number, request: ContentDeleteRequest) =>
     client.delete<unknown, void>(`/content/comments/${commentId}`, { data: request }),
+  restorePost: (postId: number) => client.post<unknown, void>(`/content/posts/${postId}/restore`),
+  restoreComment: (commentId: number) =>
+    client.post<unknown, void>(`/content/comments/${commentId}/restore`),
   hotTopics: (params: { skip?: number; limit?: number; status?: string; source?: string }) =>
     client.get<unknown, PaginatedResponse<HotTopic>>('/hot-topics/', { params }),
   createHotTopic: (request: HotTopicRequest) =>

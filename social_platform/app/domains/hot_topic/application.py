@@ -471,6 +471,7 @@ def _format_top_posts(db: Session, limit: int = 10) -> list[dict[str, Any]]:
     posts = (
         db.query(Post)
         .options(joinedload(Post.author))
+        .filter(Post.moderation_status == "active")
         .order_by(func.coalesce(Post.heat_score, 0).desc(), Post.created_at.desc(), Post.id.desc())
         .limit(limit)
         .all()
@@ -634,7 +635,10 @@ def _search_platform_posts_for_agent(db: Session, query: str, count: int = 5) ->
     posts = (
         db.query(Post)
         .options(joinedload(Post.author))
-        .filter(or_(Post.title.ilike(like_query), Post.content.ilike(like_query)))
+        .filter(
+            Post.moderation_status == "active",
+            or_(Post.title.ilike(like_query), Post.content.ilike(like_query)),
+        )
         .order_by(func.coalesce(Post.heat_score, 0).desc(), Post.created_at.desc(), Post.id.desc())
         .limit(safe_count)
         .all()

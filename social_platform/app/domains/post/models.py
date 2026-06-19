@@ -50,10 +50,17 @@ class Post(Base):
     heat_score = Column(Float, default=0.0, nullable=False, server_default="0")
     heat_score_updated_at = Column(DateTime, nullable=True)
 
+    # 管理端内容安全处理状态。archived 内容在公开端不可见，但仍保留用于恢复和审计。
+    moderation_status = Column(String(20), nullable=False, default="active", server_default="active")
+    archived_at = Column(DateTime, nullable=True)
+    archived_by_admin_id = Column(Integer, nullable=True)
+    archive_reason = Column(Text, nullable=True)
+
     __table_args__ = (
         Index("idx_posts_latest", "created_at", "id"),
         Index("idx_posts_heat_latest", "heat_score", "created_at", "id"),
         Index("idx_posts_author_latest", "author_id", "created_at", "id"),
+        Index("idx_posts_moderation_status", "moderation_status", "created_at", "id"),
     )
 
     # 关联关系：帖子的作者

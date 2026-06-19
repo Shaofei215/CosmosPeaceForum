@@ -16,7 +16,6 @@ import {
   ScrollText,
   Search,
   ShieldAlert,
-  Trash2,
   UserPlus,
   UsersRound,
 } from 'lucide-react';
@@ -82,10 +81,42 @@ function getErrorMessage(error: unknown) {
   return null;
 }
 
+function reportedUserToModerationUser(user: ReportedUserItem): UserWithModeration {
+  return {
+    id: user.id,
+    username: user.username,
+    email: null,
+    bio: user.bio,
+    avatar_url: user.avatar_url,
+    is_ai_agent: user.is_ai_agent,
+    ai_config_id: null,
+    created_at: user.created_at,
+    following_count: 0,
+    followers_count: 0,
+    post_count: 0,
+    comment_count: 0,
+    moderation: {
+      account_banned: false,
+      account_banned_at: null,
+      account_ban_reason: null,
+      publish_banned_until: null,
+      publish_ban_reason: null,
+      comment_banned_until: null,
+      comment_ban_reason: null,
+      interaction_banned_until: null,
+      interaction_ban_reason: null,
+      updated_at: null,
+    },
+  };
+}
+
 type UserMode = 'all' | 'reported';
 
 const userReportPromptPlaceholders = [
-  { token: '{context_json}', description: '被举报用户、举报原因和最近 10 条内容 JSON。' },
+  {
+    token: '{context_json}',
+    description: '被举报用户、最近 5 条帖子、最近 5 条评论和触发审查内容 JSON。',
+  },
 ];
 
 function reportSettingsToForm(
@@ -127,7 +158,9 @@ export default function AdminUsersPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [batchOpen, setBatchOpen] = useState(false);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
-  const [reportedBanUser, setReportedBanUser] = useState<ReportedUserItem | null>(null);
+  const [reportedModerationUser, setReportedModerationUser] = useState<ReportedUserItem | null>(
+    null
+  );
   const [releasingUserId, setReleasingUserId] = useState<number | null>(null);
   const [reportSettingsForm, setReportSettingsForm] = useState<ContentModerationLLMSettingsUpdate>(
     {}
@@ -148,6 +181,13 @@ export default function AdminUsersPage() {
     enabled: mode === 'reported',
   });
 
+  const moderatedQuery = useQuery({
+    queryKey: adminKeys.moderatedUsers(keyword),
+    queryFn: () =>
+      adminApi.moderatedUsers({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
+    enabled: mode === 'reported',
+  });
+
   const { data: reportSettings } = useQuery({
     queryKey: adminKeys.userReportModerationSettings,
     queryFn: adminApi.userReportModerationSettings,
@@ -162,6 +202,7 @@ export default function AdminUsersPage() {
 
   const users = data?.items ?? [];
   const reportedUsers = reportedQuery.data?.items ?? [];
+  const moderatedUsers = moderatedQuery.data?.items ?? [];
   const selectedUsers = users.filter(user => selectedIds.includes(user.id));
   const allPageSelected = users.length > 0 && users.every(user => selectedIds.includes(user.id));
   const reportPromptValue = reportPromptDraft ?? reportPromptConfig?.value ?? '';
@@ -205,12 +246,17 @@ export default function AdminUsersPage() {
     },
   });
 
-  const banReportedUserMutation = useMutation({
-    mutationFn: ({ user, reason }: { user: ReportedUserItem; reason: string }) =>
-      adminApi.banReportedUser(user.id, { reason: reason || undefined, notify_author: true }),
+  const moderateReportedUserMutation = useMutation({
+    mutationFn: ({
+      user,
+      payload,
+    }: {
+      user: ReportedUserItem;
+      payload: UserModerationUpdateRequest;
+    }) => adminApi.moderateReportedUser(user.id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      setReportedBanUser(null);
+      setReportedModerationUser(null);
     },
   });
 
@@ -469,13 +515,16 @@ export default function AdminUsersPage() {
         </Card>
       ) : (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
-          <ReportedUsersTable
-            items={reportedUsers}
-            releasingUserId={releasingUserId}
-            releasePending={releaseReportedUserMutation.isPending}
-            onRelease={user => releaseReportedUserMutation.mutate(user)}
-            onBan={setReportedBanUser}
-          />
+          <div className="space-y-4">
+            <ReportedUsersTable
+              items={reportedUsers}
+              releasingUserId={releasingUserId}
+              releasePending={releaseReportedUserMutation.isPending}
+              onRelease={user => releaseReportedUserMutation.mutate(user)}
+              onManage={setReportedModerationUser}
+            />
+            <ModeratedUsersTable items={moderatedUsers} onManage={setSelectedUser} />
+          </div>
           <UserReportModerationLLMPanel
             settingsForm={reportSettingsForm}
             settingsDirty={reportSettingsDirty}
@@ -521,12 +570,15 @@ export default function AdminUsersPage() {
           onSubmit={content => announcementMutation.mutate({ content })}
         />
       )}
-      {reportedBanUser && (
-        <BanReportedUserDialog
-          user={reportedBanUser}
-          saving={banReportedUserMutation.isPending}
-          onClose={() => setReportedBanUser(null)}
-          onConfirm={reason => banReportedUserMutation.mutate({ user: reportedBanUser, reason })}
+      {reportedModerationUser && (
+        <ModerationEditor
+          user={reportedUserToModerationUser(reportedModerationUser)}
+          saving={moderateReportedUserMutation.isPending}
+          error={getErrorMessage(moderateReportedUserMutation.error)}
+          onClose={() => setReportedModerationUser(null)}
+          onSubmit={payload =>
+            moderateReportedUserMutation.mutate({ user: reportedModerationUser, payload })
+          }
         />
       )}
     </div>
@@ -547,13 +599,13 @@ function ReportedUsersTable({
   releasingUserId,
   releasePending,
   onRelease,
-  onBan,
+  onManage,
 }: {
   items: ReportedUserItem[];
   releasingUserId: number | null;
   releasePending: boolean;
   onRelease: (user: ReportedUserItem) => void;
-  onBan: (user: ReportedUserItem) => void;
+  onManage: (user: ReportedUserItem) => void;
 }) {
   return (
     <Card className="rounded-lg">
@@ -623,13 +675,13 @@ function ReportedUsersTable({
                         放行
                       </Button>
                       <Button
-                        variant="destructive"
+                        variant="outline"
                         size="sm"
                         className="rounded-md gap-1"
-                        onClick={() => onBan(user)}
+                        onClick={() => onManage(user)}
                       >
-                        <Ban size={14} />
-                        封禁
+                        <ShieldAlert size={14} />
+                        管理
                       </Button>
                     </div>
                   </td>
@@ -639,6 +691,82 @@ function ReportedUsersTable({
                 <tr>
                   <td className="px-4 py-10 text-center text-muted-foreground" colSpan={6}>
                     暂无待审举报用户
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModeratedUsersTable({
+  items,
+  onManage,
+}: {
+  items: UserWithModeration[];
+  onManage: (user: UserWithModeration) => void;
+}) {
+  return (
+    <Card className="rounded-lg">
+      <CardContent className="p-0">
+        <div className="border-b px-4 py-3">
+          <div className="flex items-center gap-2 font-semibold">
+            <Ban size={16} className="text-muted-foreground" />
+            已管控用户
+          </div>
+        </div>
+        <div className="overflow-auto">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="border-b bg-muted/50 text-left text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">用户</th>
+                <th className="px-4 py-3 font-medium">类型</th>
+                <th className="px-4 py-3 font-medium">状态</th>
+                <th className="px-4 py-3 font-medium">更新时间</th>
+                <th className="px-4 py-3 text-center font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(user => (
+                <tr key={user.id} className="border-b last:border-0">
+                  <td className="px-4 py-3">
+                    <Link
+                      to={`/user/${user.id}`}
+                      className="font-medium hover:text-primary hover:underline"
+                    >
+                      @{user.username || `user_${user.id}`}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">{user.email || `ID ${user.id}`}</p>
+                  </td>
+                  <td className="px-4 py-3">{user.is_ai_agent ? '角色' : '人类'}</td>
+                  <td className="px-4 py-3">
+                    <UserStatus user={user} />
+                  </td>
+                  <td className="px-4 py-3">
+                    {user.moderation.updated_at
+                      ? new Date(user.moderation.updated_at).toLocaleString()
+                      : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md gap-1"
+                      onClick={() => onManage(user)}
+                    >
+                      <ShieldAlert size={14} />
+                      管理
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td className="px-4 py-10 text-center text-muted-foreground" colSpan={5}>
+                    暂无已管控用户
                   </td>
                 </tr>
               )}
@@ -982,7 +1110,7 @@ function ModerationEditor({
               checked={accountBanned}
               onChange={event => setAccountBanned(event.target.checked)}
             />
-            永久封禁账号
+            封禁账号
           </label>
           <Textarea
             value={reason}
@@ -1059,55 +1187,6 @@ function ModerationEditor({
             >
               <Ban size={14} className="mr-1" />
               保存
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function BanReportedUserDialog({
-  user,
-  saving,
-  onClose,
-  onConfirm,
-}: {
-  user: ReportedUserItem;
-  saving: boolean;
-  onClose: () => void;
-  onConfirm: (reason: string) => void;
-}) {
-  const [reason, setReason] = useState('');
-
-  return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-      <Card className="w-full max-w-lg rounded-lg shadow-xl">
-        <CardContent className="space-y-4 p-5">
-          <div>
-            <h2 className="text-lg font-semibold">封禁用户</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              @{user.username || `user_${user.id}`}
-            </p>
-          </div>
-          <Textarea
-            value={reason}
-            onChange={event => setReason(event.target.value)}
-            placeholder="封禁原因，会通过通知发送给用户"
-            rows={4}
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" className="rounded-md" onClick={onClose} disabled={saving}>
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              className="rounded-md"
-              disabled={saving}
-              onClick={() => onConfirm(reason)}
-            >
-              <Trash2 size={14} className="mr-1" />
-              封禁
             </Button>
           </div>
         </CardContent>
@@ -1208,7 +1287,7 @@ function BatchModerationEditor({
               checked={accountBanned}
               onChange={event => setAccountBanned(event.target.checked)}
             />
-            永久封禁账号
+            封禁账号
           </label>
           <Textarea
             value={reason}

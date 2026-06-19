@@ -275,7 +275,7 @@ def create_comment(
         >>> print(f"评论创建成功，ID: {comment.id}")
     """
     # 检查帖子是否存在
-    post = db.query(Post).filter(Post.id == post_id).first()
+    post = db.query(Post).filter(Post.id == post_id, Post.moderation_status == "active").first()
     if not post:
         raise PostNotFoundError(post_id)
     
@@ -285,7 +285,10 @@ def create_comment(
     root_comment = None
     root_comment_id = None
     if parent_id is not None:
-        parent_comment = db.query(Comment).filter(Comment.id == parent_id).first()
+        parent_comment = db.query(Comment).filter(
+            Comment.id == parent_id,
+            Comment.moderation_status == "active",
+        ).first()
         if not parent_comment:
             raise ParentCommentNotFoundError(parent_id)
         if parent_comment.post_id != post_id:
@@ -294,7 +297,10 @@ def create_comment(
         root_comment = (
             parent_comment
             if parent_comment.id == root_comment_id
-            else db.query(Comment).filter(Comment.id == root_comment_id).first()
+            else db.query(Comment).filter(
+                Comment.id == root_comment_id,
+                Comment.moderation_status == "active",
+            ).first()
         )
     
     try:
@@ -378,7 +384,10 @@ def toggle_like(
         >>> print(f"点赞状态：{is_liked}, 点赞数：{like_count}")
     """
     # 检查评论是否存在
-    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    comment = db.query(Comment).filter(
+        Comment.id == comment_id,
+        Comment.moderation_status == "active",
+    ).first()
     if not comment:
         raise CommentNotFoundError(comment_id)
     
@@ -441,7 +450,10 @@ def toggle_like(
         # 数据库完整性错误（如复合主键冲突）
         rollback_session(db)
         # 重新查询状态
-        comment = db.query(Comment).filter(Comment.id == comment_id).first()
+        comment = db.query(Comment).filter(
+            Comment.id == comment_id,
+            Comment.moderation_status == "active",
+        ).first()
         like_exists = db.query(CommentLike).filter(
             CommentLike.user_id == user_id,
             CommentLike.comment_id == comment_id
@@ -478,7 +490,10 @@ def get_like_status(
         ...     print("您已点赞此评论")
     """
     # 检查评论是否存在
-    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    comment = db.query(Comment).filter(
+        Comment.id == comment_id,
+        Comment.moderation_status == "active",
+    ).first()
     if not comment:
         raise CommentNotFoundError(comment_id)
     
@@ -535,13 +550,17 @@ def get_comment_tree(
     seed = _normalize_seed(seed)
 
     # 检查帖子是否存在
-    post_exists = db.query(Post.id).filter(Post.id == post_id).first()
+    post_exists = db.query(Post.id).filter(
+        Post.id == post_id,
+        Post.moderation_status == "active",
+    ).first()
     if not post_exists:
         raise PostNotFoundError(post_id)
     
     root_query = db.query(Comment).filter(
         Comment.post_id == post_id,
-        Comment.parent_id == None
+        Comment.parent_id == None,
+        Comment.moderation_status == "active",
     )
     root_total = root_query.count()
 
@@ -599,7 +618,10 @@ def get_comment_replies(
     sort = _normalize_comment_sort(sort)
     seed = _normalize_seed(seed)
 
-    parent = db.query(Comment).filter(Comment.id == comment_id).first()
+    parent = db.query(Comment).filter(
+        Comment.id == comment_id,
+        Comment.moderation_status == "active",
+    ).first()
     if not parent:
         raise CommentNotFoundError(comment_id)
     if parent.post_id != post_id:
@@ -610,6 +632,7 @@ def get_comment_replies(
     replies_query = db.query(Comment).filter(
         Comment.post_id == post_id,
         Comment.id.in_(reply_ids),
+        Comment.moderation_status == "active",
     )
     total = replies_query.count()
     replies = _get_comments_for_tree(
@@ -673,8 +696,10 @@ def get_comment_by_id(
     comment = db.query(Comment).options(
         joinedload(Comment.owner),
         joinedload(Comment.parent).joinedload(Comment.owner),
-    ).filter(Comment.id == comment_id).first()
+    ).filter(Comment.id == comment_id, Comment.moderation_status == "active").first()
     if not comment:
+        return None
+    if comment.post and comment.post.moderation_status != "active":
         return None
 
     mention_service.attach_mention_users(db, comment)
@@ -733,7 +758,10 @@ def delete_comment(
         >>> if success:
         ...     print("评论删除成功")
     """
-    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    comment = db.query(Comment).filter(
+        Comment.id == comment_id,
+        Comment.moderation_status == "active",
+    ).first()
     if not comment:
         raise CommentNotFoundError(comment_id)
     
@@ -799,7 +827,10 @@ def delete_comment_precise(
     db: Session
 ) -> bool:
     """精确删除评论并修正帖子及 thread 计数，供需要严格计数的调用方使用。"""
-    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    comment = db.query(Comment).filter(
+        Comment.id == comment_id,
+        Comment.moderation_status == "active",
+    ).first()
     if not comment:
         raise CommentNotFoundError(comment_id)
 

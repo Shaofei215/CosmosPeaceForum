@@ -22,9 +22,12 @@ from social_platform.app.domains.content_safety.admin_application import (
     delete_post_as_admin,
     delete_reported_comment_as_admin,
     delete_reported_post_as_admin,
+    list_archived_content,
     list_content,
     list_reported_content,
     release_reported_content,
+    restore_comment_as_admin,
+    restore_post_as_admin,
 )
 
 router = APIRouter(prefix="/content", tags=["platform-admin-content"])
@@ -118,6 +121,25 @@ async def reported_content(
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
 
 
+@router.get("/archived", response_model=PaginatedResponse[ContentItemResponse])
+async def archived_content(
+    content_type: ContentType | None = Query(default=None, alias="type"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    items, total = list_archived_content(
+        db,
+        content_type=content_type,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+    return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
 @router.post("/reports/{content_type}/{content_id}/release")
 async def release_report(
     content_type: ContentType,
@@ -184,6 +206,19 @@ async def delete_post(
     return None
 
 
+@router.post("/posts/{post_id}/restore", status_code=status.HTTP_204_NO_CONTENT)
+async def restore_post(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        restore_post_as_admin(db, post_id=post_id, admin=current_admin)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return None
+
+
 @router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_comment(
     comment_id: int,
@@ -200,6 +235,19 @@ async def delete_comment(
             reason=payload.reason,
             notify_author=payload.notify_author,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return None
+
+
+@router.post("/comments/{comment_id}/restore", status_code=status.HTTP_204_NO_CONTENT)
+async def restore_comment(
+    comment_id: int,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
+):
+    try:
+        restore_comment_as_admin(db, comment_id=comment_id, admin=current_admin)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return None

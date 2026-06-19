@@ -14,7 +14,7 @@ from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.content_safety import admin_application as moderation_service
 from social_platform.app.domains.content_safety.models import ContentModerationLLMSettings
-from social_platform.app.domains.content_safety.models import ContentReport
+from social_platform.app.domains.content_safety.models import ContentReport, ContentReportEscalation
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
 
@@ -46,7 +46,7 @@ DEFAULT_CONTENT_MODERATION_LLM_PROMPT = """你是 CosmosPeaceForum 的内容安�
 
 输出约束：
 - pass 表示通过，放行内容。
-- delete 后必须跟一段简短中文处理原因；内容举报会删除内容，用户举报会封禁账号，原因会通知作者或用户。
+- delete 后必须跟一段简短中文处理原因；内容举报会归档内容，用户举报会封禁账号，原因会通知作者或用户。
 - drop 表示放弃自动判断，保留在人工待审队列。
 
 待审上下文 JSON：
@@ -349,7 +349,11 @@ def build_report_context(db: Session, report: ContentReport) -> dict[str, Any]:
     if target_type == "user":
         user = db.query(User).filter(User.id == report.user_id).first()
         context["target_user"] = _user_payload(user)
-        context["recent_contents"] = _recent_user_content_payloads(db, report.user_id)
+        context.update(_recent_user_content_payloads(db, report.user_id))
+        context["triggering_reported_contents"] = _triggering_reported_content_payloads(
+            db,
+            report.user_id,
+        )
         return context
 
     comment = db.query(Comment).options(joinedload(Comment.owner)).filter(Comment.id == report.comment_id).first()
@@ -430,39 +434,65 @@ def _user_payload(user: User | None) -> dict[str, Any] | None:
     }
 
 
-def _recent_user_content_payloads(db: Session, user_id: int | None) -> list[dict[str, Any]]:
-    """读取被举报用户最近 10 条帖子或评论作为账号审查上下文。"""
+def _recent_user_content_payloads(db: Session, user_id: int | None) -> dict[str, list[dict[str, Any]]]:
+    """读取被举报用户最近 5 条帖子和 5 条评论作为账号审查上下文。"""
+
+    if user_id is None:
+        return {"recent_posts": [], "recent_comments": []}
+    posts = db.query(Post).filter(
+        Post.author_id == user_id,
+        Post.moderation_status == "active",
+    ).order_by(Post.created_at.desc()).limit(5).all()
+    comments = db.query(Comment).filter(
+        Comment.owner_id == user_id,
+        Comment.moderation_status == "active",
+    ).order_by(Comment.created_at.desc()).limit(5).all()
+    return {
+        "recent_posts": [
+            {
+                "type": "post",
+                "id": post.id,
+                "title": post.title,
+                "content": post.content,
+                "created_at": post.created_at.isoformat() if post.created_at else None,
+                "like_count": post.like_count,
+                "comment_count": post.comment_count,
+            }
+            for post in posts
+        ],
+        "recent_comments": [
+            {
+                "type": "comment",
+                "id": comment.id,
+                "post_id": comment.post_id,
+                "content": comment.content,
+                "created_at": comment.created_at.isoformat() if comment.created_at else None,
+                "like_count": comment.like_count,
+                "reply_count": comment.reply_count,
+            }
+            for comment in comments
+        ],
+    }
+
+
+def _triggering_reported_content_payloads(db: Session, user_id: int | None) -> list[dict[str, Any]]:
+    """读取待审用户升级批次中的 5 条触发内容。"""
 
     if user_id is None:
         return []
-    posts = db.query(Post).filter(Post.author_id == user_id).order_by(Post.created_at.desc()).limit(10).all()
-    comments = db.query(Comment).filter(Comment.owner_id == user_id).order_by(Comment.created_at.desc()).limit(10).all()
-    contents: list[dict[str, Any]] = []
-    contents.extend(
-        {
-            "type": "post",
-            "id": post.id,
-            "title": post.title,
-            "content": post.content,
-            "created_at": post.created_at.isoformat() if post.created_at else None,
-            "like_count": post.like_count,
-            "comment_count": post.comment_count,
-        }
-        for post in posts
-    )
-    contents.extend(
-        {
-            "type": "comment",
-            "id": comment.id,
-            "post_id": comment.post_id,
-            "content": comment.content,
-            "created_at": comment.created_at.isoformat() if comment.created_at else None,
-            "like_count": comment.like_count,
-            "reply_count": comment.reply_count,
-        }
-        for comment in comments
-    )
-    return sorted(contents, key=lambda item: item["created_at"] or "", reverse=True)[:10]
+    escalation = db.query(ContentReportEscalation).filter(
+        ContentReportEscalation.user_id == user_id,
+        ContentReportEscalation.status == "pending",
+    ).order_by(ContentReportEscalation.created_at.desc()).first()
+    if escalation is None:
+        return []
+    try:
+        payload = json.loads(escalation.trigger_content_json)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)][:5]
 
 
 def _post_payload(post: Post | None) -> dict[str, Any] | None:

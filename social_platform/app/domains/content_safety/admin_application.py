@@ -19,21 +19,22 @@ from social_platform.app.admin.schemas import (
     UserModerationUpdateRequest,
 )
 from social_platform.app.admin.services.log_service import create_operation_log
-from social_platform.app.domains.comment.models import Comment, CommentLike
+from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.content_safety.events import (
     ContentModerationActionApplied,
     ReportedContentViolationConfirmed,
 )
-from social_platform.app.domains.content_safety.models import ContentReport
+from social_platform.app.domains.content_safety.models import ContentReport, ContentReportEscalation
 from social_platform.app.domains.heat import application as heat_service
 from social_platform.app.domains.post.models import Post
-from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.search import application as search_service
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.domains.user.models import User
 
 
 ContentType = Literal["post", "comment"]
+CONTENT_STATUS_ACTIVE = "active"
+CONTENT_STATUS_ARCHIVED = "archived"
 
 
 def _notify_moderation_action(
@@ -74,7 +75,7 @@ def delete_post_as_admin(
     reason: Optional[str] = None,
     notify_author: bool = True,
 ) -> None:
-    """以管理员身份删除帖子并清理相关互动数据。
+    """以管理员身份归档帖子并保留可恢复数据。
 
     Args:
         db: SQLAlchemy 数据库会话。
@@ -90,25 +91,24 @@ def delete_post_as_admin(
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise ValueError("帖子不存在")
+    if post.moderation_status == CONTENT_STATUS_ARCHIVED:
+        raise ValueError("帖子已归档")
 
     author_id = post.author_id
-    db.query(Post).filter(Post.repost_root_post_id == post_id).update(
-        {Post.repost_root_post_id: None},
-        synchronize_session=False,
-    )
-    db.query(Like).filter(Like.post_id == post_id).delete(synchronize_session=False)
-    db.query(Comment).filter(Comment.post_id == post_id).delete(synchronize_session=False)
+    post.moderation_status = CONTENT_STATUS_ARCHIVED
+    post.archived_at = datetime.utcnow()
+    post.archived_by_admin_id = admin.id
+    post.archive_reason = reason
     if notify_author:
         _notify_moderation_action(db, author_id, "post", post_id, reason)
     create_operation_log(
         db,
         admin,
-        action="delete_post",
+        action="archive_post",
         target_type="post",
         target_id=post_id,
         details={"reason": reason, "notify_author": notify_author},
     )
-    db.delete(post)
     db.commit()
     search_service.delete_post(post_id)
 
@@ -137,7 +137,7 @@ def delete_comment_as_admin(
     reason: Optional[str] = None,
     notify_author: bool = True,
 ) -> None:
-    """以管理员身份删除评论并修正帖子、根评论计数与热度。
+    """以管理员身份归档评论并修正帖子、根评论计数与热度。
 
     Args:
         db: SQLAlchemy 数据库会话。
@@ -153,6 +153,8 @@ def delete_comment_as_admin(
     comment = db.query(Comment).filter(Comment.id == comment_id).first()
     if not comment:
         raise ValueError("评论不存在")
+    if comment.moderation_status == CONTENT_STATUS_ARCHIVED:
+        raise ValueError("评论已归档")
 
     post_id = comment.post_id
     parent_id = comment.parent_id
@@ -168,9 +170,6 @@ def delete_comment_as_admin(
         )
         db.flush()
 
-    db.query(CommentLike).filter(CommentLike.comment_id == comment_id).delete(
-        synchronize_session=False
-    )
     post = db.query(Post).filter(Post.id == post_id).first()
     if post:
         post.comment_count = max(0, post.comment_count - count_to_subtract)
@@ -184,15 +183,100 @@ def delete_comment_as_admin(
 
     if notify_author:
         _notify_moderation_action(db, owner_id, "comment", comment_id, reason)
+    comment.moderation_status = CONTENT_STATUS_ARCHIVED
+    comment.archived_at = datetime.utcnow()
+    comment.archived_by_admin_id = admin.id
+    comment.archive_reason = reason
     create_operation_log(
         db,
         admin,
-        action="delete_comment",
+        action="archive_comment",
         target_type="comment",
         target_id=comment_id,
         details={"reason": reason, "notify_author": notify_author},
     )
-    db.delete(comment)
+    db.commit()
+
+
+def restore_post_as_admin(db: Session, post_id: int, admin: PlatformAdminUser) -> None:
+    """恢复管理员归档的帖子。
+
+    Args:
+        db: SQLAlchemy 数据库会话。
+        post_id: 待恢复帖子 ID。
+        admin: 执行操作的管理员。
+
+    Raises:
+        ValueError: 帖子不存在或未归档时抛出。
+    """
+
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise ValueError("帖子不存在")
+    if post.moderation_status != CONTENT_STATUS_ARCHIVED:
+        raise ValueError("帖子未归档")
+
+    post.moderation_status = CONTENT_STATUS_ACTIVE
+    post.archived_at = None
+    post.archived_by_admin_id = None
+    post.archive_reason = None
+    create_operation_log(
+        db,
+        admin,
+        action="restore_post",
+        target_type="post",
+        target_id=post_id,
+        details={},
+    )
+    db.commit()
+    db.refresh(post)
+    search_service.index_post(post)
+
+
+def restore_comment_as_admin(db: Session, comment_id: int, admin: PlatformAdminUser) -> None:
+    """恢复管理员归档的评论并修正帖子与根评论计数。
+
+    Args:
+        db: SQLAlchemy 数据库会话。
+        comment_id: 待恢复评论 ID。
+        admin: 执行操作的管理员。
+
+    Raises:
+        ValueError: 评论不存在、未归档或所属帖子已归档时抛出。
+    """
+
+    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    if not comment:
+        raise ValueError("评论不存在")
+    if comment.moderation_status != CONTENT_STATUS_ARCHIVED:
+        raise ValueError("评论未归档")
+
+    post = db.query(Post).filter(Post.id == comment.post_id).first()
+    if not post or post.moderation_status == CONTENT_STATUS_ARCHIVED:
+        raise ValueError("所属帖子不存在或已归档")
+
+    parent_id = comment.parent_id
+    count_to_add = 1 + len(_get_descendant_comment_ids(db, comment_id)) if parent_id is None else 1
+    post.comment_count = max(0, post.comment_count + count_to_add)
+    heat_service.refresh_post_heat_score(db, post)
+    if parent_id is not None and comment.root_comment_id is not None:
+        root = db.query(Comment).filter(Comment.id == comment.root_comment_id).first()
+        if root and root.moderation_status == CONTENT_STATUS_ACTIVE:
+            root.reply_count = max(0, root.reply_count + count_to_add)
+            heat_service.refresh_comment_heat_score(db, root)
+
+    comment.moderation_status = CONTENT_STATUS_ACTIVE
+    comment.archived_at = None
+    comment.archived_by_admin_id = None
+    comment.archive_reason = None
+    create_operation_log(
+        db,
+        admin,
+        action="restore_comment",
+        target_type="comment",
+        target_id=comment_id,
+        details={},
+    )
     db.commit()
 
 
@@ -218,7 +302,9 @@ def list_content(
 
     items: list[ContentItemResponse] = []
     if content_type in (None, "post"):
-        query = db.query(Post).options(joinedload(Post.author))
+        query = db.query(Post).options(joinedload(Post.author)).filter(
+            Post.moderation_status == CONTENT_STATUS_ACTIVE
+        )
         if keyword:
             like = f"%{keyword.strip()}%"
             query = query.filter(or_(Post.title.like(like), Post.content.like(like)))
@@ -235,12 +321,18 @@ def list_content(
                 created_at=post.created_at,
                 like_count=post.like_count,
                 comment_count=post.comment_count,
+                moderation_status=post.moderation_status,
+                archived_at=post.archived_at,
+                archive_reason=post.archive_reason,
             )
             for post in posts
         )
     if content_type in (None, "comment"):
         query = db.query(Comment).join(Post, Comment.post_id == Post.id).options(
             joinedload(Comment.owner)
+        ).filter(
+            Comment.moderation_status == CONTENT_STATUS_ACTIVE,
+            Post.moderation_status == CONTENT_STATUS_ACTIVE,
         )
         if keyword:
             query = query.filter(Comment.content.like(f"%{keyword.strip()}%"))
@@ -256,10 +348,88 @@ def list_content(
                 created_at=comment.created_at,
                 like_count=comment.like_count,
                 reply_count=comment.reply_count,
+                moderation_status=comment.moderation_status,
+                archived_at=comment.archived_at,
+                archive_reason=comment.archive_reason,
             )
             for comment in comments
         )
     items.sort(key=lambda item: item.created_at, reverse=True)
+    total = len(items)
+    return items[skip:skip + limit], total
+
+
+def list_archived_content(
+    db: Session,
+    content_type: Optional[ContentType],
+    skip: int,
+    limit: int,
+    keyword: Optional[str] = None,
+) -> tuple[list[ContentItemResponse], int]:
+    """分页读取管理端已归档内容列表。
+
+    Args:
+        db: SQLAlchemy 数据库会话。
+        content_type: 可选内容类型过滤。
+        skip: 分页偏移。
+        limit: 分页大小。
+        keyword: 可选关键词。
+
+    Returns:
+        tuple[list[ContentItemResponse], int]: 当前页归档内容和过滤后的总数。
+    """
+
+    items: list[ContentItemResponse] = []
+    keyword_value = keyword.strip() if keyword else None
+    if content_type in (None, "post"):
+        query = db.query(Post).options(joinedload(Post.author)).filter(
+            Post.moderation_status == CONTENT_STATUS_ARCHIVED
+        )
+        if keyword_value:
+            like = f"%{keyword_value}%"
+            query = query.filter(or_(Post.title.like(like), Post.content.like(like)))
+        items.extend(
+            ContentItemResponse(
+                id=post.id,
+                type=post.type,
+                post_id=post.id,
+                author_id=post.author_id,
+                author_username=post.author.username if post.author else None,
+                title=post.title,
+                content=post.content,
+                created_at=post.created_at,
+                like_count=post.like_count,
+                comment_count=post.comment_count,
+                moderation_status=post.moderation_status,
+                archived_at=post.archived_at,
+                archive_reason=post.archive_reason,
+            )
+            for post in query.order_by(Post.archived_at.desc(), Post.id.desc()).all()
+        )
+    if content_type in (None, "comment"):
+        query = db.query(Comment).options(joinedload(Comment.owner)).filter(
+            Comment.moderation_status == CONTENT_STATUS_ARCHIVED
+        )
+        if keyword_value:
+            query = query.filter(Comment.content.like(f"%{keyword_value}%"))
+        items.extend(
+            ContentItemResponse(
+                id=comment.id,
+                type="comment",
+                post_id=comment.post_id,
+                author_id=comment.owner_id,
+                author_username=comment.owner.username if comment.owner else None,
+                content=comment.content,
+                created_at=comment.created_at,
+                like_count=comment.like_count,
+                reply_count=comment.reply_count,
+                moderation_status=comment.moderation_status,
+                archived_at=comment.archived_at,
+                archive_reason=comment.archive_reason,
+            )
+            for comment in query.order_by(Comment.archived_at.desc(), Comment.id.desc()).all()
+        )
+    items.sort(key=lambda item: item.archived_at or item.created_at, reverse=True)
     total = len(items)
     return items[skip:skip + limit], total
 
@@ -296,6 +466,8 @@ def list_reported_content(
             target = report.comment
             target_id = report.comment_id
         if target is None or target_id is None:
+            continue
+        if getattr(target, "moderation_status", CONTENT_STATUS_ACTIVE) != CONTENT_STATUS_ACTIVE:
             continue
 
         key = (report.target_type, target_id)
@@ -391,6 +563,7 @@ def delete_reported_post_as_admin(
     if not post:
         raise ValueError("帖子不存在")
     reporter_ids = _pending_reporter_ids(db, "post", post_id)
+    _confirm_pending_reports(db, "post", post_id, admin)
     _notify_reporters_content_deleted(db, reporter_ids, "post", post_id)
     delete_post_as_admin(db, post_id, admin, reason=reason, notify_author=notify_author)
 
@@ -419,6 +592,7 @@ def delete_reported_comment_as_admin(
     if not comment:
         raise ValueError("评论不存在")
     reporter_ids = _pending_reporter_ids(db, "comment", comment_id)
+    _confirm_pending_reports(db, "comment", comment_id, admin)
     _notify_reporters_content_deleted(db, reporter_ids, "comment", comment_id)
     delete_comment_as_admin(db, comment_id, admin, reason=reason, notify_author=notify_author)
 
@@ -442,6 +616,9 @@ def list_reported_users(
     """
 
     reports = _pending_reports_query(db, "user").all()
+    escalations = db.query(ContentReportEscalation).options(
+        joinedload(ContentReportEscalation.user),
+    ).filter(ContentReportEscalation.status == "pending").all()
     keyword_value = keyword.strip() if keyword else None
     grouped: dict[int, list[ContentReport]] = {}
 
@@ -450,14 +627,20 @@ def list_reported_users(
             continue
         grouped.setdefault(report.user_id, []).append(report)
 
-    items: list[ReportedUserItemResponse] = []
-    for user_id, group_reports in grouped.items():
-        if not group_reports:
+    escalations_by_user: dict[int, list[ContentReportEscalation]] = {}
+    for escalation in escalations:
+        if escalation.user is None:
             continue
-        user = group_reports[0].user
+        escalations_by_user.setdefault(escalation.user_id, []).append(escalation)
+
+    items: list[ReportedUserItemResponse] = []
+    for user_id in sorted(set(grouped) | set(escalations_by_user)):
+        group_reports = grouped.get(user_id, [])
+        group_escalations = escalations_by_user.get(user_id, [])
+        user = group_reports[0].user if group_reports else group_escalations[0].user
         if user is None:
             continue
-        item = _reported_user_item_from_group(user, group_reports)
+        item = _reported_user_item_from_group(user, group_reports, group_escalations)
         if keyword_value and keyword_value not in (item.username or "") and keyword_value not in (item.bio or ""):
             continue
         items.append(item)
@@ -487,7 +670,8 @@ def release_reported_user(
     """
 
     reports = _pending_reports_for_target(db, "user", user_id).all()
-    if not reports:
+    escalations = _pending_escalations_for_user(db, user_id).all()
+    if not reports and not escalations:
         raise ValueError("待审举报不存在")
 
     now = datetime.utcnow()
@@ -495,16 +679,20 @@ def release_reported_user(
         report.status = "released"
         report.reviewed_at = now
         report.reviewed_by_admin_id = admin.id
+    for escalation in escalations:
+        escalation.status = "released"
+        escalation.reviewed_at = now
+        escalation.reviewed_by_admin_id = admin.id
     create_operation_log(
         db,
         admin,
         action="release_reported_user",
         target_type="user",
         target_id=user_id,
-        details={"report_count": len(reports)},
+        details={"report_count": len(reports), "escalation_count": len(escalations)},
     )
     db.commit()
-    return len(reports)
+    return len(reports) + len(escalations)
 
 
 def ban_reported_user_as_admin(
@@ -530,7 +718,8 @@ def ban_reported_user_as_admin(
     if db.query(User).filter(User.id == user_id).first() is None:
         raise ValueError("用户不存在")
     reports = _pending_reports_for_target(db, "user", user_id).all()
-    if not reports:
+    escalations = _pending_escalations_for_user(db, user_id).all()
+    if not reports and not escalations:
         raise ValueError("待审举报不存在")
 
     reporter_ids = sorted({report.reporter_id for report in reports})
@@ -551,8 +740,59 @@ def ban_reported_user_as_admin(
         report.status = "confirmed"
         report.reviewed_at = now
         report.reviewed_by_admin_id = admin.id
+    for escalation in escalations:
+        escalation.status = "confirmed"
+        escalation.reviewed_at = now
+        escalation.reviewed_by_admin_id = admin.id
     _notify_reporters_content_deleted(db, reporter_ids, "user", user_id)
     db.commit()
+
+
+def moderate_reported_user_as_admin(
+    db: Session,
+    user_id: int,
+    request: UserModerationUpdateRequest,
+    admin: PlatformAdminUser,
+) -> object:
+    """对被举报用户应用任意管控并关闭待审用户举报。
+
+    Args:
+        db: SQLAlchemy 数据库会话。
+        user_id: 被举报用户 ID。
+        request: 用户管控更新请求。
+        admin: 执行操作的管理员。
+
+    Returns:
+        object: 更新后的用户管控模型。
+
+    Raises:
+        ValueError: 用户或待审举报不存在时抛出。
+    """
+
+    if db.query(User).filter(User.id == user_id).first() is None:
+        raise ValueError("用户不存在")
+    reports = _pending_reports_for_target(db, "user", user_id).all()
+    escalations = _pending_escalations_for_user(db, user_id).all()
+    if not reports and not escalations:
+        raise ValueError("待审举报不存在")
+
+    from social_platform.app.admin.services.moderation_service import update_user_moderation
+
+    moderation = update_user_moderation(db, user_id, request, admin)
+    now = datetime.utcnow()
+    for report in reports:
+        report.status = "confirmed"
+        report.reviewed_at = now
+        report.reviewed_by_admin_id = admin.id
+    for escalation in escalations:
+        escalation.status = "confirmed"
+        escalation.reviewed_at = now
+        escalation.reviewed_by_admin_id = admin.id
+    reporter_ids = sorted({report.reporter_id for report in reports})
+    _notify_reporters_content_deleted(db, reporter_ids, "user", user_id)
+    db.commit()
+    db.refresh(moderation)
+    return moderation
 
 
 def _pending_reports_query(db: Session, content_type: Optional[str]) -> Query[ContentReport]:
@@ -586,6 +826,15 @@ def _pending_reports_for_target(
     return query.filter(ContentReport.comment_id == content_id)
 
 
+def _pending_escalations_for_user(db: Session, user_id: int) -> Query[ContentReportEscalation]:
+    """构建指定用户待审升级记录查询。"""
+
+    return db.query(ContentReportEscalation).filter(
+        ContentReportEscalation.status == "pending",
+        ContentReportEscalation.user_id == user_id,
+    )
+
+
 def _pending_reporter_ids(db: Session, content_type: ContentType, content_id: int) -> list[int]:
     """读取指定内容的待审举报人 ID。"""
 
@@ -597,19 +846,41 @@ def _pending_reporter_ids(db: Session, content_type: ContentType, content_id: in
     })
 
 
+def _confirm_pending_reports(
+    db: Session,
+    content_type: ContentType,
+    content_id: int,
+    admin: PlatformAdminUser,
+) -> None:
+    """把指定内容的待审举报标记为违规确认。"""
+
+    now = datetime.utcnow()
+    for report in _pending_reports_for_target(db, content_type, content_id).all():
+        report.status = "confirmed"
+        report.reviewed_at = now
+        report.reviewed_by_admin_id = admin.id
+
+
 def _reported_user_item_from_group(
     user: User,
     reports: list[ContentReport],
+    escalations: list[ContentReportEscalation],
 ) -> ReportedUserItemResponse:
     """把同一用户的多条举报聚合为管理端响应项。"""
 
     reason_counts: dict[str, int] = {}
     for report in reports:
         reason_counts[report.reason] = reason_counts.get(report.reason, 0) + 1
+    for escalation in escalations:
+        reason_counts[escalation.reason] = reason_counts.get(escalation.reason, 0) + 1
     report_reasons = [
         ContentReportReasonResponse(reason=reason, count=count)
         for reason, count in sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)
     ]
+    last_reported_values = [report.created_at for report in reports] + [
+        escalation.created_at for escalation in escalations
+    ]
+    unique_reporter_count = len({report.reporter_id for report in reports})
     return ReportedUserItemResponse(
         id=user.id,
         username=user.username,
@@ -617,9 +888,10 @@ def _reported_user_item_from_group(
         avatar_url=user.avatar_url,
         is_ai_agent=user.is_ai_agent,
         created_at=user.created_at,
-        report_count=len({report.reporter_id for report in reports}),
+        report_count=unique_reporter_count + len(escalations),
         report_reasons=report_reasons,
-        last_reported_at=max(report.created_at for report in reports),
+        last_reported_at=max(last_reported_values),
+        source="report+escalation" if reports and escalations else ("escalation" if escalations else "report"),
     )
 
 
@@ -652,6 +924,9 @@ def _reported_content_item_from_group(
             created_at=target.created_at,
             like_count=target.like_count,
             comment_count=target.comment_count,
+            moderation_status=target.moderation_status,
+            archived_at=target.archived_at,
+            archive_reason=target.archive_reason,
             report_count=len({report.reporter_id for report in reports}),
             report_reasons=report_reasons,
             last_reported_at=last_reported_at,
@@ -668,6 +943,9 @@ def _reported_content_item_from_group(
         created_at=target.created_at,
         like_count=target.like_count,
         reply_count=target.reply_count,
+        moderation_status=target.moderation_status,
+        archived_at=target.archived_at,
+        archive_reason=target.archive_reason,
         report_count=len({report.reporter_id for report in reports}),
         report_reasons=report_reasons,
         last_reported_at=last_reported_at,
