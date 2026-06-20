@@ -13,9 +13,40 @@ class PostBase(BaseModel):
     content: str = Field(..., min_length=1)
 
 
+class PollOptionResponse(BaseModel):
+    """投票选项响应模型，供帖子详情、信息流和投票接口复用。"""
+
+    id: int
+    text: str
+    position: int
+    vote_count: int = 0
+    percentage: float = 0
+
+
+class PollResponse(BaseModel):
+    """帖子投票响应模型，描述选项统计和当前用户投票状态。"""
+
+    post_id: int
+    total_votes: int = 0
+    has_voted: bool = False
+    selected_option_id: Optional[int] = None
+    options: List[PollOptionResponse] = Field(default_factory=list)
+
+
 class PostCreate(PostBase):
     """帖子领域 API schema的创建请求，供 API adapter 做参数校验和响应序列化。"""
-    pass
+    poll_options: Optional[List[str]] = Field(
+        None,
+        min_length=2,
+        max_length=5,
+        description="可选投票选项，仅普通帖子支持，每项最多 20 个字符。",
+    )
+
+
+class PollVoteCreate(BaseModel):
+    """投票请求模型，供 API adapter 校验用户选择的选项。"""
+
+    option_id: int
 
 
 class RepostCreate(BaseModel):
@@ -74,6 +105,7 @@ class PostResponse(PostBase):
     mention_users: List[MentionUser] = Field(default_factory=list)
     repost_origin: Optional[RepostOriginPost] = None
     repost_origin_missing: bool = False
+    poll: Optional[PollResponse] = None
 
     class Config:
         """帖子领域 API schema的Pydantic ORM 映射配置，供 API adapter 做参数校验和响应序列化。"""

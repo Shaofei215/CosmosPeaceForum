@@ -57,6 +57,19 @@ export const useRepost = () => {
   });
 };
 
+export const useVotePoll = (postId: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (optionId: number) => postApi.votePoll(postId, { option_id: optionId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['post', postId] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+};
+
 /**
  * 更新帖子Hook
  */

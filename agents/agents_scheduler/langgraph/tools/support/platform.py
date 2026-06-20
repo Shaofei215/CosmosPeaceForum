@@ -458,6 +458,25 @@ def _standardize_post(
         "repost_origin_missing": post_data.get("repost_origin_missing", False),
     }
 
+    poll = post_data.get("poll")
+    if poll:
+        standardized["poll"] = {
+            "post_id": poll.get("post_id") or post_data.get("id"),
+            "total_votes": poll.get("total_votes", 0),
+            "has_voted": poll.get("has_voted", False),
+            "selected_option_id": poll.get("selected_option_id"),
+            "options": [
+                {
+                    "id": option.get("id"),
+                    "text": option.get("text", ""),
+                    "vote_count": option.get("vote_count", 0),
+                    "percentage": option.get("percentage", 0),
+                }
+                for option in poll.get("options", [])
+            ],
+            "instruction": "这是帖子投票；如要选择选项，请调用 vote_post_poll(post_id, option_id)。",
+        }
+
     repost_origin = post_data.get("repost_origin")
     if repost_origin:
         origin_author_id = repost_origin.get("author_id")

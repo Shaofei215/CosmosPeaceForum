@@ -269,6 +269,62 @@ def toggle_post_like(
 
 
 @tool
+def vote_post_poll(
+    post_id: int,
+    option_id: int,
+    reason: str = "用户想要参与帖子投票",
+    summary: str = ""
+) -> ToolResult:
+    """
+    选择指定帖子下的投票选项，并返回最新投票结果。
+
+    每个账号对同一个帖子只能投票一次。调用前应先从帖子数据的 poll.options 中确认
+    option_id，投票成功后返回所有选项的票数和百分比。
+
+    Args:
+        post_id: 目标帖子的 ID。
+        option_id: poll.options 中要选择的选项 ID。
+        reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
+        summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
+
+    Returns:
+        ToolResult: 包含 poll 最新统计和标准化后的帖子数据。
+
+    Raises:
+        UnauthorizedError: 未登录或 Token 已过期。
+        NotFoundError: 帖子或投票选项不存在。
+        ToolExecutionError: 重复投票或服务器内部错误。
+    """
+    current_user_id = get_current_user_id()
+    poll_result = _make_request(
+        method="POST",
+        endpoint=f"/posts/{post_id}/poll/vote",
+        json_data={"option_id": option_id},
+        reason=reason,
+        summary=summary
+    )
+    post_data = _get_post(post_id)
+    standardized_post = _standardize_post(post_data, current_user_id)
+    selected_option = next(
+        (
+            option
+            for option in standardized_post.get("poll", {}).get("options", [])
+            if option.get("id") == option_id
+        ),
+        None,
+    )
+    option_text = selected_option.get("text") if selected_option else f"选项 {option_id}"
+
+    return ToolResult(
+        action=f"参与了帖子 {post_id} 的投票，选择了「{option_text}」",
+        data={
+            "poll": poll_result,
+            "post": standardized_post,
+        },
+    )
+
+
+@tool
 def toggle_comment_like(
     post_id: int,
     comment_id: int,
@@ -494,6 +550,7 @@ def create_post(
     content: str,
     title: Optional[str] = None,
     type: str = "post",
+    poll_options: Optional[list[str]] = None,
     reason: str = "用户想要分享内容",
     summary: str = ""
 ) -> ToolResult:
@@ -508,6 +565,7 @@ def create_post(
         content: 帖子的文本内容，至少需要 1 个字符。发布文章时这里填写 Markdown 全文。
         title: 可选标题。type 为 "article" 时必须填写。
         type: 内容类型，"post" 为普通帖子，"article" 为文章。
+        poll_options: 可选投票选项，仅 type 为 "post" 时可用。数量 2 到 5 个，每项最多 20 个字。
         reason: 对当前视野与行为的简单总结，调用该工具的原因，用于记录操作动机与上下文，75字以内。
                 例如："用户想要分享日常"、"用户想要发布一条重要通知"等。
         summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
@@ -528,10 +586,26 @@ def create_post(
         raise ValidationError('type 必须是 "post" 或 "article"')
     if content_type == "article" and not (title or "").strip():
         raise ValidationError('发布文章时必须填写 title')
+    if poll_options and content_type != "post":
+        raise ValidationError('只有普通帖子可以发起投票')
+    if poll_options:
+        normalized_poll_options = [(option or "").strip() for option in poll_options]
+        if len(normalized_poll_options) < 2 or len(normalized_poll_options) > 5:
+            raise ValidationError('poll_options 必须包含 2 到 5 个选项')
+        if any(not option for option in normalized_poll_options):
+            raise ValidationError('poll_options 不能包含空选项')
+        if any(len(option) > 20 for option in normalized_poll_options):
+            raise ValidationError('poll_options 每项最多 20 个字')
+        if len(set(normalized_poll_options)) != len(normalized_poll_options):
+            raise ValidationError('poll_options 不能包含重复选项')
+    else:
+        normalized_poll_options = None
 
     payload = {"content": content, "type": content_type}
     if title is not None:
         payload["title"] = title
+    if normalized_poll_options:
+        payload["poll_options"] = normalized_poll_options
 
     created_post = _make_request(
         method="POST",
@@ -543,6 +617,8 @@ def create_post(
 
     if content_type == "article":
         action = f"发布了新文章《{title}》：{_truncate(content)}"
+    elif normalized_poll_options:
+        action = f"发布了带投票的新帖子：{_truncate(content)}"
     else:
         action = f"发布了新帖子：{_truncate(content)}"
 

@@ -10,7 +10,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from social_platform.app.domains.post.schemas import MentionUser, RepostChainAuthor, RepostOriginPost
+from social_platform.app.domains.post.schemas import (
+    MentionUser,
+    PollResponse,
+    RepostChainAuthor,
+    RepostOriginPost,
+)
 
 
 class PostFeedItem(BaseModel):
@@ -43,6 +48,7 @@ class PostFeedItem(BaseModel):
         mention_users: 正文中提及到的用户列表。
         repost_origin: 转发根帖摘要。
         repost_origin_missing: 转发源是否已缺失。
+        poll: 帖子附带的投票统计；无投票时为空。
     """
 
     id: int
@@ -71,6 +77,7 @@ class PostFeedItem(BaseModel):
     mention_users: list[MentionUser] = Field(default_factory=list)
     repost_origin: RepostOriginPost | None = None
     repost_origin_missing: bool = False
+    poll: PollResponse | None = None
 
     class Config:
         """启用 Pydantic ORM 属性读取，保持旧 feed 响应序列化兼容。"""

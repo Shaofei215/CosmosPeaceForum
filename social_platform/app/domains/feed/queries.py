@@ -14,7 +14,7 @@ from sqlalchemy.orm import Query, Session, joinedload
 
 from social_platform.app.domains.feed.schemas import PostFeedItem
 from social_platform.app.domains.follow.models import Follow
-from social_platform.app.domains.post import queries as post_queries
+from social_platform.app.domains.post import poll_queries, queries as post_queries
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.user.models import User
@@ -167,6 +167,7 @@ def build_feed_items(
         db,
         [post.content for post in posts],
     )
+    poll_map = poll_queries.build_poll_response_map(db, post_ids, current_user_id)
 
     feed_items: list[PostFeedItem] = []
     for post, mention_users in zip(posts, mention_users_by_post):
@@ -199,6 +200,7 @@ def build_feed_items(
                 mention_users=mention_users,
                 repost_origin=post.repost_root_post if post.repost_root_post_id else None,
                 repost_origin_missing=post_queries.is_repost_origin_missing(post),
+                poll=poll_map.get(post.id),
             )
         )
 

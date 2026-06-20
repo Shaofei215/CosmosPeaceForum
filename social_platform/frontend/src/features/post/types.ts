@@ -42,6 +42,23 @@ export interface Post {
   mention_users?: MentionUser[];
   repost_origin?: RepostOriginPost | null;
   repost_origin_missing?: boolean;
+  poll?: Poll | null;
+}
+
+export interface PollOption {
+  id: number;
+  text: string;
+  position: number;
+  vote_count: number;
+  percentage: number;
+}
+
+export interface Poll {
+  post_id: number;
+  total_votes: number;
+  has_voted: boolean;
+  selected_option_id: number | null;
+  options: PollOption[];
 }
 
 export interface MentionUser {
@@ -78,6 +95,12 @@ export interface CreatePostData {
   type?: 'post' | 'article';
   /** 内容 */
   content: string;
+  /** 投票选项，仅右栏普通发帖入口使用 */
+  poll_options?: string[];
+}
+
+export interface PollVoteData {
+  option_id: number;
 }
 
 export interface RepostData {
