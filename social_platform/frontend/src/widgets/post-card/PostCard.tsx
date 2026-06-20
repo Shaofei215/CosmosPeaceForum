@@ -14,8 +14,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { PostFeedItem } from '@/features/feed';
-import type { PostWithLikeStatus } from '@/features/post';
-import { useDeletePost, useRepost } from '@/features/post';
+import type { Poll, PostWithLikeStatus } from '@/features/post';
+import { useDeletePost, useRepost, useVotePoll } from '@/features/post';
 import { useCreateReport } from '@/features/report';
 import type { Comment, CommentSort } from '@/features/comment';
 import {
@@ -296,6 +296,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             </p>
           </>
         )}
+        {post.poll && <PollBlock postId={post.id} poll={post.poll} requireLogin={requireLogin} />}
         {post.repost_origin && <RepostOriginBlock origin={post.repost_origin} />}
         {!post.repost_origin && post.repost_origin_missing && <MissingRepostOriginBlock />}
         {!isArticle && isContentTruncated && (
@@ -609,6 +610,93 @@ function MissingRepostOriginBlock() {
   return (
     <div className="mt-3 rounded-md border border-dashed border-border/80 bg-muted/20 p-3 text-sm text-muted-foreground">
       原内容不存在
+    </div>
+  );
+}
+
+function PollBlock({
+  postId,
+  poll,
+  requireLogin,
+}: {
+  postId: number;
+  poll: Poll;
+  requireLogin: () => boolean;
+}) {
+  const votePoll = useVotePoll(postId);
+  const [currentPoll, setCurrentPoll] = useState(poll);
+  const [animateProgress, setAnimateProgress] = useState(false);
+  const showResults = currentPoll.has_voted;
+
+  useEffect(() => {
+    setCurrentPoll(poll);
+  }, [poll]);
+
+  useEffect(() => {
+    if (!showResults) {
+      setAnimateProgress(false);
+      return;
+    }
+
+    setAnimateProgress(false);
+    const frame = window.requestAnimationFrame(() => {
+      setAnimateProgress(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [showResults, currentPoll.selected_option_id]);
+
+  const handleVote = (optionId: number) => {
+    if (currentPoll.has_voted || votePoll.isPending) return;
+    if (!requireLogin()) return;
+
+    votePoll.mutate(optionId, {
+      onSuccess: data => {
+        setCurrentPoll(data);
+      },
+    });
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      {currentPoll.options.map(option => {
+        const isSelected = currentPoll.selected_option_id === option.id;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            onClick={event => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleVote(option.id);
+            }}
+            disabled={currentPoll.has_voted || votePoll.isPending}
+            className="group relative min-h-10 w-full overflow-hidden rounded-lg border-0 bg-slate-100 px-3 py-2 text-left text-sm transition-colors hover:bg-slate-200 disabled:cursor-default disabled:hover:bg-slate-100"
+          >
+            {showResults && (
+              <span
+                className={`absolute inset-y-0 left-0 transition-[width] duration-500 ease-out ${
+                  isSelected ? 'bg-sky-300' : 'bg-sky-100'
+                }`}
+                style={{ width: animateProgress ? `${option.percentage}%` : 0 }}
+              />
+            )}
+            <span className="relative flex items-center justify-between gap-3">
+              <span className="break-words text-foreground">{option.text}</span>
+              {showResults && (
+                <span
+                  className={`shrink-0 text-xs ${isSelected ? 'text-sky-800' : 'text-slate-500'}`}
+                >
+                  {option.percentage}%
+                </span>
+              )}
+            </span>
+          </button>
+        );
+      })}
+      {showResults && (
+        <p className="px-1 text-xs text-muted-foreground">{currentPoll.total_votes} 票</p>
+      )}
     </div>
   );
 }

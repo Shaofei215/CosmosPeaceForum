@@ -14,8 +14,11 @@ from social_platform.app.domains.post.schemas import (
     PostUpdate,
     PostResponseWithLikeStatus,
     RepostCreate,
+    PollResponse,
+    PollVoteCreate,
 )
 from social_platform.app.domains.post import application as post_application
+from social_platform.app.domains.post import poll_application, poll_queries
 from social_platform.app.domains.post import queries as post_queries
 
 router = APIRouter()
@@ -41,9 +44,48 @@ def create_post(
     try:
         db_post = post_application.create_post(db, current_user, post)
         db_post.mention_users = post_queries.build_mention_users(db, db_post.content)
+        db_post.poll = poll_queries.get_poll_response(db, db_post.id, current_user.id)
         return db_post
     except post_application.ArticleTitleRequiredError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except poll_application.InvalidPollError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{post_id}/poll/vote", response_model=PollResponse, summary="选择帖子投票选项")
+def vote_poll(
+    post_id: int,
+    data: PollVoteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """选择帖子投票选项。
+
+    Args:
+        post_id: 投票所属帖子 ID。
+        data: 用户选择的投票选项。
+        db: 当前数据库会话。
+        current_user: 当前登录用户。
+
+    Returns:
+        PollResponse: 投票后的最新统计结果。
+
+    Raises:
+        HTTPException: 帖子或选项不存在、用户重复投票或互动权限受限时抛出。
+    """
+
+    try:
+        poll_application.vote_poll(db, current_user, post_id, data.option_id)
+    except poll_application.PollPostNotFoundError:
+        raise HTTPException(status_code=404, detail="帖子不存在")
+    except poll_application.PollOptionNotFoundError:
+        raise HTTPException(status_code=404, detail="投票选项不存在")
+    except poll_application.PollAlreadyVotedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    poll_response = poll_queries.get_poll_response(db, post_id, current_user.id)
+    if poll_response is None:
+        raise HTTPException(status_code=404, detail="投票不存在")
+    return poll_response
 
 
 @router.post("/repost", response_model=PostResponse, summary="转发帖子或评论")
@@ -81,8 +123,10 @@ def get_posts(
         joinedload(Post.author),
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
+    poll_map = poll_queries.build_poll_response_map(db, [post.id for post in posts], None)
     for post in posts:
         post_queries.attach_repost_metadata(db, post)
+        post.poll = poll_map.get(post.id)
     return posts
 
 
@@ -138,6 +182,7 @@ def get_post(
         mention_users=post_queries.build_mention_users(db, post.content),
         repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         repost_origin_missing=post_queries.is_repost_origin_missing(post),
+        poll=poll_queries.get_poll_response(db, post.id, current_user.id if current_user else None),
         is_liked_by_current_user=is_liked
     )
 
@@ -236,6 +281,8 @@ def get_user_posts(
         joinedload(Post.author),
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
+    poll_map = poll_queries.build_poll_response_map(db, [post.id for post in posts], None)
     for post in posts:
         post_queries.attach_repost_metadata(db, post)
+        post.poll = poll_map.get(post.id)
     return posts

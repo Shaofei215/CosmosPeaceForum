@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from social_platform.app.domains.comment.models import Comment
-from social_platform.app.domains.post import queries as post_queries
+from social_platform.app.domains.post import poll_application, queries as post_queries
 from social_platform.app.domains.post.events import (
     PostCreated,
     PostDeleted,
@@ -111,6 +111,7 @@ def create_post(db: Session, current_user: User, post_data: PostCreate) -> Post:
     )
     db.add(post)
     db.flush()
+    poll_application.create_poll_options(db, post.id, post_data.type, post_data.poll_options)
     publish_domain_event(db, PostCreated(post_id=post.id, author_id=current_user.id))
     commit_session(db)
     db.refresh(post)

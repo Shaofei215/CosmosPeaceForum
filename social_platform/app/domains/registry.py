@@ -13,7 +13,7 @@ from social_platform.app.domains.follow.models import Follow
 from social_platform.app.domains.hot_topic.models import HotTopic, HotTopicGeneration, HotTopicSettings
 from social_platform.app.domains.identity.models import EmailVerificationCode, UserSession
 from social_platform.app.domains.notification.models import Notification
-from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.post.models import PollOption, PollVote, Post
 from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.user.models import User
 
@@ -30,6 +30,8 @@ __all__ = [
     "Like",
     "Notification",
     "PlatformAdminUser",
+    "PollOption",
+    "PollVote",
     "Post",
     "User",
     "UserSession",

@@ -3,7 +3,15 @@
  */
 
 import { apiClient } from '@/shared/api/client';
-import type { Post, PostWithLikeStatus, CreatePostData, UpdatePostData, RepostData } from './types';
+import type {
+  Poll,
+  PollVoteData,
+  Post,
+  PostWithLikeStatus,
+  CreatePostData,
+  UpdatePostData,
+  RepostData,
+} from './types';
 
 /**
  * 帖子API
@@ -30,6 +38,9 @@ export const postApi = {
    * POST /api/v1/posts/
    */
   createPost: (data: CreatePostData) => apiClient.post<Post>('/posts/', data),
+
+  votePoll: (postId: number, data: PollVoteData) =>
+    apiClient.post<Poll>(`/posts/${postId}/poll/vote`, data),
 
   repost: (data: RepostData) => apiClient.post<Post>('/posts/repost', data),
 
