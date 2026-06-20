@@ -77,6 +77,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const isCurrentUser = user?.id === post.author_id;
   const isArticle = post.type === 'article';
   const mentionUsers = post.mention_users || post.repost_chain_authors || [];
+  const topicMentions = post.topic_mentions || [];
   const hasAuthorFollowStatus =
     'author_is_following' in post || 'author_is_followed_by' in post || 'author_is_mutual' in post;
   const initialFollowStatus: FollowStatusResponse | undefined = hasAuthorFollowStatus
@@ -260,7 +261,11 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               <h1 className="text-xl font-semibold leading-8 text-foreground sm:text-2xl sm:leading-9">
                 {post.title}
               </h1>
-              <MarkdownRenderer content={post.content} mentionUsers={mentionUsers} />
+              <MarkdownRenderer
+                content={post.content}
+                mentionUsers={mentionUsers}
+                topicMentions={topicMentions}
+              />
             </div>
           ) : (
             <Link
@@ -291,7 +296,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               <MentionText
                 text={post.content}
                 users={mentionUsers}
+                topics={topicMentions}
                 onMentionClick={event => event.stopPropagation()}
+                onTopicClick={event => event.stopPropagation()}
               />
             </p>
           </>

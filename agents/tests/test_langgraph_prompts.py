@@ -143,6 +143,28 @@ class TestBuildDecisionPrompt:
         assert "8. 热榜8" in header
         assert "热榜9" not in header
 
+    def test_attention_header_includes_trending_topic_titles(self):
+        topics = [{"name": f"话题{i}"} for i in range(1, 10)]
+        with patch(
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
+            return_value={
+                "following_count": 0,
+                "followers_count": 0,
+                "unread_count": 0,
+            },
+        ), patch(
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_hot_topics",
+            return_value=[],
+        ), patch(
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_trending_topics",
+            return_value=topics,
+        ):
+            header = _build_attention_header()
+
+        assert "热门话题：#话题1#" in header
+        assert "#话题8#" in header
+        assert "话题9" not in header
+
     def test_build_decision_prompt_first_decision(self):
         state = {
             "step_count": 0,

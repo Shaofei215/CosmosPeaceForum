@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 from social_platform.app.domains.feed.queries import build_feed_items
 from social_platform.app.domains.feed.schemas import PostFeedItem
 from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.topic import application as topic_application
+from social_platform.app.domains.topic.models import PostTopic, Topic
 from social_platform.app.domains.user.models import User
 from social_platform.app.schemas.response import APIResponse, PaginationInfo
 from social_platform.app.domains.search.schemas import UserSearchItem
@@ -17,7 +19,7 @@ from social_platform.app.domains.search.index import get_content_index, get_user
 
 
 logger = logging.getLogger(__name__)
-SearchType = Literal["content", "user"]
+SearchType = Literal["content", "user", "topic"]
 MAX_INDEX_RESULTS = 500
 TITLE_CONTAINS_BOOST = 0.20
 TITLE_EXACT_BOOST = 0.35
@@ -263,5 +265,69 @@ def search_users(
             )
             for user in users
         ],
+        pagination=_calculate_pagination(page, page_size, total),
+    )
+
+
+def search_topic(
+    db: Session,
+    query: str,
+    page: int,
+    page_size: int,
+    current_user_id: int | None = None,
+) -> APIResponse[List[PostFeedItem]]:
+    """按话题搜索帖子并返回稳定分页响应。
+
+    Args:
+        db: 当前数据库会话。
+        query: 话题名，允许带 ``#`` 或 ``#话题#``。
+        page: 页码，从 1 开始。
+        page_size: 每页记录数。
+        current_user_id: 当前登录用户 ID；匿名访问时为 ``None``。
+
+    Returns:
+        APIResponse[List[PostFeedItem]]: 使用该话题的帖子列表。
+    """
+
+    topic_name = topic_application.normalize_topic_query(query)
+    if not topic_name:
+        return APIResponse(
+            code=200,
+            message="success",
+            data=[],
+            pagination=_calculate_pagination(page, page_size, 0),
+        )
+
+    topic = db.query(Topic).filter(Topic.name == topic_name).first()
+    if topic is None:
+        return APIResponse(
+            code=200,
+            message="success",
+            data=[],
+            pagination=_calculate_pagination(page, page_size, 0),
+        )
+
+    base_query = (
+        db.query(Post)
+        .join(PostTopic, PostTopic.post_id == Post.id)
+        .filter(PostTopic.topic_id == topic.id, Post.moderation_status == "active")
+    )
+    total = base_query.with_entities(func.count(Post.id)).scalar() or 0
+    offset = (page - 1) * page_size
+    posts = (
+        base_query.options(
+            joinedload(Post.author),
+            joinedload(Post.repost_root_post).joinedload(Post.author),
+        )
+        .order_by(Post.heat_score.desc(), Post.created_at.desc(), Post.id.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+
+    return APIResponse(
+        code=200,
+        message="success",
+        data=build_feed_items(db, posts, current_user_id) if posts else [],
         pagination=_calculate_pagination(page, page_size, total),
     )

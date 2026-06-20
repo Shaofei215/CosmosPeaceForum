@@ -78,6 +78,8 @@ def refresh_all_heat_scores() -> None:
             comment.heat_score = calculate_comment_heat_score(comment, now)
             comment.heat_score_updated_at = now
 
+        from social_platform.app.domains.topic import application as topic_application
+        topic_application.refresh_all_topic_stats(db)
         db.commit()
         logger.info("热度分数刷新完成")
     except Exception:

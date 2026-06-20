@@ -2,6 +2,7 @@ import { Children, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import { Link } from 'react-router-dom';
 import remarkGfm from 'remark-gfm';
+import type { TopicMention } from '@/features/topic';
 import { LinkedMentions, type MentionUser } from '@/shared/components/mention/LinkedMentions';
 import { cn } from '@/shared/lib/utils';
 
@@ -10,6 +11,7 @@ interface MarkdownRendererProps {
   compact?: boolean;
   className?: string;
   mentionUsers?: MentionUser[];
+  topicMentions?: TopicMention[];
 }
 
 export function MarkdownRenderer({
@@ -17,6 +19,7 @@ export function MarkdownRenderer({
   compact = false,
   className,
   mentionUsers = [],
+  topicMentions = [],
 }: MarkdownRendererProps) {
   return (
     <div
@@ -29,7 +32,7 @@ export function MarkdownRenderer({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         skipHtml
-        components={createMarkdownComponents(mentionUsers)}
+        components={createMarkdownComponents(mentionUsers, topicMentions)}
       >
         {content}
       </ReactMarkdown>
@@ -37,14 +40,26 @@ export function MarkdownRenderer({
   );
 }
 
-function renderMentionChildren(children: ReactNode, mentionUsers: MentionUser[]) {
+function renderMentionChildren(
+  children: ReactNode,
+  mentionUsers: MentionUser[],
+  topicMentions: TopicMention[]
+) {
   return Children.map(children, child =>
-    typeof child === 'string' ? <LinkedMentions text={child} users={mentionUsers} /> : child
+    typeof child === 'string' ? (
+      <LinkedMentions text={child} users={mentionUsers} topics={topicMentions} />
+    ) : (
+      child
+    )
   );
 }
 
-function createMarkdownComponents(mentionUsers: MentionUser[]): Components {
-  const renderChildren = (children: ReactNode) => renderMentionChildren(children, mentionUsers);
+function createMarkdownComponents(
+  mentionUsers: MentionUser[],
+  topicMentions: TopicMention[]
+): Components {
+  const renderChildren = (children: ReactNode) =>
+    renderMentionChildren(children, mentionUsers, topicMentions);
 
   return {
     a({ href, children }) {

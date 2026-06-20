@@ -30,6 +30,7 @@ from social_platform.app.api.routers import (
     search,
     theme,
     hot_topics,
+    topics,
     reports,
 )
 
@@ -85,6 +86,17 @@ def ensure_search_indexes():
         db.close()
 
 
+def ensure_topic_projection():
+    """启动时为历史帖子补齐话题投影。"""
+    from social_platform.app.domains.topic.application import ensure_topic_projection as ensure_topics
+
+    db = SessionLocal()
+    try:
+        ensure_topics(db)
+    finally:
+        db.close()
+
+
 def initialize_admin_manager():
     """初始化公开平台管理器运行时数据。"""
     db = SessionLocal()
@@ -106,6 +118,7 @@ async def lifespan(app: FastAPI):
     initialize_admin_manager()
     start_scheduler()
     ensure_search_indexes()
+    ensure_topic_projection()
     yield
     scheduler.shutdown()
     terminal_log_capture.stop()
@@ -158,6 +171,7 @@ app.include_router(notifications.router, prefix=f"{settings.API_V1_PREFIX}/notif
 app.include_router(search.router, prefix=f"{settings.API_V1_PREFIX}/search", tags=["search"])
 app.include_router(theme.router, prefix=f"{settings.API_V1_PREFIX}/theme", tags=["theme"])
 app.include_router(hot_topics.router, prefix=f"{settings.API_V1_PREFIX}/hot-topics", tags=["hot-topics"])
+app.include_router(topics.router, prefix=f"{settings.API_V1_PREFIX}/topics", tags=["topics"])
 app.include_router(reports.router, prefix=f"{settings.API_V1_PREFIX}/reports", tags=["reports"])
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 

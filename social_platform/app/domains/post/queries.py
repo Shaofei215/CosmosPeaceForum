@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.mention import application as mention_service
+from social_platform.app.domains.topic import queries as topic_queries
 
 
 MentionUserData = dict[str, object]
@@ -36,6 +37,7 @@ def attach_repost_metadata(db: Session, post: Post) -> Post:
     post.repost_origin_missing = is_repost_origin_missing(post)
     post.repost_chain_authors = build_repost_chain_authors(db, post.content)
     post.mention_users = build_mention_users(db, post.content)
+    post.topic_mentions = topic_queries.build_topic_mentions(db, post.id)
     return post
 
 

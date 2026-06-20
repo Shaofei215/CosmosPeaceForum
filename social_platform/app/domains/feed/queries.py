@@ -17,6 +17,7 @@ from social_platform.app.domains.follow.models import Follow
 from social_platform.app.domains.post import poll_queries, queries as post_queries
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.topic import queries as topic_queries
 from social_platform.app.domains.user.models import User
 from social_platform.app.schemas.response import APIResponse, PaginationInfo
 
@@ -167,6 +168,7 @@ def build_feed_items(
         db,
         [post.content for post in posts],
     )
+    topic_mentions_by_post = topic_queries.build_topic_mentions_for_post_ids(db, post_ids)
     poll_map = poll_queries.build_poll_response_map(db, post_ids, current_user_id)
 
     feed_items: list[PostFeedItem] = []
@@ -198,6 +200,7 @@ def build_feed_items(
                 repost_chain=post.repost_chain,
                 repost_chain_authors=mention_users,
                 mention_users=mention_users,
+                topic_mentions=topic_mentions_by_post.get(post.id, []),
                 repost_origin=post.repost_root_post if post.repost_root_post_id else None,
                 repost_origin_missing=post_queries.is_repost_origin_missing(post),
                 poll=poll_map.get(post.id),

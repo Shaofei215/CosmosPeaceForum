@@ -4,6 +4,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from social_platform.app.domains.user.schemas import UserResponse
+from social_platform.app.domains.topic.schemas import TopicMention
 
 
 class PostBase(BaseModel):
@@ -103,6 +104,7 @@ class PostResponse(PostBase):
     repost_chain: Optional[str] = None
     repost_chain_authors: List[RepostChainAuthor] = Field(default_factory=list)
     mention_users: List[MentionUser] = Field(default_factory=list)
+    topic_mentions: List[TopicMention] = Field(default_factory=list)
     repost_origin: Optional[RepostOriginPost] = None
     repost_origin_missing: bool = False
     poll: Optional[PollResponse] = None
