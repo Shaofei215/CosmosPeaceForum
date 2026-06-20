@@ -1,14 +1,16 @@
 /**
  * 右侧边栏组件
- * 展示热榜、趋势话题与回到顶部按钮，固定在视口内
+ * 展示热榜、热门话题与回到顶部按钮，固定在视口内
  */
 
 import { Link } from 'react-router-dom';
+import { useMemo } from 'react';
 import { TrendingUp, Flame } from 'lucide-react';
 import { BackToTopButton } from '@/widgets/back-to-top-button';
 import { CreatePostForm } from '@/widgets/create-post-form';
 import { useAuthStore } from '@/features/auth';
 import { useHotTopics } from '@/features/hot-topic';
+import { useTrendingTopics } from '@/features/topic';
 
 /**
  * 右侧边栏组件
@@ -16,6 +18,10 @@ import { useHotTopics } from '@/features/hot-topic';
 export function RightSidebar() {
   const { isAuthenticated } = useAuthStore();
   const { data: hotTopics = [], isLoading } = useHotTopics(10);
+  const { data: trendingTopics = [], isLoading: isTopicsLoading } = useTrendingTopics(12);
+  const displayTopics = useMemo(() => {
+    return [...trendingTopics].sort(() => Math.random() - 0.5).slice(0, 3);
+  }, [trendingTopics]);
 
   return (
     <aside className="fixed top-24 z-30 h-fit w-64 space-y-3 pb-3">
@@ -64,10 +70,26 @@ export function RightSidebar() {
       <div className="rounded-lg bg-white p-3 shadow-sm">
         <div className="mb-3 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold">趋势话题</h3>
+          <h3 className="font-semibold">热门话题</h3>
         </div>
 
-        <div className="py-3 text-center text-sm text-muted-foreground">暂无热门话题</div>
+        <div className="space-y-2">
+          {isTopicsLoading && <div className="py-2 text-sm text-muted-foreground">加载中...</div>}
+          {!isTopicsLoading &&
+            displayTopics.map(topic => (
+              <Link
+                key={topic.id}
+                to={`/search?type=topic&q=${encodeURIComponent(topic.name)}`}
+                className="flex items-center justify-between gap-3 text-muted-foreground hover:text-primary"
+              >
+                <span className="min-w-0 truncate text-sm">#{topic.name}#</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{topic.post_count}帖</span>
+              </Link>
+            ))}
+          {!isTopicsLoading && displayTopics.length === 0 && (
+            <div className="py-3 text-center text-sm text-muted-foreground">暂无热门话题</div>
+          )}
+        </div>
       </div>
 
       <div className="flex">

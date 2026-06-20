@@ -1,7 +1,7 @@
 import type { PostFeedItem } from '@/features/feed';
 import type { UserProfile } from '@/features/user';
 
-export type SearchType = 'content' | 'user';
+export type SearchType = 'content' | 'user' | 'topic';
 
 export interface SearchParams {
   type: SearchType;

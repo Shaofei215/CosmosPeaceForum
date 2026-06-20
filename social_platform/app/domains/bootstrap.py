@@ -20,8 +20,10 @@ def ensure_domain_event_handlers_registered() -> None:
     )
     from social_platform.app.domains.heat.subscribers import register_heat_subscribers
     from social_platform.app.domains.search.subscribers import register_search_subscribers
+    from social_platform.app.domains.topic.subscribers import register_topic_subscribers
 
     register_heat_subscribers()
     register_notification_subscribers()
     register_search_subscribers()
+    register_topic_subscribers()
     _registered = True

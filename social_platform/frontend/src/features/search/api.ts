@@ -12,4 +12,9 @@ export const searchApi = {
     apiClient.get<PaginatedResponse<UserSearchItem>>('/search', {
       params: { ...params, type: 'user' },
     }),
+
+  searchTopics: (params: SearchParams) =>
+    apiClient.get<PaginatedResponse<ContentSearchItem>>('/search', {
+      params: { ...params, type: 'topic' },
+    }),
 };

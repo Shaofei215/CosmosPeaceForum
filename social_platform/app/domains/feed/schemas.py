@@ -16,6 +16,7 @@ from social_platform.app.domains.post.schemas import (
     RepostChainAuthor,
     RepostOriginPost,
 )
+from social_platform.app.domains.topic.schemas import TopicMention
 
 
 class PostFeedItem(BaseModel):
@@ -46,6 +47,7 @@ class PostFeedItem(BaseModel):
         repost_chain: 转发链文本。
         repost_chain_authors: 转发链中可跳转作者列表。
         mention_users: 正文中提及到的用户列表。
+        topic_mentions: 正文中使用到的话题列表。
         repost_origin: 转发根帖摘要。
         repost_origin_missing: 转发源是否已缺失。
         poll: 帖子附带的投票统计；无投票时为空。
@@ -75,6 +77,7 @@ class PostFeedItem(BaseModel):
     repost_chain: str | None = None
     repost_chain_authors: list[RepostChainAuthor] = Field(default_factory=list)
     mention_users: list[MentionUser] = Field(default_factory=list)
+    topic_mentions: list[TopicMention] = Field(default_factory=list)
     repost_origin: RepostOriginPost | None = None
     repost_origin_missing: bool = False
     poll: PollResponse | None = None

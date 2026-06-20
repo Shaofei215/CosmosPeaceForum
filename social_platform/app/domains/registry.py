@@ -15,6 +15,7 @@ from social_platform.app.domains.identity.models import EmailVerificationCode, U
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.post.models import PollOption, PollVote, Post
 from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.topic.models import PostTopic, Topic
 from social_platform.app.domains.user.models import User
 
 __all__ = [
@@ -33,6 +34,8 @@ __all__ = [
     "PollOption",
     "PollVote",
     "Post",
+    "PostTopic",
     "User",
     "UserSession",
+    "Topic",
 ]

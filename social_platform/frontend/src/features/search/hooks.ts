@@ -20,7 +20,13 @@ export const useInfiniteSearch = (type: SearchType, query: string) => {
         page_size: DEFAULT_PAGE_SIZE,
       };
 
-      return type === 'content' ? searchApi.searchContent(params) : searchApi.searchUsers(params);
+      if (type === 'user') {
+        return searchApi.searchUsers(params);
+      }
+      if (type === 'topic') {
+        return searchApi.searchTopics(params);
+      }
+      return searchApi.searchContent(params);
     },
     getNextPageParam: lastPage => {
       if (lastPage.pagination.has_next) {

@@ -18,6 +18,7 @@ from social_platform.app.domains.notification.schemas import (
 )
 from social_platform.app.domains.notification import application as notification_service
 from social_platform.app.domains.post import queries as post_queries
+from social_platform.app.domains.topic import queries as topic_queries
 from social_platform.app.domains.mention import application as mention_service
 from social_platform.app.domains.notification.stream import (
     get_notification_version,
@@ -211,6 +212,10 @@ def _serialize_post(db: Session, post, current_user_id: int):
         "mention_users": post_queries.build_mention_users(
             object_session(post),
             post.content,
+        ) if object_session(post) else [],
+        "topic_mentions": topic_queries.build_topic_mentions(
+            object_session(post),
+            post.id,
         ) if object_session(post) else [],
         "repost_origin": _serialize_post(db, post.repost_root_post, current_user_id)
         if getattr(post, "repost_root_post_id", None) and getattr(post, "repost_root_post", None)

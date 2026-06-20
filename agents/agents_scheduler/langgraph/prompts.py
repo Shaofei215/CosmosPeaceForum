@@ -60,6 +60,7 @@ def _build_attention_header() -> str:
         f"粉丝：{values['followers_count']}",
         f"消息：{values['unread_count']}",
         f"热榜：{values['hot_topic_titles']}",
+        f"热门话题：{values['topic_titles']}",
     ]
     if values["login_stats"]:
         parts.extend([
@@ -80,6 +81,7 @@ def _build_attention_template_values() -> Dict[str, Any]:
     total_login_count = login_stats.get("total_login_count", 0) or 0
     last_login_time = _format_last_login_time(login_stats.get("last_login_timestamp"))
     hot_topic_titles = _build_hot_topic_titles()
+    topic_titles = _build_topic_titles()
     try:
         from agents.agents_scheduler.scheduler.context import get_current_user_id
         platform_user_id = get_current_user_id() or "未知"
@@ -92,6 +94,7 @@ def _build_attention_template_values() -> Dict[str, Any]:
         "followers_count": summary.get("followers_count", 0),
         "unread_count": summary.get("unread_count", 0),
         "hot_topic_titles": hot_topic_titles,
+        "topic_titles": topic_titles,
         "total_login_count": total_login_count,
         "last_login_time": last_login_time,
         "login_stats": bool(total_login_count or login_stats.get("last_login_timestamp")),
@@ -113,6 +116,23 @@ def _build_hot_topic_titles() -> str:
     if not titles:
         return "暂无"
     return "；".join(f"{index}. {title}" for index, title in enumerate(titles, start=1))
+
+
+def _build_topic_titles() -> str:
+    try:
+        from agents.agents_scheduler.langgraph.tools.support.platform import _get_trending_topics
+        topics = _get_trending_topics(limit=8)
+    except Exception:
+        topics = []
+
+    titles = [
+        str(topic.get("name", "")).strip()
+        for topic in topics
+        if isinstance(topic, dict) and str(topic.get("name", "")).strip()
+    ][:8]
+    if not titles:
+        return "暂无"
+    return "；".join(f"#{title}#" for title in titles)
 
 
 def build_system_prompt(
@@ -325,16 +345,17 @@ def _format_tool_result(result: Any) -> str:
                 lines.append(f"签名: {user.get('bio', '')}")
             return "\n".join(lines)
 
-        if result.get("type") in {"content", "user"} and (
+        if result.get("type") in {"content", "user", "topic"} and (
             "posts" in result or "users" in result
         ):
             search_type = result.get("type")
             query = result.get("query", "")
             pagination = result.get("pagination") or {}
             total = pagination.get("total", 0)
-            if search_type == "content":
+            if search_type in {"content", "topic"}:
                 posts = result.get("posts", [])
-                lines = [f"【帖子搜索结果】关键词：{query}，共{total}条，显示{len(posts)}条："]
+                label = "话题" if search_type == "topic" else "关键词"
+                lines = [f"【帖子搜索结果】{label}：{query}，共{total}条，显示{len(posts)}条："]
                 if not posts:
                     lines.append("暂无帖子结果")
                 for post in posts:
@@ -492,6 +513,14 @@ def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
         f"{indent}is_liked / 当前用户是否已点赞: {post.get('is_liked', False)}",
         f"{indent}follow_status / 当前用户对作者的关注状态: {post.get('follow_status', '')}",
     ]
+    topic_mentions = post.get("topic_mentions") or []
+    if topic_mentions:
+        topic_names = [
+            f"#{topic.get('name')}#"
+            for topic in topic_mentions
+            if isinstance(topic, dict) and topic.get("name")
+        ]
+        lines.append(f"{indent}topic_mentions / 帖子话题: {'；'.join(topic_names)}")
     origin = post.get("repost_origin") or {}
     if origin:
         lines.extend([

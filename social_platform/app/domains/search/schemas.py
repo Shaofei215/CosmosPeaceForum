@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from social_platform.app.domains.user.schemas import UserResponse
 
 
-SearchType = Literal["content", "user"]
+SearchType = Literal["content", "user", "topic"]
 
 
 class SearchMeta(BaseModel):

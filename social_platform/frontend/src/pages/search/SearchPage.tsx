@@ -10,7 +10,8 @@ export default function SearchPage() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
   const requestedType = searchParams.get('type');
-  const type: SearchType = requestedType === 'user' ? 'user' : 'content';
+  const type: SearchType =
+    requestedType === 'user' ? 'user' : requestedType === 'topic' ? 'topic' : 'content';
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteSearch(
     type,
@@ -52,7 +53,7 @@ export default function SearchPage() {
         </div>
       ) : items.length > 0 ? (
         <div className="divide-y divide-border/50">
-          {type === 'content'
+          {type === 'content' || type === 'topic'
             ? contentItems.map(post => <PostCard key={post.id} post={post} />)
             : userItems.map(user => <UserListItem key={user.id} user={user} />)}
         </div>

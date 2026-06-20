@@ -455,6 +455,7 @@ def _standardize_post(
         "repost_chain": formatted_repost_chain or raw_repost_chain,
         "repost_chain_authors": repost_chain_authors,
         "mention_users": mention_users,
+        "topic_mentions": post_data.get("topic_mentions", []),
         "repost_origin_missing": post_data.get("repost_origin_missing", False),
     }
 
@@ -869,6 +870,18 @@ def _get_hot_topics(limit: int = 20) -> List[Dict[str, Any]]:
         endpoint="/hot-topics",
         params={"limit": safe_limit},
         reason="内部调用：获取公开热榜"
+    )
+    return data if isinstance(data, list) else []
+
+
+def _get_trending_topics(limit: int = 20) -> List[Dict[str, Any]]:
+    """获取公开热门话题。"""
+    safe_limit = max(1, min(int(limit), 50))
+    data = _make_request(
+        method="GET",
+        endpoint="/topics/trending",
+        params={"limit": safe_limit},
+        reason="内部调用：获取公开热门话题"
     )
     return data if isinstance(data, list) else []
 

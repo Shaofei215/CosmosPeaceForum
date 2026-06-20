@@ -3,6 +3,7 @@
  */
 
 import type { UserProfile } from '@/features/user/types';
+import type { TopicMention } from '@/features/topic/types';
 
 export type PostAuthor = Pick<
   UserProfile,
@@ -40,6 +41,7 @@ export interface Post {
   repost_chain?: string | null;
   repost_chain_authors?: RepostChainAuthor[];
   mention_users?: MentionUser[];
+  topic_mentions?: TopicMention[];
   repost_origin?: RepostOriginPost | null;
   repost_origin_missing?: boolean;
   poll?: Poll | null;

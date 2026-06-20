@@ -20,6 +20,7 @@ from social_platform.app.domains.post.schemas import (
 from social_platform.app.domains.post import application as post_application
 from social_platform.app.domains.post import poll_application, poll_queries
 from social_platform.app.domains.post import queries as post_queries
+from social_platform.app.domains.topic import queries as topic_queries
 
 router = APIRouter()
 
@@ -44,6 +45,7 @@ def create_post(
     try:
         db_post = post_application.create_post(db, current_user, post)
         db_post.mention_users = post_queries.build_mention_users(db, db_post.content)
+        db_post.topic_mentions = topic_queries.build_topic_mentions(db, db_post.id)
         db_post.poll = poll_queries.get_poll_response(db, db_post.id, current_user.id)
         return db_post
     except post_application.ArticleTitleRequiredError as e:
@@ -96,6 +98,7 @@ def repost(
 ):
     try:
         created_post = post_application.create_repost_for_user(db, current_user, data)
+        created_post.topic_mentions = topic_queries.build_topic_mentions(db, created_post.id)
         return created_post
     except post_application.RepostSourceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -180,6 +183,7 @@ def get_post(
         repost_chain=post.repost_chain,
         repost_chain_authors=post_queries.build_repost_chain_authors(db, post.content),
         mention_users=post_queries.build_mention_users(db, post.content),
+        topic_mentions=topic_queries.build_topic_mentions(db, post.id),
         repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         repost_origin_missing=post_queries.is_repost_origin_missing(post),
         poll=poll_queries.get_poll_response(db, post.id, current_user.id if current_user else None),

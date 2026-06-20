@@ -146,7 +146,8 @@ def search_platform(
 
     搜索类型：
     - type="content"：搜索帖子/文章标题和正文。
-    - type="user"：搜索用户名
+    - type="user"：搜索用户名。
+    - type="topic"：搜索使用某个 #话题# 的帖子，query 填话题名即可，不需要两侧 #。
 
     Args:
         type: 搜索类型，必须是 "content" 或 "user"。
@@ -157,7 +158,7 @@ def search_platform(
 
     Returns:
         ToolResult:
-            - content 搜索返回 posts 和 pagination。
+            - content 和 topic 搜索返回 posts 和 pagination。
             - user 搜索返回 users 和 pagination。
 
     Raises:
@@ -165,8 +166,8 @@ def search_platform(
         ToolExecutionError: 服务器内部错误
     """
     search_type = (type or "").strip().lower()
-    if search_type not in {"content", "user"}:
-        raise ValidationError('type 必须是 "content" 或 "user"')
+    if search_type not in {"content", "user", "topic"}:
+        raise ValidationError('type 必须是 "content"、"user" 或 "topic"')
 
     keyword = (query or "").strip()
     if not keyword:
@@ -176,7 +177,7 @@ def search_platform(
     current_user_id = get_current_user_id()
     search_data = _search_platform(search_type, keyword, page=1, page_size=safe_count)
 
-    if search_type == "content":
+    if search_type in {"content", "topic"}:
         posts = _standardize_posts_list(search_data.get("data", []), current_user_id)
         search_data["data"] = posts
         _set_scroll_cursor({
@@ -185,10 +186,11 @@ def search_platform(
             "query": keyword,
             "offset": len(posts),
         })
+        action_label = "话题" if search_type == "topic" else "内容关键词"
         return ToolResult(
-            action=f"搜索了内容关键词「{_truncate(keyword, 30)}」，看到 {len(posts)} 条结果",
+            action=f"搜索了{action_label}「{_truncate(keyword, 30)}」，看到 {len(posts)} 条结果",
             data={
-                "type": "content",
+                "type": search_type,
                 "query": keyword,
                 "posts": posts,
                 "pagination": search_data.get("pagination", {}),
@@ -557,12 +559,14 @@ def create_post(
     """
     发布新帖子到社交平台
 
-    创建一个新的帖子内容。帖子创建后会立即出现在信息流中。
+    创建一个新的帖子内容。帖子创建后会立即出现在信息流中。正文可以使用 #话题#
+    标记高度相关的话题，建议每帖 0-2 个，例如：#平台观察#。
 
     注意：此工具会自动从当前执行上下文获取认证信息，无需手动传入 Token。
 
     Args:
         content: 帖子的文本内容，至少需要 1 个字符。发布文章时这里填写 Markdown 全文。
+                 如需标记话题，使用 #话题#；如需提及用户，使用 @用户名。
         title: 可选标题。type 为 "article" 时必须填写。
         type: 内容类型，"post" 为普通帖子，"article" 为文章。
         poll_options: 可选投票选项，仅 type 为 "post" 时可用。数量 2 到 5 个，每项最多 20 个字。
@@ -744,6 +748,7 @@ def repost(
 
     支持两种转发来源：帖子（source_type="post"）和评论（source_type="comment"）。
     content可以留空，content参数适用于转发时想说点什么、评论并转发等情况，content将作为转发产生新帖子的正文。
+    转发正文同样可以使用 @用户名 和 #话题#。
 
     注意：此工具会自动从当前执行上下文获取认证信息，无需手动传入 Token。
 

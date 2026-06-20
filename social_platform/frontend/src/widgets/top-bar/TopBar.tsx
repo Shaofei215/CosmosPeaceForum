@@ -48,7 +48,12 @@ export function TopBar() {
   // 将 feed 类型放进 URL，保证刷新、返回和无限滚动缓存都能保持同一视图。
   const searchParams = new URLSearchParams(location.search);
   const currentSearchQuery = searchParams.get('q') || '';
-  const urlSearchType = searchParams.get('type') === 'user' ? 'user' : 'content';
+  const urlSearchType: SearchType =
+    searchParams.get('type') === 'user'
+      ? 'user'
+      : searchParams.get('type') === 'topic'
+        ? 'topic'
+        : 'content';
   const currentFeedType = searchParams.get('feed_type');
   const activeFilter: FilterType =
     currentFeedType === 'latest' || currentFeedType === 'following'

@@ -5,6 +5,7 @@
  */
 import { Fragment, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
+import type { TopicMention } from '@/features/topic';
 
 export interface MentionUser {
   user_id: number;
@@ -14,47 +15,70 @@ export interface MentionUser {
 interface LinkedMentionsProps {
   text: string;
   users?: MentionUser[];
+  topics?: TopicMention[];
   className?: string;
   onMentionClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  onTopicClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 }
 
-const mentionPattern = /(@[a-zA-Z0-9_一-龥]+)/g;
+const tokenPattern = /(@[a-zA-Z0-9_一-龥]+|#[a-zA-Z0-9_\-一-龥]{1,40}#)/g;
 
 export function LinkedMentions({
   text,
   users = [],
+  topics = [],
   className,
   onMentionClick,
+  onTopicClick,
 }: LinkedMentionsProps) {
   const userByName = new Map(users.map(user => [user.username, user]));
-  const parts = text.split(mentionPattern);
+  const topicByName = new Map(topics.map(topic => [topic.name, topic]));
+  const parts = text.split(tokenPattern);
+  const linkClassName =
+    className || 'font-medium text-[var(--theme-accent-bg)] transition-colors hover:opacity-80';
 
   return (
     <>
       {parts.map((part, index) => {
         const key = `${part}-${index}`;
-        if (!part.startsWith('@')) {
-          return <Fragment key={key}>{part}</Fragment>;
+        if (part.startsWith('@')) {
+          const user = userByName.get(part.slice(1));
+          if (!user) {
+            return <Fragment key={key}>{part}</Fragment>;
+          }
+
+          return (
+            <Link
+              key={key}
+              to={`/user/${user.user_id}`}
+              className={linkClassName}
+              onClick={onMentionClick}
+            >
+              {part}
+            </Link>
+          );
         }
 
-        const user = userByName.get(part.slice(1));
-        if (!user) {
-          return <Fragment key={key}>{part}</Fragment>;
+        if (part.startsWith('#') && part.endsWith('#')) {
+          const topicName = part.slice(1, -1);
+          const topic = topicByName.get(topicName);
+          if (!topic) {
+            return <Fragment key={key}>{part}</Fragment>;
+          }
+
+          return (
+            <Link
+              key={key}
+              to={`/search?type=topic&q=${encodeURIComponent(topic.name)}`}
+              className={linkClassName}
+              onClick={onTopicClick}
+            >
+              {part}
+            </Link>
+          );
         }
 
-        return (
-          <Link
-            key={key}
-            to={`/user/${user.user_id}`}
-            className={
-              className ||
-              'font-medium text-[var(--theme-accent-bg)] transition-colors hover:opacity-80'
-            }
-            onClick={onMentionClick}
-          >
-            {part}
-          </Link>
-        );
+        return <Fragment key={key}>{part}</Fragment>;
       })}
     </>
   );
