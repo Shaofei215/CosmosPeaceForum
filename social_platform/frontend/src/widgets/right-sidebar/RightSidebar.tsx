@@ -83,7 +83,6 @@ export function RightSidebar() {
                 className="flex items-center justify-between gap-3 text-muted-foreground hover:text-primary"
               >
                 <span className="min-w-0 truncate text-sm">#{topic.name}#</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{topic.post_count}帖</span>
               </Link>
             ))}
           {!isTopicsLoading && displayTopics.length === 0 && (
