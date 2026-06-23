@@ -41,6 +41,15 @@ def _build_login_stats_summary() -> Dict[str, Any]:
     return {"total_login_count": 0, "last_login_timestamp": None}
 
 
+def _get_platform_display_name() -> str:
+    """读取 Agent 侧配置的平台展示名，失败时回退到默认项目名。"""
+    try:
+        from agents.management.backend.core.config import get_config
+        return get_config().platform_display_name
+    except Exception:
+        return "宇宙和平论坛"
+
+
 def _format_last_login_time(timestamp: Any) -> str:
     if timestamp is None:
         return "暂无记录"
@@ -87,9 +96,11 @@ def _build_attention_template_values() -> Dict[str, Any]:
         platform_user_id = get_current_user_id() or "未知"
     except Exception:
         platform_user_id = "未知"
+    platform_name = _get_platform_display_name()
 
     return {
         "platform_user_id": platform_user_id,
+        "platform_name": platform_name,
         "following_count": summary.get("following_count", 0),
         "followers_count": summary.get("followers_count", 0),
         "unread_count": summary.get("unread_count", 0),
@@ -635,5 +646,6 @@ def build_summarize_prompt(state: Dict[str, Any]) -> str:
         {
             "username": state.get("username", "未知"),
             "history_text": history_text,
+            "platform_name": _get_platform_display_name(),
         },
     )

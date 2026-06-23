@@ -15,6 +15,7 @@ from typing import Any, Callable, Iterable, Optional
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
+from social_platform.app.core.branding import get_platform_display_name
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.hot_topic.models import HotTopic, HotTopicGeneration, HotTopicSettings
 from social_platform.app.domains.post.models import Post
@@ -37,7 +38,7 @@ HOT_TOPIC_LLM_MAX_RETRIES = 1
 HOT_TOPIC_AGENT_PROMPT_KEY = "hot_topic_agent_prompt"
 HOT_TOPIC_AGENT_PROMPT_NAME = "热榜生成提示词"
 HOT_TOPIC_AGENT_PROMPT_DESCRIPTION = "用于指导热榜 Agent 生成候选热点。"
-DEFAULT_HOT_TOPIC_AGENT_PROMPT = """你是 CosmosPeaceForum 的热榜编辑 Agent。请从站内讨论、当前热榜和历史生成记录中提炼新的候选事件。
+DEFAULT_HOT_TOPIC_AGENT_PROMPT = f"""你是 {get_platform_display_name()} 的热榜编辑 Agent。请从站内讨论、当前热榜和历史生成记录中提炼新的候选事件。
 
 任务目标：
 - 生成 5 到 10 条适合公开展示的候选事件。
@@ -56,7 +57,7 @@ DEFAULT_HOT_TOPIC_AGENT_PROMPT = """你是 CosmosPeaceForum 的热榜编辑 Agen
 - 如果证据不足，减少条目数量，也不要编造。
 
 当前上下文 JSON：
-{context_json}"""
+{{context_json}}"""
 
 _scheduler = None
 _agent_run_lock = threading.Lock()

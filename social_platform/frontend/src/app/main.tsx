@@ -8,7 +8,10 @@ import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
 import { Providers } from './providers';
+import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 import './styles/globals.css';
+
+document.title = PLATFORM_DISPLAY_NAME;
 
 /**
  * 渲染React应用

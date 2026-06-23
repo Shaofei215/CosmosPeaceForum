@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from string import Template
 
+from social_platform.app.core.branding import get_platform_display_name
 from social_platform.app.domains.email.sender import EmailMessage
 
 
@@ -18,7 +19,7 @@ LOGIN_EMAIL_TEMPLATE = Template(
 请勿将验证码泄露给他人，如果这不是您的操作，请立即检查账号安全。
 
 ---
-此邮件由 CosmosPeaceForum 系统自动发送，请勿回复。
+此邮件由 $platform_name 系统自动发送，请勿回复。
 """
 )
 """登录验证码纯文本模板。"""
@@ -36,12 +37,13 @@ def build_login_email(recipient_email: str, code: str, expire_minutes: int) -> E
         EmailMessage: 已渲染的登录验证码邮件消息。
     """
 
+    platform_name = get_platform_display_name()
     return EmailMessage(
         recipient_email=recipient_email,
-        subject="【CosmosPeaceForum】登录验证码",
+        subject=f"【{platform_name}】登录验证码",
         text_body=LOGIN_EMAIL_TEMPLATE.safe_substitute(
             code=code,
             expire_minutes=expire_minutes,
+            platform_name=platform_name,
         ),
     )
-

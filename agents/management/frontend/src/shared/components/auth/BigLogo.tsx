@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 import { cn } from '@/shared/lib/cn';
 
 export function BigLogo({ className }: { className?: string }) {
@@ -7,7 +8,7 @@ export function BigLogo({ className }: { className?: string }) {
   return (
     <img
       src={src}
-      alt="CosmosPeaceForum"
+      alt={PLATFORM_DISPLAY_NAME}
       className={cn('auth-big-logo', className)}
       onError={() => {
         if (src !== '/logo.png') {

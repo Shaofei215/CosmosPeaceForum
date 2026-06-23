@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     所有配置从环境变量或.env文件加载，生产环境必须正确配置
     """
     PROJECT_NAME: str
+    # 平台对外展示名，用于网页标题、邮件模板和系统提示词等可品牌化位置。
+    PLATFORM_DISPLAY_NAME: str = "宇宙和平论坛"
     VERSION: str
     API_V1_PREFIX: str
     DEBUG: bool = False

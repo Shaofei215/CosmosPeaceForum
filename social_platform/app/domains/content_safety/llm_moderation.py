@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.services import auth_service, log_service
 from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_CONTENT, PERMISSION_MANAGE_USERS
+from social_platform.app.core.branding import get_platform_display_name
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.content_safety import admin_application as moderation_service
@@ -28,7 +29,7 @@ CONTENT_MODERATION_LLM_TIMEOUT_SECONDS = 60
 CONTENT_MODERATION_LLM_MAX_RETRIES = 1
 LLM_MODERATOR_USERNAME = "llm_moderator"
 
-DEFAULT_CONTENT_MODERATION_LLM_PROMPT = """你是 CosmosPeaceForum 的内容安全审查员。你每次只审查一条被举报内容或用户账号，不保留任何历史对话，也不得参考上下文以外的信息。
+DEFAULT_CONTENT_MODERATION_LLM_PROMPT = f"""你是 {get_platform_display_name()} 的内容安全审查员。你每次只审查一条被举报内容或用户账号，不保留任何历史对话，也不得参考上下文以外的信息。
 
 审查目标：
 - 判断被举报内容是否应在平台继续展示，或被举报用户是否应被封禁。
@@ -41,7 +42,7 @@ DEFAULT_CONTENT_MODERATION_LLM_PROMPT = """你是 CosmosPeaceForum 的内容安�
 
 你只能输出以下三种格式之一，不能输出解释、Markdown、JSON 或多余文字：
 1. pass
-2. delete {处理原因}
+2. delete {{处理原因}}
 3. drop
 
 输出约束：
@@ -50,7 +51,7 @@ DEFAULT_CONTENT_MODERATION_LLM_PROMPT = """你是 CosmosPeaceForum 的内容安�
 - drop 表示放弃自动判断，保留在人工待审队列。
 
 待审上下文 JSON：
-{context_json}"""
+{{context_json}}"""
 
 Decision = Literal["pass", "delete", "drop"]
 
