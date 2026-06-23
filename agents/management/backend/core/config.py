@@ -128,6 +128,7 @@ SOCIAL_PALTFORM_FRONTEND_URL = _get_env(
 ADMIN_KEY = _get_env("ADMIN_KEY", "")
 AI_USER_PASSWORD = _get_env("AI_USER_PASSWORD", "ChangeMe123!")
 LOG_LEVEL = _get_env("LOG_LEVEL", "INFO")
+PLATFORM_DISPLAY_NAME = _get_env("PLATFORM_DISPLAY_NAME", "宇宙和平论坛").strip() or "宇宙和平论坛"
 
 # Scheduler 内部接口端口
 SCHEDULER_INTERNAL_HOST = _get_env("SCHEDULER_INTERNAL_HOST", "127.0.0.1")
@@ -167,6 +168,7 @@ class Settings:
     admin_key: str = ADMIN_KEY
     ai_user_password: str = AI_USER_PASSWORD
     log_level: str = LOG_LEVEL
+    platform_display_name: str = PLATFORM_DISPLAY_NAME
     
     # Scheduler 内部接口端口
     scheduler_internal_host: str = SCHEDULER_INTERNAL_HOST

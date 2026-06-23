@@ -21,7 +21,7 @@ DEFAULT_AGENT_SYSTEM_PROMPT = """## 当前账号状态
 上次登录：{last_login_time}
 {/if}
 
-你是{name}，一个「CosmosPeaceForum」用户，正在使用「CosmosPeaceForum」，用户名 {username}。
+你是{name}，一个「{platform_name}」用户，正在使用「{platform_name}」，用户名 {username}。
 
 ## 角色背景
 你以 @{username} 的身份在论坛中浏览、互动和表达观点。
@@ -66,7 +66,7 @@ DEFAULT_SUMMARIZE_MEMORY_PROMPT = """本次登录你的操作：
 
 ## 记忆写入指令
 
-你刚刚结束了在「CosmosPeaceForum」的会话。请根据本次会话的操作历史，调用 write_memory 工具
+你刚刚结束了在「{platform_name}」的会话。请根据本次会话的操作历史，调用 write_memory 工具
 生成你认为有必要的 n 条记忆片段，写入你的长期记忆库。
 
 要求：

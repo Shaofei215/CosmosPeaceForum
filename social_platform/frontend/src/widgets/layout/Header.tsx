@@ -5,6 +5,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore, useLogout } from '@/features/auth';
 import { Button } from '@/shared/components/ui';
+import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 
 /**
  * 头部导航组件
@@ -27,7 +28,7 @@ export function Header() {
       <div className="container mx-auto px-4 h-14 flex items-center justify-between max-w-3xl">
         {/* Logo */}
         <Link to="/" className="font-bold text-xl">
-          CosmosPeaceForum
+          {PLATFORM_DISPLAY_NAME}
         </Link>
 
         {/* 导航链接 */}

@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from social_platform.app.core.branding import get_platform_display_name
 from social_platform.app.core.config import get_settings
 from social_platform.app.core.paths import get_avatar_upload_dir, get_frontend_dist_dir
 from social_platform.app.core.static_files import RaceSafeStaticFiles, SPAStaticFiles
@@ -189,7 +190,7 @@ def root():
         return FileResponse(frontend_index)
 
     return {
-        "message": "Welcome to CosmosPeaceForum Social Platform",
+        "message": f"Welcome to {get_platform_display_name()} Social Platform",
         "version": settings.VERSION,
         "docs": "/docs"
     }
