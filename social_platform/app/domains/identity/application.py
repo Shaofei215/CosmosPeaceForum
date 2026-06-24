@@ -12,6 +12,7 @@ from social_platform.app.core.config import get_settings
 from social_platform.app.core.security import get_password_hash
 from social_platform.app.domains.identity import verification
 from social_platform.app.domains.identity.models import EmailVerificationCode
+from social_platform.app.domains.invitation import application as invitation_service
 from social_platform.app.domains.user.models import User
 
 
@@ -59,7 +60,13 @@ def _consume_matching_code(
     verification_code.used_at = datetime.utcnow()
 
 
-def register_human_user_with_code(db: Session, email: str, password: str, code: str) -> User:
+def register_human_user_with_code(
+    db: Session,
+    email: str,
+    password: str,
+    code: str,
+    invitation_code: str | None = None,
+) -> User:
     """验证注册验证码并创建真人用户。
 
     Args:
@@ -67,12 +74,15 @@ def register_human_user_with_code(db: Session, email: str, password: str, code: 
         email: 注册邮箱。
         password: 明文密码。
         code: 用户提交的注册验证码。
+        invitation_code: 邀请制开启时用户提交的邀请码。
 
     Returns:
         User: 创建后的真人用户。
 
     Raises:
         verification.EmailAlreadyRegisteredError: 邮箱已经被注册。
+        invitation_service.InvitationRequiredError: 邀请制开启但未提交邀请码。
+        invitation_service.InvitationInvalidError: 邀请码不存在、邮箱不匹配或已使用。
         verification.VerificationCodeNotFoundError: 注册验证码不存在或已失效。
         verification.VerificationCodeAttemptsExceededError: 尝试次数超限。
         verification.VerificationCodeMismatchError: 验证码内容错误。
@@ -81,6 +91,11 @@ def register_human_user_with_code(db: Session, email: str, password: str, code: 
     normalized_email = email.lower()
     if db.query(User).filter(User.email == normalized_email).first():
         raise verification.EmailAlreadyRegisteredError()
+    invitation = invitation_service.get_required_registration_invitation(
+        db,
+        normalized_email,
+        invitation_code,
+    )
 
     verification_code = verification.get_valid_verification(db, normalized_email, "register")
     if not verification_code:
@@ -101,6 +116,7 @@ def register_human_user_with_code(db: Session, email: str, password: str, code: 
     db.refresh(db_user)
 
     verification_code.user_id = db_user.id
+    invitation_service.consume_registration_invitation(db, invitation, db_user.id)
     db.commit()
     return db_user
 

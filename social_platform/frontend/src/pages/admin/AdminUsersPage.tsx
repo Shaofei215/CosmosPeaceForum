@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -9,6 +9,7 @@ import {
   CheckCircle,
   FileText,
   Heart,
+  KeyRound,
   Megaphone,
   MessageCircle,
   RotateCcw,
@@ -25,6 +26,8 @@ import {
   type ContentModerationLLMPromptConfig,
   type ContentModerationLLMSettings,
   type ContentModerationLLMSettingsUpdate,
+  type InvitationCode,
+  type InvitationCodeCreateRequest,
   type ReportedUserItem,
   type UserModerationUpdateRequest,
   type UserWithModeration,
@@ -110,7 +113,7 @@ function reportedUserToModerationUser(user: ReportedUserItem): UserWithModeratio
   };
 }
 
-type UserMode = 'all' | 'reported';
+type UserMode = 'all' | 'reported' | 'invite';
 
 const userReportPromptPlaceholders = [
   {
@@ -188,6 +191,13 @@ export default function AdminUsersPage() {
     enabled: mode === 'reported',
   });
 
+  const invitationQuery = useQuery({
+    queryKey: adminKeys.invitations(keyword),
+    queryFn: () =>
+      adminApi.invitations({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
+    enabled: mode === 'invite',
+  });
+
   const { data: reportSettings } = useQuery({
     queryKey: adminKeys.userReportModerationSettings,
     queryFn: adminApi.userReportModerationSettings,
@@ -203,6 +213,7 @@ export default function AdminUsersPage() {
   const users = data?.items ?? [];
   const reportedUsers = reportedQuery.data?.items ?? [];
   const moderatedUsers = moderatedQuery.data?.items ?? [];
+  const invitations = invitationQuery.data?.items ?? [];
   const selectedUsers = users.filter(user => selectedIds.includes(user.id));
   const allPageSelected = users.length > 0 && users.every(user => selectedIds.includes(user.id));
   const reportPromptValue = reportPromptDraft ?? reportPromptConfig?.value ?? '';
@@ -235,6 +246,13 @@ export default function AdminUsersPage() {
   const announcementMutation = useMutation({
     mutationFn: adminApi.publishAnnouncement,
     onSuccess: () => setAnnouncementOpen(false),
+  });
+
+  const createInvitationMutation = useMutation({
+    mutationFn: (payload: InvitationCodeCreateRequest) => adminApi.createInvitation(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'invitations'] });
+    },
   });
 
   const releaseReportedUserMutation = useMutation({
@@ -353,6 +371,15 @@ export default function AdminUsersPage() {
               <ShieldAlert size={14} className="mr-1" />
               被举报用户审查
             </Button>
+            <Button
+              variant={mode === 'invite' ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-md"
+              onClick={() => switchMode('invite')}
+            >
+              <KeyRound size={14} className="mr-1" />
+              邀请码
+            </Button>
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -383,7 +410,13 @@ export default function AdminUsersPage() {
                 setKeyword(event.target.value);
                 setSelectedIds([]);
               }}
-              placeholder={mode === 'reported' ? '搜索被举报用户' : '搜索用户名或邮箱'}
+              placeholder={
+                mode === 'reported'
+                  ? '搜索被举报用户'
+                  : mode === 'invite'
+                    ? '搜索邮箱、邀请码或使用人'
+                    : '搜索用户名或邮箱'
+              }
               className="pl-8"
             />
           </div>
@@ -513,7 +546,7 @@ export default function AdminUsersPage() {
             </div>
           </CardContent>
         </Card>
-      ) : (
+      ) : mode === 'reported' ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
           <div className="space-y-4">
             <ReportedUsersTable
@@ -542,6 +575,14 @@ export default function AdminUsersPage() {
             onPromptSave={() => updateReportPromptMutation.mutate(reportPromptValue)}
           />
         </div>
+      ) : (
+        <InvitationCodesPanel
+          items={invitations}
+          loading={invitationQuery.isLoading}
+          creating={createInvitationMutation.isPending}
+          error={getErrorMessage(createInvitationMutation.error)}
+          onCreate={payload => createInvitationMutation.mutate(payload)}
+        />
       )}
 
       {selectedUser && (
@@ -593,6 +634,170 @@ const statusIconMap = {
 };
 
 type StatusIconKey = keyof typeof statusIconMap;
+
+function InvitationCodesPanel({
+  items,
+  loading,
+  creating,
+  error,
+  onCreate,
+}: {
+  items: InvitationCode[];
+  loading: boolean;
+  creating: boolean;
+  error: string | null;
+  onCreate: (payload: InvitationCodeCreateRequest) => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [prefix, setPrefix] = useState('');
+  const [formError, setFormError] = useState('');
+
+  const handleCreate = (event: FormEvent) => {
+    event.preventDefault();
+    setFormError('');
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setFormError('请输入邮箱');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setFormError('请输入有效的邮箱地址');
+      return;
+    }
+    onCreate({ email: normalizedEmail, prefix: prefix.trim() });
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="rounded-lg">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <KeyRound size={17} className="text-primary" />
+            生成邀请码
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto]"
+            onSubmit={handleCreate}
+          >
+            <Input
+              value={email}
+              onChange={event => setEmail(event.target.value)}
+              placeholder="绑定邮箱"
+              type="email"
+              disabled={creating}
+            />
+            <Input
+              value={prefix}
+              onChange={event =>
+                setPrefix(
+                  event.target.value
+                    .replace(/[^A-Za-z0-9_-]/g, '')
+                    .toUpperCase()
+                    .slice(0, 16)
+                )
+              }
+              placeholder="前缀，可留空"
+              disabled={creating}
+              maxLength={16}
+            />
+            <Button type="submit" className="rounded-md" disabled={creating}>
+              <KeyRound size={14} className="mr-1" />
+              {creating ? '生成中...' : '生成'}
+            </Button>
+          </form>
+          {(formError || error) && (
+            <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+              {formError || error}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-lg">
+        <CardContent className="p-0">
+          <div className="overflow-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead className="border-b bg-muted/50 text-left text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">邮箱</th>
+                  <th className="px-4 py-3 font-medium">邀请码</th>
+                  <th className="px-4 py-3 font-medium">状态</th>
+                  <th className="px-4 py-3 font-medium">使用用户</th>
+                  <th className="px-4 py-3 font-medium">创建人</th>
+                  <th className="px-4 py-3 font-medium">时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(invitation => (
+                  <tr key={invitation.id} className="border-b last:border-0">
+                    <td className="px-4 py-3">{invitation.email}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs font-semibold tracking-normal">
+                        {invitation.code}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={
+                          invitation.status === 'used'
+                            ? 'rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700'
+                            : 'rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground'
+                        }
+                      >
+                        {invitation.status === 'used' ? '已使用' : '未使用'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {invitation.used_by_user_id ? (
+                        <Link
+                          to={`/user/${invitation.used_by_user_id}`}
+                          className="font-medium hover:text-primary hover:underline"
+                        >
+                          @{invitation.used_by_username || `user_${invitation.used_by_user_id}`}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {invitation.created_by_admin_username || (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>{new Date(invitation.created_at).toLocaleString()}</div>
+                      {invitation.used_at && (
+                        <div className="text-xs text-muted-foreground">
+                          使用于 {new Date(invitation.used_at).toLocaleString()}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {!loading && items.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-10 text-center text-muted-foreground" colSpan={6}>
+                      暂无邀请码
+                    </td>
+                  </tr>
+                )}
+                {loading && (
+                  <tr>
+                    <td className="px-4 py-10 text-center text-muted-foreground" colSpan={6}>
+                      加载中...
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 function ReportedUsersTable({
   items,

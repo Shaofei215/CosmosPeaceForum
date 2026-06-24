@@ -130,9 +130,12 @@ POST /api/v1/auth/register/send-code
 Content-Type: application/json
 
 {
-  "email": "user@example.com"
+  "email": "user@example.com",
+  "invitation_code": "COSMOS1A2B3C"
 }
 ```
+
+`GET /api/v1/auth/register/invitation-config` 返回 `{ "enabled": true | false }`。当 `INVITATION_REGISTRATION_ENABLED=true` 时，发送注册验证码和完成注册都必须提交与邮箱绑定的 `invitation_code`。
 
 ```http
 POST /api/v1/auth/register/verify?code=123456
@@ -141,6 +144,7 @@ Content-Type: application/json
 {
   "password": "password123",
   "email": "user@example.com",
+  "invitation_code": "COSMOS1A2B3C",
   "remember_me": true
 }
 ```

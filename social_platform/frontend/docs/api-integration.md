@@ -94,10 +94,10 @@ export const authApi = {
       { username, password }
     ),
 
-  sendRegisterCode: (email: string) =>
+  sendRegisterCode: (email: string, invitationCode?: string) =>
     apiClient.post<{ message: string; email: string; expires_in: number }>(
       '/auth/register/send-code',
-      { email }
+      { email, invitation_code: invitationCode }
     ),
 
   register: (data: {
@@ -105,6 +105,7 @@ export const authApi = {
     password: string
     email: string
     code: string
+    invitation_code?: string
   }) =>
     apiClient.post<User>(
       `/auth/register/verify?code=${data.code}`,
@@ -112,6 +113,7 @@ export const authApi = {
         username: data.username,
         password: data.password,
         email: data.email,
+        invitation_code: data.invitation_code,
       }
     ),
 
@@ -363,6 +365,7 @@ export interface RegisterRequest {
   password: string
   email: string
   code: string
+  invitation_code?: string
 }
 ```
 

@@ -6,13 +6,18 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useSendVerificationCode, useRegisterWithVerification } from '@/features/auth';
+import {
+  useInvitationRegistrationConfig,
+  useRegisterWithVerification,
+  useSendVerificationCode,
+} from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { BigLogo } from '@/shared/components/auth/BigLogo';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
+  const [invitationCode, setInvitationCode] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -22,8 +27,10 @@ export default function RegisterPage() {
 
   const { mutate: sendCode, isPending: isSendingCode } = useSendVerificationCode();
   const { mutate: register, isPending: isRegistering } = useRegisterWithVerification();
+  const { data: invitationConfig } = useInvitationRegistrationConfig();
 
   const isPending = isSendingCode || isRegistering;
+  const invitationRequired = !!invitationConfig?.enabled;
 
   useEffect(() => {
     if (countdown > 0) {
@@ -48,9 +55,16 @@ export default function RegisterPage() {
       setError('请输入有效的邮箱地址');
       return;
     }
+    if (invitationRequired && !invitationCode.trim()) {
+      setError('请输入邀请码');
+      return;
+    }
 
     sendCode(
-      { email: email.trim() },
+      {
+        email: email.trim(),
+        invitation_code: invitationRequired ? invitationCode.trim() : undefined,
+      },
       {
         onSuccess: () => {
           setCountdown(60);
@@ -72,6 +86,10 @@ export default function RegisterPage() {
     }
     if (!validateEmail(email)) {
       setError('请输入有效的邮箱地址');
+      return;
+    }
+    if (invitationRequired && !invitationCode.trim()) {
+      setError('请输入邀请码');
       return;
     }
 
@@ -103,6 +121,7 @@ export default function RegisterPage() {
         email: email.trim(),
         password,
         code: code.trim(),
+        invitation_code: invitationRequired ? invitationCode.trim() : undefined,
         remember_me: rememberMe,
       },
       {
@@ -147,6 +166,31 @@ export default function RegisterPage() {
               />
             </div>
 
+            {invitationRequired && (
+              <div className="auth-field space-y-2">
+                <label htmlFor="invitationCode" className="text-sm font-medium">
+                  邀请码
+                </label>
+                <Input
+                  id="invitationCode"
+                  type="text"
+                  placeholder="请输入邮箱对应的邀请码"
+                  value={invitationCode}
+                  onChange={e =>
+                    setInvitationCode(
+                      e.target.value
+                        .replace(/[^A-Za-z0-9_-]/g, '')
+                        .toUpperCase()
+                        .slice(0, 64)
+                    )
+                  }
+                  disabled={isPending}
+                  maxLength={64}
+                  className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
+                />
+              </div>
+            )}
+
             {/* 验证码 */}
             <div className="auth-field space-y-2">
               <label htmlFor="code" className="text-sm font-medium">
@@ -167,7 +211,12 @@ export default function RegisterPage() {
                   type="button"
                   variant="outline"
                   onClick={handleSendCode}
-                  disabled={isSendingCode || countdown > 0 || !email.trim()}
+                  disabled={
+                    isSendingCode ||
+                    countdown > 0 ||
+                    !email.trim() ||
+                    (invitationRequired && !invitationCode.trim())
+                  }
                   className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-none hover:opacity-90"
                 >
                   {countdown > 0 ? `${countdown}秒后重试` : '获取验证码'}

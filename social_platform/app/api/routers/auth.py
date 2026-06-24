@@ -18,6 +18,8 @@ from social_platform.app.domains.identity import application as identity_service
 from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.identity import verification as verification_service
 from social_platform.app.domains.identity.models import UserSession
+from social_platform.app.domains.invitation import application as invitation_service
+from social_platform.app.domains.invitation.schemas import InvitationRegistrationConfigResponse
 from social_platform.app.domains.identity.schemas import (
     EmailCodeSendRequest,
     EmailCodeSendResponse,
@@ -91,6 +93,23 @@ def _raise_send_code_http_error(exc: Exception) -> NoReturn:
 # ========== 邮箱验证码发送 ==========
 
 
+@router.get(
+    "/register/invitation-config",
+    response_model=InvitationRegistrationConfigResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_register_invitation_config() -> InvitationRegistrationConfigResponse:
+    """读取公开注册页的邀请码开关配置。
+
+    Returns:
+        InvitationRegistrationConfigResponse: 是否开启邀请制注册。
+    """
+
+    return InvitationRegistrationConfigResponse(
+        enabled=invitation_service.is_invitation_registration_enabled()
+    )
+
+
 @router.post(
     "/register/send-code",
     response_model=EmailCodeSendResponse,
@@ -125,9 +144,12 @@ def send_register_verification_code(
             db,
             request.email,
             verification_email_sender,
+            invitation_code=request.invitation_code,
         )
     except (
         verification_service.EmailAlreadyRegisteredError,
+        invitation_service.InvitationRequiredError,
+        invitation_service.InvitationInvalidError,
         verification_service.VerifiedHumanUserNotFoundError,
         verification_service.VerificationCodeFrequencyError,
         verification_service.VerificationCodeDailyLimitError,
@@ -326,9 +348,12 @@ def verify_and_register(
             user_data.email,
             user_data.password,
             code,
+            invitation_code=user_data.invitation_code,
         )
     except (
         verification_service.EmailAlreadyRegisteredError,
+        invitation_service.InvitationRequiredError,
+        invitation_service.InvitationInvalidError,
         verification_service.VerificationCodeNotFoundError,
         verification_service.VerificationCodeAttemptsExceededError,
         verification_service.VerificationCodeMismatchError,

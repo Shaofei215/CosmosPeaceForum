@@ -31,6 +31,8 @@ import type {
   HotTopicRequest,
   HotTopicSettings,
   HotTopicSettingsUpdate,
+  InvitationCode,
+  InvitationCodeCreateRequest,
   OperationLog,
   PaginatedResponse,
   TerminalLogList,
@@ -159,6 +161,10 @@ export const adminApi = {
     client.get<unknown, PaginatedResponse<ReportedUserItem>>('/users/reports', { params }),
   moderatedUsers: (params: { skip?: number; limit?: number; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<UserWithModeration>>('/users/moderated', { params }),
+  invitations: (params: { skip?: number; limit?: number; keyword?: string }) =>
+    client.get<unknown, PaginatedResponse<InvitationCode>>('/users/invitations', { params }),
+  createInvitation: (request: InvitationCodeCreateRequest) =>
+    client.post<unknown, InvitationCode>('/users/invitations', request),
   releaseReportedUser: (userId: number) =>
     client.post<unknown, ReportReleaseResponse>('/users/reports/' + userId + '/release'),
   banReportedUser: (userId: number, request: ContentDeleteRequest) =>

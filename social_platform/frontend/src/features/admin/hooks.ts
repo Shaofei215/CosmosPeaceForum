@@ -14,6 +14,7 @@ export const adminKeys = {
   users: (keyword: string) => ['admin', 'users', keyword] as const,
   reportedUsers: (keyword: string) => ['admin', 'users', 'reports', keyword] as const,
   moderatedUsers: (keyword: string) => ['admin', 'users', 'moderated', keyword] as const,
+  invitations: (keyword: string) => ['admin', 'users', 'invitations', keyword] as const,
   userReportModerationSettings: ['admin', 'users', 'report-moderation-settings'] as const,
   userReportModerationPrompt: ['admin', 'users', 'report-moderation-prompt'] as const,
   content: (type: string, keyword: string) => ['admin', 'content', type, keyword] as const,
