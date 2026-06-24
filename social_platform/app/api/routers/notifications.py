@@ -16,6 +16,11 @@ from social_platform.app.domains.notification.schemas import (
     NotificationSummaryResponse,
     NotificationUnreadCountResponse,
 )
+from social_platform.app.domains.content_safety import appeal_application
+from social_platform.app.domains.content_safety.schemas import (
+    ModerationAppealCreate,
+    ModerationAppealResponse,
+)
 from social_platform.app.domains.notification import application as notification_service
 from social_platform.app.domains.post import queries as post_queries
 from social_platform.app.domains.topic import queries as topic_queries
@@ -44,6 +49,7 @@ def list_notifications(
         notification_type=type,
         mark_read=True,
     )
+    _attach_appeal_statuses(db, items, current_user.id)
     return NotificationListResponse(
         items=items,
         total=total,
@@ -136,7 +142,29 @@ def get_notification(
     notification = notification_service.get_notification(db, current_user.id, notification_id)
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
+    _attach_appeal_statuses(db, [notification], current_user.id)
     return notification
+
+
+@router.post("/{notification_id}/appeal", response_model=ModerationAppealResponse)
+def submit_moderation_appeal(
+    notification_id: int,
+    request: ModerationAppealCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_including_banned),
+):
+    """基于当前用户收到的处罚通知创建或覆盖站内申诉。"""
+
+    try:
+        appeal = appeal_application.create_or_update_appeal(
+            db=db,
+            notification_id=notification_id,
+            appellant=current_user,
+            reason=request.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return ModerationAppealResponse(id=appeal.id, status=appeal.status, message="申诉已提交")
 
 
 @router.post("/mark-read")
@@ -247,3 +275,14 @@ def _serialize_comment(db: Session, comment, current_user_id: int):
 
 def _sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _attach_appeal_statuses(db: Session, items: list[object], user_id: int) -> None:
+    """给通知对象动态附加申诉状态，供 Pydantic from_attributes 序列化。"""
+
+    notification_ids = [item.id for item in items if getattr(item, "type", None) == "moderation"]
+    statuses = appeal_application.get_notification_appeal_statuses(db, notification_ids)
+    for item in items:
+        if getattr(item, "type", None) == "moderation":
+            item.appeal_status = statuses.get(item.id)
+            item.can_appeal = appeal_application.is_notification_appealable(db, item, user_id)

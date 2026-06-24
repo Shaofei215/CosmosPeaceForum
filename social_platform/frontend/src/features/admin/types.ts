@@ -210,6 +210,27 @@ export interface ReportedUserItem {
   last_reported_at: string;
 }
 
+export interface ModerationAppealItem {
+  id: number;
+  notification_id: number;
+  appellant_id: number;
+  appellant_username: string | null;
+  target_type: string;
+  target_id: number;
+  target_label: string;
+  target_content: string | null;
+  action_label: string;
+  moderation_reason: string | null;
+  appeal_reason: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModerationAppealRejectRequest {
+  reason: string;
+}
+
 export interface ReportReleaseResponse {
   released_count: number;
 }

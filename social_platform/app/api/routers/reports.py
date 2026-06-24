@@ -1,6 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from social_platform.app.api.deps import get_current_user, get_db
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.content_safety.schemas import ContentReportCreate, ContentReportResponse
@@ -18,6 +19,7 @@ def create_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    ensure_action_allowed(db, current_user, "interaction")
     try:
         report = report_service.create_content_report(
             db=db,

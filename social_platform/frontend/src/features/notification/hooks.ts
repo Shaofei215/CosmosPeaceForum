@@ -46,6 +46,18 @@ export const useMarkNotificationsRead = () => {
   });
 };
 
+export const useSubmitModerationAppeal = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ notificationId, reason }: { notificationId: number; reason: string }) =>
+      notificationApi.submitAppeal(notificationId, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+};
+
 export const useNotificationEvents = (enabled = true) => {
   const queryClient = useQueryClient();
 

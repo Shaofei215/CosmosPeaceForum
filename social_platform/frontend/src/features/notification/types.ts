@@ -20,9 +20,21 @@ export interface NotificationItem {
   source_post_type?: 'post' | 'article' | null;
   comment_id: number | null;
   source_content: string | null;
+  can_appeal?: boolean;
+  appeal_status?: string | null;
   is_read: boolean;
   created_at: string;
   sender: UserProfile | null;
+}
+
+export interface ModerationAppealRequest {
+  reason: string;
+}
+
+export interface ModerationAppealResponse {
+  id: number;
+  status: string;
+  message: string;
 }
 
 export interface NotificationListResponse {

@@ -10,7 +10,6 @@ from social_platform.app.core.security import decode_access_token
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.user.models import User
-from social_platform.app.admin.services.moderation_guard import ensure_account_available
 
 
 security = HTTPBearer()
@@ -75,7 +74,11 @@ def get_access_payload(token: str, db: Session, expected_scope: str) -> dict:
 
 
 def _get_user_from_payload(db: Session, payload: dict, include_banned: bool = False) -> User:
-    """根据已验证 payload 加载用户，并按需要执行账号可用性检查。"""
+    """根据已验证 payload 加载用户。
+
+    include_banned 参数保留给既有调用点兼容；账号封禁不再阻止读取类接口，
+    写操作由具体业务入口调用处罚守卫拦截。
+    """
     try:
         user_id = int(payload.get("sub"))
     except (ValueError, TypeError):
@@ -85,8 +88,6 @@ def _get_user_from_payload(db: Session, payload: dict, include_banned: bool = Fa
     if user is None:
         raise _unauthorized("用户不存在")
 
-    if not include_banned:
-        ensure_account_available(db, user)
     return user
 
 

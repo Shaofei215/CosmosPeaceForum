@@ -20,6 +20,7 @@ from social_platform.app.domains.content_safety.admin_application import (
     release_reported_content,
     release_reported_user,
 )
+from social_platform.app.domains.content_safety.appeal_application import is_notification_appealable
 from social_platform.app.db.session import Base
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.notification.models import Notification
@@ -73,7 +74,7 @@ def test_account_ban_creates_moderation_notification(db_session):
     assert notifications[0].resource_id == user.id
     assert "你的账号已被永久封禁" in notifications[0].source_content
     assert "违规测试" in notifications[0].source_content
-    assert notifications[0].source_content.endswith("如有异议，请向appeal@example.com申诉。")
+    assert notifications[0].source_content == "你的账号已被永久封禁。\n原因：违规测试"
 
     assert db_session.query(UserModeration).count() == 1
     assert db_session.query(PlatformAdminOperationLog).count() == 1
@@ -95,7 +96,7 @@ def test_repeated_same_moderation_save_does_not_duplicate_notifications(db_sessi
     assert notifications[0].type == "moderation"
     assert "你的发帖功能已被限制至" in notifications[0].source_content
     assert "刷屏" in notifications[0].source_content
-    assert notifications[0].source_content.endswith("如有异议，请向appeal@example.com申诉。")
+    assert "appeal@example.com" not in notifications[0].source_content
 
 
 def test_action_restrictions_can_be_removed_with_explicit_null(db_session):
@@ -146,7 +147,7 @@ def test_action_restrictions_can_be_removed_with_explicit_null(db_session):
     ]
 
 
-def test_account_ban_login_detail_includes_admin_appeal_email(db_session):
+def test_account_ban_operation_detail_excludes_admin_appeal_email(db_session):
     user, admin = _seed_user_and_admin(db_session)
 
     update_user_moderation(
@@ -160,7 +161,7 @@ def test_account_ban_login_detail_includes_admin_appeal_email(db_session):
         ensure_account_available(db_session, user)
 
     assert exc_info.value.status_code == 403
-    assert exc_info.value.detail == "严重违规\n如有异议，请向appeal@example.com申诉。"
+    assert exc_info.value.detail == "严重违规"
 
 
 def test_moderation_notice_keeps_long_reason_without_original_content(db_session):
@@ -176,6 +177,35 @@ def test_moderation_notice_keeps_long_reason_without_original_content(db_session
     assert notification.source_content == f"你的内容因违反社区规则已被管理端处理。\n原因：{long_reason}"
     assert "原内容" not in notification.source_content
     assert "这段原内容不应该进入管理通知" not in notification.source_content
+
+
+def test_appeal_result_notice_is_not_appealable(db_session):
+    user, _ = _seed_user_and_admin(db_session)
+    post = Post(author_id=user.id, content="被处理内容")
+    db_session.add(post)
+    db_session.flush()
+    moderation_notice = Notification(
+        recipient_id=user.id,
+        sender_id=None,
+        type="moderation",
+        resource_type="post",
+        resource_id=post.id,
+        source_content="你的内容因违反社区规则已被管理端处理。\n原因：违规",
+    )
+    appeal_result_notice = Notification(
+        recipient_id=user.id,
+        sender_id=None,
+        type="moderation",
+        resource_type="post",
+        resource_id=post.id,
+        source_content="你的申诉已通过，相关内容已恢复公开。",
+    )
+    db_session.add_all([moderation_notice, appeal_result_notice])
+    db_session.flush()
+
+    assert is_notification_appealable(db_session, moderation_notice, user.id) is True
+    assert is_notification_appealable(db_session, appeal_result_notice, user.id) is False
+
 
 def test_create_content_report_for_post_and_comment_deduplicates_pending_report(db_session):
     author, _ = _seed_user_and_admin(db_session)
@@ -259,7 +289,9 @@ def test_delete_reported_content_notifies_author_with_reason_and_reporters_witho
     assert by_recipient[reporter_a.id] == "你举报的目标存在违规，已被管理端处理。"
     assert by_recipient[reporter_b.id] == "你举报的目标存在违规，已被管理端处理。"
     assert "广告引流" not in by_recipient[reporter_a.id]
-    assert db_session.query(Post).filter(Post.id == post.id).first() is None
+    archived_post = db_session.query(Post).filter(Post.id == post.id).one()
+    assert archived_post.moderation_status == "archived"
+    assert archived_post.archive_reason == "广告引流"
 
 
 def test_create_user_report_deduplicates_pending_report(db_session):
@@ -404,7 +436,9 @@ def test_content_moderation_llm_delete_removes_reported_post(db_session):
 
     assert decision == "delete"
     assert reason == "诈骗广告引流"
-    assert db_session.query(Post).filter(Post.id == post.id).first() is None
+    archived_post = db_session.query(Post).filter(Post.id == post.id).one()
+    assert archived_post.moderation_status == "archived"
+    assert archived_post.archive_reason == "诈骗广告引流"
     notification = db_session.query(Notification).filter(Notification.recipient_id == author.id).one()
     assert "诈骗广告引流" in notification.source_content
 
@@ -480,8 +514,10 @@ def test_content_moderation_llm_user_context_includes_recent_contents(db_session
 
     assert context["target_user"]["id"] == target.id
     assert context["target_user"]["username"] == "target_user"
-    assert len(context["recent_contents"]) == 2
-    assert {item["type"] for item in context["recent_contents"]} == {"post", "comment"}
+    assert len(context["recent_posts"]) == 1
+    assert len(context["recent_comments"]) == 1
+    assert context["recent_posts"][0]["type"] == "post"
+    assert context["recent_comments"][0]["type"] == "comment"
 
 
 def test_content_moderation_llm_delete_bans_reported_user(db_session):
