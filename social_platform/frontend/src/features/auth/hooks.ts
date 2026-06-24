@@ -99,6 +99,18 @@ export const useSendVerificationCode = () => {
 };
 
 /**
+ * 注册邀请码配置Hook
+ * 控制注册页是否展示邀请码输入，实际校验仍由后端注册接口负责
+ */
+export const useInvitationRegistrationConfig = () => {
+  return useQuery({
+    queryKey: ['auth', 'invitation-registration-config'],
+    queryFn: authApi.invitationRegistrationConfig,
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+/**
  * 带邮箱验证的注册Hook（真人用户专用）
  * 处理验证邮箱并注册逻辑，注册成功后自动保存认证信息
  *

@@ -136,6 +136,26 @@ export interface UserModerationBatchUpdateResponse {
   items: UserModerationResponse[];
 }
 
+export interface InvitationCode {
+  id: number;
+  email: string;
+  code: string;
+  prefix: string;
+  status: 'unused' | 'used';
+  created_at: string;
+  updated_at: string;
+  created_by_admin_id: number | null;
+  created_by_admin_username: string | null;
+  used_by_user_id: number | null;
+  used_by_username: string | null;
+  used_at: string | null;
+}
+
+export interface InvitationCodeCreateRequest {
+  email: string;
+  prefix: string;
+}
+
 export interface AdminAnnouncementRequest {
   content: string;
 }

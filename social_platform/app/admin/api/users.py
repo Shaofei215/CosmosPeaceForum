@@ -11,6 +11,8 @@ from social_platform.app.admin.schemas import (
     ContentModerationLLMSettingsUpdateRequest,
     PaginatedResponse,
     ReportedUserItemResponse,
+    InvitationCodeCreateRequest,
+    InvitationCodeResponse,
     UserModerationBatchUpdateRequest,
     UserModerationBatchUpdateResponse,
     UserModerationResponse,
@@ -33,6 +35,7 @@ from social_platform.app.domains.content_safety.admin_application import (
     moderate_reported_user_as_admin,
     release_reported_user,
 )
+from social_platform.app.domains.invitation import application as invitation_service
 
 router = APIRouter(prefix="/users", tags=["platform-admin-users"])
 
@@ -139,6 +142,48 @@ async def moderated_users(
 ):
     items, total = list_moderated_users(db, skip=skip, limit=limit, keyword=keyword)
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.get("/invitations", response_model=PaginatedResponse[InvitationCodeResponse])
+async def registration_invitations(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    keyword: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+):
+    """分页读取注册邀请码列表。"""
+
+    items, total = invitation_service.list_registration_invitations(
+        db,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+    return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.post(
+    "/invitations",
+    response_model=InvitationCodeResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_registration_invitation(
+    request: InvitationCodeCreateRequest,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+):
+    """为指定邮箱生成注册邀请码。"""
+
+    try:
+        return invitation_service.create_registration_invitation(
+            db,
+            str(request.email),
+            request.prefix,
+            current_admin,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/reports/{user_id}/release")

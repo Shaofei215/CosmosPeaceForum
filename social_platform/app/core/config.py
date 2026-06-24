@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     EMAIL_CODE_SEND_INTERVAL_MINUTES: int
     EMAIL_CODE_DAILY_LIMIT: int
     EMAIL_CODE_MAX_ATTEMPTS: int
+    # 开启后，真人注册必须提交与邮箱绑定的邀请码。
+    INVITATION_REGISTRATION_ENABLED: bool = False
 
     AVATAR_UPLOAD_DIR: str = "uploads/avatars"
     AVATAR_STORAGE_STRATEGY: Literal["local", "object_storage"] = "local"

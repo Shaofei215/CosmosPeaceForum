@@ -37,6 +37,8 @@ export interface RegisterWithEmailCredentials {
   email: string;
   /** 验证码 */
   code: string;
+  /** 邀请码 */
+  invitation_code?: string;
   /** 是否记住登录状态 */
   remember_me?: boolean;
 }
@@ -71,6 +73,8 @@ export interface RegisterResponse {
 export interface SendVerificationCodeRequest {
   /** 邮箱地址 */
   email: string;
+  /** 邀请码 */
+  invitation_code?: string;
 }
 
 /**
@@ -83,6 +87,14 @@ export interface SendVerificationCodeResponse {
   email: string;
   /** 有效期（秒） */
   expires_in: number;
+}
+
+/**
+ * 注册邀请码配置
+ */
+export interface InvitationRegistrationConfig {
+  /** 是否开启邀请制注册 */
+  enabled: boolean;
 }
 
 /**

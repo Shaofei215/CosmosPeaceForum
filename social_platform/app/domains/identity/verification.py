@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from social_platform.app.core.config import get_settings
 from social_platform.app.domains.identity.models import EmailVerificationCode
 from social_platform.app.domains.identity.schemas import EmailCodeSendResponse
+from social_platform.app.domains.invitation import application as invitation_service
 from social_platform.app.domains.user.models import User
 
 
@@ -330,6 +331,7 @@ def send_register_verification_code(
     db: Session,
     email: str,
     email_sender: VerificationEmailSender,
+    invitation_code: str | None = None,
 ) -> EmailCodeSendResponse:
     """发送真人用户注册验证码。
 
@@ -337,12 +339,15 @@ def send_register_verification_code(
         db: 当前数据库会话。
         email: 目标邮箱地址。
         email_sender: 验证码邮件发送端口。
+        invitation_code: 邀请制开启时用户提交的邀请码。
 
     Returns:
         EmailCodeSendResponse: 发送成功响应。
 
     Raises:
         EmailAlreadyRegisteredError: 邮箱已经被注册。
+        invitation_service.InvitationRequiredError: 邀请制开启但未提交邀请码。
+        invitation_service.InvitationInvalidError: 邀请码不存在、邮箱不匹配或已使用。
         VerificationCodeFrequencyError: 发送过于频繁。
         VerificationCodeDailyLimitError: 达到每日发送上限。
         EmailDeliveryError: 邮件发送失败。
@@ -351,6 +356,7 @@ def send_register_verification_code(
     normalized_email = email.lower()
     if db.query(User).filter(User.email == normalized_email).first():
         raise EmailAlreadyRegisteredError()
+    invitation_service.get_required_registration_invitation(db, normalized_email, invitation_code)
     return _create_and_send_code(db, normalized_email, "register", email_sender)
 
 

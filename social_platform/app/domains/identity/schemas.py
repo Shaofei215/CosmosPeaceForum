@@ -8,9 +8,11 @@ class EmailCodeSendRequest(BaseModel):
 
     Attributes:
         email: 接收验证码的目标邮箱地址。
+        invitation_code: 邀请制开启时需要提交的邮箱绑定邀请码。
     """
 
     email: EmailStr = Field(..., description="邮箱地址")
+    invitation_code: str | None = Field(default=None, max_length=64, description="邀请码")
 
 
 class EmailCodeSendResponse(BaseModel):

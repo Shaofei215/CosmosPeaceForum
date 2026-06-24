@@ -47,6 +47,11 @@ from social_platform.app.admin.schemas.moderation import (
     UserModerationUpdateRequest,
     UserWithModerationResponse,
 )
+from social_platform.app.domains.invitation.schemas import (
+    InvitationCodeCreateRequest,
+    InvitationCodeResponse,
+    InvitationRegistrationConfigResponse,
+)
 
 __all__ = [
     "AdminCreateRequest",
@@ -76,6 +81,9 @@ __all__ = [
     "HotTopicSettingsResponse",
     "HotTopicSettingsUpdateRequest",
     "HotTopicUpdateRequest",
+    "InvitationCodeCreateRequest",
+    "InvitationCodeResponse",
+    "InvitationRegistrationConfigResponse",
     "OperationLogListResponse",
     "OperationLogResponse",
     "ReportedContentItemResponse",

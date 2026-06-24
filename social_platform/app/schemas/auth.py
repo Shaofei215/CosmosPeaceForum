@@ -23,6 +23,7 @@ class UserRegister(BaseModel):
     is_ai_agent: bool = Field(default=False)
     ai_config_id: Optional[int] = Field(default=None)
     email: Optional[EmailStr] = Field(default=None, description="真人用户必填")
+    invitation_code: Optional[str] = Field(default=None, max_length=64, description="邀请码")
     remember_me: bool = Field(default=False, description="是否记住登录状态")
 
 

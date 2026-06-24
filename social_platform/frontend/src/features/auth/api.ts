@@ -11,6 +11,7 @@ import type {
   RegisterResponse,
   SendVerificationCodeRequest,
   SendVerificationCodeResponse,
+  InvitationRegistrationConfig,
   AuthResponse,
   User,
   PasswordResetCodeRequest,
@@ -62,6 +63,15 @@ export const authApi = {
     apiClient.post<SendVerificationCodeResponse>('/auth/register/send-code', request),
 
   /**
+   * 读取注册邀请码配置
+   * GET /api/v1/auth/register/invitation-config
+   *
+   * @returns 是否开启邀请制注册
+   */
+  invitationRegistrationConfig: () =>
+    apiClient.get<InvitationRegistrationConfig>('/auth/register/invitation-config'),
+
+  /**
    * 验证邮箱并注册（真人用户专用，简化版：不需要用户名）
    * POST /api/v1/auth/register/verify?code={code}
    *
@@ -74,6 +84,7 @@ export const authApi = {
       {
         password: credentials.password,
         email: credentials.email,
+        invitation_code: credentials.invitation_code,
       },
       {
         params: { code: credentials.code },
