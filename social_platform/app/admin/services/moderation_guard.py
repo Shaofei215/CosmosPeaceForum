@@ -6,7 +6,6 @@ from typing import Literal, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.models.user_moderation import UserModeration
 from social_platform.app.domains.user.models import User
 
@@ -26,21 +25,10 @@ def is_account_banned(moderation: Optional[UserModeration]) -> bool:
     return bool(moderation and moderation.account_banned_at)
 
 
-def _account_ban_detail(db: Session, moderation: UserModeration) -> str:
-    """构造账号封禁错误详情，并附带可用申诉邮箱。"""
+def _account_ban_detail(moderation: UserModeration) -> str:
+    """构造账号封禁后的操作限制错误详情。"""
 
-    detail = moderation.account_ban_reason or "账号已被封禁"
-    if not moderation.updated_by_admin_id:
-        return detail
-
-    admin = (
-        db.query(PlatformAdminUser.email)
-        .filter(PlatformAdminUser.id == moderation.updated_by_admin_id)
-        .first()
-    )
-    if admin and admin[0]:
-        return f"{detail}\n如有异议，请向{admin[0]}申诉。"
-    return detail
+    return moderation.account_ban_reason or "账号已被封禁，当前操作不可执行"
 
 
 def ensure_account_available(db: Session, user: User) -> None:
@@ -50,7 +38,7 @@ def ensure_account_available(db: Session, user: User) -> None:
     if is_account_banned(moderation):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=_account_ban_detail(db, moderation),
+            detail=_account_ban_detail(moderation),
         )
 
 
@@ -61,7 +49,7 @@ def ensure_action_allowed(db: Session, user: User, action: RestrictionAction) ->
     if is_account_banned(moderation):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=_account_ban_detail(db, moderation),
+            detail=_account_ban_detail(moderation),
         )
     if moderation is None:
         return

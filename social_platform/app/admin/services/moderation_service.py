@@ -197,14 +197,6 @@ def _append_reason(content: str, reason: Optional[str]) -> str:
     return content
 
 
-def _append_appeal_email(content: str, admin: PlatformAdminUser) -> str:
-    """在通知正文中附加管理员申诉邮箱。"""
-
-    if admin.email:
-        return f"{content}\n如有异议，请向{admin.email}申诉。"
-    return content
-
-
 def _create_user_moderation_notification(
     db: Session,
     user_id: int,
@@ -234,10 +226,7 @@ def _notify_user_moderation_changes(
             _create_user_moderation_notification(
                 db,
                 user_id,
-                _append_appeal_email(
-                    _append_reason("你的账号已被永久封禁。", current_reason),
-                    admin,
-                ),
+                _append_reason("你的账号已被永久封禁。", current_reason),
             )
         elif previous_account_banned and not request.account_banned:
             _create_user_moderation_notification(db, user_id, "你的账号封禁已解除。")
@@ -267,7 +256,7 @@ def _notify_user_moderation_changes(
         _create_user_moderation_notification(
             db,
             user_id,
-            _append_appeal_email(_append_reason(content, current_reason), admin),
+            _append_reason(content, current_reason),
         )
 
 

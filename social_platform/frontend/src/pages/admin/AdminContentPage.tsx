@@ -24,11 +24,12 @@ import {
   type ContentModerationLLMPromptConfig,
   type ContentModerationLLMSettings,
   type ContentModerationLLMSettingsUpdate,
+  type ModerationAppealItem,
   type ReportedContentItem,
 } from '@/features/admin';
 import { Button, Card, CardContent, Input, Textarea } from '@/shared/components/ui';
 
-type ContentMode = 'all' | 'reported';
+type ContentMode = 'all' | 'reported' | 'appeals';
 
 function getContentKey(item: ContentItem) {
   return item.type + '-' + item.id;
@@ -77,8 +78,8 @@ function reportSettingsFormsEqual(
   );
 }
 
-function getContentPath(item: ContentItem): string | null {
-  if (item.moderation_status === 'archived') {
+function getContentPath(item: ContentItem, includeArchived = false): string | null {
+  if (!includeArchived && item.moderation_status === 'archived') {
     return null;
   }
   if (item.type === 'comment' && item.post_id) {
@@ -90,8 +91,14 @@ function getContentPath(item: ContentItem): string | null {
   return null;
 }
 
-function ContentPreview({ item }: { item: ContentItem }) {
-  const targetPath = getContentPath(item);
+function ContentPreview({
+  item,
+  includeArchived = false,
+}: {
+  item: ContentItem;
+  includeArchived?: boolean;
+}) {
+  const targetPath = getContentPath(item, includeArchived);
   const content = (
     <>
       {item.title && <p className="mb-1 font-medium">{item.title}</p>}
@@ -116,6 +123,7 @@ export default function AdminContentPage() {
   const [type, setType] = useState('');
   const [deleting, setDeleting] = useState<ContentItem | null>(null);
   const [deletingReported, setDeletingReported] = useState<ReportedContentItem | null>(null);
+  const [rejectingAppeal, setRejectingAppeal] = useState<ModerationAppealItem | null>(null);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [releasingKey, setReleasingKey] = useState<string | null>(null);
@@ -149,6 +157,17 @@ export default function AdminContentPage() {
     enabled: mode === 'reported',
   });
 
+  const appealsQuery = useQuery({
+    queryKey: adminKeys.contentAppeals(keyword),
+    queryFn: () =>
+      adminApi.contentAppeals({
+        skip: 0,
+        limit: 100,
+        keyword: keyword.trim() || undefined,
+      }),
+    enabled: mode === 'appeals',
+  });
+
   const archivedQuery = useQuery({
     queryKey: adminKeys.archivedContent(type, keyword),
     queryFn: () =>
@@ -176,6 +195,7 @@ export default function AdminContentPage() {
   const items = contentQuery.data?.items ?? [];
   const reportedItems = reportedQuery.data?.items ?? [];
   const archivedItems = archivedQuery.data?.items ?? [];
+  const appealItems = appealsQuery.data?.items ?? [];
   const selectedItems = items.filter(item => selectedKeys.includes(getContentKey(item)));
   const allPageSelected =
     items.length > 0 && items.every(item => selectedKeys.includes(getContentKey(item)));
@@ -276,6 +296,22 @@ export default function AdminContentPage() {
     },
   });
 
+  const approveAppealMutation = useMutation({
+    mutationFn: (appeal: ModerationAppealItem) => adminApi.approveContentAppeal(appeal.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'content'] });
+    },
+  });
+
+  const rejectAppealMutation = useMutation({
+    mutationFn: ({ appeal, reason }: { appeal: ModerationAppealItem; reason: string }) =>
+      adminApi.rejectContentAppeal(appeal.id, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'content'] });
+      setRejectingAppeal(null);
+    },
+  });
+
   const saveReportSettingsMutation = useMutation({
     mutationFn: adminApi.updateReportModerationSettings,
     onSuccess: data => {
@@ -358,6 +394,15 @@ export default function AdminContentPage() {
               <ShieldAlert size={14} className="mr-1" />
               被举报内容审查
             </Button>
+            <Button
+              variant={mode === 'appeals' ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-md"
+              onClick={() => switchMode('appeals')}
+            >
+              <ShieldAlert size={14} className="mr-1" />
+              申诉处理
+            </Button>
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -394,7 +439,13 @@ export default function AdminContentPage() {
                 setKeyword(event.target.value);
                 setSelectedKeys([]);
               }}
-              placeholder={mode === 'reported' ? '搜索被举报内容' : '搜索内容'}
+              placeholder={
+                mode === 'reported'
+                  ? '搜索被举报内容'
+                  : mode === 'appeals'
+                    ? '搜索申诉'
+                    : '搜索内容'
+              }
               className="pl-8"
             />
           </div>
@@ -410,7 +461,7 @@ export default function AdminContentPage() {
           onToggleAllPage={toggleAllPage}
           onDelete={setDeleting}
         />
-      ) : (
+      ) : mode === 'reported' ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
           <div className="space-y-4">
             <ReportedContentTable
@@ -444,6 +495,18 @@ export default function AdminContentPage() {
             onPromptSave={() => updateReportPromptMutation.mutate(reportPromptValue)}
           />
         </div>
+      ) : (
+        <ContentAppealsTable
+          items={appealItems}
+          approvingId={approveAppealMutation.variables?.id ?? null}
+          approving={approveAppealMutation.isPending}
+          onOpenArchived={appeal => {
+            setType(appeal.target_type === 'comment' ? 'comment' : 'post');
+            switchMode('reported');
+          }}
+          onApprove={appeal => approveAppealMutation.mutate(appeal)}
+          onReject={setRejectingAppeal}
+        />
       )}
 
       {deleting && (
@@ -468,6 +531,14 @@ export default function AdminContentPage() {
           saving={deleteReportedMutation.isPending}
           onClose={() => setDeletingReported(null)}
           onConfirm={reason => deleteReportedMutation.mutate({ item: deletingReported, reason })}
+        />
+      )}
+      {rejectingAppeal && (
+        <RejectAppealDialog
+          title="拒绝申诉"
+          saving={rejectAppealMutation.isPending}
+          onClose={() => setRejectingAppeal(null)}
+          onConfirm={reason => rejectAppealMutation.mutate({ appeal: rejectingAppeal, reason })}
         />
       )}
     </div>
@@ -749,6 +820,155 @@ function ArchivedContentTable({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function ContentAppealsTable({
+  items,
+  approvingId,
+  approving,
+  onOpenArchived,
+  onApprove,
+  onReject,
+}: {
+  items: ModerationAppealItem[];
+  approvingId: number | null;
+  approving: boolean;
+  onOpenArchived: (appeal: ModerationAppealItem) => void;
+  onApprove: (appeal: ModerationAppealItem) => void;
+  onReject: (appeal: ModerationAppealItem) => void;
+}) {
+  return (
+    <Card className="rounded-lg">
+      <CardContent className="p-0">
+        <div className="overflow-auto">
+          <table className="w-full min-w-[1180px] text-sm">
+            <thead className="border-b bg-muted/50 text-left text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">申诉人</th>
+                <th className="px-4 py-3 font-medium">内容</th>
+                <th className="px-4 py-3 font-medium">处理操作</th>
+                <th className="px-4 py-3 font-medium">处理理由</th>
+                <th className="px-4 py-3 font-medium">申诉理由</th>
+                <th className="px-4 py-3 text-center font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item.id} className="border-b last:border-0">
+                  <td className="px-4 py-3">
+                    <Link
+                      to={`/user/${item.appellant_id}`}
+                      className="font-medium hover:text-primary hover:underline"
+                    >
+                      @{item.appellant_username || `user_${item.appellant_id}`}
+                    </Link>
+                  </td>
+                  <td className="max-w-sm px-4 py-3">
+                    <button
+                      type="button"
+                      className="line-clamp-2 text-left break-words text-muted-foreground hover:text-primary hover:underline"
+                      onClick={() => onOpenArchived(item)}
+                    >
+                      {item.target_content || '-'}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      className="font-medium text-primary hover:underline"
+                      onClick={() => onOpenArchived(item)}
+                    >
+                      {item.action_label}
+                    </button>
+                  </td>
+                  <td className="max-w-sm px-4 py-3 text-muted-foreground">
+                    <p className="line-clamp-3 break-words">{item.moderation_reason || '未填写'}</p>
+                  </td>
+                  <td className="max-w-sm px-4 py-3 text-muted-foreground">
+                    <p className="line-clamp-3 break-words">{item.appeal_reason}</p>
+                    <p className="mt-1 text-xs">{new Date(item.updated_at).toLocaleString()}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md gap-1"
+                        onClick={() => onApprove(item)}
+                        disabled={approving && approvingId === item.id}
+                      >
+                        <ArchiveRestore size={14} />
+                        恢复
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="rounded-md"
+                        onClick={() => onReject(item)}
+                      >
+                        拒绝
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td className="px-4 py-10 text-center text-muted-foreground" colSpan={6}>
+                    暂无待处理申诉
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RejectAppealDialog({
+  title,
+  saving,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
+      <Card className="w-full max-w-lg rounded-lg shadow-xl">
+        <CardContent className="space-y-4 p-4">
+          <h3 className="text-base font-semibold">{title}</h3>
+          <Textarea
+            value={reason}
+            onChange={event => setReason(event.target.value)}
+            rows={5}
+            maxLength={1000}
+            placeholder="填写拒绝原因"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!reason.trim() || saving}
+              onClick={() => onConfirm(reason.trim())}
+            >
+              拒绝
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

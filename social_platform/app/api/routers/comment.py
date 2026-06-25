@@ -25,6 +25,7 @@ def delete_comment_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    ensure_action_allowed(db, current_user, "comment")
     try:
         comment_service.delete_comment_precise(
             comment_id=comment_id,
@@ -328,6 +329,7 @@ def delete_comment(
     - 404：评论不存在
     - 403：无权删除评论（不是评论作者）
     """
+    ensure_action_allowed(db, current_user, "comment")
     try:
         comment_service.delete_comment_precise(
             comment_id=comment_id,

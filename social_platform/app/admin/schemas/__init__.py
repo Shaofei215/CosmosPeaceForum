@@ -21,6 +21,8 @@ from social_platform.app.admin.schemas.content import (
     ContentModerationLLMSettingsResponse,
     ContentModerationLLMSettingsUpdateRequest,
     ContentReportReasonResponse,
+    ModerationAppealItemResponse,
+    ModerationAppealRejectRequest,
     ReportedContentItemResponse,
     ReportedUserItemResponse,
 )
@@ -86,6 +88,8 @@ __all__ = [
     "InvitationRegistrationConfigResponse",
     "OperationLogListResponse",
     "OperationLogResponse",
+    "ModerationAppealItemResponse",
+    "ModerationAppealRejectRequest",
     "ReportedContentItemResponse",
     "ReportedUserItemResponse",
     "PaginatedResponse",

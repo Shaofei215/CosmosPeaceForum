@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from social_platform.app.db.session import Base
@@ -99,3 +99,49 @@ class ContentModerationLLMSettings(Base):
     llm_api_key = Column(String(500), nullable=True)
     prompt_template = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ModerationAppeal(Base):
+    """站内申诉记录，绑定一条管理处罚通知并支持待处理理由覆盖。
+
+    该模型连接公开通知入口和管理端申诉处理列表。用户从处罚通知提交申诉后，
+    管理端按目标类型恢复归档内容或调整用户处罚，并最终发送处理结果通知。
+    """
+
+    __tablename__ = "moderation_appeals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    notification_id = Column(
+        Integer,
+        ForeignKey("notifications.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    appellant_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_type = Column(String(20), nullable=False, index=True)
+    target_id = Column(Integer, nullable=False, index=True)
+    action_label = Column(String(100), nullable=False)
+    moderation_reason = Column(Text, nullable=True)
+    appeal_reason = Column(Text, nullable=False)
+    status = Column(String(30), nullable=False, default="pending", server_default="pending", index=True)
+    reject_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by_admin_id = Column(
+        Integer,
+        ForeignKey("platform_admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    notification = relationship("Notification")
+    appellant = relationship("User", foreign_keys=[appellant_id])
+    resolved_by_admin = relationship("PlatformAdminUser")
+
+    __table_args__ = (
+        UniqueConstraint("notification_id", name="uq_moderation_appeals_notification_id"),
+        Index("idx_moderation_appeals_target_status", "target_type", "target_id", "status"),
+        Index("idx_moderation_appeals_appellant_status", "appellant_id", "status"),
+    )

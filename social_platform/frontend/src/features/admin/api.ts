@@ -33,6 +33,8 @@ import type {
   HotTopicSettingsUpdate,
   InvitationCode,
   InvitationCodeCreateRequest,
+  ModerationAppealItem,
+  ModerationAppealRejectRequest,
   OperationLog,
   PaginatedResponse,
   TerminalLogList,
@@ -161,6 +163,12 @@ export const adminApi = {
     client.get<unknown, PaginatedResponse<ReportedUserItem>>('/users/reports', { params }),
   moderatedUsers: (params: { skip?: number; limit?: number; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<UserWithModeration>>('/users/moderated', { params }),
+  userAppeals: (params: { skip?: number; limit?: number; keyword?: string }) =>
+    client.get<unknown, PaginatedResponse<ModerationAppealItem>>('/users/appeals', { params }),
+  approveUserAppeal: (appealId: number) =>
+    client.post<unknown, void>('/users/appeals/' + appealId + '/approve'),
+  rejectUserAppeal: (appealId: number, request: ModerationAppealRejectRequest) =>
+    client.post<unknown, void>('/users/appeals/' + appealId + '/reject', request),
   invitations: (params: { skip?: number; limit?: number; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<InvitationCode>>('/users/invitations', { params }),
   createInvitation: (request: InvitationCodeCreateRequest) =>
@@ -198,6 +206,12 @@ export const adminApi = {
     client.get<unknown, PaginatedResponse<ReportedContentItem>>('/content/reports', { params }),
   archivedContent: (params: { skip?: number; limit?: number; type?: string; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<ContentItem>>('/content/archived', { params }),
+  contentAppeals: (params: { skip?: number; limit?: number; keyword?: string }) =>
+    client.get<unknown, PaginatedResponse<ModerationAppealItem>>('/content/appeals', { params }),
+  approveContentAppeal: (appealId: number) =>
+    client.post<unknown, void>('/content/appeals/' + appealId + '/approve'),
+  rejectContentAppeal: (appealId: number, request: ModerationAppealRejectRequest) =>
+    client.post<unknown, void>('/content/appeals/' + appealId + '/reject', request),
   releaseReportedContent: (type: string, id: number) =>
     client.post<unknown, ReportReleaseResponse>('/content/reports/' + type + '/' + id + '/release'),
   deleteReportedContent: (type: string, id: number, request: ContentDeleteRequest) =>

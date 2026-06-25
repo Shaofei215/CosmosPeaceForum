@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
+from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from social_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
@@ -215,6 +216,7 @@ def update_post(
     - 404：帖子不存在
     - 403：不是帖子作者，无权修改
     """
+    ensure_action_allowed(db, current_user, "publish")
     try:
         return post_application.update_post(db, current_user, post_id, post_update)
     except post_application.PostNotFoundError:
@@ -244,6 +246,7 @@ def delete_post(
     - 404：帖子不存在
     - 403：不是帖子作者，无权删除
     """
+    ensure_action_allowed(db, current_user, "publish")
     try:
         post_application.delete_post(db, current_user, post_id)
         return {"message": "帖子删除成功"}

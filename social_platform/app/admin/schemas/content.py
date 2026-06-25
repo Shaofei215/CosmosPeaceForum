@@ -44,6 +44,31 @@ class ReportedUserItemResponse(BaseModel):
     source: str = "report"
 
 
+class ModerationAppealItemResponse(BaseModel):
+    """管理端申诉列表项，供内容管理和用户管理的申诉处理页复用。"""
+
+    id: int
+    notification_id: int
+    appellant_id: int
+    appellant_username: Optional[str]
+    target_type: str
+    target_id: int
+    target_label: str
+    target_content: Optional[str] = None
+    action_label: str
+    moderation_reason: Optional[str]
+    appeal_reason: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ModerationAppealRejectRequest(BaseModel):
+    """拒绝申诉请求。"""
+
+    reason: str = Field(min_length=1, max_length=1000)
+
+
 class ContentModerationLLMSettingsResponse(BaseModel):
     id: int
     enabled: bool

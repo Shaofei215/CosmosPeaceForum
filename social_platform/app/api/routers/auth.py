@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, s
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from social_platform.app.admin.services.moderation_guard import ensure_account_available
 from social_platform.app.api.deps import get_access_payload, get_db, get_current_user, security
 from social_platform.app.core.security import (
     get_password_hash,
@@ -464,7 +463,6 @@ def login(
                 detail=str(exc),
             ) from exc
 
-    ensure_account_available(db, user)
     client_type, user_agent, ip_address = _request_session_context(request)
     token_pair = session_service.create_session_token_pair(
         db=db,
@@ -540,7 +538,6 @@ def ai_login(
             detail="用户名或密码错误"
         )
 
-    ensure_account_available(db, user)
     client_type, user_agent, ip_address = _request_session_context(request, client_type="agent")
     token_pair = session_service.create_session_token_pair(
         db=db,

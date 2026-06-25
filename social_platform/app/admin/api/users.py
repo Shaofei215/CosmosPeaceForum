@@ -9,6 +9,8 @@ from social_platform.app.admin.schemas import (
     ContentModerationLLMPromptConfigUpdateRequest,
     ContentModerationLLMSettingsResponse,
     ContentModerationLLMSettingsUpdateRequest,
+    ModerationAppealItemResponse,
+    ModerationAppealRejectRequest,
     PaginatedResponse,
     ReportedUserItemResponse,
     InvitationCodeCreateRequest,
@@ -34,6 +36,11 @@ from social_platform.app.domains.content_safety.admin_application import (
     list_reported_users,
     moderate_reported_user_as_admin,
     release_reported_user,
+)
+from social_platform.app.domains.content_safety.appeal_application import (
+    approve_user_appeal,
+    list_pending_appeals,
+    reject_appeal,
 )
 from social_platform.app.domains.invitation import application as invitation_service
 
@@ -142,6 +149,51 @@ async def moderated_users(
 ):
     items, total = list_moderated_users(db, skip=skip, limit=limit, keyword=keyword)
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.get("/appeals", response_model=PaginatedResponse[ModerationAppealItemResponse])
+async def user_appeals(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+):
+    items, total = list_pending_appeals(
+        db,
+        scope="user",
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+    return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.post("/appeals/{appeal_id}/approve", status_code=status.HTTP_204_NO_CONTENT)
+async def approve_user_moderation_appeal(
+    appeal_id: int,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+):
+    try:
+        approve_user_appeal(db, appeal_id, current_admin)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return None
+
+
+@router.post("/appeals/{appeal_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+async def reject_user_moderation_appeal(
+    appeal_id: int,
+    request: ModerationAppealRejectRequest,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+):
+    try:
+        reject_appeal(db, appeal_id, current_admin, request.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return None
 
 
 @router.get("/invitations", response_model=PaginatedResponse[InvitationCodeResponse])

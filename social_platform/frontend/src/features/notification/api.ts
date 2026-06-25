@@ -2,6 +2,8 @@ import { apiClient } from '@/shared/api/client';
 import { API_CONFIG } from '@/shared/config/api';
 import type {
   NotificationListResponse,
+  ModerationAppealRequest,
+  ModerationAppealResponse,
   NotificationSummaryResponse,
   NotificationUnreadCountResponse,
 } from './types';
@@ -16,6 +18,9 @@ export const notificationApi = {
   getSummary: () => apiClient.get<NotificationSummaryResponse>('/notifications/summary'),
 
   markRead: () => apiClient.post<{ updated_count: number }>('/notifications/mark-read'),
+
+  submitAppeal: (notificationId: number, request: ModerationAppealRequest) =>
+    apiClient.post<ModerationAppealResponse>(`/notifications/${notificationId}/appeal`, request),
 
   getEventsUrl: (token: string) =>
     `${API_CONFIG.BASE_URL}/notifications/events?token=${encodeURIComponent(token)}`,

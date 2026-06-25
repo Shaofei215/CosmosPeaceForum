@@ -16,6 +16,8 @@ class NotificationResponse(BaseModel):
     source_post_type: Optional[str] = None
     comment_id: Optional[int] = None
     source_content: Optional[str] = None
+    can_appeal: bool = False
+    appeal_status: Optional[str] = None
     is_read: bool = False
     created_at: datetime
     sender: Optional[UserResponse] = None

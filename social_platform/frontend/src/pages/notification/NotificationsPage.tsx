@@ -4,7 +4,11 @@ import { Bell, FileText, Heart, MessageCircle, Repeat2, ShieldAlert, UserPlus } 
 import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
-import { NotificationItem, useNotifications } from '@/features/notification';
+import {
+  NotificationItem,
+  useNotifications,
+  useSubmitModerationAppeal,
+} from '@/features/notification';
 import { useAuthStore } from '@/features/auth';
 import { useCommentLikeStatus, useCreateComment, useToggleCommentLike } from '@/features/comment';
 import { useFollowStatus, useToggleFollow } from '@/features/follow';
@@ -114,6 +118,10 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
 }
 
 function NotificationActions({ notification }: { notification: NotificationItem }) {
+  if (notification.type === 'moderation') {
+    return <ModerationAppealAction notification={notification} />;
+  }
+
   if (notification.type === 'follow' && notification.sender) {
     return <FollowBackButton userId={notification.sender.id} />;
   }
@@ -136,6 +144,104 @@ function NotificationActions({ notification }: { notification: NotificationItem 
   }
 
   return null;
+}
+
+function ModerationAppealAction({ notification }: { notification: NotificationItem }) {
+  const submitAppeal = useSubmitModerationAppeal();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const canAppeal = Boolean(notification.can_appeal);
+  const statusText =
+    notification.appeal_status === 'pending'
+      ? '申诉待处理'
+      : notification.appeal_status === 'approved'
+        ? '申诉已通过'
+        : notification.appeal_status === 'rejected'
+          ? '申诉已拒绝'
+          : null;
+
+  if (!canAppeal) {
+    return null;
+  }
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = reason.trim();
+    if (!value) {
+      setError('请填写申诉理由');
+      return;
+    }
+    setError('');
+    submitAppeal.mutate(
+      { notificationId: notification.id, reason: value },
+      {
+        onSuccess: () => {
+          setReason('');
+          setOpen(false);
+        },
+        onError: error => {
+          const message =
+            error && typeof error === 'object' && 'message' in error
+              ? String((error as { message?: unknown }).message)
+              : '提交失败，请稍后重试';
+          setError(message);
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 rounded-md gap-1 text-muted-foreground hover:text-primary"
+          onClick={() => setOpen(true)}
+          disabled={notification.appeal_status === 'approved'}
+        >
+          <ShieldAlert className="h-3.5 w-3.5" />
+          申诉
+        </Button>
+        {statusText && <span className="text-xs text-muted-foreground">{statusText}</span>}
+      </div>
+      {open && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
+          <form
+            onSubmit={submit}
+            className="w-full max-w-lg rounded-lg bg-white p-4 shadow-xl"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="mb-3">
+              <h3 className="text-base font-semibold">提交申诉</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {notification.appeal_status === 'pending'
+                  ? '再次提交会覆盖当前待处理申诉理由。'
+                  : '说明你认为本次处理需要复核的原因。'}
+              </p>
+            </div>
+            <Textarea
+              value={reason}
+              onChange={event => setReason(event.target.value)}
+              rows={5}
+              maxLength={1000}
+              placeholder="填写申诉理由"
+            />
+            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                取消
+              </Button>
+              <Button type="submit" disabled={!reason.trim() || submitAppeal.isPending}>
+                提交
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function CommentActionBar({ postId, commentId }: { postId: number; commentId: number }) {

@@ -28,6 +28,7 @@ import {
   type ContentModerationLLMSettingsUpdate,
   type InvitationCode,
   type InvitationCodeCreateRequest,
+  type ModerationAppealItem,
   type ReportedUserItem,
   type UserModerationUpdateRequest,
   type UserWithModeration,
@@ -113,7 +114,7 @@ function reportedUserToModerationUser(user: ReportedUserItem): UserWithModeratio
   };
 }
 
-type UserMode = 'all' | 'reported' | 'invite';
+type UserMode = 'all' | 'reported' | 'appeals' | 'invite';
 
 const userReportPromptPlaceholders = [
   {
@@ -164,6 +165,11 @@ export default function AdminUsersPage() {
   const [reportedModerationUser, setReportedModerationUser] = useState<ReportedUserItem | null>(
     null
   );
+  const [appealModeration, setAppealModeration] = useState<{
+    appeal: ModerationAppealItem;
+    user: UserWithModeration;
+  } | null>(null);
+  const [rejectingAppeal, setRejectingAppeal] = useState<ModerationAppealItem | null>(null);
   const [releasingUserId, setReleasingUserId] = useState<number | null>(null);
   const [reportSettingsForm, setReportSettingsForm] = useState<ContentModerationLLMSettingsUpdate>(
     {}
@@ -188,7 +194,14 @@ export default function AdminUsersPage() {
     queryKey: adminKeys.moderatedUsers(keyword),
     queryFn: () =>
       adminApi.moderatedUsers({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
-    enabled: mode === 'reported',
+    enabled: mode === 'reported' || mode === 'appeals',
+  });
+
+  const appealsQuery = useQuery({
+    queryKey: adminKeys.userAppeals(keyword),
+    queryFn: () =>
+      adminApi.userAppeals({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
+    enabled: mode === 'appeals',
   });
 
   const invitationQuery = useQuery({
@@ -213,6 +226,7 @@ export default function AdminUsersPage() {
   const users = data?.items ?? [];
   const reportedUsers = reportedQuery.data?.items ?? [];
   const moderatedUsers = moderatedQuery.data?.items ?? [];
+  const appealItems = appealsQuery.data?.items ?? [];
   const invitations = invitationQuery.data?.items ?? [];
   const selectedUsers = users.filter(user => selectedIds.includes(user.id));
   const allPageSelected = users.length > 0 && users.every(user => selectedIds.includes(user.id));
@@ -275,6 +289,32 @@ export default function AdminUsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       setReportedModerationUser(null);
+    },
+  });
+
+  const approveAppealWithModerationMutation = useMutation({
+    mutationFn: async ({
+      appeal,
+      payload,
+    }: {
+      appeal: ModerationAppealItem;
+      payload: UserModerationUpdateRequest;
+    }) => {
+      await adminApi.updateUserModeration(appeal.target_id, payload);
+      await adminApi.approveUserAppeal(appeal.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      setAppealModeration(null);
+    },
+  });
+
+  const rejectAppealMutation = useMutation({
+    mutationFn: ({ appeal, reason }: { appeal: ModerationAppealItem; reason: string }) =>
+      adminApi.rejectUserAppeal(appeal.id, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      setRejectingAppeal(null);
     },
   });
 
@@ -372,6 +412,15 @@ export default function AdminUsersPage() {
               被举报用户审查
             </Button>
             <Button
+              variant={mode === 'appeals' ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-md"
+              onClick={() => switchMode('appeals')}
+            >
+              <ShieldAlert size={14} className="mr-1" />
+              申诉处理
+            </Button>
+            <Button
               variant={mode === 'invite' ? 'default' : 'outline'}
               size="sm"
               className="rounded-md"
@@ -413,9 +462,11 @@ export default function AdminUsersPage() {
               placeholder={
                 mode === 'reported'
                   ? '搜索被举报用户'
-                  : mode === 'invite'
-                    ? '搜索邮箱、邀请码或使用人'
-                    : '搜索用户名或邮箱'
+                  : mode === 'appeals'
+                    ? '搜索申诉'
+                    : mode === 'invite'
+                      ? '搜索邮箱、邀请码或使用人'
+                      : '搜索用户名或邮箱'
               }
               className="pl-8"
             />
@@ -575,6 +626,14 @@ export default function AdminUsersPage() {
             onPromptSave={() => updateReportPromptMutation.mutate(reportPromptValue)}
           />
         </div>
+      ) : mode === 'appeals' ? (
+        <UserAppealsTable
+          items={appealItems}
+          moderatedUsers={moderatedUsers}
+          onOpenModerated={() => switchMode('reported')}
+          onManage={(appeal, user) => setAppealModeration({ appeal, user })}
+          onReject={setRejectingAppeal}
+        />
       ) : (
         <InvitationCodesPanel
           items={invitations}
@@ -620,6 +679,27 @@ export default function AdminUsersPage() {
           onSubmit={payload =>
             moderateReportedUserMutation.mutate({ user: reportedModerationUser, payload })
           }
+        />
+      )}
+      {appealModeration && (
+        <ModerationEditor
+          user={appealModeration.user}
+          saving={approveAppealWithModerationMutation.isPending}
+          error={getErrorMessage(approveAppealWithModerationMutation.error)}
+          onClose={() => setAppealModeration(null)}
+          onSubmit={payload =>
+            approveAppealWithModerationMutation.mutate({
+              appeal: appealModeration.appeal,
+              payload,
+            })
+          }
+        />
+      )}
+      {rejectingAppeal && (
+        <RejectAppealDialog
+          saving={rejectAppealMutation.isPending}
+          onClose={() => setRejectingAppeal(null)}
+          onConfirm={reason => rejectAppealMutation.mutate({ appeal: rejectingAppeal, reason })}
         />
       )}
     </div>
@@ -792,6 +872,188 @@ function InvitationCodesPanel({
                 )}
               </tbody>
             </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function appealToModerationUser(
+  appeal: ModerationAppealItem,
+  moderatedUsers: UserWithModeration[]
+): UserWithModeration {
+  const existing = moderatedUsers.find(user => user.id === appeal.target_id);
+  if (existing) return existing;
+  return {
+    id: appeal.target_id,
+    username: appeal.target_label.replace(/^@/, ''),
+    email: null,
+    bio: appeal.target_content,
+    avatar_url: null,
+    is_ai_agent: false,
+    ai_config_id: null,
+    created_at: appeal.created_at,
+    following_count: 0,
+    followers_count: 0,
+    post_count: 0,
+    comment_count: 0,
+    moderation: {
+      account_banned: true,
+      account_banned_at: appeal.created_at,
+      account_ban_reason: appeal.moderation_reason,
+      publish_banned_until: null,
+      publish_ban_reason: null,
+      comment_banned_until: null,
+      comment_ban_reason: null,
+      interaction_banned_until: null,
+      interaction_ban_reason: null,
+      updated_at: appeal.updated_at,
+    },
+  };
+}
+
+function UserAppealsTable({
+  items,
+  moderatedUsers,
+  onOpenModerated,
+  onManage,
+  onReject,
+}: {
+  items: ModerationAppealItem[];
+  moderatedUsers: UserWithModeration[];
+  onOpenModerated: () => void;
+  onManage: (appeal: ModerationAppealItem, user: UserWithModeration) => void;
+  onReject: (appeal: ModerationAppealItem) => void;
+}) {
+  return (
+    <Card className="rounded-lg">
+      <CardContent className="p-0">
+        <div className="overflow-auto">
+          <table className="w-full min-w-[1120px] text-sm">
+            <thead className="border-b bg-muted/50 text-left text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">申诉人</th>
+                <th className="px-4 py-3 font-medium">用户</th>
+                <th className="px-4 py-3 font-medium">处理操作</th>
+                <th className="px-4 py-3 font-medium">处理理由</th>
+                <th className="px-4 py-3 font-medium">申诉理由</th>
+                <th className="px-4 py-3 text-center font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => {
+                const user = appealToModerationUser(item, moderatedUsers);
+                return (
+                  <tr key={item.id} className="border-b last:border-0">
+                    <td className="px-4 py-3">
+                      <Link
+                        to={`/user/${item.appellant_id}`}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        @{item.appellant_username || `user_${item.appellant_id}`}
+                      </Link>
+                    </td>
+                    <td className="max-w-sm px-4 py-3">
+                      <Link
+                        to={`/user/${item.target_id}`}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        {item.target_label}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="font-medium text-primary hover:underline"
+                        onClick={onOpenModerated}
+                      >
+                        {item.action_label}
+                      </button>
+                    </td>
+                    <td className="max-w-sm px-4 py-3 text-muted-foreground">
+                      <p className="line-clamp-3 break-words">
+                        {item.moderation_reason || '未填写'}
+                      </p>
+                    </td>
+                    <td className="max-w-sm px-4 py-3 text-muted-foreground">
+                      <p className="line-clamp-3 break-words">{item.appeal_reason}</p>
+                      <p className="mt-1 text-xs">{new Date(item.updated_at).toLocaleString()}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-md gap-1"
+                          onClick={() => onManage(item, user)}
+                        >
+                          <ShieldAlert size={14} />
+                          处理
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="rounded-md"
+                          onClick={() => onReject(item)}
+                        >
+                          拒绝
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {items.length === 0 && (
+                <tr>
+                  <td className="px-4 py-10 text-center text-muted-foreground" colSpan={6}>
+                    暂无待处理申诉
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RejectAppealDialog({
+  saving,
+  onClose,
+  onConfirm,
+}: {
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
+      <Card className="w-full max-w-lg rounded-lg shadow-xl">
+        <CardContent className="space-y-4 p-4">
+          <h3 className="text-base font-semibold">拒绝申诉</h3>
+          <Textarea
+            value={reason}
+            onChange={event => setReason(event.target.value)}
+            rows={5}
+            maxLength={1000}
+            placeholder="填写拒绝原因"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!reason.trim() || saving}
+              onClick={() => onConfirm(reason.trim())}
+            >
+              拒绝
+            </Button>
           </div>
         </CardContent>
       </Card>
