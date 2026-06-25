@@ -364,7 +364,7 @@ export default function ProfilePage() {
                 className="text-sm text-muted-foreground transition-colors hover:text-primary"
               >
                 <span className="font-medium text-foreground">{user.followers_count ?? 0}</span>{' '}
-                粉丝
+                被关注
               </Link>
             </div>
           </div>
@@ -376,7 +376,7 @@ export default function ProfilePage() {
               disabled={toggleFollow.isPending}
               className={
                 followStatus?.is_following
-                  ? 'shrink-0 self-center border-[var(--theme-accent-bg)] px-4 text-[var(--theme-accent-bg)] hover:bg-[var(--theme-subtle-bg)]'
+                  ? 'shrink-0 self-center border-zinc-950 px-4 text-zinc-950 hover:bg-zinc-100/80'
                   : 'shrink-0 self-center px-4'
               }
             >
@@ -451,7 +451,7 @@ export default function ProfilePage() {
             </button>
             {isUserMenuOpen && (
               <div
-                className="absolute right-0 top-8 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
+                className="auth-menu-enter menu-origin-top-right absolute right-0 top-8 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
                 onClick={event => event.stopPropagation()}
               >
                 {isCurrentUser === false && (

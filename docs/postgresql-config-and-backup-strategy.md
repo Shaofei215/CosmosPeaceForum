@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | social_platform 业务数据 | PostgreSQL: `cosmos_peace_forum` | 用户、帖子、评论、点赞、关注、通知等核心业务数据 |
 | social_platform 管理数据 | PostgreSQL: `cosmos_peace_forum`，独立表前缀或 schema | 平台管理员、审计日志、用户处罚状态 |
-| social_platform 动态配置 | PostgreSQL: `cosmos_peace_forum` | 主题配置等 `social_platform/app/admin` 可热更新配置，例如 `platform_theme_settings` |
+| social_platform 动态配置 | PostgreSQL: `cosmos_peace_forum` | `social_platform/app/admin` 可热更新配置 |
 | agents/management 配置数据 | 暂时保留 SQLite，后续单独评估 | Agent 配置、模型配置、Embedding 配置、系统热更新配置、管理后台账号；保持与 social_platform 解耦 |
 | Agent 长期记忆主记录 | 暂时保留 SQLite，后续单独评估 | 当前与 ChromaDB/Tantivy 三写绑定，迁移优先级低于管理配置库 |
 | ChromaDB、Tantivy、搜索索引 | 不合并到 PostgreSQL | 这些是可重建索引或专用存储，不是主事实数据 |

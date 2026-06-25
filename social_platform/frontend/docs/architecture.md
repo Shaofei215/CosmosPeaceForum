@@ -178,7 +178,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 **适用场景：**
 - 用户认证状态
-- UI 主题设置
 - 模态框开关状态
 - 表单临时数据
 
@@ -314,26 +313,6 @@ interface PostCardProps {
 <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
   提交
 </button>
-```
-
-### 主题配置
-
-```javascript
-// tailwind.config.js
-export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          50: '#f0f9ff',
-          500: '#0ea5e9',
-          900: '#0c4a6e',
-        },
-      },
-    },
-  },
-}
 ```
 
 ---

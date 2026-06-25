@@ -1,6 +1,6 @@
 /**
- * 粉丝列表页面
- * 展示用户的粉丝列表
+ * 被关注列表页面
+ * 展示关注该用户的账号列表
  */
 
 import { useEffect, useRef } from 'react';
@@ -48,7 +48,7 @@ export default function FollowersListPage() {
 
   return (
     <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
-      <h2 className="text-lg font-semibold px-3 pt-3">粉丝</h2>
+      <h2 className="text-lg font-semibold px-3 pt-3">被关注</h2>
 
       {isLoading ? (
         <div className="divide-y divide-border/50">
@@ -63,7 +63,7 @@ export default function FollowersListPage() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-10 text-muted-foreground">暂无粉丝</div>
+        <div className="text-center py-10 text-muted-foreground">暂无被关注</div>
       )}
 
       <div ref={loadMoreRef} className="py-3 text-center border-t border-border/50">

@@ -14,7 +14,6 @@ import { Input } from '@/shared/components/ui';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 import { cn } from '@/shared/lib/utils';
 import type { SearchType } from '@/features/search';
-import { usePublicTheme } from '@/features/theme';
 
 /**
  * 筛选类型
@@ -30,7 +29,6 @@ export function TopBar() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [isScrolled, setIsScrolled] = useState(false);
-  const { data: theme } = usePublicTheme();
 
   useEffect(() => {
     const updateScrolled = () => {
@@ -120,19 +118,9 @@ export function TopBar() {
       >
         <div
           className="absolute inset-0"
-          style={{
-            background: isScrolled ? 'var(--theme-topbar-scrolled-bg)' : 'var(--theme-topbar-bg)',
-          }}
-        />
-        <div
-          className="absolute inset-0 bg-cover bg-center transition-opacity duration-200"
-          style={{
-            backgroundImage: 'var(--theme-topbar-bg-image)',
-            opacity: isScrolled ? 0.62 : 0.82,
-          }}
+          style={{ background: isScrolled ? 'rgba(255, 255, 255, 0.62)' : '#ffffff' }}
         />
       </div>
-      <TopBarDecorations theme={theme} />
       <div className="relative z-10 flex items-center gap-2 sm:gap-4">
         <button
           type="button"
@@ -192,8 +180,8 @@ export function TopBar() {
                   aria-label={filter.label}
                   className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     activeFilter === filter.id
-                      ? 'bg-[var(--theme-topbar-action-active-bg)] text-[var(--theme-topbar-action-active-fg)]'
-                      : 'bg-[var(--theme-topbar-action-inactive-bg)] text-[var(--theme-topbar-action-inactive-fg)] hover:opacity-85'
+                      ? 'bg-zinc-950 text-white'
+                      : 'bg-zinc-100/80 text-zinc-600 hover:opacity-85'
                   }`}
                 >
                   <Icon className="h-4 w-4 sm:hidden" />
@@ -214,8 +202,8 @@ export function TopBar() {
                   aria-label={filter.label}
                   className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     urlSearchType === filter.id
-                      ? 'bg-[var(--theme-topbar-action-active-bg)] text-[var(--theme-topbar-action-active-fg)]'
-                      : 'bg-[var(--theme-topbar-action-inactive-bg)] text-[var(--theme-topbar-action-inactive-fg)] hover:opacity-85'
+                      ? 'bg-zinc-950 text-white'
+                      : 'bg-zinc-100/80 text-zinc-600 hover:opacity-85'
                   }`}
                 >
                   <Icon className="h-4 w-4 sm:hidden" />
@@ -226,7 +214,7 @@ export function TopBar() {
             <button
               onClick={handleBack}
               aria-label="返回"
-              className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-[var(--theme-topbar-action-inactive-bg)] text-sm font-medium text-[var(--theme-topbar-action-inactive-fg)] transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+              className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-zinc-100/80 text-sm font-medium text-zinc-600 transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">返回</span>
@@ -236,7 +224,7 @@ export function TopBar() {
           <button
             onClick={handleBack}
             aria-label="返回"
-            className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-[var(--theme-topbar-action-inactive-bg)] text-sm font-medium text-[var(--theme-topbar-action-inactive-fg)] transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+            className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-zinc-100/80 text-sm font-medium text-zinc-600 transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">返回</span>
@@ -244,39 +232,5 @@ export function TopBar() {
         )}
       </div>
     </div>
-  );
-}
-
-function TopBarDecorations({ theme }: { theme: ReturnType<typeof usePublicTheme>['data'] }) {
-  const decorations = [
-    { src: theme?.topbar_decoration_top, className: 'inset-x-6 -top-5 mx-auto h-10 max-w-[72%]' },
-    {
-      src: theme?.topbar_decoration_bottom,
-      className: 'inset-x-6 -bottom-5 mx-auto h-10 max-w-[72%]',
-    },
-    {
-      src: theme?.topbar_decoration_left,
-      className: '-left-6 top-1/2 h-[118%] max-w-16 -translate-y-1/2',
-    },
-    {
-      src: theme?.topbar_decoration_right,
-      className: '-right-6 top-1/2 h-[118%] max-w-16 -translate-y-1/2',
-    },
-  ];
-
-  return (
-    <>
-      {decorations.map(({ src, className }, index) =>
-        src ? (
-          <img
-            key={index}
-            src={src}
-            alt=""
-            aria-hidden="true"
-            className={cn('pointer-events-none absolute z-20 object-contain opacity-95', className)}
-          />
-        ) : null
-      )}
-    </>
   );
 }

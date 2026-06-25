@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  Palette,
   Shield,
   UserCog,
   Users,
@@ -38,12 +37,6 @@ const navItems = [
     label: '热点管理',
     icon: Flame,
     permission: 'manage_hot_topics',
-  },
-  {
-    path: '/admin/theme',
-    label: '主题管理',
-    icon: Palette,
-    permission: 'manage_theme',
   },
   {
     path: '/admin/admins',

@@ -62,7 +62,7 @@ class Follow(Base):
         UniqueConstraint('follower_id', 'following_id', name='uq_follow_pair'),
         # 为 follower_id 添加索引，加速"查询某用户关注的人"操作
         Index('idx_follow_follower_id', 'follower_id'),
-        # 为 following_id 添加索引，加速"查询某用户的粉丝"操作
+        # 为 following_id 添加索引，加速"查询某用户的被关注"操作
         Index('idx_follow_following_id', 'following_id'),
     )
 

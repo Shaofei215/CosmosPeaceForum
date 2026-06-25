@@ -62,12 +62,17 @@ export function LeftSidebar() {
                 <p className="text-lg font-semibold">
                   {currentUserProfile?.followers_count ?? user.followers_count ?? 0}
                 </p>
-                <p className="text-xs text-muted-foreground">粉丝</p>
+                <p className="text-xs text-muted-foreground">被关注</p>
               </Link>
             </div>
 
             {/* 消息按钮 */}
-            <Button asChild className="w-full gap-2 rounded-md" size="sm">
+            <Button
+              asChild
+              variant="outline"
+              className="w-full gap-2 rounded-md border-zinc-950 bg-white text-zinc-950 hover:bg-zinc-100"
+              size="sm"
+            >
               <Link to="/notifications">
                 <MessageCircle className="h-4 w-4" />
                 消息

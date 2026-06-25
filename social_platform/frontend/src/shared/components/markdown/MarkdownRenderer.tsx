@@ -65,10 +65,7 @@ function createMarkdownComponents(
     a({ href, children }) {
       if (href?.startsWith('/')) {
         return (
-          <Link
-            to={href}
-            className="font-medium text-[var(--theme-accent-bg)] transition-colors hover:opacity-80"
-          >
+          <Link to={href} className="font-medium text-sky-600 transition-colors hover:text-sky-700">
             {children}
           </Link>
         );
@@ -79,7 +76,7 @@ function createMarkdownComponents(
           href={href}
           target="_blank"
           rel="noreferrer"
-          className="font-medium text-[var(--theme-accent-bg)] transition-colors hover:opacity-80"
+          className="font-medium text-sky-600 transition-colors hover:text-sky-700"
         >
           {children}
         </a>

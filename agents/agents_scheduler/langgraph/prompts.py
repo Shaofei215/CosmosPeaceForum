@@ -66,10 +66,10 @@ def _build_attention_header() -> str:
     parts = [
         f"当前登录平台ID：{values['platform_user_id']}",
         f"关注：{values['following_count']}",
-        f"粉丝：{values['followers_count']}",
+        f"被关注：{values['followers_count']}",
         f"消息：{values['unread_count']}",
-        f"热榜：{values['hot_topic_titles']}",
-        f"热门话题：{values['topic_titles']}",
+        f"大家都在聊：{values['hot_topic_titles']}",
+        f"话题：{values['topic_titles']}",
     ]
     if values["login_stats"]:
         parts.extend([
@@ -329,7 +329,7 @@ def _format_tool_result(result: Any) -> str:
         if "hot_topics" in result:
             topics = result.get("hot_topics", [])
             total = result.get("total", len(topics))
-            lines = [f"【完整热榜】共{total}条，显示{len(topics)}条："]
+            lines = [f"【更多热榜】共{total}条，显示{len(topics)}条："]
             if not topics:
                 lines.append("暂无热榜")
             for topic in topics:
@@ -383,7 +383,7 @@ def _format_tool_result(result: Any) -> str:
                 lines.append(f"    id / 用户ID: {user.get('id', user.get('user_id', '?'))}")
                 lines.append(f"    username / 用户名: @{user.get('username', '?')}")
                 lines.append(f"    bio / 签名: {user.get('bio', '')}")
-                lines.append(f"    followers_count / 粉丝数: {user.get('followers_count', 0)}")
+                lines.append(f"    followers_count / 被关注数: {user.get('followers_count', 0)}")
                 lines.append(f"    following_count / 关注数: {user.get('following_count', 0)}")
                 if "is_following" in user:
                     if user.get("is_following"):
@@ -470,7 +470,7 @@ def _format_tool_result(result: Any) -> str:
             lines.append(f"ID: {result.get('id', result.get('user_id', '?'))}")
             lines.append(f"用户名: @{result.get('username', '?')}")
             lines.append(f"签名: {result.get('bio', result.get('personal_signature', ''))}")
-            lines.append(f"粉丝: {result.get('followers_count', result.get('followers', 0))} | 关注: {result.get('following_count', result.get('following', 0))}")
+            lines.append(f"被关注: {result.get('followers_count', result.get('followers', 0))} | 关注: {result.get('following_count', result.get('following', 0))}")
             if "follow_status" in result:
                 fs = result.get("follow_status", "")
                 if fs == "self":

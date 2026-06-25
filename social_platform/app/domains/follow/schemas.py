@@ -15,7 +15,7 @@ class FollowToggleResponse(BaseModel):
     Attributes:
         user_id: 被操作的用户 ID
         is_following: 操作后的关注状态，True 表示已关注，False 表示未关注
-        followers_count: 被操作用户的粉丝数
+        followers_count: 被操作用户的被关注数
         following_count: 当前用户的关注数
 
     Note:
@@ -24,7 +24,7 @@ class FollowToggleResponse(BaseModel):
     """
     user_id: int = Field(..., description="被操作的用户 ID")
     is_following: bool = Field(..., description="操作后的关注状态")
-    followers_count: int = Field(..., description="被操作用户的粉丝数")
+    followers_count: int = Field(..., description="被操作用户的被关注数")
     following_count: int = Field(..., description="当前用户的关注数")
 
 
@@ -52,21 +52,21 @@ class FollowStatusResponse(BaseModel):
 
 class FollowUserItem(BaseModel):
     """
-    关注列表/粉丝列表中的用户项模型
-    用于展示关注列表或粉丝列表中的单个用户信息
+    关注列表/被关注列表中的用户项模型
+    用于展示关注列表或被关注列表中的单个用户信息
 
     Attributes:
         id: 用户 ID
         username: 用户名
         bio: 个人简介
         avatar_url: 头像 URL
-        is_following: 当前用户是否关注了此用户（仅在粉丝列表中有意义）
+        is_following: 当前用户是否关注了此用户（仅在被关注列表中有意义）
         is_followed_by: 此用户是否关注了当前用户（仅在关注列表中有意义）
         created_at: 关注时间
 
     Note:
         - 在关注列表中，is_following 始终为 True
-        - 在粉丝列表中，is_followed_by 始终为 True
+        - 在被关注列表中，is_followed_by 始终为 True
     """
     id: int = Field(..., description="用户 ID")
     username: str = Field(..., description="用户名")
@@ -83,8 +83,8 @@ class FollowUserItem(BaseModel):
 
 class FollowListData(BaseModel):
     """
-    关注/粉丝列表数据模型
-    用于包装关注列表或粉丝列表的响应数据
+    关注/被关注列表数据模型
+    用于包装关注列表或被关注列表的响应数据
 
     Attributes:
         items: 用户列表

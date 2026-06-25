@@ -777,7 +777,7 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (checked: b
       aria-checked={checked}
       className={cn(
         'relative h-6 w-11 rounded-full transition-colors',
-        checked ? 'bg-[var(--theme-accent-bg)]' : 'bg-muted'
+        checked ? 'bg-zinc-950' : 'bg-muted'
       )}
       onClick={() => onChange(!checked)}
     >

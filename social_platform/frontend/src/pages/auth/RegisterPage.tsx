@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import {
   useInvitationRegistrationConfig,
   useRegisterWithVerification,
@@ -138,20 +139,24 @@ export default function RegisterPage() {
   return (
     <div className="auth-page" data-auth-word="Register">
       <BigLogo />
-      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card auth-register-card rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1 pb-4">
           <CardTitle className="auth-title text-2xl font-bold text-center">注册</CardTitle>
         </CardHeader>
         <CardContent className="auth-card-content">
-          <form onSubmit={handleSubmit} className="auth-form space-y-3.5">
+          <form
+            onSubmit={handleSubmit}
+            className="auth-form grid grid-cols-1 gap-3.5 md:grid-cols-2"
+          >
             {error && (
-              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
-                {error}
+              <div className="auth-alert text-sm md:col-span-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
             {/* 邮箱 */}
-            <div className="auth-field space-y-2">
+            <div className="auth-field space-y-2 md:col-span-2">
               <label htmlFor="email" className="text-sm font-medium">
                 邮箱
               </label>
@@ -217,7 +222,7 @@ export default function RegisterPage() {
                     !email.trim() ||
                     (invitationRequired && !invitationCode.trim())
                   }
-                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-none hover:opacity-90"
+                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
                 >
                   {countdown > 0 ? `${countdown}秒后重试` : '获取验证码'}
                 </Button>
@@ -256,7 +261,7 @@ export default function RegisterPage() {
               />
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground md:col-span-2">
               <input
                 type="checkbox"
                 checked={rememberMe}
@@ -267,7 +272,11 @@ export default function RegisterPage() {
               记住我
             </label>
 
-            <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
+            <Button
+              type="submit"
+              className="auth-submit w-full rounded-lg md:col-span-2"
+              disabled={isPending}
+            >
               {isRegistering ? '注册中...' : '注册'}
             </Button>
           </form>

@@ -548,8 +548,8 @@ export default function AdminUsersPage() {
                         <div className="flex items-center gap-3">
                           <span
                             className="inline-flex items-center gap-1 text-muted-foreground"
-                            title="粉丝数"
-                            aria-label={`粉丝数 ${user.followers_count}`}
+                            title="被关注数"
+                            aria-label={`被关注数 ${user.followers_count}`}
                           >
                             <UsersRound size={15} />
                             <span className="font-medium tabular-nums text-foreground">
@@ -1420,8 +1420,7 @@ function CompactSwitch({
       role="switch"
       aria-checked={checked}
       className={
-        'relative h-6 w-11 rounded-full transition-colors ' +
-        (checked ? 'bg-[var(--theme-accent-bg)]' : 'bg-muted')
+        'relative h-6 w-11 rounded-full transition-colors ' + (checked ? 'bg-zinc-950' : 'bg-muted')
       }
       onClick={() => onChange(!checked)}
     >

@@ -1,6 +1,6 @@
 /**
  * 右侧边栏组件
- * 展示热榜、热门话题与回到顶部按钮，固定在视口内
+ * 展示热榜、话题与回到顶部按钮，固定在视口内
  */
 
 import { Link } from 'react-router-dom';
@@ -34,7 +34,7 @@ export function RightSidebar() {
       <div className="rounded-lg bg-white p-3 shadow-sm">
         <div className="mb-3 flex items-center gap-2">
           <Flame className="h-5 w-5 text-orange-500" />
-          <h3 className="font-semibold">热门榜单</h3>
+          <h3 className="font-semibold">大家都在聊</h3>
         </div>
 
         <div className="space-y-3">
@@ -61,7 +61,7 @@ export function RightSidebar() {
         {!isLoading && (
           <div className="mt-3 text-center">
             <Link to="/hot" className="text-xs text-muted-foreground hover:text-primary">
-              查看完整热榜
+              查看更多
             </Link>
           </div>
         )}
@@ -70,7 +70,7 @@ export function RightSidebar() {
       <div className="rounded-lg bg-white p-3 shadow-sm">
         <div className="mb-3 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold">热门话题</h3>
+          <h3 className="font-semibold">话题</h3>
         </div>
 
         <div className="space-y-2">
@@ -86,7 +86,7 @@ export function RightSidebar() {
               </Link>
             ))}
           {!isTopicsLoading && displayTopics.length === 0 && (
-            <div className="py-3 text-center text-sm text-muted-foreground">暂无热门话题</div>
+            <div className="py-3 text-center text-sm text-muted-foreground">暂无话题</div>
           )}
         </div>
       </div>

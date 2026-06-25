@@ -67,7 +67,7 @@ class TestBuildSystemPrompt:
     def test_build_system_prompt_renders_hot_topics_through_template(self):
         with patch(
             "agents.agents_scheduler.langgraph.prompts._get_configured_prompt_template",
-            return_value="账号状态\n热榜：{hot_topic_titles}",
+            return_value="账号状态\n大家都在聊：{hot_topic_titles}",
         ), patch(
             "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
             return_value={
@@ -119,7 +119,7 @@ class TestBuildDecisionPrompt:
             header = _build_attention_header()
 
         assert "关注：1" in header
-        assert "粉丝：2" in header
+        assert "被关注：2" in header
         assert "消息：3" in header
         assert "总登录：3" in header
         assert "上次登录：" in header
@@ -139,7 +139,7 @@ class TestBuildDecisionPrompt:
         ):
             header = _build_attention_header()
 
-        assert "热榜：1. 热榜1" in header
+        assert "大家都在聊：1. 热榜1" in header
         assert "8. 热榜8" in header
         assert "热榜9" not in header
 
@@ -161,7 +161,7 @@ class TestBuildDecisionPrompt:
         ):
             header = _build_attention_header()
 
-        assert "热门话题：#话题1#" in header
+        assert "话题：#话题1#" in header
         assert "#话题8#" in header
         assert "话题9" not in header
 
@@ -397,7 +397,7 @@ class TestFormatToolResult:
 
         formatted = _format_tool_result(result)
 
-        assert "【完整热榜】" in formatted
+        assert "【更多热榜】" in formatted
         assert "第一条热榜" in formatted
         assert "这是一段完整摘要，不应该被压缩或丢失。" in formatted
         assert "搜索关键词: 第一条 关键词" in formatted

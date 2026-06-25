@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import { useCompleteProfile, useUploadAvatar, useDeleteAvatar } from '@/features/user';
 import { useAuthStore } from '@/features/auth';
 import { AvatarUpload } from '@/shared/components/avatar-upload';
@@ -108,8 +109,9 @@ export default function ProfileSetupPage() {
         <CardContent className="auth-card-content">
           <form onSubmit={handleSubmit} className="auth-form space-y-6">
             {error && (
-              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
-                {error}
+              <div className="auth-alert text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 

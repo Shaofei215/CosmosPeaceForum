@@ -38,8 +38,6 @@ import type {
   OperationLog,
   PaginatedResponse,
   TerminalLogList,
-  ThemeSettings,
-  ThemeSettingsUpdate,
   UserModerationBatchUpdateRequest,
   UserModerationBatchUpdateResponse,
   UserModerationResponse,
@@ -279,7 +277,4 @@ export const adminApi = {
   terminalLogs: (params: { count?: number; level?: string; keyword?: string }) =>
     client.get<unknown, TerminalLogList>('/logs/terminal', { params }),
   clearTerminalLogs: () => client.delete<unknown, { message: string }>('/logs/terminal'),
-  theme: () => client.get<unknown, ThemeSettings>('/theme'),
-  updateTheme: (request: ThemeSettingsUpdate) =>
-    client.put<unknown, ThemeSettings>('/theme', request),
 };

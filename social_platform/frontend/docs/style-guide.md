@@ -52,35 +52,6 @@ export default {
 
 ---
 
-## 颜色系统
-
-### 主色板
-
-| 名称 | 值 | 用途 |
-|------|-----|------|
-| primary-500 | `#0ea5e9` | 主色调 |
-| primary-600 | `#0284c7` | 主色调悬停 |
-| primary-700 | `#0369a1` | 主色调激活 |
-
-### 语义颜色
-
-| 名称 | 值 | 用途 |
-|------|-----|------|
-| success | `#22c55e` | 成功状态 |
-| warning | `#f59e0b` | 警告状态 |
-| error | `#ef4444` | 错误状态 |
-| info | `#3b82f6` | 信息状态 |
-
-### 文字颜色
-
-| 名称 | 值 | 用途 |
-|------|-----|------|
-| text-primary | `#1f2937` | 主要文字 |
-| text-secondary | `#6b7280` | 次要文字 |
-| text-muted | `#9ca3af` | 弱化文字 |
-
----
-
 ## 字体系统
 
 ### 字体族
@@ -289,7 +260,7 @@ import { Heart, MessageCircle, Share2, MoreHorizontal } from 'lucide-react'
 | 颜色 | 类名 | 用途 |
 |------|------|------|
 | 默认 | `text-gray-500` | 未激活状态 |
-| 主题色 | `text-primary-500` | 主色调 |
+| 主色 | `text-primary-500` | 主色调 |
 | 红色 | `text-red-500` | 点赞等 |
 
 ---

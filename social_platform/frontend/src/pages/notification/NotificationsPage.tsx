@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, FileText, Heart, MessageCircle, Repeat2, ShieldAlert, UserPlus } from 'lucide-react';
+import {
+  Bell,
+  FileText,
+  Heart,
+  Info,
+  MessageCircle,
+  Repeat2,
+  ShieldAlert,
+  UserPlus,
+} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
+import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 import {
   NotificationItem,
   useNotifications,
@@ -58,11 +68,8 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
   const sender = notification.sender;
   const targetPath = getTargetPath(notification);
   const isArticle = notification.source_post_type === 'article';
-  const senderName =
-    sender?.username ??
-    (notification.type === 'moderation' || notification.type === 'announcement'
-      ? '平台系统'
-      : '有人');
+  const isPlatformSystem = isPlatformSystemNotification(notification);
+  const senderName = sender?.username ?? (isPlatformSystem ? PLATFORM_DISPLAY_NAME : '有人');
   const shouldShowFullContent =
     notification.type === 'moderation' || notification.type === 'announcement';
 
@@ -78,7 +85,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
             <Avatar src={sender.avatar_url} alt={sender.username ?? '用户'} size="md" />
           </Link>
         ) : (
-          <Avatar src={undefined} alt={senderName} size="md" />
+          <Avatar src={isPlatformSystem ? '/logo.png' : undefined} alt={senderName} size="md" />
         )}
 
         <div className="min-w-0 flex-1">
@@ -348,7 +355,7 @@ function FollowBackButton({ userId }: { userId: number }) {
     <Button
       variant="ghost"
       size="sm"
-      className="mt-2 h-7 gap-1 rounded-md bg-[var(--theme-accent-bg)] px-2 text-[var(--theme-accent-fg)] hover:opacity-90"
+      className="mt-2 h-7 gap-1 rounded-md bg-zinc-950 px-2 text-white hover:opacity-90"
       onClick={() => toggleFollow.mutate(userId)}
       disabled={toggleFollow.isPending}
     >
@@ -465,26 +472,30 @@ function getTargetPath(notification: NotificationItem): string {
   return '/feed';
 }
 
-function getTypeInfo(type: string) {
-  if (type === 'repost') {
-    return { label: '转发了你的内容', icon: Repeat2, color: 'text-primary' };
-  }
+function isPlatformSystemNotification(notification: NotificationItem): boolean {
+  return (
+    !notification.sender &&
+    (notification.type === 'moderation' || notification.type === 'announcement')
+  );
+}
 
+function getTypeInfo(type: string) {
   const map = {
+    repost: { label: '转发了你的内容', icon: Repeat2, color: 'text-primary' },
     post_like: { label: '赞了你的帖子', icon: Heart, color: 'text-primary' },
     comment_like: { label: '赞了你的评论', icon: Heart, color: 'text-primary' },
     comment: { label: '评论了你的帖子', icon: MessageCircle, color: 'text-primary' },
     comment_reply: { label: '回复了你', icon: MessageCircle, color: 'text-primary' },
     follow: { label: '关注了你', icon: UserPlus, color: 'text-emerald-600' },
-    moderation: { label: '发来一条管理通知', icon: ShieldAlert, color: 'text-destructive' },
+    moderation: { label: '发来一条管理通知', icon: Info, color: 'text-destructive' },
     announcement: { label: '发布了一条公告', icon: Bell, color: 'text-primary' },
   };
 
   return (
     map[type as keyof typeof map] ?? {
       label: '给你发来一条消息',
-      icon: Bell,
-      color: 'text-muted-foreground',
+      icon: Info,
+      color: 'text-sky-600',
     }
   );
 }

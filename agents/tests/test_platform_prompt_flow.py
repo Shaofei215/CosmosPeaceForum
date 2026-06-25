@@ -79,7 +79,7 @@ def test_expand_comment_returns_comment_and_reply_ids(monkeypatch):
 
 def test_tool_execution_then_decision_prompt_exposes_reply_parent_ids(monkeypatch):
     _disable_relation_expansion(monkeypatch)
-    monkeypatch.setattr(prompts, "_build_attention_header", lambda: "关注：0 粉丝：0 消息：0")
+    monkeypatch.setattr(prompts, "_build_attention_header", lambda: "关注：0 被关注：0 消息：0")
     monkeypatch.setattr(feed, "get_current_user_id", lambda: 99)
     monkeypatch.setattr(feed, "_get_post", lambda post_id: _post_payload())
     monkeypatch.setattr(feed, "_get_comment", lambda post_id, comment_id: _comment_payload())

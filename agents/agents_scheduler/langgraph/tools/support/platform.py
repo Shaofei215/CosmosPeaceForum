@@ -875,19 +875,19 @@ def _get_hot_topics(limit: int = 20) -> List[Dict[str, Any]]:
 
 
 def _get_trending_topics(limit: int = 20) -> List[Dict[str, Any]]:
-    """获取公开热门话题。"""
+    """获取公开话题。"""
     safe_limit = max(1, min(int(limit), 50))
     data = _make_request(
         method="GET",
         endpoint="/topics/trending",
         params={"limit": safe_limit},
-        reason="内部调用：获取公开热门话题"
+        reason="内部调用：获取公开话题"
     )
     return data if isinstance(data, list) else []
 
 
 def _get_notification_summary() -> Dict[str, Any]:
-    """获取关注、粉丝、未读消息数量；失败时返回空计数，避免阻断 prompt 构建。"""
+    """获取关注、被关注、未读消息数量；失败时返回空计数，避免阻断 prompt 构建。"""
     if not get_current_token():
         return {"following_count": 0, "followers_count": 0, "unread_count": 0}
 
@@ -895,7 +895,7 @@ def _get_notification_summary() -> Dict[str, Any]:
         return _make_request(
             method="GET",
             endpoint="/notifications/summary",
-            reason="内部调用：获取关注、粉丝与消息数量"
+            reason="内部调用：获取关注、被关注与消息数量"
         )
     except ToolExecutionError:
         return {"following_count": 0, "followers_count": 0, "unread_count": 0}

@@ -352,9 +352,9 @@ Base path：`/api/v1/users`
 | `POST` | `/{user_id}/follow` | 是 | `FollowToggleResponse` | 关注/取消关注 |
 | `GET` | `/{user_id}/follow-status` | 是 | `FollowStatusResponse` | 查询当前用户与目标用户关系 |
 | `GET` | `/{user_id}/following` | 否，可带 token | 公开分页包装 | 目标用户关注列表 |
-| `GET` | `/{user_id}/followers` | 否，可带 token | 公开分页包装 | 目标用户粉丝列表 |
+| `GET` | `/{user_id}/followers` | 否，可带 token | 公开分页包装 | 目标用户被关注列表 |
 | `GET` | `/me/following` | 是 | 公开分页包装 | 当前用户关注列表 |
-| `GET` | `/me/followers` | 是 | 公开分页包装 | 当前用户粉丝列表 |
+| `GET` | `/me/followers` | 是 | 公开分页包装 | 当前用户被关注列表 |
 
 分页参数使用 `page` 和 `page_size`。
 
@@ -444,7 +444,7 @@ Base path：`/api/v1/notifications`
 | `limit` | number | 数量 |
 | `unread_only` | boolean | 是否只看未读 |
 
-## 热榜、主题和举报
+## 热榜和举报
 
 ### 公开热榜
 
@@ -459,14 +459,6 @@ Base path：`/api/v1/hot-topics`
 | 参数 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `limit` | number | `20` | 返回数量 |
-
-### 公开主题设置
-
-Base path：`/api/v1/theme`
-
-| 方法 | 路径 | 认证 | 返回 | 用途 |
-| --- | --- | --- | --- | --- |
-| `GET` | `/api/v1/theme` | 否 | `ThemeSettings` | 获取公开主题配置 |
 
 ### 内容举报
 
@@ -593,7 +585,7 @@ SSE URL 需要在 query 里带管理员 token：
 /api/v1/admin/hot-topics/generate/events?token=<admin_access_token>
 ```
 
-### 管理员、日志、公告和主题
+### 管理员、日志和公告
 
 | 方法 | 路径 | 返回 | 用途 |
 | --- | --- | --- | --- |
@@ -604,8 +596,6 @@ SSE URL 需要在 query 里带管理员 token：
 | `GET` | `/logs/operations` | 管理分页 `OperationLog[]` | 操作日志 |
 | `GET` | `/logs/terminal` | `TerminalLogList` | 终端日志 |
 | `DELETE` | `/logs/terminal` | `{ message: string }` | 清空终端日志 |
-| `GET` | `/theme` | `ThemeSettings` | 获取主题设置 |
-| `PUT` | `/theme` | `ThemeSettings` | 更新主题设置 |
 
 日志参数：
 

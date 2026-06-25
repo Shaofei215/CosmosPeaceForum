@@ -82,7 +82,7 @@ class User(Base):
     # 在关注/取消关注时更新，保证高性能查询
     following_count = Column(Integer, default=0, nullable=False)
 
-    # 冗余计数字段：粉丝数量
+    # 冗余计数字段：被关注数量
     # 表示该用户被多少人关注
     # 在关注/取消关注时更新，保证高性能查询
     followers_count = Column(Integer, default=0, nullable=False)
@@ -97,8 +97,8 @@ class User(Base):
         cascade="all, delete-orphan"
     )
 
-    # 关联关系：用户的粉丝（作为被关注者）
-    # User.followers 表示该用户的粉丝有哪些
+    # 关联关系：用户的被关注（作为被关注者）
+    # User.followers 表示该用户的被关注有哪些
     # foreign_keys=[Follow.following_id] 指定外键指向 Follow 表的 following_id
     followers = relationship(
         "Follow",

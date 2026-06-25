@@ -16,7 +16,6 @@ const permissionLabels: Record<AdminPermission, string> = {
   manage_users: '管理用户',
   manage_content: '管理内容',
   manage_hot_topics: '管理热点',
-  manage_theme: '管理主题',
   manage_admins: '管理管理员',
   view_logs: '查看日志',
 };

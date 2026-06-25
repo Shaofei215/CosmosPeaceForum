@@ -67,7 +67,7 @@ export function MobileBottomBar() {
           >
             <Home className="h-5 w-5" />
           </MobileNavLink>
-          <MobileNavLink to="/hot" label="热榜" active={location.pathname === '/hot'}>
+          <MobileNavLink to="/hot" label="热门" active={location.pathname === '/hot'}>
             <Flame className="h-5 w-5" />
           </MobileNavLink>
           <MobileNavLink
@@ -89,8 +89,7 @@ export function MobileBottomBar() {
             className={cn(
               'flex min-w-0 flex-col items-center gap-1 rounded-2xl px-2 py-1.5 text-xs font-medium',
               'text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground',
-              isComposerOpen &&
-                'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] hover:opacity-90'
+              isComposerOpen && 'bg-zinc-950 text-white hover:opacity-90'
             )}
             onClick={openComposer}
           >

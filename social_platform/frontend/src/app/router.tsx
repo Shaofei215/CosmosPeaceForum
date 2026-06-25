@@ -33,7 +33,6 @@ import AdminContentPage from '@/pages/admin/AdminContentPage';
 import AdminHotTopicsPage from '@/pages/admin/AdminHotTopicsPage';
 import AdminAdminsPage from '@/pages/admin/AdminAdminsPage';
 import AdminLogsPage from '@/pages/admin/AdminLogsPage';
-import AdminThemePage from '@/pages/admin/AdminThemePage';
 
 /**
  * 应用路由配置
@@ -56,7 +55,6 @@ export const router = createBrowserRouter([
           { path: 'users', element: <AdminUsersPage /> },
           { path: 'content', element: <AdminContentPage /> },
           { path: 'hot-topics', element: <AdminHotTopicsPage /> },
-          { path: 'theme', element: <AdminThemePage /> },
           { path: 'admins', element: <AdminAdminsPage /> },
           { path: 'logs', element: <AdminLogsPage /> },
         ],

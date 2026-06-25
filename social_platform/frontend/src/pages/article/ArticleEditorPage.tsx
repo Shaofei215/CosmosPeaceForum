@@ -460,9 +460,9 @@ function ToolbarButton({
       onClick={onClick}
       className={cn(
         'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent text-muted-foreground',
-        'transition-colors hover:bg-[var(--theme-subtle-bg)] hover:text-[var(--theme-accent-bg)]',
+        'transition-colors hover:bg-zinc-100/80 hover:text-zinc-950',
         active &&
-          'border-[var(--theme-accent-bg)] bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-sm hover:bg-[var(--theme-accent-bg)] hover:text-[var(--theme-accent-fg)] hover:opacity-90'
+          'border-zinc-950 bg-zinc-950 text-white shadow-sm hover:bg-zinc-950 hover:text-white hover:opacity-90'
       )}
       aria-pressed={Boolean(active)}
       title={label}

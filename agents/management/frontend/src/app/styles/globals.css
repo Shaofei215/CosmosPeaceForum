@@ -127,59 +127,56 @@ textarea:focus {
   align-items: center;
   justify-content: flex-start;
   overflow: hidden;
-  padding: clamp(1.25rem, 4.5vh, 3rem) 1rem 1rem;
-  background: hsl(var(--background));
+  padding: clamp(0.75rem, 2.6vh, 1.75rem) 1rem 1rem;
+  background: url('/background.png') center / cover no-repeat;
 }
 
 .auth-page::before {
-  content: attr(data-auth-word);
-  position: fixed;
-  z-index: -1;
-  right: max(-18vw, -9rem);
-  bottom: max(-10vh, -7rem);
-  max-width: 120vw;
-  color: hsl(var(--muted));
-  font-size: clamp(12rem, 34vw, 34rem);
-  font-weight: 800;
-  line-height: 0.8;
-  letter-spacing: 0;
-  opacity: 0.76;
-  white-space: nowrap;
-  text-transform: uppercase;
-  pointer-events: none;
+  content: '';
+  display: none;
 }
 
 .auth-big-logo {
   position: relative;
   z-index: 1;
-  width: min(74vw, 34rem);
-  max-height: min(22vh, 10rem);
+  width: min(62vw, 26rem);
+  max-height: min(16vh, 7.5rem);
   object-fit: contain;
-  margin-bottom: clamp(1rem, 3vh, 2rem);
+  margin-bottom: clamp(0.5rem, 1.8vh, 1.1rem);
 }
 
 .auth-card {
   position: relative;
   z-index: 1;
   width: min(100%, 23rem);
-  margin-top: clamp(0.75rem, 2.25vh, 1.75rem);
+  margin-top: clamp(0.25rem, 1vh, 0.75rem);
+}
+
+.auth-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.75rem;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.35rem 0.55rem;
+  color: rgb(220, 38, 38);
 }
 
 @media (max-width: 640px) {
   .auth-page {
-    padding-top: clamp(1rem, 3vh, 1.75rem);
-  }
-
-  .auth-page::before {
-    right: -3.5rem;
-    bottom: -2rem;
-    font-size: clamp(7rem, 42vw, 13rem);
+    min-height: 100svh;
+    padding-top: clamp(0.75rem, 2vh, 1.25rem);
+    background: hsl(var(--card));
+    overflow-y: auto;
   }
 
   .auth-big-logo {
-    width: min(78vw, 20rem);
-    max-height: 7rem;
-    margin-bottom: 0.75rem;
+    width: min(68vw, 17rem);
+    max-height: 5.5rem;
+    margin-bottom: 0.35rem;
+    align-self: center;
   }
 }
 

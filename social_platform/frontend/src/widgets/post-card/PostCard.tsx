@@ -243,7 +243,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               toggleFollow.mutate(post.author_id);
             }}
             disabled={toggleFollow.isPending}
-            className="h-7 shrink-0 border-[var(--theme-accent-bg)] bg-white px-3 text-xs text-[var(--theme-accent-bg)] hover:bg-[var(--theme-subtle-bg)]"
+            className="h-7 shrink-0 border-zinc-950 bg-white px-3 text-xs text-zinc-950 hover:bg-zinc-100/80"
           >
             {toggleFollow.isPending ? (
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -313,7 +313,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               event.stopPropagation();
               setIsContentExpanded(!isContentExpanded);
             }}
-            className="mt-2 flex items-center gap-1 text-sm text-[var(--theme-accent-bg)] transition-colors hover:opacity-80"
+            className="mt-2 flex items-center gap-1 text-sm text-zinc-950 transition-colors hover:opacity-80"
           >
             {isContentExpanded ? (
               <>
@@ -388,7 +388,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           </button>
           {isMoreOpen && (
             <div
-              className="absolute bottom-8 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
+              className="auth-menu-enter menu-origin-bottom-right absolute bottom-8 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
               onClick={event => event.stopPropagation()}
             >
               {isCurrentUser && (
@@ -449,7 +449,11 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         <div className="mt-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="text-sm font-medium text-foreground/80">评论</span>
-            <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
+            <div
+              className="comment-sort-segmented relative grid grid-cols-2 rounded-md bg-muted/50 p-1"
+              data-active={commentSort}
+            >
+              <span className="auth-sort-slider absolute left-1 top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded bg-background shadow-sm transition-transform duration-200 ease-out" />
               <button
                 type="button"
                 onClick={event => {
@@ -457,9 +461,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   event.stopPropagation();
                   setCommentSort('default');
                 }}
-                className={`flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
+                className={`relative z-10 flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
                   commentSort === 'default'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -473,9 +477,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   event.stopPropagation();
                   setCommentSort('latest');
                 }}
-                className={`flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
+                className={`relative z-10 flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
                   commentSort === 'latest'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -1020,7 +1024,7 @@ function CommentItem({
               </button>
               {isMoreOpen && (
                 <div
-                  className="absolute bottom-7 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
+                  className="auth-menu-enter menu-origin-bottom-right absolute bottom-7 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
                   onClick={event => event.stopPropagation()}
                 >
                   {isCurrentUserComment && (
