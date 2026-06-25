@@ -31,6 +31,7 @@ services:
     expose:
       - "5432"
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       POSTGRES_DB: cosmos_peace_forum
       POSTGRES_USER: cosmos_peace_forum
       POSTGRES_PASSWORD: cosmos_peace_forum
@@ -58,8 +59,10 @@ services:
       - path: ./social_platform/.env
         required: true
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       DATABASE_URL: postgresql+psycopg://cosmos_peace_forum:cosmos_peace_forum@postgres:5432/cosmos_peace_forum
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./social_platform/app/data:/app/social_platform/app/data
       - ./social_platform/app/uploads:/app/social_platform/app/uploads
     depends_on:
@@ -94,9 +97,11 @@ services:
       - path: ./agents/.env
         required: true
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       APP_PLATFORM_API_BASE_URL: http://social-platform:8000/api/v1
       API_BASE_URL: http://social-platform:8000/api/v1
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./agents/management/data:/app/agents/management/data
       - ./agents/agents_scheduler/memory/data:/app/agents/agents_scheduler/memory/data
     depends_on:

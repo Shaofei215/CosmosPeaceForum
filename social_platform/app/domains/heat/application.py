@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -20,7 +21,7 @@ def _age_hours(created_at: Optional[datetime], now: datetime) -> float:
 
 def calculate_post_heat_score(post: Post, now: Optional[datetime] = None) -> float:
     """计算帖子热度分数，综合互动计数和时间衰减。"""
-    now = now or datetime.utcnow()
+    now = now or local_now()
     age_hours = _age_hours(post.created_at, now)
     # 帖子热度只保存可解释的稳定质量分；请求层再做 Top-N 候选重排。
     base_score = (
@@ -35,7 +36,7 @@ def calculate_post_heat_score(post: Post, now: Optional[datetime] = None) -> flo
 
 def calculate_comment_heat_score(comment: Comment, now: Optional[datetime] = None) -> float:
     """计算评论热度分数，综合点赞、回复和时间衰减。"""
-    now = now or datetime.utcnow()
+    now = now or local_now()
     age_hours = _age_hours(comment.created_at, now)
     base_score = (comment.like_count or 0) * 1 + (comment.reply_count or 0) * 3
     time_decay = (age_hours + 2) ** 1.1
@@ -45,7 +46,7 @@ def calculate_comment_heat_score(comment: Comment, now: Optional[datetime] = Non
 
 def refresh_post_heat_score(db: Session, post: Post, commit: bool = False) -> float:
     """刷新单条帖子热度；互动写操作中复用当前事务，因此默认不提交。"""
-    now = datetime.utcnow()
+    now = local_now()
     post.heat_score = calculate_post_heat_score(post, now)
     post.heat_score_updated_at = now
     if commit:
@@ -56,7 +57,7 @@ def refresh_post_heat_score(db: Session, post: Post, commit: bool = False) -> fl
 
 def refresh_comment_heat_score(db: Session, comment: Comment, commit: bool = False) -> float:
     """刷新单条评论热度；互动写操作中复用当前事务，因此默认不提交。"""
-    now = datetime.utcnow()
+    now = local_now()
     comment.heat_score = calculate_comment_heat_score(comment, now)
     comment.heat_score_updated_at = now
     if commit:
@@ -68,7 +69,7 @@ def refresh_comment_heat_score(db: Session, comment: Comment, commit: bool = Fal
 def refresh_all_heat_scores() -> None:
     """定时刷新全量热度，让时间衰减持续生效。"""
     db = SessionLocal()
-    now = datetime.utcnow()
+    now = local_now()
     try:
         for post in db.query(Post).all():
             post.heat_score = calculate_post_heat_score(post, now)

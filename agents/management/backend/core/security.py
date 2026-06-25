@@ -6,6 +6,7 @@ Management Backend - 安全认证模块。
 """
 
 from datetime import datetime, timedelta
+from agents.management.backend.core.timezone import local_now
 from hashlib import sha256
 from secrets import token_urlsafe
 from typing import Optional
@@ -45,10 +46,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     """
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = local_now() + expires_delta
     else:
         config = get_config()
-        expire = datetime.utcnow() + timedelta(minutes=config.jwt_access_token_expire_minutes)
+        expire = local_now() + timedelta(minutes=config.jwt_access_token_expire_minutes)
     to_encode.update({"exp": expire, "typ": "access", "jti": to_encode.get("jti") or str(uuid4())})
     config = get_config()
     encoded_jwt = jwt.encode(to_encode, config.jwt_secret_key, algorithm=config.jwt_algorithm)

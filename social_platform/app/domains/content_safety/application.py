@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Literal
 
 from sqlalchemy.orm import Session, joinedload
@@ -67,7 +68,7 @@ def create_content_report(
     existing = query.first()
     if existing:
         existing.reason = reason
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = local_now()
         db.commit()
         db.refresh(existing)
         _maybe_create_user_review_escalation(db, owner_id)
@@ -139,7 +140,7 @@ def _maybe_create_user_review_escalation(db: Session, owner_id: int) -> None:
     db.flush()
     for report in selected_reports:
         report.escalation_id = escalation.id
-        report.updated_at = datetime.utcnow()
+        report.updated_at = local_now()
     db.commit()
 
 

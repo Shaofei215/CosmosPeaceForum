@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from datetime import datetime, time as datetime_time
+from agents.management.backend.core.timezone import local_now
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlmodel import func, select
 from fastapi.responses import StreamingResponse
@@ -207,7 +208,7 @@ def get_dashboard_stats(
     current_admin: AdminUser = Depends(require_permission(PERMISSION_VIEW_DASHBOARD)),
 ):
     """获取管理仪表盘统计。"""
-    today_start = datetime.combine(datetime.utcnow().date(), datetime_time.min)
+    today_start = datetime.combine(local_now().date(), datetime_time.min)
 
     total_roles = db.exec(select(func.count()).select_from(AgentConfig)).one()
     enabled_roles = db.exec(

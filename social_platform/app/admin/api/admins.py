@@ -1,4 +1,5 @@
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -85,7 +86,7 @@ async def update_admin(
         admin.is_super_admin = request.is_super_admin
     if request.new_password:
         admin.password_hash = get_password_hash(request.new_password)
-    admin.updated_at = datetime.utcnow()
+    admin.updated_at = local_now()
     create_operation_log(db, current_admin, "update_admin", "admin", admin_id)
     db.commit()
     db.refresh(admin)

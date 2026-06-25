@@ -1,4 +1,5 @@
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import Column, DateTime, Integer, Text
 
@@ -35,4 +36,4 @@ class PlatformThemeSettings(Base):
     topbar_action_inactive_color = Column(Text, nullable=True)
     topbar_action_inactive_foreground_color = Column(Text, nullable=True)
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)

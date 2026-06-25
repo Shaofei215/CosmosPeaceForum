@@ -5,6 +5,7 @@
 """
 
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -25,11 +26,11 @@ class UserSession(Base):
     refresh_token_hash = Column(String(64), nullable=False, unique=True, index=True)
     revoked_at = Column(DateTime, nullable=True, index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
-    last_seen_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_seen_at = Column(DateTime, default=local_now, nullable=False)
     user_agent = Column(Text, nullable=True)
     ip_address = Column(String(64), nullable=True)
     remember_me = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False)
 
 
 Index(
@@ -58,7 +59,7 @@ class EmailVerificationCode(Base):
     email = Column(String(255), nullable=False, index=True)
     code = Column(String(6), nullable=False, index=True)
     purpose = Column(String(20), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=local_now)
     expires_at = Column(DateTime, nullable=False)
     used = Column(Boolean, default=False, nullable=False)
     used_at = Column(DateTime, nullable=True)
@@ -73,7 +74,7 @@ class EmailVerificationCode(Base):
             bool: 已过期返回 True，否则返回 False。
         """
 
-        return datetime.utcnow() > self.expires_at
+        return local_now() > self.expires_at
 
     def can_attempt(self, max_attempts: int = 5) -> bool:
         """判断验证码是否仍可继续尝试。

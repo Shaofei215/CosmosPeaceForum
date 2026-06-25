@@ -1,6 +1,7 @@
 """管理端用户处罚与仪表盘统计服务。"""
 
 from datetime import datetime, timedelta
+from social_platform.app.core.timezone import local_now
 from typing import Optional
 
 from sqlalchemy import func, or_
@@ -154,7 +155,7 @@ def _apply_user_moderation_update(
         "interaction": (moderation.interaction_banned_until, moderation.interaction_ban_reason),
     }
     if request.account_banned is not None:
-        moderation.account_banned_at = datetime.utcnow() if request.account_banned else None
+        moderation.account_banned_at = local_now() if request.account_banned else None
         moderation.account_ban_reason = (
             request.account_ban_reason if request.account_banned else None
         )
@@ -169,7 +170,7 @@ def _apply_user_moderation_update(
         moderation.interaction_banned_until = request.interaction_banned_until
         moderation.interaction_ban_reason = request.interaction_ban_reason
 
-    moderation.updated_at = datetime.utcnow()
+    moderation.updated_at = local_now()
     moderation.updated_by_admin_id = admin.id
     _notify_user_moderation_changes(
         db=db,
@@ -249,7 +250,7 @@ def _notify_user_moderation_changes(
                 _create_user_moderation_notification(db, user_id, f"你的{label}限制已解除。")
             continue
 
-        if current_until <= datetime.utcnow():
+        if current_until <= local_now():
             continue
 
         content = f"你的{label}已被限制至 {_format_until(current_until)}。"
@@ -319,7 +320,7 @@ def list_moderated_users(
 ) -> tuple[list[UserWithModerationResponse], int]:
     """分页读取当前处于账号或功能管控状态的用户。"""
 
-    now = datetime.utcnow()
+    now = local_now()
     query = db.query(User).join(UserModeration, UserModeration.user_id == User.id).filter(
         or_(
             UserModeration.account_banned_at.isnot(None),
@@ -373,7 +374,7 @@ def list_moderated_users(
 def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
     """读取管理端 dashboard 汇总统计。"""
 
-    since = datetime.utcnow() - timedelta(days=1)
+    since = local_now() - timedelta(days=1)
     active_user_ids = set()
     for rows in (
         db.query(Post.author_id).filter(Post.created_at >= since).all(),

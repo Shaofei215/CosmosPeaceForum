@@ -10,6 +10,7 @@ import os
 import threading
 import time
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Any, Callable, Iterable, Optional
 
 from sqlalchemy import func, or_
@@ -73,7 +74,7 @@ class HotTopicAgentRunError(RuntimeError):
 
 
 def _now() -> datetime:
-    return datetime.utcnow()
+    return local_now()
 
 
 def _normalize_text(value: str | None) -> str | None:

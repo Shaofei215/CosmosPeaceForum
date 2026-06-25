@@ -5,6 +5,7 @@ refresh token 轮换所需的哈希、过期时间和审计信息。
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 
 from sqlalchemy import Column, DateTime, String, Text
@@ -24,8 +25,8 @@ class AdminSession(SQLModel, table=True):
     refresh_token_hash: str = Field(sa_column=Column(String(64), unique=True, nullable=False, index=True))
     revoked_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime, index=True))
     expires_at: datetime = Field(sa_column=Column(DateTime, nullable=False, index=True))
-    last_seen_at: datetime = Field(default_factory=datetime.utcnow)
+    last_seen_at: datetime = Field(default_factory=local_now)
     user_agent: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     ip_address: Optional[str] = Field(default=None, max_length=64)
     remember_me: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=local_now)

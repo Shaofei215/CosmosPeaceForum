@@ -9,6 +9,7 @@ from __future__ import annotations
 import random
 import string
 from datetime import datetime, timedelta
+from social_platform.app.core.timezone import local_now
 from typing import Protocol
 
 from sqlalchemy import and_, func
@@ -189,7 +190,7 @@ def check_send_frequency(db: Session, email: str, purpose: str) -> None:
     ).order_by(EmailVerificationCode.created_at.desc()).first()
 
     if latest_code:
-        time_since_last = datetime.utcnow() - latest_code.created_at
+        time_since_last = local_now() - latest_code.created_at
         if time_since_last < interval:
             remaining = int((interval - time_since_last).total_seconds())
             raise VerificationCodeFrequencyError(remaining)
@@ -206,7 +207,7 @@ def check_daily_limit(db: Session, email: str) -> None:
         VerificationCodeDailyLimitError: 今日发送次数已达到配置上限。
     """
 
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = local_now().replace(hour=0, minute=0, second=0, microsecond=0)
     count = db.query(func.count(EmailVerificationCode.id)).filter(
         and_(
             EmailVerificationCode.email == email,
@@ -245,7 +246,7 @@ def create_verification_code(
     check_daily_limit(db, normalized_email)
 
     code = generate_verification_code()
-    expires_at = datetime.utcnow() + timedelta(minutes=settings.EMAIL_CODE_EXPIRE_MINUTES)
+    expires_at = local_now() + timedelta(minutes=settings.EMAIL_CODE_EXPIRE_MINUTES)
     verification = EmailVerificationCode(
         user_id=user_id,
         email=normalized_email,
@@ -442,7 +443,7 @@ def get_valid_verification(
             EmailVerificationCode.email == normalized_email,
             EmailVerificationCode.purpose == purpose,
             EmailVerificationCode.used.is_(False),
-            EmailVerificationCode.expires_at > datetime.utcnow(),
+            EmailVerificationCode.expires_at > local_now(),
         )
     )
 
@@ -461,7 +462,7 @@ def mark_verification_used(db: Session, verification: EmailVerificationCode) -> 
     """
 
     verification.used = True
-    verification.used_at = datetime.utcnow()
+    verification.used_at = local_now()
     db.commit()
 
 

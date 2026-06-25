@@ -19,7 +19,10 @@ services:
     env_file:
       - path: ${SOCIAL_PLATFORM_ENV_FILE:-./social_platform/.env}
         required: true
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./social_platform/app/data:/app/social_platform/app/data
       - ./social_platform/app/uploads:/app/social_platform/app/uploads
     healthcheck:
@@ -49,9 +52,11 @@ services:
       - path: ${AGENTS_ENV_FILE:-./agents/.env}
         required: true
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       APP_PLATFORM_API_BASE_URL: http://social-platform:8000/api/v1
       API_BASE_URL: http://social-platform:8000/api/v1
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./agents/management/data:/app/agents/management/data
       - ./agents/agents_scheduler/memory/data:/app/agents/agents_scheduler/memory/data
     depends_on:

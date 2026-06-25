@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -33,8 +34,8 @@ class Topic(Base):
     post_count = Column(Integer, nullable=False, default=0, server_default="0")
     heat_score = Column(Float, nullable=False, default=0.0, server_default="0")
     last_used_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=local_now)
+    updated_at = Column(DateTime, nullable=False, default=local_now, onupdate=local_now)
 
     post_topics = relationship("PostTopic", back_populates="topic", cascade="all, delete-orphan")
 
@@ -57,7 +58,7 @@ class PostTopic(Base):
     id = Column(Integer, primary_key=True, index=True)
     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
     topic_id = Column(Integer, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False, index=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=local_now)
 
     topic = relationship("Topic", back_populates="post_topics")
 

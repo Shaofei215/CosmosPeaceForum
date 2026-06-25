@@ -1,4 +1,5 @@
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 
@@ -24,6 +25,6 @@ class UserModeration(Base):
     comment_ban_reason = Column(Text, nullable=True)
     interaction_banned_until = Column(DateTime, nullable=True)
     interaction_ban_reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False)
+    updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)
     updated_by_admin_id = Column(Integer, nullable=True)

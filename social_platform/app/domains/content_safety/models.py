@@ -5,6 +5,7 @@
 """
 
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -25,8 +26,8 @@ class ContentReport(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     reason = Column(Text, nullable=False)
     status = Column(String(30), nullable=False, default="pending", server_default="pending", index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
+    updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)
     reviewed_at = Column(DateTime, nullable=True)
     reviewed_by_admin_id = Column(
         Integer,
@@ -68,8 +69,8 @@ class ContentReportEscalation(Base):
     status = Column(String(30), nullable=False, default="pending", server_default="pending", index=True)
     reason = Column(Text, nullable=False)
     trigger_content_json = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
+    updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)
     reviewed_at = Column(DateTime, nullable=True)
     reviewed_by_admin_id = Column(
         Integer,
@@ -98,7 +99,7 @@ class ContentModerationLLMSettings(Base):
     llm_model_name = Column(String(120), nullable=True)
     llm_api_key = Column(String(500), nullable=True)
     prompt_template = Column(Text, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=local_now, nullable=False)
 
 
 class ModerationAppeal(Base):
@@ -126,8 +127,8 @@ class ModerationAppeal(Base):
     appeal_reason = Column(Text, nullable=False)
     status = Column(String(30), nullable=False, default="pending", server_default="pending", index=True)
     reject_reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
+    updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)
     resolved_at = Column(DateTime, nullable=True)
     resolved_by_admin_id = Column(
         Integer,

@@ -4,6 +4,7 @@ Management Backend - 提示词配置模型
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 
 import sqlalchemy as sa
@@ -21,5 +22,5 @@ class PromptConfig(SQLModel, table=True):
     value: str = Field(sa_column=sa.Column(sa.Text(), nullable=False))
     default_value: str = Field(sa_column=sa.Column(sa.Text(), nullable=False))
     description: str = Field(default="", max_length=500)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=local_now)
+    updated_at: datetime = Field(default_factory=local_now)

@@ -5,6 +5,7 @@
 """
 
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Literal, Optional
 
 from sqlalchemy import or_
@@ -96,7 +97,7 @@ def delete_post_as_admin(
 
     author_id = post.author_id
     post.moderation_status = CONTENT_STATUS_ARCHIVED
-    post.archived_at = datetime.utcnow()
+    post.archived_at = local_now()
     post.archived_by_admin_id = admin.id
     post.archive_reason = reason
     if notify_author:
@@ -184,7 +185,7 @@ def delete_comment_as_admin(
     if notify_author:
         _notify_moderation_action(db, owner_id, "comment", comment_id, reason)
     comment.moderation_status = CONTENT_STATUS_ARCHIVED
-    comment.archived_at = datetime.utcnow()
+    comment.archived_at = local_now()
     comment.archived_by_admin_id = admin.id
     comment.archive_reason = reason
     create_operation_log(
@@ -522,7 +523,7 @@ def release_reported_content(
     if not reports:
         raise ValueError("待审举报不存在")
 
-    now = datetime.utcnow()
+    now = local_now()
     for report in reports:
         report.status = "released"
         report.reviewed_at = now
@@ -674,7 +675,7 @@ def release_reported_user(
     if not reports and not escalations:
         raise ValueError("待审举报不存在")
 
-    now = datetime.utcnow()
+    now = local_now()
     for report in reports:
         report.status = "released"
         report.reviewed_at = now
@@ -735,7 +736,7 @@ def ban_reported_user_as_admin(
         admin,
     )
 
-    now = datetime.utcnow()
+    now = local_now()
     for report in reports:
         report.status = "confirmed"
         report.reviewed_at = now
@@ -779,7 +780,7 @@ def moderate_reported_user_as_admin(
     from social_platform.app.admin.services.moderation_service import update_user_moderation
 
     moderation = update_user_moderation(db, user_id, request, admin)
-    now = datetime.utcnow()
+    now = local_now()
     for report in reports:
         report.status = "confirmed"
         report.reviewed_at = now
@@ -854,7 +855,7 @@ def _confirm_pending_reports(
 ) -> None:
     """把指定内容的待审举报标记为违规确认。"""
 
-    now = datetime.utcnow()
+    now = local_now()
     for report in _pending_reports_for_target(db, content_type, content_id).all():
         report.status = "confirmed"
         report.reviewed_at = now

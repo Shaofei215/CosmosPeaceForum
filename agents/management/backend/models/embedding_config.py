@@ -4,6 +4,7 @@ Management Backend - Embedding 配置模型
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -20,5 +21,5 @@ class EmbeddingConfig(SQLModel, table=True):
     model_name: str = Field(default="text-embedding-3-small", max_length=100, description="向量化模型名称")
     dimension: int = Field(default=1536, description="向量维度")
     is_active: bool = Field(default=False, description="是否启用")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=local_now)
+    updated_at: datetime = Field(default_factory=local_now)

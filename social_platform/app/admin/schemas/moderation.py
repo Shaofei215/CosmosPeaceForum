@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -29,8 +30,8 @@ class UserModerationUpdateRequest(BaseModel):
         if value is None:
             return None
         if value.tzinfo is not None:
-            value = value.astimezone(timezone.utc).replace(tzinfo=None)
-        if value <= datetime.utcnow():
+            value = value.astimezone().replace(tzinfo=None)
+        if value <= local_now():
             raise ValueError("封禁结束时间必须晚于当前时间")
         return value
 

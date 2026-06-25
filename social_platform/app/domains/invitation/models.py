@@ -4,6 +4,7 @@
 """
 
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
@@ -24,8 +25,8 @@ class RegistrationInvitation(Base):
     code = Column(String(64), unique=True, nullable=False, index=True)
     prefix = Column(String(16), default="", nullable=False)
     code_suffix = Column(String(6), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False)
+    updated_at = Column(DateTime, default=local_now, nullable=False)
     created_by_admin_id = Column(
         Integer,
         ForeignKey("platform_admin_users.id", ondelete="SET NULL"),

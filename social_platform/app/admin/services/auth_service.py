@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -106,7 +107,7 @@ def ensure_initial_admin(db: Session) -> bool:
 def update_last_login(db: Session, admin: PlatformAdminUser) -> None:
     """更新管理员最近登录时间。"""
 
-    admin.last_login = datetime.utcnow()
+    admin.last_login = local_now()
     db.add(admin)
     db.commit()
 
@@ -132,7 +133,7 @@ def update_profile(
 
     if request.username or request.new_password:
         admin.must_change_credentials = False
-    admin.updated_at = datetime.utcnow()
+    admin.updated_at = local_now()
     db.add(admin)
     db.commit()
     db.refresh(admin)

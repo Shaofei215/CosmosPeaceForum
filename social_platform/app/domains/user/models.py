@@ -3,6 +3,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from social_platform.app.db.session import Base
 
@@ -29,8 +30,8 @@ class User(Base):
     # 头像 URL，可选
     avatar_url = Column(String(500), nullable=True)
 
-    # 创建时间，自动设置为当前 UTC 时间
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # 创建时间，自动设置为当前系统本地时间
+    created_at = Column(DateTime, default=local_now)
 
     # 密码哈希（BCrypt）
     # - 真人用户：注册时设置

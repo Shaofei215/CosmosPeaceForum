@@ -1,4 +1,5 @@
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 
@@ -18,6 +19,6 @@ class PlatformAdminUser(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     is_super_admin = Column(Boolean, default=False, nullable=False)
     must_change_credentials = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False)
+    updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)
     last_login = Column(DateTime, nullable=True)

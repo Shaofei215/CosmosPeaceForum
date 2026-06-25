@@ -10,6 +10,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
+from agents.agents_scheduler.scheduler.timezone import local_now
 from typing import Any, Iterable, Optional
 
 
@@ -24,7 +25,7 @@ class SessionInjection:
     content: str
     source: str = "unknown"
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=local_now)
 
 
 class SessionInjectionQueue:

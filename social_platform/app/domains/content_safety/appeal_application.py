@@ -5,6 +5,7 @@
 """
 
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Literal, Optional
 
 from sqlalchemy.orm import Session, joinedload
@@ -72,7 +73,7 @@ def create_or_update_appeal(
         appeal.appeal_reason = reason
         appeal.action_label = action_label
         appeal.moderation_reason = moderation_reason
-        appeal.updated_at = datetime.utcnow()
+        appeal.updated_at = local_now()
     elif appeal:
         raise ValueError("该申诉已处理，不能再次提交")
     else:
@@ -318,9 +319,9 @@ def _mark_appeal_resolved(
         raise ValueError("申诉不存在")
     appeal.status = status
     appeal.reject_reason = reject_reason
-    appeal.resolved_at = datetime.utcnow()
+    appeal.resolved_at = local_now()
     appeal.resolved_by_admin_id = admin.id
-    appeal.updated_at = datetime.utcnow()
+    appeal.updated_at = local_now()
     create_system_notifications(
         db=db,
         recipient_ids=[appeal.appellant_id],

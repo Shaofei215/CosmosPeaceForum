@@ -3,6 +3,7 @@
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from social_platform.app.db.session import Base
 
@@ -51,8 +52,8 @@ class Follow(Base):
         nullable=False
     )
 
-    # 关注创建时间，自动设置为当前 UTC 时间
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # 关注创建时间，自动设置为当前系统本地时间
+    created_at = Column(DateTime, default=local_now)
 
     # 表级约束和索引配置
     __table_args__ = (

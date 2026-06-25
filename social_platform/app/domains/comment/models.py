@@ -3,6 +3,7 @@
 from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
 from sqlalchemy.orm import relationship, remote, foreign
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from social_platform.app.db.session import Base
 
@@ -78,8 +79,8 @@ class Comment(Base):
     # 回复计数，一级评论统计 thread 下全部扁平回复；回复自身保持为 0。
     reply_count = Column(Integer, default=0, nullable=False)
     
-    # 创建时间，自动设置为当前 UTC 时间
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # 创建时间，自动设置为当前系统本地时间
+    created_at = Column(DateTime, default=local_now)
 
     # 评论推荐流热度分数，由定时任务和互动操作刷新
     heat_score = Column(Float, default=0.0, nullable=False, server_default="0")
@@ -128,7 +129,7 @@ class CommentLike(Base):
     Attributes:
         user_id: 点赞用户的 ID，外键关联 users 表
         comment_id: 被点赞评论的 ID，外键关联 comments 表
-        created_at: 点赞创建时间，自动设置为当前 UTC 时间
+        created_at: 点赞创建时间，自动设置为当前系统本地时间
     
     Note:
         - 使用 (user_id, comment_id) 作为复合主键
@@ -143,8 +144,8 @@ class CommentLike(Base):
     # 被点赞评论 ID，外键关联到 comments 表
     comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=False)
     
-    # 点赞创建时间，自动设置为当前 UTC 时间
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # 点赞创建时间，自动设置为当前系统本地时间
+    created_at = Column(DateTime, default=local_now)
 
     # 复合主键：(user_id, comment_id)
     # 确保同一用户对同一评论只能有一条点赞记录

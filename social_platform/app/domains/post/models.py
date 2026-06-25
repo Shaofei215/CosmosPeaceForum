@@ -3,6 +3,7 @@
 from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from social_platform.app.db.session import Base
 
@@ -28,8 +29,8 @@ class Post(Base):
     # 帖子内容，必填
     content = Column(Text, nullable=False)
     
-    # 创建时间，自动设置为当前 UTC 时间
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # 创建时间，自动设置为当前系统本地时间
+    created_at = Column(DateTime, default=local_now)
     
     # 点赞计数，冗余存储以提高查询性能
     # 默认值为 0，每次点赞/取消点赞时更新
@@ -110,7 +111,7 @@ class PollOption(Base):
     text = Column(String(20), nullable=False)
     position = Column(Integer, nullable=False)
     vote_count = Column(Integer, default=0, nullable=False, server_default="0")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False)
 
     post = relationship("Post", back_populates="poll_options")
     votes = relationship("PollVote", back_populates="option", cascade="all, delete-orphan")
@@ -152,7 +153,7 @@ class PollVote(Base):
         nullable=False,
         index=True,
     )
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False)
 
     post = relationship("Post", back_populates="poll_votes")
     option = relationship("PollOption", back_populates="votes")
