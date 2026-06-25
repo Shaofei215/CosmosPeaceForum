@@ -3,6 +3,7 @@ Management Backend - 分块模型配置服务
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import List, Optional
 
 from sqlmodel import Session, select
@@ -49,7 +50,7 @@ def update_chunk_model_config(
         return None
 
     update_data = config_in.model_dump(exclude_unset=True)
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = local_now()
 
     for key, value in update_data.items():
         setattr(db_config, key, value)
@@ -78,7 +79,7 @@ def toggle_chunk_model_config(db: Session, config_id: int) -> Optional[ChunkMode
         return None
 
     db_config.is_active = not db_config.is_active
-    db_config.updated_at = datetime.utcnow()
+    db_config.updated_at = local_now()
     db.add(db_config)
     db.commit()
     db.refresh(db_config)

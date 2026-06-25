@@ -8,6 +8,7 @@ import os
 import tempfile
 import zipfile
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import List, Optional
 
 from sqlmodel import Session, select
@@ -63,7 +64,7 @@ def update_agent(db: Session, agent_id: int, agent_in: AgentUpdate) -> Optional[
         return None
 
     update_data = agent_in.model_dump(exclude_unset=True)
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = local_now()
 
     for key, value in update_data.items():
         setattr(db_agent, key, value)
@@ -80,9 +81,9 @@ def update_agent_last_login(db: Session, agent_id: int, login_at: Optional[datet
     if not db_agent:
         return False
 
-    db_agent.last_login_at = login_at or datetime.utcnow()
+    db_agent.last_login_at = login_at or local_now()
     db_agent.total_login_count = (db_agent.total_login_count or 0) + 1
-    db_agent.updated_at = datetime.utcnow()
+    db_agent.updated_at = local_now()
     db.add(db_agent)
     db.commit()
     return True
@@ -115,7 +116,7 @@ def update_agent_knows(db: Session, agent_id: int, knows_ids: List[int], bidirec
         return None
 
     db_agent.knows_ids = json.dumps(knows_ids)
-    db_agent.updated_at = datetime.utcnow()
+    db_agent.updated_at = local_now()
     db.add(db_agent)
 
     if bidirectional:
@@ -131,12 +132,12 @@ def update_agent_knows(db: Session, agent_id: int, knows_ids: List[int], bidirec
             if should_have_relation and not has_relation:
                 other_knows.append(agent_id)
                 other.knows_ids = json.dumps(other_knows)
-                other.updated_at = datetime.utcnow()
+                other.updated_at = local_now()
                 db.add(other)
             elif not should_have_relation and has_relation:
                 other_knows.remove(agent_id)
                 other.knows_ids = json.dumps(other_knows)
-                other.updated_at = datetime.utcnow()
+                other.updated_at = local_now()
                 db.add(other)
 
     db.commit()

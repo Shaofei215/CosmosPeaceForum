@@ -10,6 +10,7 @@ Management Database Client - 数据库抽象层
 import json
 import sqlite3
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from pathlib import Path
 from typing import Optional
 
@@ -238,7 +239,7 @@ class ManagementDBClient:
 
                 previous_count = row["total_login_count"] or 0
                 previous_timestamp = row["last_login_timestamp"]
-                timestamp = (login_at or datetime.utcnow()).isoformat(sep=" ")
+                timestamp = (login_at or local_now()).isoformat(sep=" ")
                 new_count = previous_count + 1
 
                 update_columns = [

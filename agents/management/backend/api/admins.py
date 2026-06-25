@@ -1,6 +1,7 @@
 """Management Backend - 管理员管理路由"""
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
@@ -97,7 +98,7 @@ def update_admin(
         if admin.id == current_admin.id and not request.is_super_admin:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能取消自己的超级管理员权限")
         admin.is_super_admin = request.is_super_admin
-    admin.updated_at = datetime.utcnow()
+    admin.updated_at = local_now()
     db.add(admin)
     db.flush()
     create_log(

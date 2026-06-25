@@ -7,6 +7,7 @@ system_configs 只保存运行期可调的非敏感配置。基础设施和敏�
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import List, Optional
 
 from sqlmodel import Session, select
@@ -94,7 +95,7 @@ def update_system_config(db: Session, key: str, value: str) -> Optional[SystemCo
     validate_system_config_value(key, value)
 
     db_config.value = value
-    db_config.updated_at = datetime.utcnow()
+    db_config.updated_at = local_now()
     db.add(db_config)
     db.commit()
     db.refresh(db_config)

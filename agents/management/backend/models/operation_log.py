@@ -4,6 +4,7 @@ Management Backend - 操作日志模型
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -21,4 +22,4 @@ class OperationLog(SQLModel, table=True):
     target_type: str = Field(max_length=50)  # agent / model / system
     target_id: Optional[int] = Field(default=None)
     details: str = Field(default="")  # JSON 字符串
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=local_now)

@@ -1,6 +1,7 @@
 """公开平台写操作的用户处罚状态校验服务。"""
 
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Literal, Optional
 
 from fastapi import HTTPException, status
@@ -54,7 +55,7 @@ def ensure_action_allowed(db: Session, user: User, action: RestrictionAction) ->
     if moderation is None:
         return
 
-    now = datetime.utcnow()
+    now = local_now()
     field = f"{action}_banned_until"
     reason_field = f"{action}_ban_reason"
     banned_until = getattr(moderation, field, None)

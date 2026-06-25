@@ -1,4 +1,5 @@
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -23,7 +24,7 @@ class Notification(Base):
     source_content = Column(Text, nullable=True)
 
     is_read = Column(Integer, default=0, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
 
     recipient = relationship("User", foreign_keys=[recipient_id], back_populates="notifications")
     sender = relationship("User", foreign_keys=[sender_id])

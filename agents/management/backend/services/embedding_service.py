@@ -4,6 +4,7 @@ Management Backend - Embedding 配置服务
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -48,7 +49,7 @@ def update_embedding_config(db: Session, config_in: EmbeddingConfigUpdate) -> Op
         if update_data["dimension"] < 1:
             raise ValueError("dimension 必须大于 0")
 
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = local_now()
 
     for key, value in update_data.items():
         setattr(db_config, key, value)

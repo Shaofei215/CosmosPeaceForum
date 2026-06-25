@@ -5,7 +5,7 @@ Management Backend - 记忆管理路由
 import logging
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Optional
 
 import jieba
@@ -403,8 +403,8 @@ async def upload_memory(
     try:
         if semantic_time:
             dt = datetime.fromisoformat(semantic_time)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+            if dt.tzinfo is not None:
+                dt = dt.astimezone().replace(tzinfo=None)
             semantic_timestamp = dt.timestamp()
         else:
             semantic_timestamp = 0

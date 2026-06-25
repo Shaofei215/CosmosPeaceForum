@@ -5,7 +5,7 @@ import re
 import threading
 import requests
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 from agents.agents_scheduler.scheduler.context import (
@@ -57,8 +57,8 @@ def _format_display_time(value: Any) -> str:
     if dt.tzinfo is None:
         now = datetime.now()
     else:
-        dt = dt.astimezone(timezone.utc)
-        now = datetime.now(timezone.utc)
+        dt = dt.astimezone().replace(tzinfo=None)
+        now = datetime.now()
 
     diff_seconds = max(0, int((now - dt).total_seconds()))
     if diff_seconds < 60:

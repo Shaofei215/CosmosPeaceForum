@@ -4,6 +4,7 @@ Management Backend - 管理员用户模型
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 
 from sqlalchemy import Column, Text
@@ -23,6 +24,6 @@ class AdminUser(SQLModel, table=True):
     is_active: bool = Field(default=True)
     is_super_admin: bool = Field(default=False)
     must_change_credentials: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=local_now)
+    updated_at: datetime = Field(default_factory=local_now)
     last_login: Optional[datetime] = Field(default=None)

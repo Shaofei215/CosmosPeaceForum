@@ -3,6 +3,7 @@
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, PrimaryKeyConstraint, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from social_platform.app.db.session import Base
 
@@ -15,7 +16,7 @@ class Like(Base):
     Attributes:
         user_id: 点赞用户的 ID，外键关联 users 表
         post_id: 被点赞帖子的 ID，外键关联 posts 表
-        created_at: 点赞创建时间，自动设置为当前 UTC 时间
+        created_at: 点赞创建时间，自动设置为当前系统本地时间
     
     Note:
         - 使用 (user_id, post_id) 作为复合主键
@@ -32,8 +33,8 @@ class Like(Base):
     # 不能为空，因为点赞必须针对帖子
     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
     
-    # 点赞创建时间，自动设置为当前 UTC 时间
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # 点赞创建时间，自动设置为当前系统本地时间
+    created_at = Column(DateTime, default=local_now)
 
     # 复合主键：(user_id, post_id)
     # 确保同一用户对同一帖子只能有一条点赞记录

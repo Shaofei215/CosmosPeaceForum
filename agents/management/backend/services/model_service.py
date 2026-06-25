@@ -5,6 +5,7 @@ Management Backend - 模型配置服务。
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import List, Optional
 
 from sqlmodel import Session, select
@@ -27,7 +28,7 @@ def _sync_assigned_agents(db: Session, config_id: int, assigned_agent_ids: Optio
         return
 
     assigned_ids = set(assigned_agent_ids)
-    now = datetime.utcnow()
+    now = local_now()
     agents = db.exec(select(AgentConfig)).all()
     for agent in agents:
         should_assign = agent.id in assigned_ids
@@ -98,7 +99,7 @@ def update_model_config(db: Session, config_id: int, config_in: ModelConfigUpdat
         if update_data["max_token"] < 1:
             raise ValueError("max_token 必须大于 0")
 
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = local_now()
 
     for key, value in update_data.items():
         setattr(db_config, key, value)

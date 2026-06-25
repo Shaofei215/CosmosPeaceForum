@@ -4,6 +4,7 @@ Management Backend - Agent 配置模型
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -27,5 +28,5 @@ class AgentConfig(SQLModel, table=True):
     last_login_at: Optional[datetime] = Field(default=None)
     last_login_timestamp: Optional[float] = Field(default=None)
     total_login_count: int = Field(default=0)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=local_now)
+    updated_at: datetime = Field(default_factory=local_now)

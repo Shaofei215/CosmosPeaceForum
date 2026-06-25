@@ -1,4 +1,5 @@
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import Column, DateTime, Integer, String, Text
 
@@ -17,5 +18,5 @@ class PlatformAdminOperationLog(Base):
     target_type = Column(String(50), nullable=False, index=True)
     target_id = Column(Integer, nullable=True, index=True)
     details = Column(Text, nullable=False, default="{}")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
 

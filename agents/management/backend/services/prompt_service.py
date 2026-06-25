@@ -1,6 +1,7 @@
 """提示词配置服务。"""
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import List, Optional
 
 from sqlmodel import Session, select
@@ -38,7 +39,7 @@ def update_prompt_config(db: Session, key: str, value: str) -> Optional[PromptCo
         return None
 
     db_config.value = value
-    db_config.updated_at = datetime.utcnow()
+    db_config.updated_at = local_now()
     db.add(db_config)
     db.commit()
     db.refresh(db_config)
@@ -53,7 +54,7 @@ def reset_prompt_config(db: Session, key: str) -> Optional[PromptConfig]:
 
     db_config.value = get_default_prompt_template(key)
     db_config.default_value = get_default_prompt_template(key)
-    db_config.updated_at = datetime.utcnow()
+    db_config.updated_at = local_now()
     db.add(db_config)
     db.commit()
     db.refresh(db_config)
@@ -91,7 +92,7 @@ def init_default_prompt_configs(db: Session) -> int:
                 existing.description = definition.description
                 existing.value = next_value
                 existing.default_value = definition.default_value
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = local_now()
                 db.add(existing)
                 changed = True
 

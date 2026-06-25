@@ -9,6 +9,7 @@ import re
 import secrets
 import string
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -238,7 +239,7 @@ def create_registration_invitation(
         prefix=normalized_prefix,
         code_suffix=suffix,
         created_by_admin_id=admin.id,
-        updated_at=datetime.utcnow(),
+        updated_at=local_now(),
     )
     db.add(invitation)
     db.flush()
@@ -316,5 +317,5 @@ def consume_registration_invitation(
     if invitation.used_by_user_id is not None:
         raise InvitationInvalidError()
     invitation.used_by_user_id = user_id
-    invitation.used_at = datetime.utcnow()
-    invitation.updated_at = datetime.utcnow()
+    invitation.used_at = local_now()
+    invitation.updated_at = local_now()

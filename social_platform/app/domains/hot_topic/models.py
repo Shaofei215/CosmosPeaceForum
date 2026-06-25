@@ -1,4 +1,5 @@
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy import (
     Boolean,
@@ -27,7 +28,7 @@ class HotTopicGeneration(Base):
     input_snapshot = Column(Text, nullable=True)
     output_json = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False)
     completed_at = Column(DateTime, nullable=True)
 
     topics = relationship("HotTopic", back_populates="generation")
@@ -50,7 +51,7 @@ class HotTopicSettings(Base):
     history_limit = Column(Integer, nullable=False, default=3, server_default="3")
     max_llm_rounds = Column(Integer, nullable=False, default=6, server_default="6")
     prompt_template = Column(Text, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=local_now, nullable=False)
 
 
 class HotTopic(Base):
@@ -68,8 +69,8 @@ class HotTopic(Base):
     weight = Column(Float, nullable=False, default=0.0, server_default="0")
     is_pinned = Column(Boolean, nullable=False, default=False, server_default="0")
     generation_id = Column(Integer, ForeignKey("hot_topic_generations.id"), nullable=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=local_now, nullable=False)
+    updated_at = Column(DateTime, default=local_now, nullable=False)
 
     generation = relationship("HotTopicGeneration", back_populates="topics")
 

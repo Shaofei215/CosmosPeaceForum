@@ -4,6 +4,7 @@
 access token 会自动补充 typ=access 与 jti；sid/scope 由调用方传入并在依赖层回查 session。
 """
 from datetime import datetime, timedelta
+from social_platform.app.core.timezone import local_now
 from hashlib import sha256
 from secrets import token_urlsafe
 from typing import Optional, Dict, Any
@@ -66,9 +67,9 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     """
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = local_now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(hours=settings.ACCESS_TOKEN_EXPIRE_HOURS)
+        expire = local_now() + timedelta(hours=settings.ACCESS_TOKEN_EXPIRE_HOURS)
     to_encode.update({"exp": expire, "typ": "access", "jti": to_encode.get("jti") or str(uuid4())})
     encoded_jwt = jwt.encode(
         to_encode,

@@ -1,6 +1,7 @@
 # 验证码清理定时任务
 # 定期清理过期的验证码记录，防止数据库膨胀
 from datetime import datetime, timedelta
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -21,14 +22,14 @@ def cleanup_expired_verification_codes():
     """
     db = SessionLocal()
     try:
-        cutoff_date = datetime.utcnow() - timedelta(days=7)
+        cutoff_date = local_now() - timedelta(days=7)
 
         expired_codes = db.query(EmailVerificationCode).filter(
             and_(
                 (
                     EmailVerificationCode.used.is_(True)
                 ) | (
-                    EmailVerificationCode.expires_at < datetime.utcnow()
+                    EmailVerificationCode.expires_at < local_now()
                 ),
                 EmailVerificationCode.created_at < cutoff_date
             )

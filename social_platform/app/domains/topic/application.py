@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import re
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Iterable
 
 from sqlalchemy import func
@@ -44,9 +45,9 @@ def extract_topic_names(content: str | None) -> list[str]:
 
 
 def _now() -> datetime:
-    """返回当前 UTC 时间。"""
+    """返回当前系统本地时间。"""
 
-    return datetime.utcnow()
+    return local_now()
 
 
 def _get_or_create_topics(db: Session, names: list[str]) -> dict[str, Topic]:

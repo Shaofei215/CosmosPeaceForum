@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from social_platform.app.core.timezone import local_now
 from typing import Mapping
 from uuid import uuid4
 
@@ -112,7 +113,7 @@ def _active_query(db: Session) -> Query[UserSession]:
         Query[UserSession]: 可继续追加过滤条件的 SQLAlchemy 查询。
     """
 
-    now = datetime.utcnow()
+    now = local_now()
     return db.query(UserSession).filter(UserSession.revoked_at.is_(None), UserSession.expires_at > now)
 
 
@@ -164,7 +165,7 @@ def create_session_token_pair(
         dict[str, object]: access/refresh token、过期秒数和 session_id。
     """
 
-    now = datetime.utcnow()
+    now = local_now()
     if revoke_same_client:
         _active_query(db).filter(
             UserSession.account_id == account_id,
@@ -230,7 +231,7 @@ def refresh_token_pair(
     if session is None:
         raise RefreshTokenInvalidError()
 
-    now = datetime.utcnow()
+    now = local_now()
     next_refresh_token = create_refresh_token()
     session.refresh_token_hash = hash_refresh_token(next_refresh_token)
     session.last_seen_at = now
@@ -279,7 +280,7 @@ def revoke_session(db: Session, session: UserSession) -> None:
     """
 
     if session.revoked_at is None:
-        session.revoked_at = datetime.utcnow()
+        session.revoked_at = local_now()
         db.add(session)
         db.commit()
 
@@ -321,7 +322,7 @@ def revoke_other_sessions(db: Session, account_id: int, scope: str, current_sess
         int: 被撤销的会话数量。
     """
 
-    now = datetime.utcnow()
+    now = local_now()
     count = _active_query(db).filter(
         UserSession.account_id == account_id,
         UserSession.scope == scope,

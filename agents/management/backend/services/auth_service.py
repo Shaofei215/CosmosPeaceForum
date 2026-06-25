@@ -4,6 +4,7 @@ Management Backend - 认证服务
 
 import json
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 
 from sqlmodel import Session, select
@@ -77,7 +78,7 @@ def update_last_login(db: Session, admin_id: int) -> None:
     """更新最后登录时间"""
     admin = db.get(AdminUser, admin_id)
     if admin:
-        admin.last_login = datetime.utcnow()
+        admin.last_login = local_now()
         db.add(admin)
         db.commit()
 

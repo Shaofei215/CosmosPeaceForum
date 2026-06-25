@@ -3,6 +3,7 @@
 import json
 import logging
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 from typing import Any, Callable, Literal, Optional
 
 from sqlalchemy.orm import Session, joinedload
@@ -57,9 +58,9 @@ Decision = Literal["pass", "delete", "drop"]
 
 
 def _now() -> datetime:
-    """返回当前 UTC 时间，便于统一写入更新时间。"""
+    """返回当前系统本地时间，便于统一写入更新时间。"""
 
-    return datetime.utcnow()
+    return local_now()
 
 
 def _normalize_text(value: str | None) -> str | None:

@@ -5,6 +5,7 @@
 """
 
 from datetime import datetime, timedelta
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 from uuid import uuid4
 
@@ -46,7 +47,7 @@ def _refresh_delta(remember_me: bool) -> timedelta:
 
 def _active_statement():
     """构造未撤销且未过期 admin session 的 SQLModel 查询。"""
-    now = datetime.utcnow()
+    now = local_now()
     return select(AdminSession).where(AdminSession.revoked_at.is_(None), AdminSession.expires_at > now)
 
 
@@ -74,7 +75,7 @@ def create_session_token_pair(
     ip_address: str | None,
 ) -> dict[str, object]:
     """创建新的管理员 session，并返回 access/refresh token 对。"""
-    now = datetime.utcnow()
+    now = local_now()
     refresh_token = create_refresh_token()
     refresh_delta = _refresh_delta(remember_me)
     session = AdminSession(
@@ -120,7 +121,7 @@ def refresh_token_pair(
     if session is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="refresh token 无效或已过期")
 
-    now = datetime.utcnow()
+    now = local_now()
     next_refresh_token = create_refresh_token()
     session.refresh_token_hash = hash_refresh_token(next_refresh_token)
     session.last_seen_at = now
@@ -148,7 +149,7 @@ def get_active_session(db: Session, session_id: str) -> Optional[AdminSession]:
 def revoke_session(db: Session, session: AdminSession) -> None:
     """撤销单个 admin session，使其 access/refresh token 同时失效。"""
     if session.revoked_at is None:
-        session.revoked_at = datetime.utcnow()
+        session.revoked_at = local_now()
         db.add(session)
         db.commit()
 

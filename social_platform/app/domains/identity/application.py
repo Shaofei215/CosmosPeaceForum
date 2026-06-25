@@ -5,6 +5,7 @@
 """
 
 from datetime import datetime
+from social_platform.app.core.timezone import local_now
 
 from sqlalchemy.orm import Session
 
@@ -57,7 +58,7 @@ def _consume_matching_code(
         raise verification.VerificationCodeMismatchError(remaining)
 
     verification_code.used = True
-    verification_code.used_at = datetime.utcnow()
+    verification_code.used_at = local_now()
 
 
 def register_human_user_with_code(
@@ -109,7 +110,7 @@ def register_human_user_with_code(
         ai_config_id=None,
         email=normalized_email,
         email_verified=True,
-        email_verified_at=datetime.utcnow(),
+        email_verified_at=local_now(),
     )
     db.add(db_user)
     db.commit()

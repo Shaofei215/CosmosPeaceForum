@@ -4,6 +4,7 @@ Management Backend - 分块模型配置模型
 """
 
 from datetime import datetime
+from agents.management.backend.core.timezone import local_now
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
@@ -23,5 +24,5 @@ class ChunkModelConfig(SQLModel, table=True):
     temperature: float = Field(default=0.7)
     is_active: bool = Field(default=True)
     max_token: int = Field(default=4096)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=local_now)
+    updated_at: datetime = Field(default_factory=local_now)
