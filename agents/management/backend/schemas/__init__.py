@@ -91,6 +91,14 @@ class AdminUserResponse(BaseModel):
     last_login: Optional[datetime] = None
 
 
+class AdminProfileUpdateRequest(BaseModel):
+    """当前管理员更新首次登录资料的请求。"""
+
+    current_password: str = Field(min_length=1)
+    username: Optional[str] = Field(default=None, min_length=3, max_length=50)
+    new_password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+
+
 class AdminCreateRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     email: Optional[EmailStr] = None

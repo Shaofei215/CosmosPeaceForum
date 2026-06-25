@@ -38,8 +38,8 @@ export default function LoginPage() {
     login(
       { username: username.trim(), password, remember_me: rememberMe },
       {
-        onSuccess: () => {
-          navigate(from, { replace: true });
+        onSuccess: (data) => {
+          navigate(data.admin.must_change_credentials ? '/setup' : from, { replace: true });
         },
         onError: (err: { message?: string }) => {
           setError(err.message || '登录失败，请检查用户名和密码');

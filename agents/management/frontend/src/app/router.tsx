@@ -3,6 +3,7 @@ import { AuthGuard } from '@/features/auth';
 import { AppLayout } from '@/widgets/layout/AppLayout';
 
 import LoginPage from '@/pages/LoginPage';
+import SetupPage from '@/pages/SetupPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AdminListPage from '@/pages/AdminListPage';
 import AgentListPage from '@/pages/AgentListPage';
@@ -20,6 +21,14 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/setup',
+    element: (
+      <AuthGuard>
+        <SetupPage />
+      </AuthGuard>
+    ),
   },
   {
     path: '/',

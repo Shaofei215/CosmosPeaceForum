@@ -561,7 +561,7 @@ function ProviderSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      className="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
     >
       {modelProviderOptions.map((option) => (
         <option key={option.value} value={option.value}>

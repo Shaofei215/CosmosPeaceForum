@@ -46,6 +46,12 @@ export interface LoginResponse {
   admin: AdminUser;
 }
 
+export interface AdminProfileUpdateRequest {
+  current_password: string;
+  username?: string;
+  new_password?: string;
+}
+
 export interface AdminCreateRequest {
   username: string;
   email?: string;
