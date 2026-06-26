@@ -414,19 +414,18 @@ export default function AgentListPage() {
       )}
 
       {/* Search */}
-      <Card className="mb-6">
-        <CardContent className="p-4">
-          <div className="flex h-10 items-center gap-3">
-            <Search size={18} className="shrink-0 text-muted-foreground" />
-            <Input
-              placeholder="搜索角色名称或用户名..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-10 max-w-md"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <div className="relative mb-6 max-w-md">
+        <Search
+          size={18}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          placeholder="搜索角色名称或用户名..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
 
       {/* Table */}
       <Card>
@@ -457,7 +456,6 @@ export default function AgentListPage() {
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">用户名</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">模型</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">每月登录</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">ID</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">最后登录时间</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">运行状态</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">操作</th>
@@ -504,7 +502,6 @@ export default function AgentListPage() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-sm tabular-nums">{agent.monthly_logins}</td>
-                        <td className="py-3 px-4 text-sm">{agent.id}</td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">
                           {formatLastLogin(agent.last_login_at)}
                         </td>
