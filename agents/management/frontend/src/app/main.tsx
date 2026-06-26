@@ -3,10 +3,10 @@ import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
 import { Providers } from './providers';
-import { MANAGEMENT_DOCUMENT_TITLE } from '@/shared/config/branding';
+import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 import './styles/globals.css';
 
-document.title = MANAGEMENT_DOCUMENT_TITLE;
+document.title = PLATFORM_DISPLAY_NAME;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

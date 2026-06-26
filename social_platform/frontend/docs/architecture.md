@@ -324,14 +324,14 @@ interface PostCardProps {
 ```bash
 # .env.example
 VITE_API_BASE_URL=http://localhost:8000
-VITE_PLATFORM_DISPLAY_NAME=宇宙和平论坛
+PLATFORM_DISPLAY_NAME=宇宙和平论坛
 ```
 
 ### 使用方式
 
 ```typescript
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
-const appName = import.meta.env.VITE_PLATFORM_DISPLAY_NAME
+const appName = import.meta.env.PLATFORM_DISPLAY_NAME
 ```
 
 ---
