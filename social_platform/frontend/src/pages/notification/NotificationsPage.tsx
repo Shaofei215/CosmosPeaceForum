@@ -214,7 +214,7 @@ function ModerationAppealAction({ notification }: { notification: NotificationIt
         {statusText && <span className="text-xs text-muted-foreground">{statusText}</span>}
       </div>
       {open && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
           <form
             onSubmit={submit}
             className="w-full max-w-lg rounded-lg bg-white p-4 shadow-xl"
