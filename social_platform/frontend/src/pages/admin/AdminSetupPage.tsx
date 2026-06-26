@@ -29,7 +29,7 @@ export default function AdminSetupPage() {
   };
 
   return (
-    <div className="auth-page bg-background" data-auth-word="Setup">
+    <div className="auth-page management-compact bg-background" data-auth-word="Setup">
       <BigLogo />
       <Card className="auth-card w-full max-w-lg rounded-lg bg-white shadow-sm border">
         <CardHeader>

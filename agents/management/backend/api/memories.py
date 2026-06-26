@@ -241,7 +241,6 @@ async def _llm_smart_chunk(
         llm_kwargs = {
             "model": chunk_model_config.model_name,
             "temperature": chunk_model_config.temperature,
-            "max_tokens": chunk_model_config.max_token,
             "api_key": chunk_model_config.api_key,
         }
         base_url = chunk_model_config.base_url.rstrip('/')

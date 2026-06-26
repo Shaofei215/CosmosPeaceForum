@@ -126,6 +126,15 @@ textarea:focus {
   outline: none;
 }
 
+.management-compact :where(input, textarea, select) {
+  border-color: rgb(212 212 216 / 0.8);
+  box-shadow: none;
+}
+
+.management-compact :where(button, a[role='button']) {
+  box-shadow: none;
+}
+
 .auth-page {
   position: relative;
   isolation: isolate;

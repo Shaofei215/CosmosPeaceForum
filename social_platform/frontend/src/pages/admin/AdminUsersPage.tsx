@@ -767,6 +767,7 @@ function InvitationCodesPanel({
               placeholder="绑定邮箱"
               type="email"
               disabled={creating}
+              className="shadow-none"
             />
             <Input
               value={prefix}
@@ -781,8 +782,9 @@ function InvitationCodesPanel({
               placeholder="前缀，可留空"
               disabled={creating}
               maxLength={16}
+              className="shadow-none"
             />
-            <Button type="submit" className="rounded-md" disabled={creating}>
+            <Button type="submit" className="rounded-md shadow-none" disabled={creating}>
               <KeyRound size={14} className="mr-1" />
               {creating ? '生成中...' : '生成'}
             </Button>

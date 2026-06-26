@@ -22,7 +22,7 @@ const PLACEHOLDER_LABELS: Record<string, PlaceholderHint[]> = {
     { token: '{#if login_stats}', description: '条件段：仅存在登录统计时拼入。' },
     { token: '{total_login_count}', description: '累计登录次数。' },
     { token: '{last_login_time}', description: '上次登录时间描述。' },
-    { token: '{name}', description: '角色昵称。' },
+    { token: '{name}', description: '角色名。' },
     { token: '{username}', description: '角色用户名。' },
     { token: '{personality_prompt}', description: '角色性格提示词。' },
     { token: '{personal_signature}', description: '角色个人签名。' },
@@ -140,16 +140,18 @@ export default function PromptConfigPage() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setDrafts((current) => ({
-                        ...current,
-                        [prompt.key]: prompt.value,
-                      }))}
-                      disabled={!isDirty || updateMutation.isPending || resetMutation.isPending}
-                    >
-                      取消
-                    </Button>
+                    {isDirty && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setDrafts((current) => ({
+                          ...current,
+                          [prompt.key]: prompt.value,
+                        }))}
+                        disabled={updateMutation.isPending || resetMutation.isPending}
+                      >
+                        取消
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       onClick={() => resetMutation.mutate(prompt.key)}

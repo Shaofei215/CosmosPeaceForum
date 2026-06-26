@@ -242,7 +242,7 @@ class ModelConfigResponse(BaseModel):
 class EmbeddingConfigCreate(BaseModel):
     base_url: str = ""
     api_key: str = ""
-    model_name: str = "text-embedding-3-small"
+    model_name: str = ""
     dimension: int = 1536
     is_active: bool = False
 

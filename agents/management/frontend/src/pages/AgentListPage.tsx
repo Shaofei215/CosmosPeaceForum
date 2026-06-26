@@ -19,6 +19,7 @@ import {
   LogIn,
 } from 'lucide-react';
 import { ImportDialog } from '@/features/agents/components/ImportDialog';
+import AgentFormPage from '@/features/agents/components/AgentForm';
 import { formatDate } from '@/shared/lib/format';
 import type { AgentRuntimeStatus, AgentRuntimeStatusResponse } from '@/shared/types/api';
 import { getAccessToken } from '@/features/auth/tokenStorage';
@@ -82,6 +83,7 @@ export default function AgentListPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [showImport, setShowImport] = useState(false);
+  const [showCreateAgent, setShowCreateAgent] = useState(false);
   const [deleteAgentId, setDeleteAgentId] = useState<number | null>(null);
   const [stoppingId, setStoppingId] = useState<number | null>(null);
   const [startingId, setStartingId] = useState<number | null>(null);
@@ -348,7 +350,7 @@ export default function AgentListPage() {
           <Button variant="outline" onClick={() => setShowImport(true)}>
             <Upload size={16} className="mr-1" /> 批量导入
           </Button>
-          <Button onClick={() => navigate('/agents/new')}>
+          <Button onClick={() => setShowCreateAgent(true)}>
             <Plus size={16} className="mr-1" /> 创建角色
           </Button>
         </div>
@@ -709,6 +711,20 @@ export default function AgentListPage() {
 
       {/* Import dialog */}
       <ImportDialog open={showImport} onOpenChange={setShowImport} />
+
+      <Dialog open={showCreateAgent} onOpenChange={setShowCreateAgent}>
+        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>创建角色</DialogTitle>
+          </DialogHeader>
+          <AgentFormPage
+            mode="create"
+            embedded
+            onCancel={() => setShowCreateAgent(false)}
+            onSuccess={() => setShowCreateAgent(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

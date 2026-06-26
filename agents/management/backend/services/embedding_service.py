@@ -69,7 +69,7 @@ def init_default_embedding_config(db: Session) -> Optional[EmbeddingConfig]:
     default = EmbeddingConfig(
         base_url="",
         api_key="",
-        model_name="text-embedding-3-small",
+        model_name="",
         dimension=1536,
         is_active=False,
     )
@@ -81,11 +81,20 @@ def init_default_embedding_config(db: Session) -> Optional[EmbeddingConfig]:
 
 def embedding_config_to_response(config: EmbeddingConfig) -> dict:
     """将 Embedding 配置转换为响应字典"""
+    model_name = config.model_name
+    if (
+        model_name == "text-embedding-3-small"
+        and not config.is_active
+        and not config.api_key
+        and not config.base_url
+    ):
+        model_name = ""
+
     return {
         "id": config.id,
         "base_url": config.base_url,
         "api_key": config.api_key,
-        "model_name": config.model_name,
+        "model_name": model_name,
         "dimension": config.dimension,
         "is_active": config.is_active,
         "created_at": config.created_at,

@@ -12,9 +12,18 @@ import { ArrowLeft, Save, Users } from 'lucide-react';
 interface AgentFormPageProps {
   mode: 'create' | 'edit';
   agent?: AgentConfig;
+  embedded?: boolean;
+  onCancel?: () => void;
+  onSuccess?: () => void;
 }
 
-export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
+export default function AgentFormPage({
+  mode,
+  agent,
+  embedded = false,
+  onCancel,
+  onSuccess,
+}: AgentFormPageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -26,6 +35,7 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
   const [isActive, setIsActive] = useState(agent?.is_active ?? true);
   const [selectedKnowsIds, setSelectedKnowsIds] = useState<Set<number>>(new Set());
   const [bidirectional, setBidirectional] = useState(false);
+  const [relationHelpOpen, setRelationHelpOpen] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -52,7 +62,11 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
       await queryClient.invalidateQueries({ queryKey: ['agents'] });
       await queryClient.invalidateQueries({ queryKey: ['agent'] });
       await queryClient.invalidateQueries({ queryKey: ['agents-all'] });
-      navigate('/agents');
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        navigate('/agents');
+      }
     },
     onError: (err: { message?: string }) => {
       setError(err.message || '创建失败');
@@ -130,7 +144,11 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
             bidirectional,
           },
         });
-        navigate('/agents');
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          navigate('/agents');
+        }
       } catch {
         // mutation 的 onError 会写入具体错误。
       }
@@ -152,24 +170,30 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
   const isPending = createMutation.isPending || updateMutation.isPending || relationMutation.isPending;
 
   const otherAgents = (allAgents?.items ?? []).filter((a) => a.id !== agent?.id);
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    } else {
+      navigate('/agents');
+    }
+  };
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </Button>
-        <h1 className="text-2xl font-bold">
-          {mode === 'create' ? '创建角色' : `编辑角色 - ${agent?.name}`}
-        </h1>
-      </div>
+      {!embedded && (
+        <div className="flex items-center gap-3 mb-6">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            <ArrowLeft size={20} />
+          </Button>
+          <h1 className="text-2xl font-bold">
+            {mode === 'create' ? '创建角色' : `编辑角色 - ${agent?.name}`}
+          </h1>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>基本信息</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {embedded ? (
+          <div className="space-y-4">
             {error && (
               <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
                 {error}
@@ -182,7 +206,6 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="例如：Herta"
                   disabled={mode === 'edit'}
                 />
               </div>
@@ -192,7 +215,6 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
                 <Input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="例如：herta_bot"
                   disabled={mode === 'edit'}
                   maxLength={30}
                 />
@@ -203,7 +225,7 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">每月登录次数</label>
+                <label className="text-sm font-medium">使用泊松分布的每月预期登录次数</label>
                 <Input
                   type="number"
                   value={monthlyLogins}
@@ -232,7 +254,7 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
               <Textarea
                 value={signature}
                 onChange={(e) => setSignature(e.target.value)}
-                placeholder="简短描述..."
+                placeholder="在社交平台中的个性签名"
                 rows={2}
               />
             </div>
@@ -246,14 +268,115 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
                 rows={5}
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        ) : (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>基本信息</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error && (
+                <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+                  {error}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">角色名称 *</label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={mode === 'edit'}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">用户名 *</label>
+                  <Input
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    disabled={mode === 'edit'}
+                    maxLength={30}
+                  />
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    {mode === 'edit' ? <p>用户名不可修改</p> : <span />}
+                    <span>{username.length}/30</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">使用泊松分布的每月预期登录次数</label>
+                  <Input
+                    type="number"
+                    value={monthlyLogins}
+                    onChange={(e) => setMonthlyLogins(Number(e.target.value))}
+                    min={0}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">状态</label>
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="isActive"
+                      checked={isActive}
+                      onChange={(e) => setIsActive(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    <label htmlFor="isActive" className="text-sm">启用此角色</label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">个性签名</label>
+                <Textarea
+                  value={signature}
+                  onChange={(e) => setSignature(e.target.value)}
+                  placeholder="在社交平台中的个性签名"
+                  rows={2}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">角色性格提示词</label>
+                <Textarea
+                  value={personalityPrompt}
+                  onChange={(e) => setPersonalityPrompt(e.target.value)}
+                  placeholder="定义角色的个性和行为方式..."
+                  rows={5}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {mode === 'edit' && agent && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users size={18} /> 相识角色关系
+                <span className="relative inline-flex">
+                  <button
+                    type="button"
+                    aria-expanded={relationHelpOpen}
+                    onClick={() => setRelationHelpOpen((open) => !open)}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-muted/40 text-muted-foreground transition-colors hover:bg-muted"
+                  >
+                    ?
+                  </button>
+                  <span
+                    className={`absolute bottom-full left-0 z-10 mb-2 w-72 max-w-[calc(100vw-2rem)] origin-bottom-left rounded-lg border bg-background p-3 text-left text-xs font-normal leading-5 text-muted-foreground shadow-lg transition-all duration-200 sm:left-full sm:ml-2 sm:w-80 ${
+                      relationHelpOpen
+                        ? 'pointer-events-auto translate-y-0 scale-100 opacity-100'
+                        : 'pointer-events-none translate-y-2 scale-95 opacity-0'
+                    }`}
+                  >
+                    对于勾选的“相识”的角色，在提示词中构建有关相识角色的内容时将在用户名后方拓展出角色名展示给LLM
+                  </span>
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -321,7 +444,7 @@ export default function AgentFormPage({ mode, agent }: AgentFormPageProps) {
         )}
 
         <div className="flex justify-end gap-3 mt-6">
-          <Button type="button" variant="outline" onClick={() => navigate('/agents')}>
+          <Button type="button" variant="outline" onClick={handleCancel}>
             取消
           </Button>
           {mode === 'edit' ? (

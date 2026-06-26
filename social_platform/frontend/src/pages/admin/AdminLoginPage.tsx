@@ -47,7 +47,7 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="auth-page bg-background" data-auth-word="Login">
+    <div className="auth-page management-compact bg-background" data-auth-word="Login">
       <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="space-y-2 text-center">

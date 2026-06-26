@@ -464,7 +464,7 @@ export default function AdminHotTopicsPage() {
                         <option value="auto">自动发布</option>
                       </select>
                     </Field>
-                    <Field label="生成间隔" hint="单位：分钟。180 表示每 3 小时生成一次。">
+                    <Field label="时间间隔（分钟）">
                       <Input
                         type="number"
                         value={settingsForm.agent_interval_minutes ?? 180}
@@ -476,7 +476,7 @@ export default function AdminHotTopicsPage() {
                         }
                       />
                     </Field>
-                    <Field label="历史热榜注入次数" hint="默认 3；填 0 表示不注入历史热榜。">
+                    <Field label="历史热榜注入次数">
                       <Input
                         type="number"
                         min={0}
@@ -490,7 +490,7 @@ export default function AdminHotTopicsPage() {
                         }
                       />
                     </Field>
-                    <Field label="最大对话轮数" hint="默认 6；最后一轮会要求模型提交结果。">
+                    <Field label="最大对话轮数">
                       <Input
                         type="number"
                         min={1}
@@ -513,7 +513,6 @@ export default function AdminHotTopicsPage() {
                             llm_model_name: event.target.value,
                           }))
                         }
-                        placeholder="例如 gpt-4.1-mini"
                       />
                     </Field>
                   </div>
@@ -526,7 +525,6 @@ export default function AdminHotTopicsPage() {
                           llm_base_url: event.target.value,
                         }))
                       }
-                      placeholder="OpenAI-compatible API 地址"
                     />
                   </Field>
                   <Field label="API Key">
@@ -538,7 +536,6 @@ export default function AdminHotTopicsPage() {
                           llm_api_key: event.target.value,
                         }))
                       }
-                      placeholder="留空不修改，显示星号时会保留旧值"
                       type="password"
                     />
                   </Field>
@@ -555,7 +552,7 @@ export default function AdminHotTopicsPage() {
                     />
                     启用联网搜索
                   </label>
-                  <Field label="Tavily API Key" hint="仅在启用联网搜索时使用。">
+                  <Field label="Tavily API Key">
                     <Input
                       value={settingsForm.tavily_api_key || ''}
                       onChange={event =>
@@ -564,7 +561,6 @@ export default function AdminHotTopicsPage() {
                           tavily_api_key: event.target.value,
                         }))
                       }
-                      placeholder="留空不修改，显示星号时会保留旧值"
                       type="password"
                     />
                   </Field>
