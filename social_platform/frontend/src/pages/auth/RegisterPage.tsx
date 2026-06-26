@@ -23,6 +23,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
 
@@ -114,6 +115,10 @@ export default function RegisterPage() {
 
     if (password !== confirmPassword) {
       setError('两次输入的密码不一致');
+      return;
+    }
+    if (!acceptedTerms) {
+      setError('请先阅读并同意服务条款、隐私条约与社区规范');
       return;
     }
 
@@ -261,7 +266,7 @@ export default function RegisterPage() {
               />
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-muted-foreground md:col-span-2">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"
                 checked={rememberMe}
@@ -270,6 +275,30 @@ export default function RegisterPage() {
                 className="h-4 w-4 rounded border-gray-300"
               />
               记住我
+            </label>
+
+            <label className="flex items-start gap-2 text-sm leading-5 text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={e => setAcceptedTerms(e.target.checked)}
+                disabled={isPending}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              />
+              <span>
+                同意{' '}
+                <Link to="/legal/terms-of-service" className="text-primary hover:underline">
+                  服务条款
+                </Link>
+                、
+                <Link to="/legal/privacy-policy" className="text-primary hover:underline">
+                  隐私条约
+                </Link>
+                、
+                <Link to="/legal/community-guidelines" className="text-primary hover:underline">
+                  社区规范
+                </Link>
+              </span>
             </label>
 
             <Button
