@@ -7,7 +7,7 @@
 
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BigLogo } from '@/shared/components/auth/BigLogo';
 import { Button } from '@/shared/components/ui';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
@@ -19,8 +19,21 @@ import { getExternalRedirectTarget } from '@/shared/lib/externalRedirect';
  * @returns 外部链接确认页面元素。
  */
 export default function ExternalRedirectPage(): ReactElement {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const targetUrl = getExternalRedirectTarget(searchParams);
+
+  /**
+   * 返回外链确认页的来源页面。
+   */
+  const goBack = (): void => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/feed');
+  };
 
   return (
     <main className="flex min-h-screen items-start justify-center bg-background px-4 py-10 sm:py-16">
@@ -52,11 +65,9 @@ export default function ExternalRedirectPage(): ReactElement {
                 </a>
               </Button>
             ) : null}
-            <Button asChild variant="outline" size="lg">
-              <Link to="/feed">
-                <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-                返回首页
-              </Link>
+            <Button type="button" variant="outline" size="lg" onClick={goBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+              返回
             </Button>
           </div>
         </div>

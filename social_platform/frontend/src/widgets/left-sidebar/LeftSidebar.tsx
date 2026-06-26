@@ -94,11 +94,13 @@ export function LeftSidebar() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-3">登录以查看个人信息</p>
-              <Link to="/login">
-                <Button size="sm" className="w-full">
-                  登录
-                </Button>
-              </Link>
+              <Button
+                asChild
+                size="sm"
+                className="w-full gap-2 rounded-md border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800 hover:text-white"
+              >
+                <Link to="/login">登录</Link>
+              </Button>
             </div>
           </div>
         )}

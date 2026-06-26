@@ -35,6 +35,7 @@ import AdminContentPage from '@/pages/admin/AdminContentPage';
 import AdminHotTopicsPage from '@/pages/admin/AdminHotTopicsPage';
 import AdminAdminsPage from '@/pages/admin/AdminAdminsPage';
 import AdminLogsPage from '@/pages/admin/AdminLogsPage';
+import ErrorPage from '@/pages/error/ErrorPage';
 
 /**
  * 应用路由配置
@@ -103,5 +104,5 @@ export const router = createBrowserRouter([
     ],
   },
   // 404页面
-  { path: '*', element: <div className="p-8 text-center">页面不存在</div> },
+  { path: '*', element: <ErrorPage /> },
 ]);

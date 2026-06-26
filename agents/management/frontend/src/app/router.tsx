@@ -16,6 +16,7 @@ import MemoryDetailPage from '@/pages/MemoryDetailPage';
 import SystemConfigPage from '@/pages/SystemConfigPage';
 import PromptConfigPage from '@/pages/PromptConfigPage';
 import LogPage from '@/pages/LogPage';
+import ErrorPage from '@/pages/ErrorPage';
 
 export const router = createBrowserRouter([
   {
@@ -53,5 +54,5 @@ export const router = createBrowserRouter([
       { path: 'logs', element: <LogPage /> },
     ],
   },
-  { path: '*', element: <Navigate to="/" replace /> },
+  { path: '*', element: <ErrorPage /> },
 ]);
