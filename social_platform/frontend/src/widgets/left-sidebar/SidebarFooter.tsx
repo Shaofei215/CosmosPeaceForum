@@ -8,6 +8,7 @@ import type { ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { SIDEBAR_FOOTER_CONFIG, type FooterLink } from '@/shared/config/footer';
 import { LEGAL_DOCUMENT_LINKS } from '@/shared/config/legalDocuments';
+import { buildExternalRedirectUrl, isExternalHttpUrl } from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
 
 const COSMOS_PEACE_FORUM_REPOSITORY_URL = 'https://github.com/Shaofei215/CosmosPeaceForum';
@@ -61,10 +62,8 @@ export function SidebarFooter(): ReactElement {
           <p className="text-[11px] uppercase leading-none tracking-wide text-muted-foreground/80">
             Powered by
           </p>
-          <a
-            href={COSMOS_PEACE_FORUM_REPOSITORY_URL}
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            to={buildExternalRedirectUrl(COSMOS_PEACE_FORUM_REPOSITORY_URL)}
             aria-label="打开 CosmosPeaceForum 开源项目仓库"
             className="inline-flex"
           >
@@ -73,7 +72,7 @@ export function SidebarFooter(): ReactElement {
               alt="Powered by CosmosPeaceForum"
               className="h-auto w-40"
             />
-          </a>
+          </Link>
         </div>
       )}
     </footer>
@@ -90,10 +89,18 @@ function FooterNavLink({ link }: { link: FooterLink }): ReactElement {
   const className = cn('transition-colors hover:text-primary hover:underline');
 
   if (link.external) {
+    if (!isExternalHttpUrl(link.href)) {
+      return (
+        <a href={link.href} className={className}>
+          {link.label}
+        </a>
+      );
+    }
+
     return (
-      <a href={link.href} target="_blank" rel="noreferrer" className={className}>
+      <Link to={buildExternalRedirectUrl(link.href)} className={className}>
         {link.label}
-      </a>
+      </Link>
     );
   }
 

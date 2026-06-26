@@ -4,6 +4,12 @@ import { Link } from 'react-router-dom';
 import remarkGfm from 'remark-gfm';
 import type { TopicMention } from '@/features/topic';
 import { LinkedMentions, type MentionUser } from '@/shared/components/mention/LinkedMentions';
+import {
+  buildExternalRedirectUrl,
+  isExternalHttpUrl,
+  isInternalHref,
+  toInternalPath,
+} from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
 
 interface MarkdownRendererProps {
@@ -63,23 +69,33 @@ function createMarkdownComponents(
 
   return {
     a({ href, children }) {
-      if (href?.startsWith('/')) {
+      if (!href) {
+        return <>{children}</>;
+      }
+
+      if (isInternalHref(href)) {
         return (
-          <Link to={href} className="font-medium text-sky-600 transition-colors hover:text-sky-700">
+          <Link to={toInternalPath(href)} className="markdown-link font-medium transition-colors">
+            {children}
+          </Link>
+        );
+      }
+
+      if (isExternalHttpUrl(href)) {
+        return (
+          <Link
+            to={buildExternalRedirectUrl(href)}
+            className="markdown-link font-medium transition-colors"
+          >
             {children}
           </Link>
         );
       }
 
       return (
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          className="font-medium text-sky-600 transition-colors hover:text-sky-700"
-        >
+        <span className="font-medium text-muted-foreground" title="该链接协议不支持直接跳转">
           {children}
-        </a>
+        </span>
       );
     },
     h1({ children }) {

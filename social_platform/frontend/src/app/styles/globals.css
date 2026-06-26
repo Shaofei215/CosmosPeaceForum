@@ -406,6 +406,34 @@ img {
   -webkit-line-clamp: 3;
 }
 
+.markdown-link,
+.markdown-body a {
+  color: rgb(2 132 199) !important;
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+
+.markdown-link:hover,
+.markdown-body a:hover {
+  color: rgb(3 105 161) !important;
+}
+
+.article-link-bar {
+  transform-origin: left center;
+  animation: articleLinkBarEnter 160ms ease-out;
+}
+
+@keyframes articleLinkBarEnter {
+  from {
+    opacity: 0;
+    transform: scaleX(0.65) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1) translateY(0);
+  }
+}
+
 .markdown-body :not(pre) > code {
   border-radius: 0.25rem;
   background-color: hsl(var(--muted));
@@ -488,8 +516,13 @@ img {
 }
 
 .article-rich-editor .ProseMirror a {
-  color: hsl(var(--primary));
+  color: rgb(2 132 199);
   font-weight: 500;
+  transition: color 150ms ease;
+}
+
+.article-rich-editor .ProseMirror a:hover {
+  color: rgb(3 105 161);
 }
 
 .article-editor-toolbar {

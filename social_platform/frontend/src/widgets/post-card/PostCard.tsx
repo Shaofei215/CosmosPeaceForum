@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDown as ExpandIcon,
@@ -88,6 +88,33 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         is_mutual: Boolean('author_is_mutual' in post && post.author_is_mutual),
       }
     : undefined;
+
+  /**
+   * 处理文章预览区域点击：点击链接时保留链接自身行为，其它区域进入详情页。
+   *
+   * @param event 文章预览容器点击事件。
+   */
+  const handleArticlePreviewClick = (event: MouseEvent<HTMLDivElement>): void => {
+    if (event.target instanceof Element && event.target.closest('a')) {
+      return;
+    }
+
+    navigate(`/post/${post.id}`);
+  };
+
+  /**
+   * 让文章预览容器具备键盘进入详情页的能力。
+   *
+   * @param event 文章预览容器键盘事件。
+   */
+  const handleArticlePreviewKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    navigate(`/post/${post.id}`);
+  };
   const { data: followStatus } = useFollowStatus(post.author_id, {
     enabled: !hasAuthorFollowStatus && !isCurrentUser,
     initialData: initialFollowStatus,
@@ -268,17 +295,24 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               />
             </div>
           ) : (
-            <Link
-              to={`/post/${post.id}`}
-              className="block rounded-md transition-colors hover:bg-muted/20"
+            <div
+              role="link"
+              tabIndex={0}
+              onClick={handleArticlePreviewClick}
+              onKeyDown={handleArticlePreviewKeyDown}
+              className="block cursor-pointer rounded-md transition-colors hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <h3 className="mb-2 line-clamp-2 text-xl font-semibold leading-7 text-foreground sm:text-2xl sm:leading-8">
                 {post.title || 'Untitled'}
               </h3>
-              <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
-                {stripMarkdown(post.content)}
-              </p>
-            </Link>
+              <MarkdownRenderer
+                content={post.content}
+                compact
+                className="text-sm leading-6 text-muted-foreground"
+                mentionUsers={mentionUsers}
+                topicMentions={topicMentions}
+              />
+            </div>
           )
         ) : (
           <>

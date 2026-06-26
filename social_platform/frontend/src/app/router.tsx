@@ -26,6 +26,7 @@ import ArticleEditorPage from '@/pages/article/ArticleEditorPage';
 import SearchPage from '@/pages/search/SearchPage';
 import HotTopicsPage from '@/pages/hot/HotTopicsPage';
 import LegalDocumentPage from '@/pages/legal/LegalDocumentPage';
+import ExternalRedirectPage from '@/pages/external/ExternalRedirectPage';
 import AdminLoginPage from '@/pages/admin/AdminLoginPage';
 import AdminSetupPage from '@/pages/admin/AdminSetupPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
@@ -39,6 +40,10 @@ import AdminLogsPage from '@/pages/admin/AdminLogsPage';
  * 应用路由配置
  */
 export const router = createBrowserRouter([
+  {
+    path: '/external-redirect',
+    element: <ExternalRedirectPage />,
+  },
   {
     path: '/admin/login',
     element: <AdminLoginPage />,
