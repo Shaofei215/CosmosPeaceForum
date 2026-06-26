@@ -770,7 +770,9 @@ function ReportDialog({
       <div className="w-full max-w-lg rounded-lg border border-border bg-background p-5 shadow-xl">
         <div>
           <h2 className="text-lg font-semibold">举报{targetLabel}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">请填写举报原因，管理端会进行审查。</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            请填写违规类型及举报原因，确认违规后将被处理。
+          </p>
         </div>
         <Textarea
           value={reason}

@@ -480,7 +480,6 @@ export default function ProfilePage() {
       </div>
       {reportOpen && (
         <ReportUserDialog
-          username={user.username}
           reason={reportReason}
           error={reportError}
           saving={createReport.isPending}
@@ -528,7 +527,6 @@ export default function ProfilePage() {
 }
 
 function ReportUserDialog({
-  username,
   reason,
   error,
   saving,
@@ -536,7 +534,6 @@ function ReportUserDialog({
   onClose,
   onSubmit,
 }: {
-  username: string;
   reason: string;
   error: string;
   saving: boolean;
@@ -550,7 +547,7 @@ function ReportUserDialog({
         <div>
           <h2 className="text-lg font-semibold">举报用户</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            @{username} 的资料和最近内容会进入管理端审查。
+            请填写违规类型及举报原因，确认违规后将被处理。
           </p>
         </div>
         <Textarea
