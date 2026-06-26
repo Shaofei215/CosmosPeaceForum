@@ -266,6 +266,21 @@ textarea:focus {
   transform: translateX(100%);
 }
 
+.management-compact :where(button.rounded-full, a.rounded-full) {
+  border-radius: var(--radius);
+}
+
+.management-compact :where(.rounded-xl) {
+  border-radius: var(--radius);
+}
+
+.management-compact :where(button.shadow, a.shadow, button.shadow-sm, a.shadow-sm) {
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
 @media (max-width: 640px) {
   .auth-page {
     min-height: 100svh;
