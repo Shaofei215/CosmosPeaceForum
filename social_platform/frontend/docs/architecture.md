@@ -178,7 +178,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 **适用场景：**
 - 用户认证状态
-- UI 主题设置
 - 模态框开关状态
 - 表单临时数据
 
@@ -316,26 +315,6 @@ interface PostCardProps {
 </button>
 ```
 
-### 主题配置
-
-```javascript
-// tailwind.config.js
-export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          50: '#f0f9ff',
-          500: '#0ea5e9',
-          900: '#0c4a6e',
-        },
-      },
-    },
-  },
-}
-```
-
 ---
 
 ## 环境变量
@@ -345,14 +324,14 @@ export default {
 ```bash
 # .env.example
 VITE_API_BASE_URL=http://localhost:8000
-VITE_PLATFORM_DISPLAY_NAME=宇宙和平论坛
+PLATFORM_DISPLAY_NAME=宇宙和平论坛
 ```
 
 ### 使用方式
 
 ```typescript
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
-const appName = import.meta.env.VITE_PLATFORM_DISPLAY_NAME
+const appName = import.meta.env.PLATFORM_DISPLAY_NAME
 ```
 
 ---

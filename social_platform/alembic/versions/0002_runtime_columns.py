@@ -63,27 +63,6 @@ def upgrade() -> None:
         sa.Column("email", sa.String(255), nullable=True),
     )
 
-    _add_column_if_missing(
-        "platform_theme_settings",
-        sa.Column("topbar_action_active_color", sa.Text(), nullable=True),
-    )
-    _add_column_if_missing(
-        "platform_theme_settings",
-        sa.Column("topbar_action_active_foreground_color", sa.Text(), nullable=True),
-    )
-    _add_column_if_missing(
-        "platform_theme_settings",
-        sa.Column("topbar_action_inactive_color", sa.Text(), nullable=True),
-    )
-    _add_column_if_missing(
-        "platform_theme_settings",
-        sa.Column("topbar_action_inactive_foreground_color", sa.Text(), nullable=True),
-    )
-    _add_column_if_missing(
-        "platform_theme_settings",
-        sa.Column("topbar_background_image", sa.Text(), nullable=True),
-    )
-
 
 def downgrade() -> None:
     pass

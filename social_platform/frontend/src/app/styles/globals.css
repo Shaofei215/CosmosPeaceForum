@@ -20,7 +20,7 @@
 }
 
 /* ============================================
-   CSS变量定义 - 支持主题切换
+   CSS变量定义
    ============================================ */
 :root {
   /* 字体 */
@@ -53,21 +53,6 @@
   --border: 214.3 31.8% 91.4%;
   --input: 214.3 31.8% 91.4%;
   --ring: 222.2 84% 4.9%;
-
-  /* 自定义主题色 */
-  --theme-primary: 262 83% 58%;
-  --theme-primary-light: 262 83% 65%;
-  --theme-primary-dark: 262 83% 45%;
-  --theme-accent-bg: #111827;
-  --theme-accent-fg: #ffffff;
-  --theme-subtle-bg: rgba(243, 244, 246, 0.82);
-  --theme-subtle-fg: #4b5563;
-  --theme-topbar-bg: #ffffff;
-  --theme-topbar-scrolled-bg: rgba(255, 255, 255, 0.45);
-  --theme-topbar-action-active-bg: var(--theme-accent-bg);
-  --theme-topbar-action-active-fg: var(--theme-accent-fg);
-  --theme-topbar-action-inactive-bg: var(--theme-subtle-bg);
-  --theme-topbar-action-inactive-fg: var(--theme-subtle-fg);
 }
 
 /* 深色主题 */
@@ -207,58 +192,117 @@ textarea:focus {
   align-items: center;
   justify-content: flex-start;
   overflow: hidden;
-  padding: clamp(1.25rem, 4.5vh, 3rem) 1rem 1rem;
+  padding: clamp(0.75rem, 2.6vh, 1.75rem) 1rem 1rem;
+  background: url('/background.png') center / cover no-repeat;
 }
 
 .auth-page::before {
-  content: attr(data-auth-word);
-  position: fixed;
-  z-index: -1;
-  right: max(-18vw, -9rem);
-  bottom: max(-10vh, -7rem);
-  max-width: 120vw;
-  color: var(--auth-word-color, var(--theme-accent-bg));
-  font-size: clamp(12rem, 34vw, 34rem);
-  font-weight: 800;
-  line-height: 0.8;
-  letter-spacing: 0;
-  opacity: 0.72;
-  white-space: nowrap;
-  text-transform: uppercase;
-  pointer-events: none;
+  content: '';
+  display: none;
 }
 
 .auth-big-logo {
   position: relative;
   z-index: 1;
-  width: min(74vw, 34rem);
-  max-height: min(22vh, 10rem);
+  width: min(62vw, 26rem);
+  max-height: min(16vh, 7.5rem);
   object-fit: contain;
-  margin-bottom: clamp(1rem, 3vh, 2rem);
+  margin-bottom: clamp(0.5rem, 1.8vh, 1.1rem);
 }
 
 .auth-card {
   position: relative;
   z-index: 1;
   width: min(100%, 23rem);
-  margin-top: clamp(0.75rem, 2.25vh, 1.75rem);
+  margin-top: clamp(0.25rem, 1vh, 0.75rem);
+}
+
+.auth-register-card {
+  width: min(100%, 42rem);
+}
+
+.auth-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.75rem;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.35rem 0.55rem;
+  color: rgb(220, 38, 38);
+}
+
+.auth-success {
+  border-color: rgba(22, 163, 74, 0.24);
+  color: rgb(22, 101, 52);
+}
+
+.auth-segmented-slider {
+  transform: translateX(0);
+}
+
+.auth-segmented[data-active='code'] .auth-segmented-slider {
+  transform: translateX(100%);
+}
+
+.auth-menu-enter {
+  animation: menuEnter 0.16s ease-out both;
+}
+
+.menu-origin-top-right {
+  transform-origin: top right;
+}
+
+.menu-origin-bottom-right {
+  transform-origin: bottom right;
+}
+
+.auth-sort-slider {
+  transform: translateX(0);
+}
+
+.comment-sort-segmented[data-active='latest'] .auth-sort-slider {
+  transform: translateX(100%);
+}
+
+.management-compact :where(button.rounded-full, a.rounded-full) {
+  border-radius: var(--radius);
+}
+
+.management-compact :where(.rounded-xl) {
+  border-radius: var(--radius);
+}
+
+.management-compact :where(input, textarea, select) {
+  border-color: rgb(212 212 216 / 0.8);
+  box-shadow: none;
+}
+
+.management-compact :where(button, a[role='button']) {
+  box-shadow: none;
+}
+
+.management-compact :where(button.shadow, a.shadow, button.shadow-sm, a.shadow-sm) {
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  box-shadow:
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 
 @media (max-width: 640px) {
   .auth-page {
-    padding-top: clamp(1rem, 3vh, 1.75rem);
-  }
-
-  .auth-page::before {
-    right: -3.5rem;
-    bottom: -2rem;
-    font-size: clamp(7rem, 42vw, 13rem);
+    min-height: 100svh;
+    padding-top: clamp(0.75rem, 2vh, 1.25rem);
+    background: hsl(var(--card));
+    overflow-y: auto;
   }
 
   .auth-big-logo {
-    width: min(78vw, 20rem);
-    max-height: 7rem;
-    margin-bottom: 0.75rem;
+    width: min(68vw, 17rem);
+    max-height: 5.5rem;
+    margin-bottom: 0.35rem;
+    align-self: center;
   }
 
   .auth-card-header {
@@ -320,6 +364,17 @@ img {
   animation: fadeIn 0.2s ease-out;
 }
 
+@keyframes menuEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* 滑入动画 */
 @keyframes slideIn {
   from {
@@ -349,6 +404,34 @@ img {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+.markdown-link,
+.markdown-body a {
+  color: rgb(2 132 199) !important;
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+
+.markdown-link:hover,
+.markdown-body a:hover {
+  color: rgb(3 105 161) !important;
+}
+
+.article-link-bar {
+  transform-origin: left center;
+  animation: articleLinkBarEnter 160ms ease-out;
+}
+
+@keyframes articleLinkBarEnter {
+  from {
+    opacity: 0;
+    transform: scaleX(0.65) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1) translateY(0);
+  }
 }
 
 .markdown-body :not(pre) > code {
@@ -433,8 +516,13 @@ img {
 }
 
 .article-rich-editor .ProseMirror a {
-  color: hsl(var(--primary));
+  color: rgb(2 132 199);
   font-weight: 500;
+  transition: color 150ms ease;
+}
+
+.article-rich-editor .ProseMirror a:hover {
+  color: rgb(3 105 161);
 }
 
 .article-editor-toolbar {
@@ -640,8 +728,12 @@ img {
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  background-color: hsl(var(--card));
+  background: hsl(var(--card));
   padding: 1.5rem 1rem calc(2rem + env(safe-area-inset-bottom));
+}
+
+.mobile-device .auth-big-logo {
+  align-self: center;
 }
 
 .mobile-device .auth-card {

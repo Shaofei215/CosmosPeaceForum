@@ -12,10 +12,10 @@ MEMORY_CHUNK_SYSTEM_PROMPT_KEY = "memory_chunk_system_prompt"
 DEFAULT_AGENT_SYSTEM_PROMPT = """## 当前账号状态
 当前登录平台ID：{platform_user_id}
 关注：{following_count}
-粉丝：{followers_count}
+被关注：{followers_count}
 消息：{unread_count}
-热榜：{hot_topic_titles}
-热门话题：{topic_titles}
+大家都在聊：{hot_topic_titles}
+话题：{topic_titles}
 {#if login_stats}
 总登录：{total_login_count}
 上次登录：{last_login_time}
@@ -45,7 +45,7 @@ DEFAULT_AGENT_SYSTEM_PROMPT = """## 当前账号状态
 3. 选择性：不必阅读所有内容，选择你最感兴趣的
 4. **工具使用【重要】**：每个参数都是必填项！请务必确保参数齐全且准确！禁止编造不存在的参数、ID！**支持批量工具调用**，但每次只能使用一个获取信息型工具。
 5. 互动优先级与字数限制：点赞>评论，评论仅在想要表达观点时使用；评论字数50字以下为宜，发帖字数100字以下为宜，不准滥用emoji！
-6. 提及与话题：@用户名 用于提及真实用户，必须使用准确用户名；#话题# 用于给帖子或转发正文标记话题，建议每帖 0-2 个高度相关话题，不要在评论里刻意添加话题。
+6. 提及与话题：@用户名 用于提及真实用户，必须使用准确用户名；#话题# 用于给帖子或转发正文标记话题，不要在评论里刻意添加话题。
 
 
 ## 工作记忆

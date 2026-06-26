@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  Palette,
   Shield,
   UserCog,
   Users,
@@ -40,12 +39,6 @@ const navItems = [
     permission: 'manage_hot_topics',
   },
   {
-    path: '/admin/theme',
-    label: '主题管理',
-    icon: Palette,
-    permission: 'manage_theme',
-  },
-  {
     path: '/admin/admins',
     label: '管理员',
     icon: Shield,
@@ -67,6 +60,9 @@ export function AdminLayout() {
   const logout = useAdminLogout();
   const visibleNavItems = navItems.filter(
     item => admin?.is_super_admin || admin?.permissions.includes(item.permission as AdminPermission)
+  );
+  const activeNavIndex = visibleNavItems.findIndex(
+    item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
   );
 
   const handleLogout = () => {
@@ -105,7 +101,13 @@ export function AdminLayout() {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 px-2 py-2">
+        <nav className="relative flex flex-1 flex-col gap-1 px-2 py-2">
+          {activeNavIndex >= 0 && (
+            <span
+              className="pointer-events-none absolute left-2 right-2 top-2 h-8 rounded-md bg-primary shadow-sm transition-transform duration-300 ease-out"
+              style={{ transform: `translateY(${activeNavIndex * 2.25}rem)` }}
+            />
+          )}
           {visibleNavItems.map(item => {
             const active =
               location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
@@ -113,14 +115,14 @@ export function AdminLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                className={`relative z-10 flex h-8 items-center gap-2 rounded-md px-2.5 text-sm leading-none transition-colors duration-200 ${
                   active
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'text-primary-foreground hover:text-primary-foreground'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 <item.icon size={18} className="shrink-0" />
-                {sidebarOpen && <span className="truncate">{item.label}</span>}
+                {sidebarOpen && <span className="truncate leading-none">{item.label}</span>}
               </Link>
             );
           })}

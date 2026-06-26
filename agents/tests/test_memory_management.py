@@ -697,7 +697,7 @@ class TestLlmSmartChunk:
                 call_kwargs = mock_chat_openai.call_args[1]
                 assert call_kwargs["model"] == "gpt-4"
                 assert call_kwargs["temperature"] == 0.7
-                assert call_kwargs["max_tokens"] == 4096
+                assert "max_tokens" not in call_kwargs
                 assert call_kwargs["api_key"] == "test-api-key"
                 assert call_kwargs["base_url"] == "https://custom-api.com/v1"
 

@@ -26,6 +26,10 @@ export function AppLayout() {
   const visibleNavItems = navItems.filter((item) =>
     admin?.is_super_admin || admin?.permissions.includes(item.permission as AdminPermission),
   );
+  const activeNavIndex = visibleNavItems.findIndex((item) =>
+    location.pathname === item.path ||
+    (item.path !== '/dashboard' && location.pathname.startsWith(`${item.path}/`)),
+  );
 
   return (
     <div className="management-compact flex h-screen bg-background">
@@ -59,22 +63,28 @@ export function AppLayout() {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 px-2 py-2">
+        <nav className="relative flex flex-1 flex-col gap-1 px-2 py-2">
+          {activeNavIndex >= 0 && (
+            <span
+              className="pointer-events-none absolute left-2 right-2 top-2 h-8 rounded-md bg-primary shadow-sm transition-transform duration-300 ease-out"
+              style={{ transform: `translateY(${activeNavIndex * 2.25}rem)` }}
+            />
+          )}
           {visibleNavItems.map((item) => {
             const isActive = location.pathname === item.path ||
-              (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+              (item.path !== '/dashboard' && location.pathname.startsWith(`${item.path}/`));
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                className={`relative z-10 flex h-8 items-center gap-2 rounded-md px-2.5 text-sm leading-none transition-colors duration-200 ${
                   isActive
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'text-primary-foreground hover:text-primary-foreground'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 <item.icon size={18} className="shrink-0" />
-                {sidebarOpen && <span className="truncate">{item.label}</span>}
+                {sidebarOpen && <span className="truncate leading-none">{item.label}</span>}
               </Link>
             );
           })}

@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.core.security import verify_password, get_password_hash, create_access_token
 from agents.management.backend.core.config import get_config
-from agents.management.backend.schemas import AdminUserResponse
+from agents.management.backend.schemas import AdminProfileUpdateRequest, AdminUserResponse
 from agents.management.backend.services.permissions import ALL_PERMISSIONS, normalize_permissions
 
 
@@ -83,6 +83,47 @@ def update_last_login(db: Session, admin_id: int) -> None:
         db.commit()
 
 
+def update_profile(
+    db: Session,
+    admin: AdminUser,
+    request: AdminProfileUpdateRequest,
+) -> AdminUser:
+    """更新当前 management 管理员的用户名或密码。
+
+    Args:
+        db: 当前数据库会话。
+        admin: 已通过认证的管理员实体。
+        request: 包含当前密码、新用户名和新密码的更新请求。
+
+    Returns:
+        更新后的管理员实体。
+
+    Raises:
+        ValueError: 当前密码错误，或目标用户名已经被占用。
+    """
+
+    if not verify_password(request.current_password, admin.password_hash):
+        raise ValueError("当前密码不正确")
+
+    username = request.username.strip() if request.username else None
+    if username and username != admin.username:
+        existing = get_admin_by_username(db, username)
+        if existing is not None:
+            raise ValueError("用户名已存在")
+        admin.username = username
+
+    if request.new_password:
+        admin.password_hash = get_password_hash(request.new_password)
+
+    if username or request.new_password:
+        admin.must_change_credentials = False
+    admin.updated_at = local_now()
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    return admin
+
+
 def init_default_admin(db: Session) -> bool:
     """按 agents/.env 初始化首个管理员。"""
     config = get_config()
@@ -96,7 +137,7 @@ def init_default_admin(db: Session) -> bool:
         permissions=dump_permissions(ALL_PERMISSIONS),
         is_active=True,
         is_super_admin=True,
-        must_change_credentials=False,
+        must_change_credentials=True,
     )
     db.add(admin)
     db.commit()

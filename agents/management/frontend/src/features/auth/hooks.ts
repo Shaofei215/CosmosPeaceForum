@@ -37,6 +37,19 @@ export const useCurrentAdmin = () => {
   });
 };
 
+export const useProfileUpdate = () => {
+  const setUser = useAuthStore((state) => state.setUser);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: authApi.updateProfile,
+    onSuccess: (admin) => {
+      setUser(admin);
+      queryClient.setQueryData(['auth', 'me'], admin);
+    },
+  });
+};
+
 export const useLogout = () => {
   const { logout } = useAuthStore();
   const queryClient = useQueryClient();

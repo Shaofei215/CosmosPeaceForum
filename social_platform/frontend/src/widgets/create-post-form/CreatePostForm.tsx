@@ -90,7 +90,7 @@ export function CreatePostForm() {
           aria-label="投票"
           onClick={() => setIsPollOpen(value => !value)}
           className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:opacity-85 ${
-            isPollOpen ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600'
+            isPollOpen ? 'bg-zinc-950 text-white' : 'bg-slate-100 text-slate-600'
           }`}
         >
           <Vote className="h-[18px] w-[18px]" />
@@ -99,7 +99,7 @@ export function CreatePostForm() {
           to="/article/new"
           title="写文章"
           aria-label="写文章"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--theme-subtle-bg)] text-[var(--theme-subtle-fg)] transition-colors hover:opacity-85"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100/80 text-zinc-600 transition-colors hover:opacity-85"
         >
           <FilePenLine className="h-[18px] w-[18px]" />
         </Link>

@@ -83,8 +83,8 @@ class UserResponse(UserBase):
     # 关注数量
     following_count: int = Field(default=0, description="关注数量")
 
-    # 粉丝数量
-    followers_count: int = Field(default=0, description="粉丝数量")
+    # 被关注数量
+    followers_count: int = Field(default=0, description="被关注数量")
 
     # 配置：允许从 ORM 模型读取数据
     class Config:

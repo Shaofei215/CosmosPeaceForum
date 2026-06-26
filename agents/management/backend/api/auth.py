@@ -11,6 +11,7 @@ from agents.management.backend.schemas import (
     RefreshTokenRequest,
     SessionResponse,
     AdminUserResponse,
+    AdminProfileUpdateRequest,
 )
 from agents.management.backend.models.admin_session import AdminSession
 from agents.management.backend.models.admin_user import AdminUser
@@ -19,6 +20,7 @@ from agents.management.backend.services.auth_service import (
     admin_to_response,
     update_last_login,
     get_admin_by_id,
+    update_profile as update_admin_profile,
 )
 from agents.management.backend.services import session_service
 from agents.management.backend.api.deps import get_current_admin, get_management_access_payload, security
@@ -133,3 +135,17 @@ def revoke_session(
 def get_me(current_admin: AdminUser = Depends(get_current_admin)):
     """获取当前 management 管理员信息。"""
     return admin_to_response(current_admin)
+
+
+@router.put("/profile", response_model=AdminUserResponse)
+def update_profile(
+    request: AdminProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_admin),
+):
+    """更新当前 management 管理员自己的登录资料。"""
+    try:
+        admin = update_admin_profile(db, current_admin, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return admin_to_response(admin)

@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import {
   useInvitationRegistrationConfig,
   useRegisterWithVerification,
@@ -22,6 +23,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(0);
 
@@ -115,6 +117,10 @@ export default function RegisterPage() {
       setError('两次输入的密码不一致');
       return;
     }
+    if (!acceptedTerms) {
+      setError('请先阅读并同意服务条款、隐私条约与社区规范');
+      return;
+    }
 
     register(
       {
@@ -138,20 +144,24 @@ export default function RegisterPage() {
   return (
     <div className="auth-page" data-auth-word="Register">
       <BigLogo />
-      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card auth-register-card rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1 pb-4">
           <CardTitle className="auth-title text-2xl font-bold text-center">注册</CardTitle>
         </CardHeader>
         <CardContent className="auth-card-content">
-          <form onSubmit={handleSubmit} className="auth-form space-y-3.5">
+          <form
+            onSubmit={handleSubmit}
+            className="auth-form grid grid-cols-1 gap-3.5 md:grid-cols-2"
+          >
             {error && (
-              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
-                {error}
+              <div className="auth-alert text-sm md:col-span-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
             {/* 邮箱 */}
-            <div className="auth-field space-y-2">
+            <div className="auth-field space-y-2 md:col-span-2">
               <label htmlFor="email" className="text-sm font-medium">
                 邮箱
               </label>
@@ -217,7 +227,7 @@ export default function RegisterPage() {
                     !email.trim() ||
                     (invitationRequired && !invitationCode.trim())
                   }
-                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-none hover:opacity-90"
+                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
                 >
                   {countdown > 0 ? `${countdown}秒后重试` : '获取验证码'}
                 </Button>
@@ -267,7 +277,35 @@ export default function RegisterPage() {
               记住我
             </label>
 
-            <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
+            <label className="flex items-start gap-2 text-sm leading-5 text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={e => setAcceptedTerms(e.target.checked)}
+                disabled={isPending}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+              />
+              <span>
+                同意{' '}
+                <Link to="/legal/terms-of-service" className="text-primary hover:underline">
+                  服务条款
+                </Link>
+                、
+                <Link to="/legal/privacy-policy" className="text-primary hover:underline">
+                  隐私条约
+                </Link>
+                、
+                <Link to="/legal/community-guidelines" className="text-primary hover:underline">
+                  社区规范
+                </Link>
+              </span>
+            </label>
+
+            <Button
+              type="submit"
+              className="auth-submit w-full rounded-lg md:col-span-2"
+              disabled={isPending}
+            >
               {isRegistering ? '注册中...' : '注册'}
             </Button>
           </form>

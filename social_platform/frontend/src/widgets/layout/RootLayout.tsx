@@ -5,7 +5,6 @@ import { RightSidebar } from '@/widgets/right-sidebar';
 import { TopBar } from '@/widgets/top-bar';
 import { cn } from '@/shared/lib/utils';
 import { MobileBottomBar } from './MobileBottomBar';
-import { useThemeScopeStyle } from '@/features/theme/ThemeScope';
 
 const AUTH_PATHS = [
   '/login',
@@ -24,7 +23,6 @@ export function RootLayout() {
   const previousLocationKeyRef = useRef(location.key);
   const pathname = location.pathname;
   const isMobileDevice = isMobileUserAgent();
-  const themeStyle = useThemeScopeStyle();
 
   useEffect(() => {
     if (!('scrollRestoration' in window.history)) {
@@ -64,13 +62,12 @@ export function RootLayout() {
     <div
       className={cn('min-h-screen bg-background/80', isMobileDevice && 'mobile-device')}
       data-mobile-device={isMobileDevice ? 'true' : undefined}
-      style={themeStyle}
     >
       <main
         className={cn(
           'relative z-10 container mx-auto px-2 pt-2 sm:px-4 sm:pt-3',
-          isAuthPage && 'mobile-auth-main',
-          showTopAndRight ? 'pb-24 lg:pb-3' : 'pb-2 sm:pb-3'
+          isAuthPage && 'mobile-auth-main min-h-screen max-w-none p-0 sm:p-0',
+          showTopAndRight ? 'pb-24 lg:pb-3' : !isAuthPage && 'pb-2 sm:pb-3'
         )}
       >
         {showTopAndRight && (
@@ -81,14 +78,14 @@ export function RootLayout() {
           </div>
         )}
 
-        <div className="flex items-start justify-center gap-3">
+        <div className={cn('flex items-start justify-center gap-3', isAuthPage && 'min-h-screen')}>
           {showLeft && (
             <div className="hidden w-64 flex-shrink-0 lg:block">
               <LeftSidebar />
             </div>
           )}
 
-          <div className="w-full max-w-2xl flex-shrink-0">
+          <div className={cn('w-full flex-shrink-0', isAuthPage ? 'max-w-none' : 'max-w-2xl')}>
             <Outlet />
           </div>
 

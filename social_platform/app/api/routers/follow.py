@@ -101,8 +101,8 @@ def get_my_following(
 
 @router.get(
     "/me/followers",
-    summary="获取当前用户粉丝列表",
-    description="获取当前登录用户的粉丝列表，需要认证"
+    summary="获取当前用户被关注列表",
+    description="获取当前登录用户的被关注列表，需要认证"
 )
 def get_my_followers(
     page: int = Query(1, ge=1, description="页码，从 1 开始"),
@@ -111,9 +111,9 @@ def get_my_followers(
     current_user: User = Depends(get_current_user)
 ):
     """
-    获取当前用户的粉丝列表（需认证）
+    获取当前用户的被关注列表（需认证）
 
-    查询当前登录用户的所有粉丝，支持分页
+    查询当前登录用户的所有被关注，支持分页
 
     - **page**: 页码，默认 1
     - **page_size**: 每页记录数，默认 20，最大 100
@@ -197,7 +197,7 @@ def toggle_follow(
 
     需要认证：是的（Bearer Token）
 
-    返回：包含用户 ID、当前关注状态、粉丝数、关注数
+    返回：包含用户 ID、当前关注状态、被关注数、关注数
 
     错误：
     - 400：不能关注自己
@@ -339,8 +339,8 @@ def get_following(
 
 @router.get(
     "/{user_id}/followers",
-    summary="获取用户粉丝列表",
-    description="获取指定用户的粉丝列表，公开接口"
+    summary="获取用户被关注列表",
+    description="获取指定用户的被关注列表，公开接口"
 )
 def get_followers(
     user_id: int,
@@ -350,9 +350,9 @@ def get_followers(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
-    获取用户的粉丝列表（公开接口）
+    获取用户的被关注列表（公开接口）
 
-    查询指定用户的所有粉丝，支持分页
+    查询指定用户的所有被关注，支持分页
     如果当前用户已登录，会标注当前用户是否关注了列表中的用户
 
     - **user_id**: 目标用户 ID（路径参数）

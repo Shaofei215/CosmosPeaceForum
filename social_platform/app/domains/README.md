@@ -55,7 +55,7 @@ social_platform/app/domains/
 - `post`：发帖、编辑、删除、转发；发布帖子和转发相关事件。
 - `comment`：评论创建、删除、扁平回复、评论点赞状态；发布评论相关事件。
 - `reaction`：帖子/评论点赞等互动状态；发布 `LikeChanged`。
-- `follow`：关注关系、关注/粉丝列表；发布 `FollowChanged`。
+- `follow`：关注关系、关注/被关注列表；发布 `FollowChanged`。
 - `user`：用户公开资料、头像、公开用户信息；发布用户资料变化事件。
 - `identity`：注册、登录、session、邮箱验证、密码重置、AI 登录。
 - `email`：公共邮件模板、邮件内容组装和通用发件器。

@@ -25,6 +25,8 @@ import NotificationsPage from '@/pages/notification/NotificationsPage';
 import ArticleEditorPage from '@/pages/article/ArticleEditorPage';
 import SearchPage from '@/pages/search/SearchPage';
 import HotTopicsPage from '@/pages/hot/HotTopicsPage';
+import LegalDocumentPage from '@/pages/legal/LegalDocumentPage';
+import ExternalRedirectPage from '@/pages/external/ExternalRedirectPage';
 import AdminLoginPage from '@/pages/admin/AdminLoginPage';
 import AdminSetupPage from '@/pages/admin/AdminSetupPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
@@ -33,12 +35,16 @@ import AdminContentPage from '@/pages/admin/AdminContentPage';
 import AdminHotTopicsPage from '@/pages/admin/AdminHotTopicsPage';
 import AdminAdminsPage from '@/pages/admin/AdminAdminsPage';
 import AdminLogsPage from '@/pages/admin/AdminLogsPage';
-import AdminThemePage from '@/pages/admin/AdminThemePage';
+import ErrorPage from '@/pages/error/ErrorPage';
 
 /**
  * 应用路由配置
  */
 export const router = createBrowserRouter([
+  {
+    path: '/external-redirect',
+    element: <ExternalRedirectPage />,
+  },
   {
     path: '/admin/login',
     element: <AdminLoginPage />,
@@ -56,7 +62,6 @@ export const router = createBrowserRouter([
           { path: 'users', element: <AdminUsersPage /> },
           { path: 'content', element: <AdminContentPage /> },
           { path: 'hot-topics', element: <AdminHotTopicsPage /> },
-          { path: 'theme', element: <AdminThemePage /> },
           { path: 'admins', element: <AdminAdminsPage /> },
           { path: 'logs', element: <AdminLogsPage /> },
         ],
@@ -78,6 +83,7 @@ export const router = createBrowserRouter([
       { path: 'user/:userId/followers', element: <FollowersListPage /> },
       { path: 'search', element: <SearchPage /> },
       { path: 'hot', element: <HotTopicsPage /> },
+      { path: 'legal/:documentSlug', element: <LegalDocumentPage /> },
 
       // 认证路由
       { path: 'login', element: <LoginPage /> },
@@ -98,5 +104,5 @@ export const router = createBrowserRouter([
     ],
   },
   // 404页面
-  { path: '*', element: <div className="p-8 text-center">页面不存在</div> },
+  { path: '*', element: <ErrorPage /> },
 ]);

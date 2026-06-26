@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import { useConfirmPasswordReset } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { BigLogo } from '@/shared/components/auth/BigLogo';
@@ -88,8 +89,9 @@ export default function ResetPasswordPage() {
         <CardContent className="auth-card-content">
           <form onSubmit={handleSubmit} className="auth-form space-y-4">
             {error && (
-              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
-                {error}
+              <div className="auth-alert text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 

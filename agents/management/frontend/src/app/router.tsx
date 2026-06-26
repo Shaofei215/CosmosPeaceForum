@@ -3,6 +3,7 @@ import { AuthGuard } from '@/features/auth';
 import { AppLayout } from '@/widgets/layout/AppLayout';
 
 import LoginPage from '@/pages/LoginPage';
+import SetupPage from '@/pages/SetupPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AdminListPage from '@/pages/AdminListPage';
 import AgentListPage from '@/pages/AgentListPage';
@@ -15,11 +16,20 @@ import MemoryDetailPage from '@/pages/MemoryDetailPage';
 import SystemConfigPage from '@/pages/SystemConfigPage';
 import PromptConfigPage from '@/pages/PromptConfigPage';
 import LogPage from '@/pages/LogPage';
+import ErrorPage from '@/pages/ErrorPage';
 
 export const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/setup',
+    element: (
+      <AuthGuard>
+        <SetupPage />
+      </AuthGuard>
+    ),
   },
   {
     path: '/',
@@ -44,5 +54,5 @@ export const router = createBrowserRouter([
       { path: 'logs', element: <LogPage /> },
     ],
   },
-  { path: '*', element: <Navigate to="/" replace /> },
+  { path: '*', element: <ErrorPage /> },
 ]);

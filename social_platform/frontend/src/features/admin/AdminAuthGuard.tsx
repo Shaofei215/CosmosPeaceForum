@@ -11,9 +11,7 @@ export function AdminAuthGuard() {
   }
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen p-8 text-sm text-muted-foreground">正在验证管理员身份...</div>
-    );
+    return <div className="min-h-screen" />;
   }
 
   if (admin?.must_change_credentials && location.pathname !== '/admin/setup') {

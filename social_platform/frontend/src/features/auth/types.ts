@@ -139,7 +139,7 @@ export interface User {
   bio?: string | null;
   /** 关注数量 */
   following_count?: number;
-  /** 粉丝数量 */
+  /** 被关注数量 */
   followers_count?: number;
 }
 

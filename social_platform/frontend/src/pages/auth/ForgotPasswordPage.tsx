@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import { useSendPasswordResetCode } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { BigLogo } from '@/shared/components/auth/BigLogo';
@@ -106,25 +107,26 @@ export default function ForgotPasswordPage() {
         <CardContent className="auth-card-content">
           <form onSubmit={handleSubmit} className="auth-form space-y-4">
             {error && (
-              <div className="auth-alert p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
-                {error}
+              <div className="auth-alert text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
             {successMessage && (
-              <div className="auth-alert p-3 text-sm text-green-600 bg-green-50/80 backdrop-blur-sm rounded-lg">
-                {successMessage}
+              <div className="auth-alert auth-success text-sm">
+                <span>{successMessage}</span>
               </div>
             )}
 
             {/* 邮箱 */}
             <div className="auth-field space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
-                注册邮箱
+                邮箱
               </label>
               <Input
                 id="email"
                 type="email"
-                placeholder="请输入注册时使用的邮箱地址"
+                placeholder="请输入邮箱地址"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 disabled={isSending}
@@ -151,8 +153,8 @@ export default function ForgotPasswordPage() {
                   type="button"
                   variant="outline"
                   onClick={handleSendCode}
-                  disabled={countdown > 0 || isSending || !email.trim()}
-                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-none hover:opacity-90"
+                  disabled={countdown > 0 || isSending}
+                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
                 >
                   {countdown > 0 ? `${countdown}秒后重试` : isSending ? '发送中...' : '获取验证码'}
                 </Button>
@@ -160,11 +162,7 @@ export default function ForgotPasswordPage() {
             </div>
 
             {/* 提交按钮 */}
-            <Button
-              type="submit"
-              className="auth-submit w-full rounded-lg"
-              disabled={!email.trim() || !code.trim()}
-            >
+            <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isSending}>
               继续
             </Button>
 

@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import { useLogin, useSendLoginCode } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { BigLogo } from '@/shared/components/auth/BigLogo';
@@ -164,17 +165,16 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent className="auth-card-content">
           <form onSubmit={handleSubmit} className="auth-form space-y-4">
-            {/* 错误提示 */}
             {error && (
-              <div className="auth-alert whitespace-pre-wrap break-words p-3 text-sm text-red-500 bg-red-50/80 backdrop-blur-sm rounded-lg">
-                {error}
+              <div className="auth-alert whitespace-pre-wrap break-words text-sm">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
-            {/* 成功提示 */}
             {successMessage && (
-              <div className="auth-alert p-3 text-sm text-green-600 bg-green-50/80 backdrop-blur-sm rounded-lg">
-                {successMessage}
+              <div className="auth-alert auth-success text-sm">
+                <span>{successMessage}</span>
               </div>
             )}
 
@@ -195,14 +195,16 @@ export default function LoginPage() {
             </div>
 
             {/* 登录方式切换 */}
-            <div className="auth-segmented flex gap-2 rounded-lg bg-[var(--theme-subtle-bg)] p-1">
+            <div
+              className="auth-segmented relative grid grid-cols-2 rounded-lg bg-zinc-100/80 p-1"
+              data-active={loginMethod}
+            >
+              <span className="auth-segmented-slider absolute left-1 top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded-md bg-zinc-950 shadow-sm transition-transform duration-200 ease-out" />
               <button
                 type="button"
                 onClick={() => setLoginMethod('password')}
-                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-                  loginMethod === 'password'
-                    ? 'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)]'
-                    : 'text-[var(--theme-subtle-fg)] hover:text-foreground'
+                className={`relative z-10 rounded-md py-2 text-sm font-medium transition-colors ${
+                  loginMethod === 'password' ? 'text-white' : 'text-zinc-600 hover:text-foreground'
                 }`}
               >
                 密码登录
@@ -210,10 +212,8 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setLoginMethod('code')}
-                className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-                  loginMethod === 'code'
-                    ? 'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)]'
-                    : 'text-[var(--theme-subtle-fg)] hover:text-foreground'
+                className={`relative z-10 rounded-md py-2 text-sm font-medium transition-colors ${
+                  loginMethod === 'code' ? 'text-white' : 'text-zinc-600 hover:text-foreground'
                 }`}
               >
                 验证码登录
@@ -260,7 +260,7 @@ export default function LoginPage() {
                     variant="outline"
                     onClick={handleSendCode}
                     disabled={isPending || countdown > 0 || !email.trim()}
-                    className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] shadow-none hover:opacity-90"
+                    className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
                   >
                     {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
                   </Button>

@@ -8,7 +8,6 @@ from social_platform.app.admin.api import (
     dashboard,
     hot_topics,
     logs,
-    theme,
     users,
 )
 
@@ -22,6 +21,5 @@ admin_router.include_router(hot_topics.router)
 admin_router.include_router(announcements.router)
 admin_router.include_router(admins.router)
 admin_router.include_router(logs.router)
-admin_router.include_router(theme.router)
 
 __all__ = ["admin_router"]

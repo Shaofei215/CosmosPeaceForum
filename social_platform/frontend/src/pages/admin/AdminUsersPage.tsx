@@ -548,8 +548,8 @@ export default function AdminUsersPage() {
                         <div className="flex items-center gap-3">
                           <span
                             className="inline-flex items-center gap-1 text-muted-foreground"
-                            title="粉丝数"
-                            aria-label={`粉丝数 ${user.followers_count}`}
+                            title="被关注数"
+                            aria-label={`被关注数 ${user.followers_count}`}
                           >
                             <UsersRound size={15} />
                             <span className="font-medium tabular-nums text-foreground">
@@ -767,6 +767,7 @@ function InvitationCodesPanel({
               placeholder="绑定邮箱"
               type="email"
               disabled={creating}
+              className="shadow-none"
             />
             <Input
               value={prefix}
@@ -781,8 +782,9 @@ function InvitationCodesPanel({
               placeholder="前缀，可留空"
               disabled={creating}
               maxLength={16}
+              className="shadow-none"
             />
-            <Button type="submit" className="rounded-md" disabled={creating}>
+            <Button type="submit" className="rounded-md shadow-none" disabled={creating}>
               <KeyRound size={14} className="mr-1" />
               {creating ? '生成中...' : '生成'}
             </Button>
@@ -1420,8 +1422,7 @@ function CompactSwitch({
       role="switch"
       aria-checked={checked}
       className={
-        'relative h-6 w-11 rounded-full transition-colors ' +
-        (checked ? 'bg-[var(--theme-accent-bg)]' : 'bg-muted')
+        'relative h-6 w-11 rounded-full transition-colors ' + (checked ? 'bg-zinc-950' : 'bg-muted')
       }
       onClick={() => onChange(!checked)}
     >

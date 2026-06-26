@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDown as ExpandIcon,
@@ -88,6 +88,33 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         is_mutual: Boolean('author_is_mutual' in post && post.author_is_mutual),
       }
     : undefined;
+
+  /**
+   * 处理文章预览区域点击：点击链接时保留链接自身行为，其它区域进入详情页。
+   *
+   * @param event 文章预览容器点击事件。
+   */
+  const handleArticlePreviewClick = (event: MouseEvent<HTMLDivElement>): void => {
+    if (event.target instanceof Element && event.target.closest('a')) {
+      return;
+    }
+
+    navigate(`/post/${post.id}`);
+  };
+
+  /**
+   * 让文章预览容器具备键盘进入详情页的能力。
+   *
+   * @param event 文章预览容器键盘事件。
+   */
+  const handleArticlePreviewKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    navigate(`/post/${post.id}`);
+  };
   const { data: followStatus } = useFollowStatus(post.author_id, {
     enabled: !hasAuthorFollowStatus && !isCurrentUser,
     initialData: initialFollowStatus,
@@ -243,7 +270,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               toggleFollow.mutate(post.author_id);
             }}
             disabled={toggleFollow.isPending}
-            className="h-7 shrink-0 border-[var(--theme-accent-bg)] bg-white px-3 text-xs text-[var(--theme-accent-bg)] hover:bg-[var(--theme-subtle-bg)]"
+            className="h-7 shrink-0 border-zinc-950 bg-white px-3 text-xs text-zinc-950 hover:bg-zinc-100/80"
           >
             {toggleFollow.isPending ? (
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -268,17 +295,24 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               />
             </div>
           ) : (
-            <Link
-              to={`/post/${post.id}`}
-              className="block rounded-md transition-colors hover:bg-muted/20"
+            <div
+              role="link"
+              tabIndex={0}
+              onClick={handleArticlePreviewClick}
+              onKeyDown={handleArticlePreviewKeyDown}
+              className="block cursor-pointer rounded-md transition-colors hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <h3 className="mb-2 line-clamp-2 text-xl font-semibold leading-7 text-foreground sm:text-2xl sm:leading-8">
                 {post.title || 'Untitled'}
               </h3>
-              <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
-                {stripMarkdown(post.content)}
-              </p>
-            </Link>
+              <MarkdownRenderer
+                content={post.content}
+                compact
+                className="text-sm leading-6 text-muted-foreground"
+                mentionUsers={mentionUsers}
+                topicMentions={topicMentions}
+              />
+            </div>
           )
         ) : (
           <>
@@ -313,7 +347,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               event.stopPropagation();
               setIsContentExpanded(!isContentExpanded);
             }}
-            className="mt-2 flex items-center gap-1 text-sm text-[var(--theme-accent-bg)] transition-colors hover:opacity-80"
+            className="mt-2 flex items-center gap-1 text-sm text-zinc-950 transition-colors hover:opacity-80"
           >
             {isContentExpanded ? (
               <>
@@ -388,7 +422,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           </button>
           {isMoreOpen && (
             <div
-              className="absolute bottom-8 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
+              className="auth-menu-enter menu-origin-bottom-right absolute bottom-8 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
               onClick={event => event.stopPropagation()}
             >
               {isCurrentUser && (
@@ -449,7 +483,11 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         <div className="mt-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="text-sm font-medium text-foreground/80">评论</span>
-            <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
+            <div
+              className="comment-sort-segmented relative grid grid-cols-2 rounded-md bg-muted/50 p-1"
+              data-active={commentSort}
+            >
+              <span className="auth-sort-slider absolute left-1 top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded bg-background shadow-sm transition-transform duration-200 ease-out" />
               <button
                 type="button"
                 onClick={event => {
@@ -457,9 +495,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   event.stopPropagation();
                   setCommentSort('default');
                 }}
-                className={`flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
+                className={`relative z-10 flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
                   commentSort === 'default'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -473,9 +511,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   event.stopPropagation();
                   setCommentSort('latest');
                 }}
-                className={`flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
+                className={`relative z-10 flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors sm:px-2 ${
                   commentSort === 'latest'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -732,7 +770,9 @@ function ReportDialog({
       <div className="w-full max-w-lg rounded-lg border border-border bg-background p-5 shadow-xl">
         <div>
           <h2 className="text-lg font-semibold">举报{targetLabel}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">请填写举报原因，管理端会进行审查。</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            请填写违规类型及举报原因，确认违规后将被处理。
+          </p>
         </div>
         <Textarea
           value={reason}
@@ -1020,7 +1060,7 @@ function CommentItem({
               </button>
               {isMoreOpen && (
                 <div
-                  className="absolute bottom-7 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
+                  className="auth-menu-enter menu-origin-bottom-right absolute bottom-7 right-0 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
                   onClick={event => event.stopPropagation()}
                 >
                   {isCurrentUserComment && (

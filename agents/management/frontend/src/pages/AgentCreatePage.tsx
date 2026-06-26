@@ -1,5 +1,5 @@
-import AgentFormPage from '@/features/agents/components/AgentForm';
+import { Navigate } from 'react-router-dom';
 
 export default function AgentCreatePage() {
-  return <AgentFormPage mode="create" />;
+  return <Navigate to="/agents" replace />;
 }

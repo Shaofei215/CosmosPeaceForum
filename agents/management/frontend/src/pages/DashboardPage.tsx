@@ -85,7 +85,7 @@ export default function DashboardPage() {
   const stats: DashboardStat[] = [
     {
       type: 'value',
-      label: '启用角色数',
+      label: '启用角色',
       value: dashboardStats?.enabled_roles ?? 0,
       bg: 'bg-emerald-100',
       text: 'text-emerald-950',

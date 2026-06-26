@@ -10,6 +10,7 @@ import { useAuthStore } from '@/features/auth';
 import { useUser } from '@/features/user';
 import { useNotificationUnreadCount } from '@/features/notification';
 import { Avatar, Button } from '@/shared/components/ui';
+import { SidebarFooter } from './SidebarFooter';
 
 /**
  * 左侧边栏组件
@@ -62,12 +63,17 @@ export function LeftSidebar() {
                 <p className="text-lg font-semibold">
                   {currentUserProfile?.followers_count ?? user.followers_count ?? 0}
                 </p>
-                <p className="text-xs text-muted-foreground">粉丝</p>
+                <p className="text-xs text-muted-foreground">被关注</p>
               </Link>
             </div>
 
             {/* 消息按钮 */}
-            <Button asChild className="w-full gap-2 rounded-md" size="sm">
+            <Button
+              asChild
+              variant="outline"
+              className="w-full gap-2 rounded-md border-zinc-950 bg-white text-zinc-950 hover:bg-zinc-100"
+              size="sm"
+            >
               <Link to="/notifications">
                 <MessageCircle className="h-4 w-4" />
                 消息
@@ -88,15 +94,18 @@ export function LeftSidebar() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-3">登录以查看个人信息</p>
-              <Link to="/login">
-                <Button size="sm" className="w-full">
-                  登录
-                </Button>
-              </Link>
+              <Button
+                asChild
+                size="sm"
+                className="w-full gap-2 rounded-md border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800 hover:text-white"
+              >
+                <Link to="/login">登录</Link>
+              </Button>
             </div>
           </div>
         )}
       </div>
+      <SidebarFooter />
     </aside>
   );
 }

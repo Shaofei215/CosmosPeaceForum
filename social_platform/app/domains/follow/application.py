@@ -73,9 +73,9 @@ def toggle_follow(
         following_id: 被关注者用户 ID（被动接收关注的一方）
 
     Returns:
-        Tuple[bool, int, int]: (是否已关注, 被关注者的粉丝数, 关注者的关注数)
+        Tuple[bool, int, int]: (是否已关注, 被关注者的被关注数, 关注者的关注数)
         - is_following: True 表示关注成功，False 表示取消关注成功
-        - 被关注者的粉丝数（操作后的值）
+        - 被关注者的被关注数（操作后的值）
         - 关注者的关注数（操作后的值）
 
     Raises:
@@ -87,7 +87,7 @@ def toggle_follow(
         >>> is_following, followers_count, following_count = toggle_follow(
         ...     db=session, follower_id=123, following_id=456
         ... )
-        >>> print(f"关注状态：{is_following}, 粉丝数：{followers_count}")
+        >>> print(f"关注状态：{is_following}, 被关注数：{followers_count}")
     """
     # 参数校验：不能关注自己
     if follower_id == following_id:
@@ -126,7 +126,7 @@ def toggle_follow(
         following = db.query(User).filter(User.id == following_id).first()
 
         if is_following:
-            # 关注操作：关注者的关注数 +1，被关注者的粉丝数 +1
+            # 关注操作：关注者的关注数 +1，被关注者的被关注数 +1
             follower.following_count += 1
             following.followers_count += 1
             publish_domain_event(
@@ -139,7 +139,7 @@ def toggle_follow(
                 ),
             )
         else:
-            # 取消关注操作：关注者的关注数 -1，被关注者的粉丝数 -1
+            # 取消关注操作：关注者的关注数 -1，被关注者的被关注数 -1
             # 使用 max 确保不会减到负数
             follower.following_count = max(0, follower.following_count - 1)
             following.followers_count = max(0, following.followers_count - 1)
@@ -266,9 +266,9 @@ def get_followers_list(
     current_user_id: Optional[int] = None
 ) -> Tuple[List[Follow], int]:
     """
-    获取用户的粉丝列表（分页）
+    获取用户的被关注列表（分页）
 
-    查询指定用户的所有粉丝，支持分页查询。
+    查询指定用户的所有被关注，支持分页查询。
 
     Args:
         db: 数据库会话
@@ -278,16 +278,16 @@ def get_followers_list(
         current_user_id: 当前登录用户 ID（可选，用于批量查询关注状态）
 
     Returns:
-        Tuple[List[Follow], int]: (粉丝记录列表, 总数)
-        - follows: 粉丝记录列表，每条记录包含粉丝用户信息
+        Tuple[List[Follow], int]: (被关注记录列表, 总数)
+        - follows: 被关注记录列表，每条记录包含被关注用户信息
         - total: 符合条件的总记录数
 
     Note:
-        返回的 Follow 记录已预加载 follower（粉丝）用户信息
+        返回的 Follow 记录已预加载 follower（被关注）用户信息
     """
     offset = (page - 1) * page_size
 
-    # 查询粉丝记录，使用 joinedload 预加载粉丝用户信息避免 N+1
+    # 查询被关注记录，使用 joinedload 预加载被关注用户信息避免 N+1
     follows = db.query(Follow).options(
         joinedload(Follow.follower)
     ).filter(
@@ -333,7 +333,7 @@ def get_follow_status_batch(
         ...     target_user_ids=[456, 789, 101]
         ... )
         >>> for uid, status in statuses.items():
-        ...     print(f"用户{uid}: 关注={status['is_following']}, 粉丝={status['is_followed_by']}")
+        ...     print(f"用户{uid}: 关注={status['is_following']}, 被关注={status['is_followed_by']}")
     """
     if not target_user_ids:
         return {}
@@ -401,7 +401,7 @@ def get_user_follow_counts(
     """
     获取用户的关注统计数据
 
-    直接从数据库查询用户的关注数和粉丝数。
+    直接从数据库查询用户的关注数和被关注数。
 
     Args:
         db: 数据库会话

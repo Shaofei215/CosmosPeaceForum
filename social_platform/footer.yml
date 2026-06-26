@@ -1,0 +1,20 @@
+# 公开平台左侧页脚配置。
+#
+# 本文件只配置部署实例自己的页脚内容，例如备案、联系方式、运营方页面等。
+# CosmosPeaceForum 开源项目署名和仓库链接由前端源码固定维护，不在这里配置。
+
+copyright:
+  # 设为 false 后隐藏版权行。
+  enabled: true
+  # 留空时前端会显示：© 当前年份 平台展示名。
+  text: ""
+
+# 自定义链接会显示在协议链接上方。示例：
+# links:
+#   - label: "备案信息"
+#     href: "https://beian.miit.gov.cn/"
+#     external: true
+#   - label: "联系我们"
+#     href: "mailto:admin@example.com"
+#     external: true
+links: []

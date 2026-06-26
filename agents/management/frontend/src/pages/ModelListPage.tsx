@@ -214,7 +214,7 @@ export default function ModelListPage() {
                     {model.provider} / {model.model_name} / {model.base_url || '默认地址'}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    温度: {model.temperature} | Max Token: {model.max_token}
+                    温度: {model.temperature}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -297,7 +297,7 @@ export default function ModelListPage() {
                       {config.provider} / {config.model_name} / {config.base_url || '默认地址'}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      温度: {config.temperature} | Max Token: {config.max_token}
+                      温度: {config.temperature}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -421,7 +421,7 @@ interface EmbeddingConfigFormProps {
 function EmbeddingConfigForm({ config, onSave, isPending }: EmbeddingConfigFormProps) {
   const [baseUrl, setBaseUrl] = useState(config?.base_url ?? '');
   const [apiKey, setApiKey] = useState('');
-  const [modelName, setModelName] = useState(config?.model_name ?? 'text-embedding-3-small');
+  const [modelName, setModelName] = useState(config?.model_name ?? '');
   const [dimension, setDimension] = useState(config?.dimension ?? 1536);
   const [showApiKey, setShowApiKey] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -487,11 +487,11 @@ function EmbeddingConfigForm({ config, onSave, isPending }: EmbeddingConfigFormP
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Base URL</Label>
-            <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1" />
+            <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label>模型名称</Label>
-            <Input value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="text-embedding-3-small" />
+            <Input value={modelName} onChange={(e) => setModelName(e.target.value)} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -502,7 +502,6 @@ function EmbeddingConfigForm({ config, onSave, isPending }: EmbeddingConfigFormP
                 type={showApiKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
               />
               <button
                 type="button"
@@ -561,7 +560,7 @@ function ProviderSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      className="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
     >
       {modelProviderOptions.map((option) => (
         <option key={option.value} value={option.value}>
@@ -615,7 +614,6 @@ function ModelColorPicker({
           <Input
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder="#10A37F"
             className="h-7 min-w-0 border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-0"
           />
         </div>
@@ -742,7 +740,6 @@ function CreateModelDialog({
   const [baseUrl, setBaseUrl] = useState('');
   const [modelName, setModelName] = useState('');
   const [temperature, setTemperature] = useState(1.2);
-  const [maxToken, setMaxToken] = useState(4096);
   const [isActive] = useState(true);
   const [color, setColor] = useState(modelColorPresets[0].value);
   const [colorTouched, setColorTouched] = useState(false);
@@ -772,7 +769,6 @@ function CreateModelDialog({
       model_name: modelName.trim(),
       base_url: baseUrl.trim(),
       temperature,
-      max_token: maxToken,
       is_active: isActive,
       color,
       assigned_agent_ids: Array.from(assignedAgentIds),
@@ -799,7 +795,6 @@ function CreateModelDialog({
                   setName(e.target.value);
                   updateAutoColor(provider, modelName, e.target.value);
                 }}
-                placeholder="例如：OpenAI GPT-4"
               />
             </div>
 
@@ -822,7 +817,6 @@ function CreateModelDialog({
                     setModelName(e.target.value);
                     updateAutoColor(provider, e.target.value, name);
                   }}
-                  placeholder="gpt-4o"
                 />
               </div>
             </div>
@@ -834,7 +828,6 @@ function CreateModelDialog({
                   type={showApiKey ? 'text' : 'password'}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-..."
                 />
                 <button
                   type="button"
@@ -848,18 +841,12 @@ function CreateModelDialog({
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Base URL</label>
-              <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1" />
+              <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">温度</label>
-                <Input type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Max Token</label>
-                <Input type="number" min="1" value={maxToken} onChange={(e) => setMaxToken(Number(e.target.value))} />
-              </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">温度</label>
+              <Input type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
             </div>
             <ModelColorPicker
               value={color}
@@ -904,7 +891,6 @@ function EditModelDialog({
   const [baseUrl, setBaseUrl] = useState(model?.base_url ?? '');
   const [modelName, setModelName] = useState(model?.model_name ?? '');
   const [temperature, setTemperature] = useState(model?.temperature ?? 1.2);
-  const [maxToken, setMaxToken] = useState(model?.max_token ?? 4096);
   const [isActive] = useState(model?.is_active ?? true);
   const [color, setColor] = useState(model?.color ?? modelColorPresets[0].value);
   const [assignedAgentIds, setAssignedAgentIds] = useState<Set<number>>(
@@ -927,7 +913,6 @@ function EditModelDialog({
       model_name: modelName.trim(),
       base_url: baseUrl.trim(),
       temperature,
-      max_token: maxToken,
       is_active: isActive,
       color,
       assigned_agent_ids: Array.from(assignedAgentIds),
@@ -954,7 +939,7 @@ function EditModelDialog({
 
             <div className="space-y-2">
               <label className="text-sm font-medium">配置名称 *</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：OpenAI GPT-4" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -964,7 +949,7 @@ function EditModelDialog({
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
-                <Input value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="gpt-4o" />
+                <Input value={modelName} onChange={(e) => setModelName(e.target.value)} />
               </div>
             </div>
 
@@ -975,7 +960,6 @@ function EditModelDialog({
                   type={showApiKey ? 'text' : 'password'}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-..."
                 />
                 <button
                   type="button"
@@ -989,18 +973,12 @@ function EditModelDialog({
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Base URL</label>
-              <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1" />
+              <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">温度</label>
-                <Input type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Max Token</label>
-                <Input type="number" min="1" value={maxToken} onChange={(e) => setMaxToken(Number(e.target.value))} />
-              </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">温度</label>
+              <Input type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
             </div>
             <ModelColorPicker value={color} onChange={setColor} />
             <RoleAssignmentSelector
@@ -1037,7 +1015,6 @@ function CreateChunkModelDialog({ open, onOpenChange, onSubmit, isPending }: {
   const [baseUrl, setBaseUrl] = useState('');
   const [modelName, setModelName] = useState('');
   const [temperature, setTemperature] = useState(0.7);
-  const [maxToken, setMaxToken] = useState(4096);
   const [isActive] = useState(true);
   const [error, setError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -1058,7 +1035,6 @@ function CreateChunkModelDialog({ open, onOpenChange, onSubmit, isPending }: {
       model_name: modelName.trim(),
       base_url: baseUrl.trim(),
       temperature,
-      max_token: maxToken,
       is_active: isActive,
     });
   };
@@ -1077,7 +1053,7 @@ function CreateChunkModelDialog({ open, onOpenChange, onSubmit, isPending }: {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">配置名称 *</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：GPT-4 Chunker" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1087,7 +1063,7 @@ function CreateChunkModelDialog({ open, onOpenChange, onSubmit, isPending }: {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
-                <Input value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="gpt-4o" />
+                <Input value={modelName} onChange={(e) => setModelName(e.target.value)} />
               </div>
             </div>
 
@@ -1098,7 +1074,6 @@ function CreateChunkModelDialog({ open, onOpenChange, onSubmit, isPending }: {
                   type={showApiKey ? 'text' : 'password'}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-..."
                 />
                 <button
                   type="button"
@@ -1112,18 +1087,12 @@ function CreateChunkModelDialog({ open, onOpenChange, onSubmit, isPending }: {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Base URL</label>
-              <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1" />
+              <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">温度</label>
-                <Input type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Max Token</label>
-                <Input type="number" min="1" value={maxToken} onChange={(e) => setMaxToken(Number(e.target.value))} />
-              </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">温度</label>
+              <Input type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
             </div>
           </div>
           <DialogFooter>
@@ -1152,7 +1121,6 @@ function EditChunkModelDialog({ open, onOpenChange, onSubmit, isPending, model }
   const [baseUrl, setBaseUrl] = useState(model?.base_url ?? '');
   const [modelName, setModelName] = useState(model?.model_name ?? '');
   const [temperature, setTemperature] = useState(model?.temperature ?? 0.7);
-  const [maxToken, setMaxToken] = useState(model?.max_token ?? 4096);
   const [isActive] = useState(model?.is_active ?? true);
   const [error, setError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -1171,7 +1139,6 @@ function EditChunkModelDialog({ open, onOpenChange, onSubmit, isPending, model }
       model_name: modelName.trim(),
       base_url: baseUrl.trim(),
       temperature,
-      max_token: maxToken,
       is_active: isActive,
     };
 
@@ -1196,7 +1163,7 @@ function EditChunkModelDialog({ open, onOpenChange, onSubmit, isPending, model }
 
             <div className="space-y-2">
               <label className="text-sm font-medium">配置名称 *</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：GPT-4 Chunker" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1206,7 +1173,7 @@ function EditChunkModelDialog({ open, onOpenChange, onSubmit, isPending, model }
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">模型名称 *</label>
-                <Input value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="gpt-4o" />
+                <Input value={modelName} onChange={(e) => setModelName(e.target.value)} />
               </div>
             </div>
 
@@ -1217,7 +1184,6 @@ function EditChunkModelDialog({ open, onOpenChange, onSubmit, isPending, model }
                   type={showApiKey ? 'text' : 'password'}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-..."
                 />
                 <button
                   type="button"
@@ -1231,18 +1197,12 @@ function EditChunkModelDialog({ open, onOpenChange, onSubmit, isPending, model }
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Base URL</label>
-              <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1" />
+              <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">温度</label>
-                <Input type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Max Token</label>
-                <Input type="number" min="1" value={maxToken} onChange={(e) => setMaxToken(Number(e.target.value))} />
-              </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">温度</label>
+              <Input type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} />
             </div>
           </div>
           <DialogFooter>

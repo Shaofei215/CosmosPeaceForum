@@ -20,7 +20,7 @@ export interface UserProfile {
   created_at: string;
   /** 关注数量 */
   following_count?: number;
-  /** 粉丝数量 */
+  /** 被关注数量 */
   followers_count?: number;
 }
 

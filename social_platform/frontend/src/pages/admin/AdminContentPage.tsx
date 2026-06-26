@@ -1153,8 +1153,7 @@ function CompactSwitch({
       role="switch"
       aria-checked={checked}
       className={
-        'relative h-6 w-11 rounded-full transition-colors ' +
-        (checked ? 'bg-[var(--theme-accent-bg)]' : 'bg-muted')
+        'relative h-6 w-11 rounded-full transition-colors ' + (checked ? 'bg-zinc-950' : 'bg-muted')
       }
       onClick={() => onChange(!checked)}
     >

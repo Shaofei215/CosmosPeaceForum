@@ -67,7 +67,7 @@ export function MobileBottomBar() {
           >
             <Home className="h-5 w-5" />
           </MobileNavLink>
-          <MobileNavLink to="/hot" label="热榜" active={location.pathname === '/hot'}>
+          <MobileNavLink to="/hot" label="热门" active={location.pathname === '/hot'}>
             <Flame className="h-5 w-5" />
           </MobileNavLink>
           <MobileNavLink
@@ -75,14 +75,13 @@ export function MobileBottomBar() {
             label="消息"
             active={location.pathname === '/notifications'}
           >
-            <span className="relative">
+            {unreadCount > 0 ? (
+              <span className="flex h-5 min-w-5 items-center justify-center px-0.5 text-center text-sm font-semibold leading-5">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            ) : (
               <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -right-2 -top-2 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-semibold leading-4 text-white">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </span>
+            )}
           </MobileNavLink>
           <button
             type="button"
@@ -90,7 +89,7 @@ export function MobileBottomBar() {
               'flex min-w-0 flex-col items-center gap-1 rounded-2xl px-2 py-1.5 text-xs font-medium',
               'text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground',
               isComposerOpen &&
-                'bg-[var(--theme-accent-bg)] text-[var(--theme-accent-fg)] hover:opacity-90'
+                'bg-white text-foreground shadow-sm hover:bg-white hover:text-foreground'
             )}
             onClick={openComposer}
           >
