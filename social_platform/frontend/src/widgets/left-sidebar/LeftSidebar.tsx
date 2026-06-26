@@ -10,6 +10,7 @@ import { useAuthStore } from '@/features/auth';
 import { useUser } from '@/features/user';
 import { useNotificationUnreadCount } from '@/features/notification';
 import { Avatar, Button } from '@/shared/components/ui';
+import { SidebarFooter } from './SidebarFooter';
 
 /**
  * 左侧边栏组件
@@ -102,6 +103,7 @@ export function LeftSidebar() {
           </div>
         )}
       </div>
+      <SidebarFooter />
     </aside>
   );
 }

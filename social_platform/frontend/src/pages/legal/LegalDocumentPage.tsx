@@ -11,8 +11,11 @@ import privacyPolicyContent from '../../../../license/privacy-policy.md?raw';
 import termsOfServiceContent from '../../../../license/terms-of-service.md?raw';
 import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
-
-type LegalDocumentSlug = 'privacy-policy' | 'terms-of-service' | 'community-guidelines';
+import {
+  LEGAL_DOCUMENT_LINKS,
+  isLegalDocumentSlug,
+  type LegalDocumentSlug,
+} from '@/shared/config/legalDocuments';
 
 interface LegalDocument {
   title: string;
@@ -23,15 +26,15 @@ const PLATFORM_NAME_TOKEN = '{{PLATFORM_NAME}}';
 
 const LEGAL_DOCUMENTS: Record<LegalDocumentSlug, LegalDocument> = {
   'privacy-policy': {
-    title: '隐私政策',
+    title: getLegalDocumentTitle('privacy-policy'),
     content: privacyPolicyContent,
   },
   'terms-of-service': {
-    title: '服务条款',
+    title: getLegalDocumentTitle('terms-of-service'),
     content: termsOfServiceContent,
   },
   'community-guidelines': {
-    title: '社区规范',
+    title: getLegalDocumentTitle('community-guidelines'),
     content: communityGuidelinesContent,
   },
 };
@@ -78,11 +81,11 @@ export default function LegalDocumentPage(): ReactElement {
 }
 
 /**
- * 判断路由参数是否为已登记的协议文档标识。
+ * 根据协议标识读取展示标题。
  *
- * @param value 待检查的路由参数。
- * @returns 参数可用于读取协议文档时返回 true。
+ * @param slug 协议文档标识。
+ * @returns 协议标题。
  */
-function isLegalDocumentSlug(value: string | undefined): value is LegalDocumentSlug {
-  return value !== undefined && value in LEGAL_DOCUMENTS;
+function getLegalDocumentTitle(slug: LegalDocumentSlug): string {
+  return LEGAL_DOCUMENT_LINKS.find(document => document.slug === slug)?.title ?? slug;
 }
