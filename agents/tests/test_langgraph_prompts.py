@@ -89,7 +89,7 @@ class TestBuildSystemPrompt:
                 personal_signature="sig",
             )
 
-        assert prompt == "账号状态\n热榜：1. 第一条热榜；2. 第二条热榜"
+        assert prompt == "账号状态\n大家都在聊：1. 第一条热榜；2. 第二条热榜"
 
 
 class TestBuildDecisionPrompt:
