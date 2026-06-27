@@ -12,6 +12,7 @@ from social_platform.app.domains.content_safety.models import (
     ContentModerationLLMSettings,
     ContentReport,
     ModerationAppeal,
+    UserViolationEvent,
 )
 from social_platform.app.domains.follow.models import Follow
 from social_platform.app.domains.hot_topic.models import HotTopic, HotTopicGeneration, HotTopicSettings
@@ -29,6 +30,7 @@ __all__ = [
     "ContentModerationLLMSettings",
     "ContentReport",
     "ModerationAppeal",
+    "UserViolationEvent",
     "Follow",
     "HotTopic",
     "HotTopicGeneration",

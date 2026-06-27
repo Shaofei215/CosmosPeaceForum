@@ -43,6 +43,7 @@ def create_post(
 
     返回：创建的帖子信息，包含 id、author_id、title、content、created_at 等字段
     """
+    ensure_action_allowed(db, current_user, "publish")
     try:
         db_post = post_application.create_post(db, current_user, post)
         db_post.mention_users = post_queries.build_mention_users(db, db_post.content)
@@ -77,6 +78,7 @@ def vote_poll(
         HTTPException: 帖子或选项不存在、用户重复投票或互动权限受限时抛出。
     """
 
+    ensure_action_allowed(db, current_user, "interaction")
     try:
         poll_application.vote_poll(db, current_user, post_id, data.option_id)
     except poll_application.PollPostNotFoundError:
@@ -97,6 +99,7 @@ def repost(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    ensure_action_allowed(db, current_user, "publish")
     try:
         created_post = post_application.create_repost_for_user(db, current_user, data)
         created_post.topic_mentions = topic_queries.build_topic_mentions(db, created_post.id)

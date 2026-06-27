@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 SECRET_MASK = "********"
 CONTENT_MODERATION_LLM_PROMPT_KEY = "content_moderation_llm_prompt"
 CONTENT_MODERATION_LLM_PROMPT_NAME = "被举报内容 LLM 审查提示词"
-CONTENT_MODERATION_LLM_PROMPT_DESCRIPTION = "用于指导 LLM 对单条被举报内容做通过、删除或留给人工审查的判断。"
+CONTENT_MODERATION_LLM_PROMPT_DESCRIPTION = "用于指导 LLM 对举报内容做放行、删除、局部资料控制或留给人工审查的判断。"
 CONTENT_MODERATION_LLM_TIMEOUT_SECONDS = 60
 CONTENT_MODERATION_LLM_MAX_RETRIES = 1
 LLM_MODERATOR_USERNAME = "llm_moderator"
@@ -33,28 +33,32 @@ LLM_MODERATOR_USERNAME = "llm_moderator"
 DEFAULT_CONTENT_MODERATION_LLM_PROMPT = f"""你是 {get_platform_display_name()} 的内容安全审查员。你每次只审查一条被举报内容或用户账号，不保留任何历史对话，也不得参考上下文以外的信息。
 
 审查目标：
-- 判断被举报内容是否应在平台继续展示，或被举报用户是否应被封禁。
+- 判断被举报内容是否应继续展示，以及用户资料应局部控制还是账号封禁。
 - 只根据提供的 JSON 上下文判断；不要编造未提供的事实。
 - 对评论进行判断时，应同时参考所属帖子和父评论，区分引用、反驳、玩笑、上下文承接和真实违规表达。
-- 对用户进行判断时，应同时参考用户资料、举报原因和最近内容，区分偶发争执与账号级持续违规。
+- 对用户进行判断时，应同时参考用户资料、举报原因和最近内容，优先只控制违规的用户名或签名。
+- 通常仅在多项、持续或跨类别违规时封禁账号；极严重单项违规可以直接封禁账号。
 - 对存在明显违法犯罪、色情低俗、暴力威胁、仇恨歧视、人身攻击、诈骗广告、恶意刷屏、隐私泄露或平台规则显著不允许的内容，应删除。
 - 对表达正常观点、事实讨论、轻微争执、可解释的讽刺或证据不足的内容，不要轻易删除。
 - 如果内容存在争议、语义不清、需要人工结合更多背景判断，输出 drop。
 
-你只能输出以下三种格式之一，不能输出解释、Markdown、JSON 或多余文字：
+你只能输出以下五种格式之一，不能输出解释、Markdown、JSON 或多余文字：
 1. pass
 2. delete {{处理原因}}
 3. drop
+4. control_username {{处理原因}}
+5. control_bio {{处理原因}}
 
 输出约束：
 - pass 表示通过，放行内容。
-- delete 后必须跟一段简短中文处理原因；内容举报会归档内容，用户举报会封禁账号，原因会通知作者或用户。
+- delete 后必须跟一段简短中文处理原因；内容举报会归档内容，用户举报会封禁账号并撤下全部资料。
+- control_username 和 control_bio 仅用于用户举报，分别撤下用户名或签名并累计对应违规。
 - drop 表示放弃自动判断，保留在人工待审队列。
 
 待审上下文 JSON：
 {{context_json}}"""
 
-Decision = Literal["pass", "delete", "drop"]
+Decision = Literal["pass", "delete", "drop", "control_username", "control_bio"]
 
 
 def _now() -> datetime:
@@ -190,6 +194,12 @@ def parse_llm_decision(raw_output: str) -> tuple[Decision, str | None]:
         if reason.startswith(":") or reason.startswith("："):
             reason = reason[1:].strip()
         return "delete", reason or "LLM 审查判定内容违反社区规则"
+    for action in ("control_username", "control_bio"):
+        if lowered.startswith(action):
+            reason = first_line[len(action):].strip()
+            if reason.startswith(":") or reason.startswith("："):
+                reason = reason[1:].strip()
+            return action, reason or "LLM 审查判定用户资料违反社区规则"
     return "drop", None
 
 
@@ -230,7 +240,10 @@ def review_report(
 
     response = llm.invoke([
         {"role": "system", "content": prompt},
-        {"role": "user", "content": "请审查这条举报内容，并只输出 pass、delete {原因} 或 drop。"},
+        {
+            "role": "user",
+            "content": "请审查并只输出 pass、delete {原因}、drop、control_username {原因} 或 control_bio {原因}。",
+        },
     ])
     decision, reason = parse_llm_decision(str(getattr(response, "content", response)))
     apply_llm_decision(db, report, decision, reason)
@@ -302,6 +315,23 @@ def apply_llm_decision(
                 notify_author=True,
             )
         return
+
+    if decision in {"control_username", "control_bio"}:
+        if content_type != "user":
+            decision = "drop"
+        else:
+            from social_platform.app.admin.schemas import UserViolationRequest
+
+            moderation_service.moderate_reported_user_as_admin(
+                db,
+                user_id=content_id,
+                request=UserViolationRequest(
+                    category="username" if decision == "control_username" else "bio",
+                    reason=reason,
+                ),
+                admin=admin,
+            )
+            return
 
     log_service.create_operation_log(
         db,

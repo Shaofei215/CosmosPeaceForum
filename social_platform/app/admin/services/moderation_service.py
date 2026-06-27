@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 from social_platform.app.core.timezone import local_now
-from typing import Optional
+from typing import Literal, Optional
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -16,12 +16,15 @@ from social_platform.app.admin.schemas import (
     UserModerationResponse,
     UserModerationStatusResponse,
     UserModerationUpdateRequest,
+    UserViolationBatchRequest,
     UserWithModerationResponse,
 )
 from social_platform.app.admin.services.log_service import create_operation_log
 from social_platform.app.domains.comment.models import Comment, CommentLike
 from social_platform.app.domains.follow.models import Follow
 from social_platform.app.domains.notification.system import create_user_moderation_notice
+from social_platform.app.domains.notification import application as notification_service
+from social_platform.app.domains.content_safety.models import UserViolationEvent
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.user.models import User
@@ -31,6 +34,23 @@ _RESTRICTION_LABELS = {
     "publish": "发帖功能",
     "comment": "评论功能",
     "interaction": "互动功能",
+}
+
+ViolationCategory = Literal[
+    "publish", "comment", "interaction", "avatar", "username", "bio", "account"
+]
+COUNTED_VIOLATION_CATEGORIES = ("publish", "comment", "interaction", "avatar", "username", "bio")
+VIOLATION_LABELS = {
+    "publish": "发帖",
+    "comment": "评论",
+    "interaction": "互动",
+    "avatar": "头像",
+    "username": "用户名",
+    "bio": "签名",
+    "account": "账号",
+}
+DEFAULT_VIOLATION_REASONS = {
+    category: f"{label}违反社区规则" for category, label in VIOLATION_LABELS.items()
 }
 
 _last_cpu_snapshot: tuple[int, int] | None = None
@@ -48,12 +68,357 @@ def moderation_to_status(
         account_banned_at=moderation.account_banned_at,
         account_ban_reason=moderation.account_ban_reason,
         publish_banned_until=moderation.publish_banned_until,
+        publish_violation_count=moderation.publish_violation_count,
+        publish_permanently_banned=moderation.publish_permanently_banned,
         publish_ban_reason=moderation.publish_ban_reason,
         comment_banned_until=moderation.comment_banned_until,
+        comment_violation_count=moderation.comment_violation_count,
+        comment_permanently_banned=moderation.comment_permanently_banned,
         comment_ban_reason=moderation.comment_ban_reason,
         interaction_banned_until=moderation.interaction_banned_until,
+        interaction_violation_count=moderation.interaction_violation_count,
+        interaction_permanently_banned=moderation.interaction_permanently_banned,
         interaction_ban_reason=moderation.interaction_ban_reason,
+        avatar_banned_until=moderation.avatar_banned_until,
+        avatar_violation_count=moderation.avatar_violation_count,
+        avatar_permanently_banned=moderation.avatar_permanently_banned,
+        avatar_ban_reason=moderation.avatar_ban_reason,
+        username_banned_until=moderation.username_banned_until,
+        username_violation_count=moderation.username_violation_count,
+        username_permanently_banned=moderation.username_permanently_banned,
+        username_ban_reason=moderation.username_ban_reason,
+        bio_banned_until=moderation.bio_banned_until,
+        bio_violation_count=moderation.bio_violation_count,
+        bio_permanently_banned=moderation.bio_permanently_banned,
+        bio_ban_reason=moderation.bio_ban_reason,
         updated_at=moderation.updated_at,
+    )
+
+
+def apply_user_violation(
+    db: Session,
+    user_id: int,
+    category: ViolationCategory,
+    admin: PlatformAdminUser,
+    reason: Optional[str] = None,
+    *,
+    source_type: str = "manual",
+    source_id: Optional[int] = None,
+    notify_user: bool = True,
+    commit: bool = True,
+) -> tuple[UserModeration, UserViolationEvent]:
+    """登记违规、执行处罚和资料撤下，并在同一事务创建事件与通知。
+
+    内容来源使用唯一去重键，保证同一帖子或评论只累计一次。账号违规禁止普通写
+    操作并撤下全部资料，但不修改六类累计次数，管理员或申诉流程可以解除封禁。
+
+    Args:
+        db: 当前 SQLAlchemy 会话。
+        user_id: 被处罚用户 ID。
+        category: 七类违规动作之一，其中账号违规不参与累计。
+        admin: 执行处罚的管理员或 LLM 系统管理员。
+        reason: 可选原因，空值使用类别默认原因。
+        source_type: 处罚来源类型，帖子和评论来源参与去重。
+        source_id: 来源内容 ID。
+        notify_user: 是否生成可申诉的处罚通知。
+        commit: 是否由本函数提交；组合用例传 False 以共享事务。
+
+    Returns:
+        tuple[UserModeration, UserViolationEvent]: 最新状态与本次或已存在的去重事件。
+
+    Raises:
+        ValueError: 用户不存在时抛出。
+        sqlalchemy.exc.IntegrityError: 默认用户名被占用或数据库约束冲突时抛出。
+    """
+
+    user = db.query(User).filter(User.id == user_id).with_for_update().first()
+    if user is None:
+        raise ValueError("用户不存在")
+    dedup_key = (
+        f"{source_type}:{source_id}:{category}"
+        if source_id is not None and source_type in {"post", "comment"}
+        else None
+    )
+    if dedup_key:
+        existing = db.query(UserViolationEvent).filter(
+            UserViolationEvent.dedup_key == dedup_key
+        ).first()
+        if existing is not None:
+            moderation = get_or_create_moderation(db, user_id, admin.id)
+            return moderation, existing
+
+    moderation = get_or_create_moderation(db, user_id, admin.id)
+    moderation = (
+        db.query(UserModeration)
+        .filter(UserModeration.user_id == user_id)
+        .with_for_update()
+        .one()
+    )
+    now = local_now()
+    normalized_reason = (reason or "").strip() or DEFAULT_VIOLATION_REASONS[category]
+    violation_count: Optional[int] = None
+    restriction_until: Optional[datetime] = None
+    is_permanent = False
+
+    if category == "account":
+        moderation.account_banned_at = now
+        moderation.account_ban_reason = normalized_reason
+        user.avatar_url = None
+        user.username = f"用户_{user.id}"
+        user.bio = None
+    else:
+        count_field = f"{category}_violation_count"
+        violation_count = int(getattr(moderation, count_field) or 0) + 1
+        setattr(moderation, count_field, violation_count)
+        is_permanent = violation_count >= 4
+        if not is_permanent:
+            restriction_until = now + timedelta(days=(1, 7, 30)[violation_count - 1])
+        setattr(moderation, f"{category}_banned_until", restriction_until)
+        setattr(moderation, f"{category}_permanently_banned", is_permanent)
+        setattr(moderation, f"{category}_ban_reason", normalized_reason)
+        if category == "avatar":
+            user.avatar_url = None
+        elif category == "username":
+            user.username = f"用户_{user.id}"
+        elif category == "bio":
+            user.bio = None
+
+    event = UserViolationEvent(
+        user_id=user_id,
+        category=category,
+        violation_count=violation_count,
+        reason=normalized_reason,
+        source_type=source_type,
+        source_id=source_id,
+        dedup_key=dedup_key,
+        created_by_admin_id=admin.id,
+        restriction_until=restriction_until,
+        is_permanent=is_permanent,
+    )
+    db.add(event)
+    db.flush()
+    setattr(moderation, f"{category}_current_event_id", event.id)
+    moderation.updated_at = now
+    moderation.updated_by_admin_id = admin.id
+
+    if notify_user:
+        if source_type in {"post", "comment"}:
+            content = _append_reason("你的内容因违反社区规则已被管理端处理。", normalized_reason)
+        elif category == "account":
+            content = _append_reason("你的账号已被封禁，公开资料已撤下。", normalized_reason)
+        elif is_permanent:
+            content = _append_reason(f"你的{VIOLATION_LABELS[category]}功能已被永久限制。", normalized_reason)
+        else:
+            assert restriction_until is not None
+            content = _append_reason(
+                f"你的{VIOLATION_LABELS[category]}功能已被限制至 {_format_until(restriction_until)}。",
+                normalized_reason,
+            )
+        notification = notification_service.create_notification(
+            db=db,
+            recipient_id=user_id,
+            sender_id=None,
+            notification_type="moderation",
+            resource_type=source_type if source_type in {"post", "comment"} else "user",
+            resource_id=source_id if source_id is not None else user_id,
+            source_content=content,
+            truncate_source_content=False,
+        )
+        db.flush()
+        event.notification_id = notification.id if notification is not None else None
+
+    create_operation_log(
+        db,
+        admin,
+        action="apply_user_violation",
+        target_type="user",
+        target_id=user_id,
+        details={
+            "category": category,
+            "reason": normalized_reason,
+            "violation_count": violation_count,
+            "source_type": source_type,
+            "source_id": source_id,
+        },
+    )
+    if commit:
+        db.commit()
+        db.refresh(moderation)
+        db.refresh(event)
+    return moderation, event
+
+
+def release_violation_event(
+    db: Session,
+    event_id: int,
+    admin: PlatformAdminUser,
+    *,
+    reverse_violation_count: bool = False,
+    commit: bool = True,
+) -> bool:
+    """解除事件仍对应的当前限制，并可在纠错场景撤销一次违规计数。
+
+    Args:
+        db: 当前 SQLAlchemy 会话。
+        event_id: 申诉或内容恢复所对应的违规事件 ID。
+        admin: 执行解除的管理员。
+        reverse_violation_count: 申诉通过或内容恢复时是否撤销该事件对应的一次计数。
+        commit: 是否立即提交事务。
+
+    Returns:
+        bool: 事件仍是当前处罚并成功解除时为 True，否则为 False。
+    """
+
+    event = db.query(UserViolationEvent).filter(UserViolationEvent.id == event_id).first()
+    if event is None:
+        return False
+    moderation = get_or_create_moderation(db, event.user_id, admin.id)
+    current_event_field = f"{event.category}_current_event_id"
+    released = getattr(moderation, current_event_field, None) == event.id
+    if released:
+        if event.category == "account":
+            moderation.account_banned_at = None
+            moderation.account_ban_reason = None
+        else:
+            setattr(moderation, f"{event.category}_banned_until", None)
+            setattr(moderation, f"{event.category}_permanently_banned", False)
+            setattr(moderation, f"{event.category}_ban_reason", None)
+        setattr(moderation, current_event_field, None)
+        moderation.updated_at = local_now()
+        moderation.updated_by_admin_id = admin.id
+    if (
+        reverse_violation_count
+        and event.violation_count is not None
+        and event.violation_count_reversed_at is None
+        and event.category in COUNTED_VIOLATION_CATEGORIES
+    ):
+        count_field = f"{event.category}_violation_count"
+        current_count = int(getattr(moderation, count_field) or 0)
+        setattr(moderation, count_field, max(0, current_count - 1))
+        event.violation_count_reversed_at = local_now()
+        moderation.updated_at = local_now()
+        moderation.updated_by_admin_id = admin.id
+    event.released_at = local_now()
+    event.released_by_admin_id = admin.id
+    if commit:
+        db.commit()
+    return released
+
+
+def release_current_user_restriction(
+    db: Session,
+    user_id: int,
+    category: ViolationCategory,
+    admin: PlatformAdminUser,
+) -> UserModeration:
+    """主动解除用户当前单项管控，不修改对应违规累计次数。
+
+    Args:
+        db: 当前 SQLAlchemy 会话。
+        user_id: 被解除管控的用户 ID。
+        category: 需要解除的账号或功能类别。
+        admin: 执行解除操作的管理员。
+
+    Returns:
+        UserModeration: 解除后的完整用户管控状态。
+
+    Raises:
+        ValueError: 用户、管控状态不存在，或指定类别当前未受管控时抛出。
+    """
+
+    if db.query(User.id).filter(User.id == user_id).first() is None:
+        raise ValueError("用户不存在")
+    moderation = db.query(UserModeration).filter(UserModeration.user_id == user_id).first()
+    if moderation is None:
+        raise ValueError("该用户当前没有管控状态")
+
+    current_event_id = getattr(moderation, f"{category}_current_event_id", None)
+    if category == "account":
+        active = moderation.account_banned_at is not None
+    else:
+        banned_until = getattr(moderation, f"{category}_banned_until", None)
+        active = bool(
+            getattr(moderation, f"{category}_permanently_banned", False)
+            or (banned_until and banned_until > local_now())
+        )
+    if not active:
+        raise ValueError("该类别当前未受管控")
+
+    if current_event_id is not None:
+        release_violation_event(db, current_event_id, admin, commit=False)
+    elif category == "account":
+        moderation.account_banned_at = None
+        moderation.account_ban_reason = None
+    else:
+        setattr(moderation, f"{category}_banned_until", None)
+        setattr(moderation, f"{category}_permanently_banned", False)
+        setattr(moderation, f"{category}_ban_reason", None)
+
+    setattr(moderation, f"{category}_current_event_id", None)
+    moderation.updated_at = local_now()
+    moderation.updated_by_admin_id = admin.id
+    label = "账号封禁" if category == "account" else f"{VIOLATION_LABELS[category]}限制"
+    create_user_moderation_notice(db, user_id, f"你的{label}已解除。")
+    create_operation_log(
+        db,
+        admin,
+        action="release_user_restriction",
+        target_type="user",
+        target_id=user_id,
+        details={"category": category, "event_id": current_event_id},
+    )
+    db.commit()
+    db.refresh(moderation)
+    return moderation
+
+
+def apply_users_violation(
+    db: Session,
+    request: UserViolationBatchRequest,
+    admin: PlatformAdminUser,
+) -> UserModerationBatchUpdateResponse:
+    """在单一事务内为一组用户登记同类违规。
+
+    Args:
+        db: 当前 SQLAlchemy 会话。
+        request: 用户 ID、违规类别和可选原因。
+        admin: 执行批量处罚的管理员。
+
+    Returns:
+        UserModerationBatchUpdateResponse: 更新数量和每个用户的最新处罚状态。
+
+    Raises:
+        ValueError: 任一用户不存在时在写入前抛出。
+    """
+
+    existing_ids = {
+        row[0] for row in db.query(User.id).filter(User.id.in_(request.user_ids)).all()
+    }
+    missing_ids = sorted(set(request.user_ids) - existing_ids)
+    if missing_ids:
+        raise ValueError(f"用户不存在：{', '.join(str(item) for item in missing_ids)}")
+    moderations = [
+        apply_user_violation(
+            db,
+            user_id,
+            request.category,
+            admin,
+            request.reason,
+            source_type="batch",
+            commit=False,
+        )[0]
+        for user_id in request.user_ids
+    ]
+    db.commit()
+    return UserModerationBatchUpdateResponse(
+        updated_count=len(moderations),
+        items=[
+            UserModerationResponse(
+                user_id=item.user_id,
+                **moderation_to_status(item).model_dump(),
+            )
+            for item in moderations
+        ],
     )
 
 
@@ -227,7 +592,7 @@ def _notify_user_moderation_changes(
             _create_user_moderation_notification(
                 db,
                 user_id,
-                _append_reason("你的账号已被永久封禁。", current_reason),
+                _append_reason("你的账号已被封禁。", current_reason),
             )
         elif previous_account_banned and not request.account_banned:
             _create_user_moderation_notification(db, user_id, "你的账号封禁已解除。")
@@ -325,8 +690,17 @@ def list_moderated_users(
         or_(
             UserModeration.account_banned_at.isnot(None),
             UserModeration.publish_banned_until > now,
+            UserModeration.publish_permanently_banned.is_(True),
             UserModeration.comment_banned_until > now,
+            UserModeration.comment_permanently_banned.is_(True),
             UserModeration.interaction_banned_until > now,
+            UserModeration.interaction_permanently_banned.is_(True),
+            UserModeration.avatar_banned_until > now,
+            UserModeration.avatar_permanently_banned.is_(True),
+            UserModeration.username_banned_until > now,
+            UserModeration.username_permanently_banned.is_(True),
+            UserModeration.bio_banned_until > now,
+            UserModeration.bio_permanently_banned.is_(True),
         )
     )
     if keyword:

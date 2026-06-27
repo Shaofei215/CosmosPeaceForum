@@ -17,7 +17,7 @@ from social_platform.app.admin.schemas import (
     ContentReportReasonResponse,
     ReportedContentItemResponse,
     ReportedUserItemResponse,
-    UserModerationUpdateRequest,
+    UserViolationRequest,
 )
 from social_platform.app.admin.services.log_service import create_operation_log
 from social_platform.app.domains.comment.models import Comment
@@ -100,8 +100,19 @@ def delete_post_as_admin(
     post.archived_at = local_now()
     post.archived_by_admin_id = admin.id
     post.archive_reason = reason
-    if notify_author:
-        _notify_moderation_action(db, author_id, "post", post_id, reason)
+    from social_platform.app.admin.services.moderation_service import apply_user_violation
+
+    apply_user_violation(
+        db,
+        author_id,
+        "publish",
+        admin,
+        reason,
+        source_type="post",
+        source_id=post_id,
+        notify_user=notify_author,
+        commit=False,
+    )
     create_operation_log(
         db,
         admin,
@@ -182,12 +193,23 @@ def delete_comment_as_admin(
             root.reply_count = max(0, root.reply_count - count_to_subtract)
             heat_service.refresh_comment_heat_score(db, root)
 
-    if notify_author:
-        _notify_moderation_action(db, owner_id, "comment", comment_id, reason)
     comment.moderation_status = CONTENT_STATUS_ARCHIVED
     comment.archived_at = local_now()
     comment.archived_by_admin_id = admin.id
     comment.archive_reason = reason
+    from social_platform.app.admin.services.moderation_service import apply_user_violation
+
+    apply_user_violation(
+        db,
+        owner_id,
+        "comment",
+        admin,
+        reason,
+        source_type="comment",
+        source_id=comment_id,
+        notify_user=notify_author,
+        commit=False,
+    )
     create_operation_log(
         db,
         admin,
@@ -221,6 +243,20 @@ def restore_post_as_admin(db: Session, post_id: int, admin: PlatformAdminUser) -
     post.archived_at = None
     post.archived_by_admin_id = None
     post.archive_reason = None
+    from social_platform.app.admin.services.moderation_service import release_violation_event
+    from social_platform.app.domains.content_safety.models import UserViolationEvent
+
+    event = db.query(UserViolationEvent).filter(
+        UserViolationEvent.dedup_key == f"post:{post_id}:publish"
+    ).first()
+    if event is not None:
+        release_violation_event(
+            db,
+            event.id,
+            admin,
+            reverse_violation_count=True,
+            commit=False,
+        )
     create_operation_log(
         db,
         admin,
@@ -270,6 +306,20 @@ def restore_comment_as_admin(db: Session, comment_id: int, admin: PlatformAdminU
     comment.archived_at = None
     comment.archived_by_admin_id = None
     comment.archive_reason = None
+    from social_platform.app.admin.services.moderation_service import release_violation_event
+    from social_platform.app.domains.content_safety.models import UserViolationEvent
+
+    event = db.query(UserViolationEvent).filter(
+        UserViolationEvent.dedup_key == f"comment:{comment_id}:comment"
+    ).first()
+    if event is not None:
+        release_violation_event(
+            db,
+            event.id,
+            admin,
+            reverse_violation_count=True,
+            commit=False,
+        )
     create_operation_log(
         db,
         admin,
@@ -724,16 +774,17 @@ def ban_reported_user_as_admin(
         raise ValueError("待审举报不存在")
 
     reporter_ids = sorted({report.reporter_id for report in reports})
-    from social_platform.app.admin.services.moderation_service import update_user_moderation
+    from social_platform.app.admin.services.moderation_service import apply_user_violation
 
-    update_user_moderation(
+    apply_user_violation(
         db,
         user_id,
-        UserModerationUpdateRequest(
-            account_banned=True,
-            account_ban_reason=reason or "账号因违反社区规则被封禁",
-        ),
+        "account",
         admin,
+        reason or "账号因违反社区规则被封禁",
+        source_type="user_report",
+        notify_user=notify_user,
+        commit=False,
     )
 
     now = local_now()
@@ -752,7 +803,7 @@ def ban_reported_user_as_admin(
 def moderate_reported_user_as_admin(
     db: Session,
     user_id: int,
-    request: UserModerationUpdateRequest,
+    request: UserViolationRequest,
     admin: PlatformAdminUser,
 ) -> object:
     """对被举报用户应用任意管控并关闭待审用户举报。
@@ -777,9 +828,17 @@ def moderate_reported_user_as_admin(
     if not reports and not escalations:
         raise ValueError("待审举报不存在")
 
-    from social_platform.app.admin.services.moderation_service import update_user_moderation
+    from social_platform.app.admin.services.moderation_service import apply_user_violation
 
-    moderation = update_user_moderation(db, user_id, request, admin)
+    moderation, _ = apply_user_violation(
+        db,
+        user_id,
+        request.category,
+        admin,
+        request.reason,
+        source_type="user_report",
+        commit=False,
+    )
     now = local_now()
     for report in reports:
         report.status = "confirmed"

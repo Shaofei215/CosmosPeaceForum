@@ -47,6 +47,9 @@ from social_platform.app.admin.schemas.moderation import (
     UserModerationResponse,
     UserModerationStatusResponse,
     UserModerationUpdateRequest,
+    UserViolationBatchRequest,
+    UserViolationRequest,
+    ViolationCategory,
     UserWithModerationResponse,
 )
 from social_platform.app.domains.invitation.schemas import (
@@ -101,5 +104,8 @@ __all__ = [
     "UserModerationResponse",
     "UserModerationStatusResponse",
     "UserModerationUpdateRequest",
+    "UserViolationBatchRequest",
+    "UserViolationRequest",
+    "ViolationCategory",
     "UserWithModerationResponse",
 ]

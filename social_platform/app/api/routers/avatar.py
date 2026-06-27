@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
+from social_platform.app.admin.services.moderation_guard import ensure_profile_field_allowed
 from social_platform.app.api.deps import get_db, get_current_user
 from social_platform.app.domains.user import application as user_application
 from social_platform.app.domains.user.models import User
@@ -38,7 +38,7 @@ async def upload_avatar(
     - 400：图片大小超过限制
     - 500：文件保存失败
     """
-    ensure_action_allowed(db, current_user, "interaction")
+    ensure_profile_field_allowed(db, current_user, "avatar")
     try:
         return await user_application.upload_user_avatar(db, current_user, file)
     except user_application.AvatarValidationError as e:
@@ -69,7 +69,7 @@ async def delete_avatar(
     错误：
     - 500：删除失败
     """
-    ensure_action_allowed(db, current_user, "interaction")
+    ensure_profile_field_allowed(db, current_user, "avatar")
     try:
         return await user_application.delete_user_avatar(db, current_user)
     except user_application.UserNotFoundError as e:

@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from social_platform.app.admin.api.deps import require_permission
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.schemas import (
-    ContentDeleteRequest,
     ContentModerationLLMPromptConfigResponse,
     ContentModerationLLMPromptConfigUpdateRequest,
     ContentModerationLLMSettingsResponse,
@@ -15,24 +14,25 @@ from social_platform.app.admin.schemas import (
     ReportedUserItemResponse,
     InvitationCodeCreateRequest,
     InvitationCodeResponse,
-    UserModerationBatchUpdateRequest,
     UserModerationBatchUpdateResponse,
     UserModerationResponse,
-    UserModerationUpdateRequest,
+    UserViolationBatchRequest,
+    UserViolationRequest,
+    ViolationCategory,
     UserWithModerationResponse,
 )
 from social_platform.app.admin.services.moderation_service import (
     list_moderated_users,
     list_users,
     moderation_to_status,
-    update_user_moderation,
-    update_users_moderation,
+    apply_user_violation,
+    apply_users_violation,
+    release_current_user_restriction,
 )
 from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_USERS
 from social_platform.app.api.deps import get_db
 from social_platform.app.domains.content_safety import llm_moderation as content_moderation_llm_service
 from social_platform.app.domains.content_safety.admin_application import (
-    ban_reported_user_as_admin,
     list_reported_users,
     moderate_reported_user_as_admin,
     release_reported_user,
@@ -59,14 +59,14 @@ async def users(
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
 
 
-@router.put("/moderation/batch", response_model=UserModerationBatchUpdateResponse)
-async def update_moderation_batch(
-    request: UserModerationBatchUpdateRequest,
+@router.post("/violations/batch", response_model=UserModerationBatchUpdateResponse)
+async def create_violations_batch(
+    request: UserViolationBatchRequest,
     db: Session = Depends(get_db),
     current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
 ):
     try:
-        return update_users_moderation(db, request, current_admin)
+        return apply_users_violation(db, request, current_admin)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -251,31 +251,10 @@ async def release_user_report(
     return {"released_count": released_count}
 
 
-@router.delete("/reports/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def ban_reported_user(
+@router.post("/reports/{user_id}/violations", response_model=UserModerationResponse)
+async def create_reported_user_violation(
     user_id: int,
-    request: ContentDeleteRequest | None = None,
-    db: Session = Depends(get_db),
-    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
-):
-    payload = request or ContentDeleteRequest()
-    try:
-        ban_reported_user_as_admin(
-            db,
-            user_id=user_id,
-            admin=current_admin,
-            reason=payload.reason,
-            notify_user=payload.notify_author,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return None
-
-
-@router.put("/reports/{user_id}/moderation", response_model=UserModerationResponse)
-async def moderate_reported_user(
-    user_id: int,
-    request: UserModerationUpdateRequest,
+    request: UserViolationRequest,
     db: Session = Depends(get_db),
     current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
 ):
@@ -287,16 +266,39 @@ async def moderate_reported_user(
     return UserModerationResponse(user_id=user_id, **status_data.model_dump())
 
 
-@router.put("/{user_id}/moderation", response_model=UserModerationResponse)
-async def update_moderation(
+@router.post("/{user_id}/violations", response_model=UserModerationResponse)
+async def create_user_violation(
     user_id: int,
-    request: UserModerationUpdateRequest,
+    request: UserViolationRequest,
     db: Session = Depends(get_db),
     current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
 ):
     try:
-        moderation = update_user_moderation(db, user_id, request, current_admin)
+        moderation, _ = apply_user_violation(
+            db,
+            user_id,
+            request.category,
+            current_admin,
+            request.reason,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    status_data = moderation_to_status(moderation)
+    return UserModerationResponse(user_id=user_id, **status_data.model_dump())
+
+
+@router.delete("/{user_id}/restrictions/{category}", response_model=UserModerationResponse)
+async def release_user_restriction(
+    user_id: int,
+    category: ViolationCategory,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+):
+    """主动解除用户当前单项管控，保留历史违规累计次数。"""
+
+    try:
+        moderation = release_current_user_restriction(db, user_id, category, current_admin)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     status_data = moderation_to_status(moderation)
     return UserModerationResponse(user_id=user_id, **status_data.model_dump())

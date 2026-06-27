@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
-from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
+from social_platform.app.admin.services.moderation_guard import (
+    ensure_account_available,
+    ensure_action_allowed,
+    ensure_profile_field_allowed,
+)
 from social_platform.app.api.deps import get_db, get_current_user
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.user.schemas import UserResponse, UserUpdate, CompleteProfileRequest
@@ -98,7 +102,10 @@ def update_user(
     - 404：用户不存在
     - 403：不是用户本人，无权修改
     """
-    ensure_action_allowed(db, current_user, "interaction")
+    ensure_account_available(db, current_user)
+    for field in user_update.model_fields_set:
+        if field in {"avatar_url", "username", "bio"}:
+            ensure_profile_field_allowed(db, current_user, "avatar" if field == "avatar_url" else field)
     try:
         return user_application.update_user(db, current_user, user_id, user_update)
     except user_application.UserPermissionError as e:
@@ -137,7 +144,10 @@ def complete_profile(
     - 400：用户已设置过用户名
     - 400：用户名格式不正确
     """
-    ensure_action_allowed(db, current_user, "interaction")
+    ensure_account_available(db, current_user)
+    for field in profile_data.model_fields_set:
+        if field in {"avatar_url", "username", "bio"}:
+            ensure_profile_field_allowed(db, current_user, "avatar" if field == "avatar_url" else field)
     try:
         return user_application.complete_profile(db, current_user, user_id, profile_data)
     except user_application.UserPermissionError as e:

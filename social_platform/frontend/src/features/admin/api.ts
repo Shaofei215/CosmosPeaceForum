@@ -38,10 +38,11 @@ import type {
   OperationLog,
   PaginatedResponse,
   TerminalLogList,
-  UserModerationBatchUpdateRequest,
+  UserViolationBatchRequest,
   UserModerationBatchUpdateResponse,
   UserModerationResponse,
-  UserModerationUpdateRequest,
+  UserViolationRequest,
+  ViolationCategory,
   UserWithModeration,
 } from './types';
 import { useAdminAuthStore } from './store';
@@ -173,11 +174,9 @@ export const adminApi = {
     client.post<unknown, InvitationCode>('/users/invitations', request),
   releaseReportedUser: (userId: number) =>
     client.post<unknown, ReportReleaseResponse>('/users/reports/' + userId + '/release'),
-  banReportedUser: (userId: number, request: ContentDeleteRequest) =>
-    client.delete<unknown, void>('/users/reports/' + userId, { data: request }),
-  moderateReportedUser: (userId: number, request: UserModerationUpdateRequest) =>
-    client.put<unknown, UserModerationResponse>(
-      '/users/reports/' + userId + '/moderation',
+  moderateReportedUser: (userId: number, request: UserViolationRequest) =>
+    client.post<unknown, UserModerationResponse>(
+      '/users/reports/' + userId + '/violations',
       request
     ),
   userReportModerationSettings: () =>
@@ -192,10 +191,12 @@ export const adminApi = {
     }),
   resetUserReportModerationPrompt: () =>
     client.post<unknown, ContentModerationLLMPromptConfig>('/users/report-moderation/prompt/reset'),
-  updateUserModeration: (userId: number, request: UserModerationUpdateRequest) =>
-    client.put<unknown, UserModerationResponse>(`/users/${userId}/moderation`, request),
-  updateUsersModeration: (request: UserModerationBatchUpdateRequest) =>
-    client.put<unknown, UserModerationBatchUpdateResponse>('/users/moderation/batch', request),
+  createUserViolation: (userId: number, request: UserViolationRequest) =>
+    client.post<unknown, UserModerationResponse>(`/users/${userId}/violations`, request),
+  releaseUserRestriction: (userId: number, category: ViolationCategory) =>
+    client.delete<unknown, UserModerationResponse>(`/users/${userId}/restrictions/${category}`),
+  createUsersViolation: (request: UserViolationBatchRequest) =>
+    client.post<unknown, UserModerationBatchUpdateResponse>('/users/violations/batch', request),
   publishAnnouncement: (request: AdminAnnouncementRequest) =>
     client.post<unknown, AdminAnnouncementResponse>('/announcements/', request),
   content: (params: { skip?: number; limit?: number; type?: string; keyword?: string }) =>
