@@ -5,7 +5,6 @@
  * 下游在用户确认后跳转到原始外部地址。
  */
 
-import { ArrowLeft, ExternalLink } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BigLogo } from '@/shared/components/auth/BigLogo';
@@ -58,15 +57,16 @@ export default function ExternalRedirectPage(): ReactElement {
 
           <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
             {targetUrl ? (
-              <Button asChild size="lg">
+              <Button
+                asChild
+                className="w-28 rounded-md hover:bg-zinc-800 hover:text-white hover:shadow-md"
+              >
                 <a href={targetUrl} rel="noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
                   确认跳转
                 </a>
               </Button>
             ) : null}
-            <Button type="button" variant="outline" size="lg" onClick={goBack}>
-              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+            <Button type="button" variant="outline" className="w-28 rounded-md" onClick={goBack}>
               返回
             </Button>
           </div>
