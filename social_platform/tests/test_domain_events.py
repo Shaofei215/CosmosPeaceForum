@@ -16,6 +16,7 @@ from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.follow.models import Follow
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.post.schemas import PostCreate
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.comment import application as comment_service
 from social_platform.app.domains.follow import application as follow_service
@@ -164,6 +165,72 @@ def test_comment_create_and_like_notifications_are_event_driven(db_session):
     assert len(notifications) == 2
     assert notifications[1].recipient_id == actor.id
     assert notifications[1].type == "comment_like"
+
+
+def test_post_mention_creates_notification_for_each_existing_user_once(db_session):
+    """新帖子应按用户名去重发送提及通知，并保留帖子原文和操作目标。"""
+
+    author = User(username="mention_author")
+    mentioned = User(username="mentioned_user")
+    db_session.add_all([author, mentioned])
+    db_session.commit()
+
+    post = post_application.create_post(
+        db_session,
+        author,
+        PostCreate(
+            content="你好 @mentioned_user，再次 @mentioned_user，忽略 @missing_user",
+        ),
+    )
+
+    notification = db_session.query(Notification).one()
+    assert notification.recipient_id == mentioned.id
+    assert notification.sender_id == author.id
+    assert notification.type == "mention"
+    assert notification.resource_type == "post"
+    assert notification.resource_id == post.id
+    assert notification.post_id == post.id
+    assert notification.comment_id is None
+    assert notification.source_content == post.content
+
+
+def test_comment_mention_uses_mention_instead_of_duplicate_comment_notification(db_session):
+    """同一评论的常规接收者被提及时应只收到更具体的提及通知。"""
+
+    author, actor, post = _seed_users_and_post(db_session)
+
+    comment = comment_service.create_comment(
+        post.id,
+        actor.id,
+        "正文中提及 @author",
+        None,
+        db_session,
+    )
+
+    notification = db_session.query(Notification).one()
+    assert notification.recipient_id == author.id
+    assert notification.type == "mention"
+    assert notification.resource_type == "comment"
+    assert notification.resource_id == comment.id
+    assert notification.post_id == post.id
+    assert notification.comment_id == comment.id
+    assert notification.source_content == comment.content
+
+
+def test_self_mention_does_not_create_notification(db_session):
+    """用户在自己的帖子中提及自己时不应产生通知。"""
+
+    author = User(username="self_mention")
+    db_session.add(author)
+    db_session.commit()
+
+    post_application.create_post(
+        db_session,
+        author,
+        PostCreate(content="@self_mention 自我记录"),
+    )
+
+    assert db_session.query(Notification).count() == 0
 
 
 def test_follow_notification_only_created_on_follow(db_session):

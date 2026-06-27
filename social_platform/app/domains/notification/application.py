@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.follow.models import Follow
+from social_platform.app.domains.mention import application as mention_service
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
@@ -102,9 +103,25 @@ def create_comment_notifications(
     comment: Comment,
     sender_id: int,
     parent_comment: Optional[Comment] = None,
+    excluded_recipient_ids: Optional[set[int]] = None,
 ) -> None:
-    """为评论或回复事件创建对应通知，保持通知生成逻辑归属通知领域。"""
+    """为评论或回复事件创建对应通知，保持通知生成逻辑归属通知领域。
+
+    Args:
+        db: 当前数据库会话。
+        post: 被评论的帖子。
+        comment: 新创建的评论。
+        sender_id: 评论发布者 ID。
+        parent_comment: 回复场景中的父评论，为空表示一级评论。
+        excluded_recipient_ids: 已因同一内容收到更具体通知的用户 ID 集合。
+
+    Returns:
+        None: 通知记录由当前数据库事务统一提交。
+    """
+    excluded_recipient_ids = excluded_recipient_ids or set()
     if parent_comment is not None:
+        if parent_comment.owner_id in excluded_recipient_ids:
+            return
         create_notification(
             db=db,
             recipient_id=parent_comment.owner_id,
@@ -118,6 +135,8 @@ def create_comment_notifications(
         )
         return
 
+    if post.author_id in excluded_recipient_ids:
+        return
     create_notification(
         db=db,
         recipient_id=post.author_id,
@@ -129,6 +148,52 @@ def create_comment_notifications(
         comment_id=comment.id,
         source_content=comment.content,
     )
+
+
+def create_mention_notifications(
+    db: Session,
+    *,
+    sender_id: int,
+    content: str,
+    resource_type: str,
+    resource_id: int,
+    post_id: int,
+    comment_id: Optional[int] = None,
+) -> set[int]:
+    """为正文中实际存在的被提及用户创建通知。
+
+    Args:
+        db: 当前数据库会话。
+        sender_id: 发布提及内容的用户 ID。
+        content: 帖子或评论正文，同时作为通知中的来源原文。
+        resource_type: 提及所在资源类型，支持 ``post`` 和 ``comment``。
+        resource_id: 提及所在帖子或评论 ID。
+        post_id: 通知跳转和互动操作指向的帖子 ID。
+        comment_id: 评论提及时对应的评论 ID，帖子提及时为空。
+
+    Returns:
+        set[int]: 实际创建提及通知的接收者 ID，用于避免同一内容产生重复通知。
+
+    Raises:
+        数据库查询异常会透传给调用方。
+    """
+    recipient_ids: set[int] = set()
+    for mentioned_user in mention_service.build_mention_users(db, content):
+        recipient_id = mentioned_user["user_id"]
+        notification = create_notification(
+            db=db,
+            recipient_id=recipient_id,
+            sender_id=sender_id,
+            notification_type="mention",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            post_id=post_id,
+            comment_id=comment_id,
+            source_content=content,
+        )
+        if notification is not None:
+            recipient_ids.add(recipient_id)
+    return recipient_ids
 
 
 def create_follow_notification(db: Session, follower_id: int, following_id: int) -> None:

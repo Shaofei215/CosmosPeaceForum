@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  AtSign,
   Bell,
   FileText,
   Heart,
@@ -136,7 +137,8 @@ function NotificationActions({ notification }: { notification: NotificationItem 
   if (
     (notification.type === 'comment' ||
       notification.type === 'comment_reply' ||
-      notification.type === 'comment_like') &&
+      notification.type === 'comment_like' ||
+      (notification.type === 'mention' && notification.resource_type === 'comment')) &&
     notification.post_id &&
     notification.comment_id
   ) {
@@ -144,7 +146,9 @@ function NotificationActions({ notification }: { notification: NotificationItem 
   }
 
   if (
-    (notification.type === 'post_like' || notification.type === 'repost') &&
+    (notification.type === 'post_like' ||
+      notification.type === 'repost' ||
+      (notification.type === 'mention' && notification.resource_type === 'post')) &&
     notification.post_id
   ) {
     return <PostActionBar postId={notification.post_id} />;
@@ -486,6 +490,7 @@ function getTypeInfo(type: string) {
     comment_like: { label: '赞了你的评论', icon: Heart, color: 'text-primary' },
     comment: { label: '评论了你的帖子', icon: MessageCircle, color: 'text-primary' },
     comment_reply: { label: '回复了你', icon: MessageCircle, color: 'text-primary' },
+    mention: { label: '提及了你', icon: AtSign, color: 'text-primary' },
     follow: { label: '关注了你', icon: UserPlus, color: 'text-emerald-600' },
     moderation: { label: '发来一条管理通知', icon: Info, color: 'text-destructive' },
     announcement: { label: '发布了一条公告', icon: Bell, color: 'text-primary' },
