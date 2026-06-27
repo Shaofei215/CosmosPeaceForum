@@ -14,7 +14,7 @@ from social_platform.app.domains.content_safety.events import (
     ReportedContentViolationConfirmed,
 )
 from social_platform.app.domains.follow.events import FollowChanged
-from social_platform.app.domains.post.events import RepostCreated
+from social_platform.app.domains.post.events import PostCreated, RepostCreated
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.events import LikeChanged
 from social_platform.app.shared.events import subscribe_domain_event
@@ -51,12 +51,50 @@ def handle_comment_created(db: Session, event: CommentCreated) -> None:
     if event.parent_comment_id is not None:
         parent_comment = db.query(Comment).filter(Comment.id == event.parent_comment_id).first()
 
+    mentioned_recipient_ids = notification_service.create_mention_notifications(
+        db=db,
+        sender_id=event.sender_id,
+        content=comment.content,
+        resource_type="comment",
+        resource_id=comment.id,
+        post_id=post.id,
+        comment_id=comment.id,
+    )
     notification_service.create_comment_notifications(
         db=db,
         post=post,
         comment=comment,
         sender_id=event.sender_id,
         parent_comment=parent_comment,
+        excluded_recipient_ids=mentioned_recipient_ids,
+    )
+
+
+def handle_post_created(db: Session, event: PostCreated) -> None:
+    """处理帖子创建事件并向正文中被提及的用户发送通知。
+
+    Args:
+        db: 当前数据库会话。
+        event: 帖子创建事件，提供帖子和发布者 ID。
+
+    Returns:
+        None: 通知随帖子创建事务统一提交。
+
+    Raises:
+        数据库查询或通知创建异常会透传给帖子创建事务。
+    """
+
+    post = db.query(Post).filter(Post.id == event.post_id).first()
+    if post is None:
+        return
+
+    notification_service.create_mention_notifications(
+        db=db,
+        sender_id=event.author_id,
+        content=post.content,
+        resource_type="post",
+        resource_id=post.id,
+        post_id=post.id,
     )
 
 
@@ -134,6 +172,7 @@ def register_notification_subscribers() -> None:
     """注册通知领域事件订阅器。"""
 
     subscribe_domain_event(LikeChanged, handle_like_changed)
+    subscribe_domain_event(PostCreated, handle_post_created)
     subscribe_domain_event(CommentCreated, handle_comment_created)
     subscribe_domain_event(FollowChanged, handle_follow_changed)
     subscribe_domain_event(RepostCreated, handle_repost_created)

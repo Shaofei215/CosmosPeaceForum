@@ -5,6 +5,7 @@ export type NotificationType =
   | 'comment_like'
   | 'comment'
   | 'comment_reply'
+  | 'mention'
   | 'repost'
   | 'follow'
   | 'moderation'
