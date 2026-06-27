@@ -86,11 +86,29 @@ export interface UserModerationStatus {
   account_banned_at: string | null;
   account_ban_reason: string | null;
   publish_banned_until: string | null;
+  publish_violation_count: number;
+  publish_permanently_banned: boolean;
   publish_ban_reason: string | null;
   comment_banned_until: string | null;
+  comment_violation_count: number;
+  comment_permanently_banned: boolean;
   comment_ban_reason: string | null;
   interaction_banned_until: string | null;
+  interaction_violation_count: number;
+  interaction_permanently_banned: boolean;
   interaction_ban_reason: string | null;
+  avatar_banned_until: string | null;
+  avatar_violation_count: number;
+  avatar_permanently_banned: boolean;
+  avatar_ban_reason: string | null;
+  username_banned_until: string | null;
+  username_violation_count: number;
+  username_permanently_banned: boolean;
+  username_ban_reason: string | null;
+  bio_banned_until: string | null;
+  bio_violation_count: number;
+  bio_permanently_banned: boolean;
+  bio_ban_reason: string | null;
   updated_at: string | null;
 }
 
@@ -110,24 +128,26 @@ export interface UserWithModeration {
   moderation: UserModerationStatus;
 }
 
-export interface UserModerationUpdateRequest {
-  account_banned?: boolean;
-  account_ban_reason?: string;
-  publish_banned_until?: string | null;
-  publish_ban_reason?: string;
-  comment_banned_until?: string | null;
-  comment_ban_reason?: string;
-  interaction_banned_until?: string | null;
-  interaction_ban_reason?: string;
+export type ViolationCategory =
+  | 'publish'
+  | 'comment'
+  | 'interaction'
+  | 'avatar'
+  | 'username'
+  | 'bio'
+  | 'account';
+
+export interface UserViolationRequest {
+  category: ViolationCategory;
+  reason?: string;
 }
 
 export interface UserModerationResponse extends UserModerationStatus {
   user_id: number;
 }
 
-export interface UserModerationBatchUpdateRequest {
+export interface UserViolationBatchRequest extends UserViolationRequest {
   user_ids: number[];
-  moderation: UserModerationUpdateRequest;
 }
 
 export interface UserModerationBatchUpdateResponse {

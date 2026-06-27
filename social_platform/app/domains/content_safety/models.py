@@ -119,6 +119,12 @@ class ModerationAppeal(Base):
         unique=True,
         index=True,
     )
+    violation_event_id = Column(
+        Integer,
+        ForeignKey("user_violation_events.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     appellant_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     target_type = Column(String(20), nullable=False, index=True)
     target_id = Column(Integer, nullable=False, index=True)
@@ -145,4 +151,50 @@ class ModerationAppeal(Base):
         UniqueConstraint("notification_id", name="uq_moderation_appeals_notification_id"),
         Index("idx_moderation_appeals_target_status", "target_type", "target_id", "status"),
         Index("idx_moderation_appeals_appellant_status", "appellant_id", "status"),
+    )
+
+
+class UserViolationEvent(Base):
+    """一次不可回退的用户违规处罚事件，连接处罚状态、来源内容、通知和申诉。"""
+
+    __tablename__ = "user_violation_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    category = Column(String(20), nullable=False, index=True)
+    violation_count = Column(Integer, nullable=True)
+    reason = Column(Text, nullable=False)
+    source_type = Column(String(30), nullable=False, default="manual", server_default="manual")
+    source_id = Column(Integer, nullable=True)
+    dedup_key = Column(String(100), nullable=True, unique=True, index=True)
+    notification_id = Column(
+        Integer,
+        ForeignKey("notifications.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_by_admin_id = Column(
+        Integer,
+        ForeignKey("platform_admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    restriction_until = Column(DateTime, nullable=True)
+    is_permanent = Column(Boolean, nullable=False, default=False, server_default="0")
+    released_at = Column(DateTime, nullable=True)
+    violation_count_reversed_at = Column(DateTime, nullable=True)
+    released_by_admin_id = Column(
+        Integer,
+        ForeignKey("platform_admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
+
+    user = relationship("User")
+    notification = relationship("Notification", foreign_keys=[notification_id])
+    created_by_admin = relationship("PlatformAdminUser", foreign_keys=[created_by_admin_id])
+    released_by_admin = relationship("PlatformAdminUser", foreign_keys=[released_by_admin_id])
+
+    __table_args__ = (
+        Index("idx_user_violation_events_user_category", "user_id", "category", "created_at"),
     )

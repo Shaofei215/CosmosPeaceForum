@@ -18,7 +18,7 @@ from social_platform.app.domains.content_safety.admin_application import (
     restore_comment_as_admin,
     restore_post_as_admin,
 )
-from social_platform.app.domains.content_safety.models import ModerationAppeal
+from social_platform.app.domains.content_safety.models import ModerationAppeal, UserViolationEvent
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.notification.system import create_system_notifications
 from social_platform.app.domains.post.models import Post
@@ -69,16 +69,21 @@ def create_or_update_appeal(
     ).first()
     action_label = _build_action_label(notification)
     moderation_reason = _extract_moderation_reason(notification.source_content)
+    violation_event = db.query(UserViolationEvent).filter(
+        UserViolationEvent.notification_id == notification.id
+    ).first()
     if appeal and appeal.status == APPEAL_STATUS_PENDING:
         appeal.appeal_reason = reason
         appeal.action_label = action_label
         appeal.moderation_reason = moderation_reason
         appeal.updated_at = local_now()
+        appeal.violation_event_id = violation_event.id if violation_event else None
     elif appeal:
         raise ValueError("该申诉已处理，不能再次提交")
     else:
         appeal = ModerationAppeal(
             notification_id=notification.id,
+            violation_event_id=violation_event.id if violation_event else None,
             appellant_id=appellant.id,
             target_type=notification.resource_type,
             target_id=notification.resource_id,
@@ -186,6 +191,16 @@ def approve_user_appeal(db: Session, appeal_id: int, admin: PlatformAdminUser) -
     """
 
     appeal = _get_pending_appeal(db, appeal_id, scope="user")
+    if appeal.violation_event_id is not None:
+        from social_platform.app.admin.services.moderation_service import release_violation_event
+
+        release_violation_event(
+            db,
+            appeal.violation_event_id,
+            admin,
+            reverse_violation_count=True,
+            commit=False,
+        )
     _mark_appeal_resolved(
         db,
         appeal_id=appeal.id,

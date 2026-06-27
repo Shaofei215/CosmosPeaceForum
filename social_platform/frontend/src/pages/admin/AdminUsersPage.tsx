@@ -30,7 +30,8 @@ import {
   type InvitationCodeCreateRequest,
   type ModerationAppealItem,
   type ReportedUserItem,
-  type UserModerationUpdateRequest,
+  type UserViolationRequest,
+  type ViolationCategory,
   type UserWithModeration,
 } from '@/features/admin';
 import {
@@ -43,41 +44,6 @@ import {
   Textarea,
 } from '@/shared/components/ui';
 
-function toDateTimeLocal(value: string | null) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-}
-
-function fromDateTimeLocal(value: string) {
-  return value ? new Date(value).toISOString() : null;
-}
-
-function getMinDateTimeLocal() {
-  const date = new Date(Date.now() + 60 * 1000);
-  date.setSeconds(0, 0);
-  return toDateTimeLocal(date.toISOString());
-}
-
-function isPastDateTimeLocal(value: string) {
-  return value ? new Date(value).getTime() <= Date.now() : false;
-}
-
-function isFutureIsoDateTime(value: string | null) {
-  return value ? new Date(value).getTime() > Date.now() : false;
-}
-
-function getInitialModerationReason(user: UserWithModeration) {
-  return (
-    user.moderation.account_ban_reason ||
-    user.moderation.publish_ban_reason ||
-    user.moderation.comment_ban_reason ||
-    user.moderation.interaction_ban_reason ||
-    ''
-  );
-}
-
 function getErrorMessage(error: unknown) {
   if (error && typeof error === 'object' && 'message' in error) {
     return String((error as { message?: unknown }).message);
@@ -85,7 +51,19 @@ function getErrorMessage(error: unknown) {
   return null;
 }
 
-function reportedUserToModerationUser(user: ReportedUserItem): UserWithModeration {
+function reportedUserToModerationUser(
+  user: ReportedUserItem,
+  moderatedUsers: UserWithModeration[] = []
+): UserWithModeration {
+  const existing = moderatedUsers.find(item => item.id === user.id);
+  if (existing) {
+    return {
+      ...existing,
+      username: user.username,
+      bio: user.bio,
+      avatar_url: user.avatar_url,
+    };
+  }
   return {
     id: user.id,
     username: user.username,
@@ -104,11 +82,29 @@ function reportedUserToModerationUser(user: ReportedUserItem): UserWithModeratio
       account_banned_at: null,
       account_ban_reason: null,
       publish_banned_until: null,
+      publish_violation_count: 0,
+      publish_permanently_banned: false,
       publish_ban_reason: null,
       comment_banned_until: null,
+      comment_violation_count: 0,
+      comment_permanently_banned: false,
       comment_ban_reason: null,
       interaction_banned_until: null,
+      interaction_violation_count: 0,
+      interaction_permanently_banned: false,
       interaction_ban_reason: null,
+      avatar_banned_until: null,
+      avatar_violation_count: 0,
+      avatar_permanently_banned: false,
+      avatar_ban_reason: null,
+      username_banned_until: null,
+      username_violation_count: 0,
+      username_permanently_banned: false,
+      username_ban_reason: null,
+      bio_banned_until: null,
+      bio_violation_count: 0,
+      bio_permanently_banned: false,
+      bio_ban_reason: null,
       updated_at: null,
     },
   };
@@ -165,10 +161,6 @@ export default function AdminUsersPage() {
   const [reportedModerationUser, setReportedModerationUser] = useState<ReportedUserItem | null>(
     null
   );
-  const [appealModeration, setAppealModeration] = useState<{
-    appeal: ModerationAppealItem;
-    user: UserWithModeration;
-  } | null>(null);
   const [rejectingAppeal, setRejectingAppeal] = useState<ModerationAppealItem | null>(null);
   const [releasingUserId, setReleasingUserId] = useState<number | null>(null);
   const [reportSettingsForm, setReportSettingsForm] = useState<ContentModerationLLMSettingsUpdate>(
@@ -239,17 +231,33 @@ export default function AdminUsersPage() {
   }, [reportSettings, reportSettingsForm]);
 
   const updateMutation = useMutation({
-    mutationFn: ({ userId, payload }: { userId: number; payload: UserModerationUpdateRequest }) =>
-      adminApi.updateUserModeration(userId, payload),
-    onSuccess: () => {
+    mutationFn: ({ userId, payload }: { userId: number; payload: UserViolationRequest }) =>
+      adminApi.createUserViolation(userId, payload),
+    onSuccess: response => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      setSelectedUser(null);
+      const { user_id, ...moderation } = response;
+      setSelectedUser(current =>
+        current && current.id === user_id ? { ...current, moderation } : current
+      );
+    },
+  });
+
+  const releaseRestrictionMutation = useMutation({
+    mutationFn: ({ userId, category }: { userId: number; category: ViolationCategory }) =>
+      adminApi.releaseUserRestriction(userId, category),
+    onSuccess: response => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      const { user_id, ...moderation } = response;
+      setSelectedUser(current =>
+        current && current.id === user_id ? { ...current, moderation } : current
+      );
+      setReportedModerationUser(null);
     },
   });
 
   const batchMutation = useMutation({
-    mutationFn: (payload: UserModerationUpdateRequest) =>
-      adminApi.updateUsersModeration({ user_ids: selectedIds, moderation: payload }),
+    mutationFn: (payload: UserViolationRequest) =>
+      adminApi.createUsersViolation({ user_ids: selectedIds, ...payload }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       setBatchOpen(false);
@@ -279,33 +287,18 @@ export default function AdminUsersPage() {
   });
 
   const moderateReportedUserMutation = useMutation({
-    mutationFn: ({
-      user,
-      payload,
-    }: {
-      user: ReportedUserItem;
-      payload: UserModerationUpdateRequest;
-    }) => adminApi.moderateReportedUser(user.id, payload),
+    mutationFn: ({ user, payload }: { user: ReportedUserItem; payload: UserViolationRequest }) =>
+      adminApi.moderateReportedUser(user.id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
       setReportedModerationUser(null);
     },
   });
 
-  const approveAppealWithModerationMutation = useMutation({
-    mutationFn: async ({
-      appeal,
-      payload,
-    }: {
-      appeal: ModerationAppealItem;
-      payload: UserModerationUpdateRequest;
-    }) => {
-      await adminApi.updateUserModeration(appeal.target_id, payload);
-      await adminApi.approveUserAppeal(appeal.id);
-    },
+  const approveAppealMutation = useMutation({
+    mutationFn: (appeal: ModerationAppealItem) => adminApi.approveUserAppeal(appeal.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-      setAppealModeration(null);
     },
   });
 
@@ -435,7 +428,7 @@ export default function AdminUsersPage() {
           {mode === 'all' && selectedIds.length > 0 && (
             <Button variant="outline" className="rounded-md" onClick={() => setBatchOpen(true)}>
               <UsersRound size={14} className="mr-1" />
-              批量封禁
+              批量违规处理
             </Button>
           )}
           {mode === 'all' && (
@@ -629,9 +622,8 @@ export default function AdminUsersPage() {
       ) : mode === 'appeals' ? (
         <UserAppealsTable
           items={appealItems}
-          moderatedUsers={moderatedUsers}
           onOpenModerated={() => switchMode('reported')}
-          onManage={(appeal, user) => setAppealModeration({ appeal, user })}
+          onApprove={appeal => approveAppealMutation.mutate(appeal)}
           onReject={setRejectingAppeal}
         />
       ) : (
@@ -645,17 +637,23 @@ export default function AdminUsersPage() {
       )}
 
       {selectedUser && (
-        <ModerationEditor
+        <ViolationEditor
           user={selectedUser}
-          saving={updateMutation.isPending}
-          error={getErrorMessage(updateMutation.error)}
+          saving={updateMutation.isPending || releaseRestrictionMutation.isPending}
+          error={
+            getErrorMessage(updateMutation.error) ||
+            getErrorMessage(releaseRestrictionMutation.error)
+          }
           onClose={() => setSelectedUser(null)}
           onSubmit={payload => updateMutation.mutate({ userId: selectedUser.id, payload })}
+          onRelease={category =>
+            releaseRestrictionMutation.mutate({ userId: selectedUser.id, category })
+          }
         />
       )}
       {batchOpen && (
-        <BatchModerationEditor
-          users={selectedUsers}
+        <ViolationEditor
+          title={`批量处理 ${selectedUsers.length} 个用户`}
           saving={batchMutation.isPending}
           error={getErrorMessage(batchMutation.error)}
           onClose={() => setBatchOpen(false)}
@@ -671,27 +669,19 @@ export default function AdminUsersPage() {
         />
       )}
       {reportedModerationUser && (
-        <ModerationEditor
-          user={reportedUserToModerationUser(reportedModerationUser)}
-          saving={moderateReportedUserMutation.isPending}
-          error={getErrorMessage(moderateReportedUserMutation.error)}
+        <ViolationEditor
+          user={reportedUserToModerationUser(reportedModerationUser, moderatedUsers)}
+          saving={moderateReportedUserMutation.isPending || releaseRestrictionMutation.isPending}
+          error={
+            getErrorMessage(moderateReportedUserMutation.error) ||
+            getErrorMessage(releaseRestrictionMutation.error)
+          }
           onClose={() => setReportedModerationUser(null)}
           onSubmit={payload =>
             moderateReportedUserMutation.mutate({ user: reportedModerationUser, payload })
           }
-        />
-      )}
-      {appealModeration && (
-        <ModerationEditor
-          user={appealModeration.user}
-          saving={approveAppealWithModerationMutation.isPending}
-          error={getErrorMessage(approveAppealWithModerationMutation.error)}
-          onClose={() => setAppealModeration(null)}
-          onSubmit={payload =>
-            approveAppealWithModerationMutation.mutate({
-              appeal: appealModeration.appeal,
-              payload,
-            })
+          onRelease={category =>
+            releaseRestrictionMutation.mutate({ userId: reportedModerationUser.id, category })
           }
         />
       )}
@@ -711,6 +701,9 @@ const statusIconMap = {
   publish: { icon: FileText, label: '禁止发布' },
   comment: { icon: MessageCircle, label: '禁止评论' },
   interaction: { icon: Heart, label: '禁止互动' },
+  avatar: { icon: Bot, label: '头像限制' },
+  username: { icon: UsersRound, label: '用户名限制' },
+  bio: { icon: ScrollText, label: '签名限制' },
 };
 
 type StatusIconKey = keyof typeof statusIconMap;
@@ -881,51 +874,15 @@ function InvitationCodesPanel({
   );
 }
 
-function appealToModerationUser(
-  appeal: ModerationAppealItem,
-  moderatedUsers: UserWithModeration[]
-): UserWithModeration {
-  const existing = moderatedUsers.find(user => user.id === appeal.target_id);
-  if (existing) return existing;
-  return {
-    id: appeal.target_id,
-    username: appeal.target_label.replace(/^@/, ''),
-    email: null,
-    bio: appeal.target_content,
-    avatar_url: null,
-    is_ai_agent: false,
-    ai_config_id: null,
-    created_at: appeal.created_at,
-    following_count: 0,
-    followers_count: 0,
-    post_count: 0,
-    comment_count: 0,
-    moderation: {
-      account_banned: true,
-      account_banned_at: appeal.created_at,
-      account_ban_reason: appeal.moderation_reason,
-      publish_banned_until: null,
-      publish_ban_reason: null,
-      comment_banned_until: null,
-      comment_ban_reason: null,
-      interaction_banned_until: null,
-      interaction_ban_reason: null,
-      updated_at: appeal.updated_at,
-    },
-  };
-}
-
 function UserAppealsTable({
   items,
-  moderatedUsers,
   onOpenModerated,
-  onManage,
+  onApprove,
   onReject,
 }: {
   items: ModerationAppealItem[];
-  moderatedUsers: UserWithModeration[];
   onOpenModerated: () => void;
-  onManage: (appeal: ModerationAppealItem, user: UserWithModeration) => void;
+  onApprove: (appeal: ModerationAppealItem) => void;
   onReject: (appeal: ModerationAppealItem) => void;
 }) {
   return (
@@ -945,7 +902,6 @@ function UserAppealsTable({
             </thead>
             <tbody>
               {items.map(item => {
-                const user = appealToModerationUser(item, moderatedUsers);
                 return (
                   <tr key={item.id} className="border-b last:border-0">
                     <td className="px-4 py-3">
@@ -988,10 +944,10 @@ function UserAppealsTable({
                           variant="outline"
                           size="sm"
                           className="rounded-md gap-1"
-                          onClick={() => onManage(item, user)}
+                          onClick={() => onApprove(item)}
                         >
-                          <ShieldAlert size={14} />
-                          处理
+                          <CheckCircle size={14} />
+                          通过并解除对应处罚
                         </Button>
                         <Button
                           variant="destructive"
@@ -1466,15 +1422,39 @@ function UserStatus({ user }: { user: UserWithModeration }) {
     const m = user.moderation;
     const items: StatusIconKey[] = [];
     if (m.account_banned) items.push('account');
-    if (m.publish_banned_until && new Date(m.publish_banned_until).getTime() > now) {
+    if (
+      m.publish_permanently_banned ||
+      (m.publish_banned_until && new Date(m.publish_banned_until).getTime() > now)
+    ) {
       items.push('publish');
     }
-    if (m.comment_banned_until && new Date(m.comment_banned_until).getTime() > now) {
+    if (
+      m.comment_permanently_banned ||
+      (m.comment_banned_until && new Date(m.comment_banned_until).getTime() > now)
+    ) {
       items.push('comment');
     }
-    if (m.interaction_banned_until && new Date(m.interaction_banned_until).getTime() > now) {
+    if (
+      m.interaction_permanently_banned ||
+      (m.interaction_banned_until && new Date(m.interaction_banned_until).getTime() > now)
+    ) {
       items.push('interaction');
     }
+    if (
+      m.avatar_permanently_banned ||
+      (m.avatar_banned_until && new Date(m.avatar_banned_until).getTime() > now)
+    )
+      items.push('avatar');
+    if (
+      m.username_permanently_banned ||
+      (m.username_banned_until && new Date(m.username_banned_until).getTime() > now)
+    )
+      items.push('username');
+    if (
+      m.bio_permanently_banned ||
+      (m.bio_banned_until && new Date(m.bio_banned_until).getTime() > now)
+    )
+      items.push('bio');
     return items;
   }, [user]);
 
@@ -1502,303 +1482,121 @@ function UserStatus({ user }: { user: UserWithModeration }) {
   );
 }
 
-function ModerationEditor({
+const violationActions: Array<{ category: ViolationCategory; label: string }> = [
+  { category: 'publish', label: '发帖违规' },
+  { category: 'comment', label: '评论违规' },
+  { category: 'interaction', label: '互动违规' },
+  { category: 'avatar', label: '头像违规' },
+  { category: 'username', label: '用户名违规' },
+  { category: 'bio', label: '签名违规' },
+  { category: 'account', label: '封禁账户' },
+];
+
+function isCategoryControlled(user: UserWithModeration, category: ViolationCategory) {
+  if (category === 'account') return user.moderation.account_banned;
+  const permanent = user.moderation[`${category}_permanently_banned`];
+  const until = user.moderation[`${category}_banned_until`];
+  return permanent || Boolean(until && new Date(until).getTime() > Date.now());
+}
+
+function ViolationEditor({
   user,
+  title,
   saving,
   error,
   onClose,
   onSubmit,
+  onRelease,
 }: {
-  user: UserWithModeration;
+  user?: UserWithModeration;
+  title?: string;
   saving: boolean;
   error: string | null;
   onClose: () => void;
-  onSubmit: (payload: UserModerationUpdateRequest) => void;
+  onSubmit: (payload: UserViolationRequest) => void;
+  onRelease?: (category: ViolationCategory) => void;
 }) {
-  const minDateTime = useMemo(getMinDateTimeLocal, []);
-  const [accountBanned, setAccountBanned] = useState(user.moderation.account_banned);
-  const [reason, setReason] = useState(getInitialModerationReason(user));
-  const [publishEnabled, setPublishEnabled] = useState(
-    isFutureIsoDateTime(user.moderation.publish_banned_until)
-  );
-  const [commentEnabled, setCommentEnabled] = useState(
-    isFutureIsoDateTime(user.moderation.comment_banned_until)
-  );
-  const [interactionEnabled, setInteractionEnabled] = useState(
-    isFutureIsoDateTime(user.moderation.interaction_banned_until)
-  );
-  const [publishUntil, setPublishUntil] = useState(
-    isFutureIsoDateTime(user.moderation.publish_banned_until)
-      ? toDateTimeLocal(user.moderation.publish_banned_until)
-      : ''
-  );
-  const [commentUntil, setCommentUntil] = useState(
-    isFutureIsoDateTime(user.moderation.comment_banned_until)
-      ? toDateTimeLocal(user.moderation.comment_banned_until)
-      : ''
-  );
-  const [interactionUntil, setInteractionUntil] = useState(
-    isFutureIsoDateTime(user.moderation.interaction_banned_until)
-      ? toDateTimeLocal(user.moderation.interaction_banned_until)
-      : ''
-  );
-  const hasPastTime = [
-    publishEnabled ? publishUntil : '',
-    commentEnabled ? commentUntil : '',
-    interactionEnabled ? interactionUntil : '',
-  ].some(isPastDateTimeLocal);
-  const hasMissingTime =
-    (publishEnabled && !publishUntil) ||
-    (commentEnabled && !commentUntil) ||
-    (interactionEnabled && !interactionUntil);
-  const handleRestrictionToggle = (
-    enabled: boolean,
-    setEnabled: (value: boolean) => void,
-    value: string,
-    setValue: (value: string) => void
-  ) => {
-    setEnabled(enabled);
-    if (enabled && !value) {
-      setValue(minDateTime);
-    }
-  };
-  const buildRestrictionUntil = (enabled: boolean, value: string) =>
-    enabled ? fromDateTimeLocal(value) : null;
-
-  return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-      <Card className="w-full max-w-2xl rounded-lg shadow-xl">
-        <CardHeader>
-          <CardTitle>管理 @{user.username || `user_${user.id}`}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={accountBanned}
-              onChange={event => setAccountBanned(event.target.checked)}
-            />
-            封禁账号
-          </label>
-          <Textarea
-            value={reason}
-            onChange={event => setReason(event.target.value)}
-            placeholder="处罚原因"
-            rows={3}
-          />
-          <div className="grid gap-3 md:grid-cols-3">
-            <RestrictionDateField
-              label="禁止发布到"
-              checked={publishEnabled}
-              value={publishUntil}
-              min={minDateTime}
-              onCheckedChange={checked =>
-                handleRestrictionToggle(checked, setPublishEnabled, publishUntil, setPublishUntil)
-              }
-              onChange={setPublishUntil}
-            />
-            <RestrictionDateField
-              label="禁止评论到"
-              checked={commentEnabled}
-              value={commentUntil}
-              min={minDateTime}
-              onCheckedChange={checked =>
-                handleRestrictionToggle(checked, setCommentEnabled, commentUntil, setCommentUntil)
-              }
-              onChange={setCommentUntil}
-            />
-            <RestrictionDateField
-              label="禁止互动到"
-              checked={interactionEnabled}
-              value={interactionUntil}
-              min={minDateTime}
-              onCheckedChange={checked =>
-                handleRestrictionToggle(
-                  checked,
-                  setInteractionEnabled,
-                  interactionUntil,
-                  setInteractionUntil
-                )
-              }
-              onChange={setInteractionUntil}
-            />
-          </div>
-          {hasPastTime && (
-            <p className="text-sm text-destructive">封禁结束时间必须晚于当前时间。</p>
-          )}
-          {hasMissingTime && (
-            <p className="text-sm text-destructive">已启用的限制需要填写结束时间。</p>
-          )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" className="rounded-md" onClick={onClose} disabled={saving}>
-              取消
-            </Button>
-            <Button
-              className="rounded-md"
-              disabled={saving || hasPastTime || hasMissingTime}
-              onClick={() =>
-                onSubmit({
-                  account_banned: accountBanned,
-                  account_ban_reason: reason || undefined,
-                  publish_banned_until: buildRestrictionUntil(publishEnabled, publishUntil),
-                  publish_ban_reason: reason || undefined,
-                  comment_banned_until: buildRestrictionUntil(commentEnabled, commentUntil),
-                  comment_ban_reason: reason || undefined,
-                  interaction_banned_until: buildRestrictionUntil(
-                    interactionEnabled,
-                    interactionUntil
-                  ),
-                  interaction_ban_reason: reason || undefined,
-                })
-              }
-            >
-              <Ban size={14} className="mr-1" />
-              保存
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function RestrictionDateField({
-  label,
-  checked,
-  value,
-  min,
-  onCheckedChange,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  value: string;
-  min: string;
-  onCheckedChange: (checked: boolean) => void;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="space-y-2 text-sm">
-      <span className="flex items-center gap-2 font-medium">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={event => onCheckedChange(event.target.checked)}
-        />
-        {label}
-      </span>
-      <Input
-        type="datetime-local"
-        value={value}
-        min={min}
-        disabled={!checked}
-        onChange={event => onChange(event.target.value)}
-      />
-    </label>
-  );
-}
-
-function BatchModerationEditor({
-  users,
-  saving,
-  error,
-  onClose,
-  onSubmit,
-}: {
-  users: UserWithModeration[];
-  saving: boolean;
-  error: string | null;
-  onClose: () => void;
-  onSubmit: (payload: UserModerationUpdateRequest) => void;
-}) {
-  const minDateTime = useMemo(getMinDateTimeLocal, []);
-  const [accountBanned, setAccountBanned] = useState(true);
   const [reason, setReason] = useState('');
-  const [publishUntil, setPublishUntil] = useState('');
-  const [commentUntil, setCommentUntil] = useState('');
-  const [interactionUntil, setInteractionUntil] = useState('');
-  const hasPastTime = [publishUntil, commentUntil, interactionUntil].some(isPastDateTimeLocal);
-  const hasAction = accountBanned || publishUntil || commentUntil || interactionUntil;
-
-  const handleSubmit = () => {
-    const payload: UserModerationUpdateRequest = {};
-    if (accountBanned) {
-      payload.account_banned = true;
-      payload.account_ban_reason = reason || undefined;
+  const apply = (category: ViolationCategory) => {
+    if (user && isCategoryControlled(user, category)) {
+      onRelease?.(category);
+      return;
     }
-    if (publishUntil) {
-      payload.publish_banned_until = fromDateTimeLocal(publishUntil);
-      payload.publish_ban_reason = reason || undefined;
+    if (
+      category === 'account' &&
+      !window.confirm('封禁账户将禁止普通写操作并撤下全部资料，确认继续？')
+    ) {
+      return;
     }
-    if (commentUntil) {
-      payload.comment_banned_until = fromDateTimeLocal(commentUntil);
-      payload.comment_ban_reason = reason || undefined;
-    }
-    if (interactionUntil) {
-      payload.interaction_banned_until = fromDateTimeLocal(interactionUntil);
-      payload.interaction_ban_reason = reason || undefined;
-    }
-    onSubmit(payload);
+    onSubmit({ category, reason: reason.trim() || undefined });
   };
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
       <Card className="w-full max-w-2xl rounded-lg shadow-xl">
         <CardHeader>
-          <CardTitle>批量封禁 {users.length} 个用户</CardTitle>
+          <CardTitle>{title || `管理 @${user?.username || `user_${user?.id}`}`}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={accountBanned}
-              onChange={event => setAccountBanned(event.target.checked)}
-            />
-            封禁账号
-          </label>
+          {user && (
+            <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              {(['publish', 'comment', 'interaction', 'avatar', 'username', 'bio'] as const).map(
+                category => {
+                  const count = user.moderation[`${category}_violation_count`];
+                  const permanent = user.moderation[`${category}_permanently_banned`];
+                  const until = user.moderation[`${category}_banned_until`];
+                  const active =
+                    permanent || Boolean(until && new Date(until).getTime() > Date.now());
+                  return (
+                    <div key={category} className="rounded-md border p-2">
+                      <p className="font-medium">
+                        {violationActions.find(item => item.category === category)?.label}
+                      </p>
+                      <p className="text-muted-foreground">累计 {count} 次</p>
+                      <p className={active ? 'text-destructive' : 'text-muted-foreground'}>
+                        {permanent
+                          ? '永久限制中'
+                          : active
+                            ? `限制至 ${new Date(until!).toLocaleString()}`
+                            : '当前未限制'}
+                      </p>
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          )}
           <Textarea
             value={reason}
             onChange={event => setReason(event.target.value)}
-            placeholder="处罚原因"
+            placeholder="违规原因（可选，留空使用类别默认原因）"
             rows={3}
           />
-          <div className="grid gap-3 md:grid-cols-3">
-            <DateField
-              label="禁止发布到"
-              value={publishUntil}
-              min={minDateTime}
-              onChange={setPublishUntil}
-            />
-            <DateField
-              label="禁止评论到"
-              value={commentUntil}
-              min={minDateTime}
-              onChange={setCommentUntil}
-            />
-            <DateField
-              label="禁止互动到"
-              value={interactionUntil}
-              min={minDateTime}
-              onChange={setInteractionUntil}
-            />
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {violationActions.map(action => {
+              const active = Boolean(user && isCategoryControlled(user, action.category));
+              return (
+                <Button
+                  key={action.category}
+                  variant="outline"
+                  className={
+                    active
+                      ? 'rounded-md border-blue-600 bg-blue-600 text-white hover:bg-blue-700 hover:text-white'
+                      : 'rounded-md'
+                  }
+                  disabled={saving}
+                  title={active ? '当前处于管控状态，再次点击解除' : undefined}
+                  onClick={() => apply(action.category)}
+                >
+                  {action.label}
+                </Button>
+              );
+            })}
           </div>
-          {hasPastTime && (
-            <p className="text-sm text-destructive">封禁结束时间必须晚于当前时间。</p>
-          )}
-          {!hasAction && <p className="text-sm text-destructive">至少选择一种封禁操作。</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="outline" className="rounded-md" onClick={onClose} disabled={saving}>
-              取消
-            </Button>
-            <Button
-              className="rounded-md"
-              disabled={saving || hasPastTime || !hasAction}
-              onClick={handleSubmit}
-            >
-              <Ban size={14} className="mr-1" />
-              应用
+              关闭
             </Button>
           </div>
         </CardContent>
@@ -1850,29 +1648,5 @@ function AnnouncementEditor({
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function DateField({
-  label,
-  value,
-  min,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  min: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="space-y-2 text-sm">
-      <span className="font-medium">{label}</span>
-      <Input
-        type="datetime-local"
-        value={value}
-        min={min}
-        onChange={event => onChange(event.target.value)}
-      />
-    </label>
   );
 }

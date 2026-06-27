@@ -72,9 +72,9 @@ def test_account_ban_creates_moderation_notification(db_session):
     assert notifications[0].type == "moderation"
     assert notifications[0].resource_type == "user"
     assert notifications[0].resource_id == user.id
-    assert "你的账号已被永久封禁" in notifications[0].source_content
+    assert "你的账号已被封禁" in notifications[0].source_content
     assert "违规测试" in notifications[0].source_content
-    assert notifications[0].source_content == "你的账号已被永久封禁。\n原因：违规测试"
+    assert notifications[0].source_content == "你的账号已被封禁。\n原因：违规测试"
 
     assert db_session.query(UserModeration).count() == 1
     assert db_session.query(PlatformAdminOperationLog).count() == 1
