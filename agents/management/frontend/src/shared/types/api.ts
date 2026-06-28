@@ -97,6 +97,7 @@ export interface AgentCreate {
 }
 
 export interface AgentUpdate {
+  username?: string;
   name?: string;
   monthly_logins?: number;
   personal_signature?: string;

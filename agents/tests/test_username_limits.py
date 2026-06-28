@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from agents.management.backend.schemas import AgentCreate
+from agents.management.backend.schemas import AgentCreate, AgentUpdate
 from agents.management.backend.services import registrar
 from social_platform.app.schemas.auth import UserRegister
 from social_platform.app.domains.user.schemas import CompleteProfileRequest
@@ -56,8 +56,62 @@ class TestUsernameLengthLimits:
 
         assert agent.username == username
 
+    def test_management_agent_update_rejects_31_characters(self):
+        with pytest.raises(ValidationError) as exc_info:
+            AgentUpdate(username="a" * 31)
+
+        assert exc_info.value.errors()[0]["type"] == "string_too_long"
+
 
 class TestRegistrar:
+    def test_update_user_username_uses_public_profile_api(self):
+        mock_response = MagicMock(status_code=200)
+
+        with (
+            patch.object(registrar, "_login_user", return_value="access-token"),
+            patch.object(registrar, "_get_user_id", return_value=42),
+            patch.object(registrar.requests, "put", return_value=mock_response) as mock_put,
+        ):
+            success, error, status_code = registrar.update_user_username(
+                api_base_url="http://localhost:8000/api/v1",
+                current_username="old_name",
+                password="secret123",
+                user_id=42,
+                new_username="new_name",
+            )
+
+        assert success is True
+        assert error is None
+        assert status_code == 200
+        mock_put.assert_called_once_with(
+            "http://localhost:8000/api/v1/users/42",
+            json={"username": "new_name"},
+            headers={
+                "Authorization": "Bearer access-token",
+                "Content-Type": "application/json",
+            },
+            timeout=10,
+        )
+
+    def test_update_user_username_rejects_mismatched_platform_account(self):
+        with (
+            patch.object(registrar, "_login_user", return_value="access-token"),
+            patch.object(registrar, "_get_user_id", return_value=99),
+            patch.object(registrar.requests, "put") as mock_put,
+        ):
+            success, error, status_code = registrar.update_user_username(
+                api_base_url="http://localhost:8000/api/v1",
+                current_username="old_name",
+                password="secret123",
+                user_id=42,
+                new_username="new_name",
+            )
+
+        assert success is False
+        assert error == "app_platform 账号映射不一致"
+        assert status_code is None
+        mock_put.assert_not_called()
+
     def test_register_agent_stops_retrying_on_422(self):
         mock_response = MagicMock(status_code=422, text='{"detail":"invalid"}')
         mock_response.json.return_value = {

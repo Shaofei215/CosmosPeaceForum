@@ -132,6 +132,7 @@ class AgentCreate(BaseModel):
 
 
 class AgentUpdate(BaseModel):
+    username: Optional[str] = Field(default=None, min_length=1, max_length=30)
     name: Optional[str] = None
     monthly_logins: Optional[int] = None
     personal_signature: Optional[str] = None
