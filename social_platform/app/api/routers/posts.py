@@ -226,6 +226,8 @@ def update_post(
         raise HTTPException(status_code=404, detail="帖子不存在")
     except post_application.PostPermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except post_application.PostContentTooLongError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @router.delete("/{post_id}", summary="删除帖子", description="删除指定帖子，仅帖子作者可以操作。")

@@ -1,8 +1,12 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from social_platform.app.core.content_limits import (
+    ARTICLE_CONTENT_MAX_LENGTH,
+    POST_CONTENT_MAX_LENGTH,
+)
 from social_platform.app.domains.user.schemas import UserResponse
 from social_platform.app.domains.topic.schemas import TopicMention
 
@@ -12,6 +16,24 @@ class PostBase(BaseModel):
     title: Optional[str] = Field(None, max_length=200)
     type: str = Field("post", pattern="^(post|article)$")
     content: str = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def validate_content_length(self) -> "PostBase":
+        """按文章或普通帖子类型校验正文长度。
+
+        Returns:
+            PostBase: 校验通过的当前 schema。
+
+        Raises:
+            ValueError: 正文超过对应内容类型的长度上限时抛出。
+        """
+
+        max_length = (
+            ARTICLE_CONTENT_MAX_LENGTH if self.type == "article" else POST_CONTENT_MAX_LENGTH
+        )
+        if len(self.content) > max_length:
+            raise ValueError(f"正文不能超过 {max_length} 个字符")
+        return self
 
 
 class PollOptionResponse(BaseModel):
@@ -52,7 +74,7 @@ class PollVoteCreate(BaseModel):
 
 class RepostCreate(BaseModel):
     """帖子领域 API schema的创建请求，供 API adapter 做参数校验和响应序列化。"""
-    content: Optional[str] = Field(None, max_length=5000)
+    content: Optional[str] = Field(None, max_length=POST_CONTENT_MAX_LENGTH)
     source_type: str = Field(..., pattern="^(post|comment)$")
     source_id: int
 
@@ -86,7 +108,7 @@ class RepostChainAuthor(MentionUser):
 class PostUpdate(BaseModel):
     """帖子领域 API schema的更新请求，供 API adapter 做参数校验和响应序列化。"""
     title: Optional[str] = Field(None, max_length=200)
-    content: Optional[str] = Field(None, min_length=1)
+    content: Optional[str] = Field(None, min_length=1, max_length=ARTICLE_CONTENT_MAX_LENGTH)
 
 
 class PostResponse(PostBase):

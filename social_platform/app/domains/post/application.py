@@ -11,6 +11,7 @@ import re
 from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
+from social_platform.app.core.content_limits import POST_CONTENT_MAX_LENGTH
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.post import poll_application, queries as post_queries
 from social_platform.app.domains.post.events import (
@@ -54,6 +55,15 @@ class PostPermissionError(Exception):
     def __init__(self, message: str) -> None:
         """初始化帖子权限异常。"""
         super().__init__(message)
+
+
+class PostContentTooLongError(Exception):
+    """普通帖子更新正文超过长度上限异常。"""
+
+    def __init__(self) -> None:
+        """初始化正文过长异常。"""
+
+        super().__init__(f"帖子正文不能超过 {POST_CONTENT_MAX_LENGTH} 个字符")
 
 
 class RepostSourceNotFoundError(Exception):
@@ -167,6 +177,12 @@ def update_post(db: Session, current_user: User, post_id: int, post_update: Post
         raise PostNotFoundError(post_id)
     if post.author_id != current_user.id:
         raise PostPermissionError("无权修改此帖子")
+    if (
+        post.type != "article"
+        and post_update.content is not None
+        and len(post_update.content) > POST_CONTENT_MAX_LENGTH
+    ):
+        raise PostContentTooLongError()
 
     update_data = post_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():

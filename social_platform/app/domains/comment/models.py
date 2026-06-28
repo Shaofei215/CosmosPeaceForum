@@ -1,9 +1,10 @@
 # 评论数据库模型
 # 定义评论表结构，支持两级评论和评论点赞功能
-from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
+from sqlalchemy import CheckConstraint, Column, Float, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
 from sqlalchemy.orm import relationship, remote, foreign
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
+from social_platform.app.core.content_limits import COMMENT_CONTENT_MAX_LENGTH
 
 from social_platform.app.db.session import Base
 
@@ -33,6 +34,10 @@ class Comment(Base):
     __tablename__ = "comments"  # 数据库表名
 
     __table_args__ = (
+        CheckConstraint(
+            f"length(content) <= {COMMENT_CONTENT_MAX_LENGTH}",
+            name="ck_comments_content_length",
+        ),
         Index("idx_comments_post_parent_latest", "post_id", "parent_id", "created_at", "id"),
         Index("idx_comments_post_root_latest", "post_id", "root_comment_id", "created_at", "id"),
         Index(
@@ -71,7 +76,7 @@ class Comment(Base):
     root_comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
     
     # 评论内容，必填
-    content = Column(Text, nullable=False)
+    content = Column(String(COMMENT_CONTENT_MAX_LENGTH), nullable=False)
     
     # 点赞计数，冗余存储以提高查询性能
     like_count = Column(Integer, default=0, nullable=False)

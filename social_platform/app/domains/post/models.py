@@ -1,9 +1,13 @@
 # 帖子数据库模型
 # 定义帖子表结构，存储用户发布的内容
-from sqlalchemy import Column, Float, Integer, String, DateTime, ForeignKey, Index, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, Float, Integer, String, DateTime, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
+from social_platform.app.core.content_limits import (
+    ARTICLE_CONTENT_MAX_LENGTH,
+    POST_CONTENT_MAX_LENGTH,
+)
 
 from social_platform.app.db.session import Base
 
@@ -27,7 +31,7 @@ class Post(Base):
     type = Column(String(20), nullable=False, default="post", server_default="post")
     
     # 帖子内容，必填
-    content = Column(Text, nullable=False)
+    content = Column(String(ARTICLE_CONTENT_MAX_LENGTH), nullable=False)
     
     # 创建时间，自动设置为当前系统本地时间
     created_at = Column(DateTime, default=local_now)
@@ -58,6 +62,14 @@ class Post(Base):
     archive_reason = Column(Text, nullable=True)
 
     __table_args__ = (
+        CheckConstraint(
+            f"length(content) <= {ARTICLE_CONTENT_MAX_LENGTH}",
+            name="ck_posts_content_article_length",
+        ),
+        CheckConstraint(
+            f"type = 'article' OR length(content) <= {POST_CONTENT_MAX_LENGTH}",
+            name="ck_posts_content_post_length",
+        ),
         Index("idx_posts_latest", "created_at", "id"),
         Index("idx_posts_heat_latest", "heat_score", "created_at", "id"),
         Index("idx_posts_author_latest", "author_id", "created_at", "id"),

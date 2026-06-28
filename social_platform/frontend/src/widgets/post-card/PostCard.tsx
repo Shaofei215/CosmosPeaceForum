@@ -28,6 +28,7 @@ import {
 } from '@/features/comment';
 import { useToggleLike } from '@/features/like';
 import { useFollowStatus, useToggleFollow, type FollowStatusResponse } from '@/features/follow';
+import { COMMENT_CONTENT_MAX_LENGTH, POST_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
@@ -455,6 +456,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             placeholder="写点什么再转发..."
             value={repostContent}
             onChange={event => setRepostContent(event.target.value)}
+            maxLength={POST_CONTENT_MAX_LENGTH}
             className="min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
             onClick={event => event.stopPropagation()}
           />
@@ -532,6 +534,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                     placeholder="写下你的评论..."
                     value={newCommentContent}
                     onChange={event => setNewCommentContent(event.target.value)}
+                    maxLength={COMMENT_CONTENT_MAX_LENGTH}
                     className="min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
                     onClick={event => event.stopPropagation()}
                   />
@@ -1142,6 +1145,7 @@ function CommentItem({
                 placeholder="写点什么再转发..."
                 value={repostContent}
                 onChange={event => setRepostContent(event.target.value)}
+                maxLength={POST_CONTENT_MAX_LENGTH}
                 className="min-h-[56px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
                 onClick={event => event.stopPropagation()}
               />
@@ -1287,6 +1291,7 @@ function ReplyInput({
           placeholder="写下你的回复..."
           value={content}
           onChange={event => setContent(event.target.value)}
+          maxLength={COMMENT_CONTENT_MAX_LENGTH}
           className="min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
           onClick={event => event.stopPropagation()}
           autoFocus

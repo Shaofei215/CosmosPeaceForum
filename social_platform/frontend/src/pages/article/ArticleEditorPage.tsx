@@ -32,6 +32,7 @@ import {
 import { useCreatePost } from '@/features/post';
 import { Button, Input, Textarea } from '@/shared/components/ui';
 import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer';
+import { ARTICLE_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { normalizeLinkHref } from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
 
@@ -170,7 +171,12 @@ export default function ArticleEditorPage() {
       },
     },
     onUpdate({ editor: currentEditor }) {
-      setContent(htmlToMarkdown(currentEditor.getHTML()));
+      const nextContent = htmlToMarkdown(currentEditor.getHTML());
+      if (nextContent.length > ARTICLE_CONTENT_MAX_LENGTH) {
+        currentEditor.commands.undo();
+        return;
+      }
+      setContent(nextContent);
     },
   });
   editorRef.current = editor;
@@ -202,12 +208,24 @@ export default function ArticleEditorPage() {
   const currentMarkdown = mode === 'rich' && editor ? htmlToMarkdown(editor.getHTML()) : content;
   const canPublish = title.trim().length > 0 && currentMarkdown.trim().length > 0;
 
+  /**
+   * 在文章上限内更新 Markdown 正文，供工具栏插入操作统一使用。
+   *
+   * @param nextContent 待写入的完整 Markdown 正文。
+   * @returns 是否成功写入。
+   */
+  const updateMarkdownContent = (nextContent: string): boolean => {
+    if (nextContent.length > ARTICLE_CONTENT_MAX_LENGTH) return false;
+    setContent(nextContent);
+    return true;
+  };
+
   const setEditorMode = (nextMode: EditorMode) => {
     if (nextMode === mode) return;
 
     if (nextMode === 'markdown') {
       const nextContent = editor ? htmlToMarkdown(editor.getHTML()) : content;
-      setContent(nextContent);
+      updateMarkdownContent(nextContent);
       setMode('markdown');
       return;
     }
@@ -223,7 +241,7 @@ export default function ArticleEditorPage() {
     const nextContent = mode === 'rich' && editor ? htmlToMarkdown(editor.getHTML()) : content;
     if (!title.trim() || !nextContent.trim() || isPending) return;
 
-    setContent(nextContent);
+    if (!updateMarkdownContent(nextContent)) return;
     createPost(
       {
         title: title.trim(),
@@ -410,7 +428,7 @@ export default function ArticleEditorPage() {
       ].join('');
       const nextCursor = selection.start + linkText.length + normalizedHref.length + 4;
 
-      setContent(nextContent);
+      if (!updateMarkdownContent(nextContent)) return;
       closeLinkDialog();
       window.requestAnimationFrame(() => {
         textareaRef.current?.focus();
@@ -473,7 +491,7 @@ export default function ArticleEditorPage() {
     );
     const nextCursor = start + before.length + selected.length + after.length;
 
-    setContent(nextContent);
+    if (!updateMarkdownContent(nextContent)) return;
     window.requestAnimationFrame(() => {
       textarea.focus();
       textarea.setSelectionRange(nextCursor, nextCursor);
@@ -487,7 +505,7 @@ export default function ArticleEditorPage() {
     const start = textarea.selectionStart;
     const lineStart = content.lastIndexOf('\n', start - 1) + 1;
     const nextContent = `${content.slice(0, lineStart)}${prefix}${content.slice(lineStart)}`;
-    setContent(nextContent);
+    if (!updateMarkdownContent(nextContent)) return;
     window.requestAnimationFrame(() => {
       textarea.focus();
       textarea.setSelectionRange(start + prefix.length, start + prefix.length);
@@ -505,7 +523,7 @@ export default function ArticleEditorPage() {
     const nextContent = `${content.slice(0, start)}${block}${content.slice(end)}`;
     const nextCursor = start + block.length;
 
-    setContent(nextContent);
+    if (!updateMarkdownContent(nextContent)) return;
     window.requestAnimationFrame(() => {
       textarea.focus();
       textarea.setSelectionRange(nextCursor, nextCursor);
@@ -654,6 +672,7 @@ export default function ArticleEditorPage() {
             ref={textareaRef}
             value={content}
             onChange={event => setContent(event.target.value)}
+            maxLength={ARTICLE_CONTENT_MAX_LENGTH}
             className={cn(
               'min-h-[420px] resize-none rounded-none border-0 px-4 py-4 sm:min-h-[560px] sm:px-5 sm:py-5',
               'font-mono text-sm leading-6 shadow-none focus-visible:ring-0'
