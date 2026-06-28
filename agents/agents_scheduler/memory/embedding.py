@@ -1,7 +1,9 @@
 # 向量化模块
 # 提供文本向量化功能，用于 ChromaDB 向量检索
 
+import threading
 from typing import List, Optional
+
 import httpx
 
 from agents.agents_scheduler.memory.config import MemoryConfig, get_memory_config
@@ -102,6 +104,7 @@ class EmbeddingModel:
 
 
 _embedding_model: Optional[EmbeddingModel] = None
+_embedding_model_lock = threading.RLock()
 
 
 def get_embedding_model(config: Optional[MemoryConfig] = None) -> EmbeddingModel:
@@ -115,6 +118,23 @@ def get_embedding_model(config: Optional[MemoryConfig] = None) -> EmbeddingModel
         EmbeddingModel: 向量化模型实例
     """
     global _embedding_model
-    if _embedding_model is None:
+    with _embedding_model_lock:
+        if _embedding_model is None:
+            _embedding_model = EmbeddingModel(config)
+        return _embedding_model
+
+
+def reload_embedding_model(config: Optional[MemoryConfig] = None) -> EmbeddingModel:
+    """
+    使用最新配置重建全局 Embedding 客户端。
+
+    Args:
+        config: 可选的记忆配置，默认读取当前配置单例。
+
+    Returns:
+        EmbeddingModel: 重建后的 Embedding 客户端。
+    """
+    global _embedding_model
+    with _embedding_model_lock:
         _embedding_model = EmbeddingModel(config)
-    return _embedding_model
+        return _embedding_model

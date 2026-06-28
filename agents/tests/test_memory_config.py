@@ -10,11 +10,13 @@ class TestMemoryConfig:
         config = MemoryConfig()
         assert config.memory_enabled is True
         assert config.recall_limit == 5
-        assert config.recall_vector_results == 5
-        assert config.recall_bm25_results == 5
+        assert config.recall_vector_results == 20
+        assert config.recall_bm25_results == 20
+        assert config.rrf_rank_constant == 60
         assert config.threshold == 0.3
         assert config.boost_factor == 0.3
         assert config.decay_rate == 0.01
+        assert config.decay_interval_seconds == 300
 
     def test_validation_valid(self):
         config = MemoryConfig()
@@ -32,6 +34,10 @@ class TestMemoryConfig:
         with pytest.raises(ValueError, match="recall_bm25_results"):
             MemoryConfig(recall_bm25_results=0)
 
+    def test_validation_rrf_rank_constant(self):
+        with pytest.raises(ValueError, match="rrf_rank_constant"):
+            MemoryConfig(rrf_rank_constant=0)
+
     def test_validation_threshold(self):
         with pytest.raises(ValueError, match="threshold"):
             MemoryConfig(threshold=-0.1)
@@ -47,6 +53,10 @@ class TestMemoryConfig:
     def test_validation_decay_rate(self):
         with pytest.raises(ValueError, match="decay_rate"):
             MemoryConfig(decay_rate=0)
+
+    def test_validation_decay_interval_seconds(self):
+        with pytest.raises(ValueError, match="decay_interval_seconds"):
+            MemoryConfig(decay_interval_seconds=0)
 
     def test_validation_embedding_dimension(self):
         with pytest.raises(ValueError, match="embedding_dimension"):

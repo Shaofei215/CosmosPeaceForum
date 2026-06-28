@@ -1,3 +1,5 @@
+import importlib
+
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from agents.management.backend.models.system_config import SystemConfig
@@ -97,6 +99,32 @@ def test_update_system_config_rejects_invalid_scheduler_time_scale():
                 raise AssertionError(f"非法时间倍率未被拒绝: {value}")
 
 
+def test_update_system_config_rejects_invalid_memory_values():
+    """记忆候选数、衰减间隔和系数应在写入配置前校验。"""
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    invalid_values = {
+        "MEMORY_RECALL_VECTOR_RESULTS": "0",
+        "MEMORY_DECAY_INTERVAL_SECONDS": "-1",
+        "MEMORY_THRESHOLD": "1.1",
+        "MEMORY_DECAY_RATE": "0",
+        "MEMORY_ENABLED": "maybe",
+    }
+    with Session(engine) as db:
+        for key, value in invalid_values.items():
+            db.add(SystemConfig(key=key, value="1", description=key))
+        db.commit()
+
+        for key, value in invalid_values.items():
+            try:
+                update_system_config(db, key, value)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"非法记忆配置未被拒绝: {key}={value}")
+
+
 def test_list_system_configs_uses_default_order_and_descriptions():
     engine = create_engine("sqlite:///:memory:")
     SQLModel.metadata.create_all(engine)
@@ -111,3 +139,39 @@ def test_list_system_configs_uses_default_order_and_descriptions():
         assert [config.key for config in configs] == ["WEB_SEARCH_ENABLED", "TAVILY_API_KEY"]
         assert configs[0].description == "启用联网搜索工具"
         assert configs[1].description == "Tavily API Key"
+
+
+def test_candidate_migration_updates_only_legacy_defaults(monkeypatch):
+    """候选数迁移只应将旧默认 5 升级为 20。"""
+    migration = importlib.import_module(
+        "agents.management.alembic.versions.0006_expand_memory_candidates"
+    )
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as db:
+        db.add(SystemConfig(
+            key="MEMORY_RECALL_VECTOR_RESULTS",
+            value="5",
+            description="vector",
+        ))
+        db.add(SystemConfig(
+            key="MEMORY_RECALL_BM25_RESULTS",
+            value="7",
+            description="bm25",
+        ))
+        db.commit()
+
+    with engine.begin() as connection:
+        monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
+        migration.upgrade()
+
+    with Session(engine) as db:
+        vector_config = db.exec(select(SystemConfig).where(
+            SystemConfig.key == "MEMORY_RECALL_VECTOR_RESULTS"
+        )).one()
+        bm25_config = db.exec(select(SystemConfig).where(
+            SystemConfig.key == "MEMORY_RECALL_BM25_RESULTS"
+        )).one()
+        assert vector_config.value == "20"
+        assert bm25_config.value == "7"

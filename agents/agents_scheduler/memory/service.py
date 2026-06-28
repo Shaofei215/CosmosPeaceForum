@@ -2,19 +2,142 @@
 # 统一管理三写同步、混合检索、衰减与唤醒机制
 
 import logging
-from typing import List, Tuple, Optional, Literal
-from datetime import datetime
+import math
+import threading
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, cast
 
 from agents.agents_scheduler.memory.config import MemoryConfig, get_memory_config
 from agents.agents_scheduler.memory.models import MemoryChunk
 from agents.agents_scheduler.memory.database import MemoryDB
 from agents.agents_scheduler.memory.vector_store import VectorStore
 from agents.agents_scheduler.memory.bm25_index import BM25Index
-from agents.agents_scheduler.memory.embedding import EmbeddingModel, get_embedding_model
-from agents.agents_scheduler.memory.utils import calculate_time_description, calculate_time_description_from_date
+from agents.agents_scheduler.memory.embedding import EmbeddingModel
+from agents.agents_scheduler.memory.utils import (
+    calculate_time_description,
+    calculate_time_description_from_date,
+)
 from agents.agents_scheduler.scheduler.time_system import get_time_system
 
 logger = logging.getLogger(__name__)
+
+MEMORY_TYPES = {"normal", "static"}
+
+
+def _normalize_memory_input(
+    content: str,
+    owner_id: int | str,
+    memory_coefficient: float | str,
+    semantic_timestamp: float | str,
+    memory_type: str,
+) -> Tuple[str, int, float, float, Literal["normal", "static"]]:
+    """
+    校验并规范化记忆写入参数。
+
+    Args:
+        content: 记忆文本。
+        owner_id: 记忆所有者平台用户 ID。
+        memory_coefficient: 记忆重要度系数。
+        semantic_timestamp: 记忆实际发生时间戳，0 表示使用当前时间。
+        memory_type: 记忆类型，仅支持 normal 或 static。
+
+    Returns:
+        Tuple[str, int, float, float, Literal["normal", "static"]]: 规范化后的参数。
+
+    Raises:
+        ValueError: 字段为空、越界、非有限数字或类型非法时抛出。
+        TypeError: 内容不是字符串时抛出。
+    """
+    if not isinstance(content, str):
+        raise TypeError("content 必须是字符串")
+    normalized_content = content.strip()
+    if not normalized_content:
+        raise ValueError("content 不能为空")
+
+    if isinstance(owner_id, bool):
+        raise ValueError("owner_id 必须是正整数")
+    try:
+        normalized_owner_id = int(owner_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("owner_id 必须是正整数") from exc
+    if normalized_owner_id <= 0 or str(normalized_owner_id) != str(owner_id).strip():
+        raise ValueError("owner_id 必须是正整数")
+
+    if isinstance(memory_coefficient, bool):
+        raise ValueError("memory_coefficient 必须在 0.0 到 1.0 之间")
+    try:
+        normalized_coefficient = float(memory_coefficient)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("memory_coefficient 必须在 0.0 到 1.0 之间") from exc
+    if not math.isfinite(normalized_coefficient) or not 0.0 <= normalized_coefficient <= 1.0:
+        raise ValueError("memory_coefficient 必须在 0.0 到 1.0 之间")
+
+    if isinstance(semantic_timestamp, bool):
+        raise ValueError("semantic_timestamp 必须是非负有限数字")
+    try:
+        normalized_semantic_timestamp = float(semantic_timestamp)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("semantic_timestamp 必须是非负有限数字") from exc
+    if not math.isfinite(normalized_semantic_timestamp) or normalized_semantic_timestamp < 0:
+        raise ValueError("semantic_timestamp 必须是非负有限数字")
+
+    if not isinstance(memory_type, str) or memory_type not in MEMORY_TYPES:
+        raise ValueError("memory_type 仅支持 normal 或 static")
+
+    normalized_memory_type = cast(Literal["normal", "static"], memory_type)
+    return (
+        normalized_content,
+        normalized_owner_id,
+        normalized_coefficient,
+        normalized_semantic_timestamp,
+        normalized_memory_type,
+    )
+
+
+def _reciprocal_rank_fusion(
+    ranked_result_sets: List[List[Dict[str, Any]]],
+    rank_constant: int,
+) -> List[Tuple[str, float]]:
+    """
+    使用 Reciprocal Rank Fusion 合并多个检索器的排名。
+
+    RRF 仅依赖各检索器内部名次，不直接混合量纲不同的向量距离和 BM25
+    分数。多路检索都命中的记忆会自然获得更高的融合分数。
+
+    Args:
+        ranked_result_sets: 各检索器按相关性降序返回的结果列表，元素必须包含 id。
+        rank_constant: RRF 排名常数，必须大于 0。
+
+    Returns:
+        List[Tuple[str, float]]: 按融合分数降序排列的记忆 ID 与分数。
+
+    Raises:
+        ValueError: rank_constant 不大于 0 时抛出。
+    """
+    if rank_constant <= 0:
+        raise ValueError("RRF rank_constant 必须大于 0")
+
+    fused_scores: Dict[str, float] = {}
+    first_seen_order: Dict[str, int] = {}
+    next_order = 0
+
+    for result_set in ranked_result_sets:
+        seen_in_result_set = set()
+        for rank, item in enumerate(result_set, start=1):
+            memory_id = str(item.get("id", "")).strip()
+            if not memory_id or memory_id in seen_in_result_set:
+                continue
+            seen_in_result_set.add(memory_id)
+            if memory_id not in first_seen_order:
+                first_seen_order[memory_id] = next_order
+                next_order += 1
+            fused_scores[memory_id] = (
+                fused_scores.get(memory_id, 0.0) + 1.0 / (rank_constant + rank)
+            )
+
+    return sorted(
+        fused_scores.items(),
+        key=lambda item: (-item[1], first_seen_order[item[0]], item[0]),
+    )
 
 
 class MemoryService:
@@ -53,18 +176,72 @@ class MemoryService:
             config: 记忆系统配置，默认使用全局配置
         """
         self.config = config or get_memory_config()
+        self._config_lock = threading.RLock()
         self.db = MemoryDB(self.config)
         self.vector_store = VectorStore(self.config)
         self.bm25_index = BM25Index(self.config)
-        self.embedding_model = get_embedding_model(self.config)
+        self.embedding_model = EmbeddingModel(self.config)
+        self._synchronize_vector_metadata()
+
+    def reload_config(self, config: MemoryConfig) -> None:
+        """
+        在保留已打开存储索引的前提下热更新运行配置。
+
+        Args:
+            config: 从 management 数据库重新加载的记忆配置。
+
+        Returns:
+            None: 配置与 Embedding 客户端替换完成后直接返回。
+        """
+        with self._config_lock:
+            self.config = config
+            self.embedding_model = EmbeddingModel(config)
+
+    @staticmethod
+    def _vector_metadata(chunk: MemoryChunk) -> Dict[str, Any]:
+        """
+        生成 Chroma 检索和过滤使用的完整元数据。
+
+        Args:
+            chunk: SQLite 中的记忆主数据。
+
+        Returns:
+            Dict[str, Any]: 包含所有者、类型、时间和重要度的元数据。
+        """
+        return {
+            "owner_id": chunk.owner_id,
+            "memory_coefficient": chunk.memory_coefficient,
+            "timestamp": chunk.timestamp,
+            "semantic_timestamp": chunk.semantic_timestamp,
+            "memory_type": chunk.memory_type,
+        }
+
+    def _synchronize_vector_metadata(self) -> None:
+        """
+        将历史 Chroma 记录的过滤元数据补齐到当前模型。
+
+        该步骤只更新已存在的向量记录，不会触发重新 Embedding。
+
+        Returns:
+            None: 同步成功或记录警告后直接返回。
+        """
+        try:
+            memories = self.db._get_all_memories_sync()
+            metadata_by_id = {
+                chunk.id: self._vector_metadata(chunk)
+                for chunk in memories
+            }
+            self.vector_store.update_existing_metadatas(metadata_by_id)
+        except Exception as exc:
+            logger.warning("历史向量元数据同步失败: %s", exc)
 
     async def write_memory(
         self,
         content: str,
-        owner_id: int,
-        memory_coefficient: float = 0.85,
-        semantic_timestamp: float = 0.0,
-        memory_type: Literal["normal", "static"] = "normal",
+        owner_id: int | str,
+        memory_coefficient: float | str = 0.85,
+        semantic_timestamp: float | str = 0.0,
+        memory_type: str = "normal",
     ) -> str:
         """
         写入记忆（三写同步）
@@ -81,6 +258,20 @@ class MemoryService:
         Returns:
             str: 记忆 ID
         """
+        (
+            content,
+            owner_id,
+            memory_coefficient,
+            semantic_timestamp,
+            memory_type,
+        ) = _normalize_memory_input(
+            content,
+            owner_id,
+            memory_coefficient,
+            semantic_timestamp,
+            memory_type,
+        )
+
         # 创建记忆分块
         chunk = MemoryChunk.create(
             owner_id=owner_id,
@@ -90,20 +281,20 @@ class MemoryService:
             memory_type=memory_type,
         )
 
+        with self._config_lock:
+            embedding_model = self.embedding_model
+
         # 1. 写入 SQLite（主存储）
         await self.db.add_memory(chunk)
 
         # 2. 生成向量并写入 ChromaDB
         try:
-            embedding = await self.embedding_model.get_embedding(content)
+            embedding = await embedding_model.get_embedding(content)
             self.vector_store.add_vector(
                 memory_id=chunk.id,
                 owner_id=owner_id,
                 embedding=embedding,
-                metadata={
-                    "memory_coefficient": memory_coefficient,
-                    "timestamp": chunk.timestamp,
-                }
+                metadata=self._vector_metadata(chunk),
             )
         except Exception as e:
             logger.warning("向量化失败: %s", e)
@@ -126,16 +317,16 @@ class MemoryService:
         owner_id: int,
         context: str,
         current_time: Optional[float] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[Tuple[MemoryChunk, str]]:
         """
         混合检索召回记忆
 
-        1. 并行执行向量检索和 BM25 检索
-        2. 合并结果集（并集）
+        1. 分别执行向量检索和 BM25 检索
+        2. 使用 RRF 融合两路排名
         3. 按记忆系数过滤
-        4. 按系数排序返回 top-k
-        5. 召回时"唤醒"：系数 boost
+        4. 按相关性返回 top-k
+        5. 召回时执行唤醒 boost
 
         Args:
             owner_id: 所属用户 ID
@@ -146,21 +337,25 @@ class MemoryService:
         Returns:
             List[Tuple[MemoryChunk, str]]: 记忆分块和时间描述列表
         """
-        if not self.config.memory_enabled:
+        with self._config_lock:
+            config = self.config
+            embedding_model = self.embedding_model
+
+        if not config.memory_enabled:
             return []
 
-        limit = limit or self.config.recall_limit
+        limit = limit or config.recall_limit
         ts = get_time_system()
         current_time = current_time or ts.get_scaled_timestamp()
 
         # 1. 向量检索 - 语义相似
         vector_results = []
         try:
-            query_embedding = await self.embedding_model.get_embedding(context)
+            query_embedding = await embedding_model.get_embedding(context)
             vector_results = self.vector_store.query(
                 query_embedding=query_embedding,
                 owner_id=owner_id,
-                n_results=self.config.recall_vector_results
+                n_results=config.recall_vector_results
             )
         except Exception as e:
             logger.warning("向量检索失败: %s", e)
@@ -171,38 +366,26 @@ class MemoryService:
             bm25_results = self.bm25_index.search(
                 query=context,
                 owner_id=owner_id,
-                limit=self.config.recall_bm25_results
+                limit=config.recall_bm25_results
             )
         except Exception as e:
             logger.warning("BM25检索失败: %s", e)
 
-        # 3. 并集去重
-        all_ids = set()
-        id_source = {}  # 记录 ID 来源
+        # 3. 使用 RRF 融合两路排名，避免直接混合不同量纲的原始分数
+        fused_results = _reciprocal_rank_fusion(
+            [vector_results, bm25_results],
+            config.rrf_rank_constant,
+        )
 
-        for r in vector_results:
-            memory_id = r["id"]
-            all_ids.add(memory_id)
-            id_source[memory_id] = "vector"
+        # 4. 获取实际数据并过滤；相关性为主，记忆系数仅用于融合分数相同的情况
+        ranked_memories = await self._load_ranked_memories(
+            fused_results,
+            lambda chunk: chunk.memory_coefficient >= config.threshold,
+        )
 
-        for r in bm25_results:
-            memory_id = r["id"]
-            all_ids.add(memory_id)
-            id_source[memory_id] = "bm25"
-
-        # 4. 获取实际数据 + 系数过滤
-        all_memories = []
-        for memory_id in all_ids:
-            chunk = await self.db.get_memory(memory_id)
-            if chunk and chunk.memory_coefficient >= self.config.threshold:
-                all_memories.append(chunk)
-
-        # 5. 按系数降序排序
-        all_memories.sort(key=lambda x: x.memory_coefficient, reverse=True)
-
-        # 6. 唤醒机制：召回时 boost 系数（静态记忆不参与唤醒）
+        # 5. 唤醒机制：召回时 boost 系数（静态记忆不参与唤醒）
         result = []
-        for chunk in all_memories[:limit]:
+        for chunk in ranked_memories[:limit]:
             # 计算时间描述（优先使用语义时间戳）
             if chunk.semantic_timestamp > 0 and chunk.semantic_timestamp > 1000000:
                 time_desc = calculate_time_description_from_date(chunk.semantic_timestamp)
@@ -211,7 +394,7 @@ class MemoryService:
 
             # 唤醒：boost 系数（仅对普通记忆）
             if chunk.memory_type == "normal":
-                new_coef = min(1.0, chunk.memory_coefficient + self.config.boost_factor)
+                new_coef = min(1.0, chunk.memory_coefficient + config.boost_factor)
                 if new_coef != chunk.memory_coefficient:
                     chunk.memory_coefficient = new_coef
                     await self.db.update_memory(chunk)
@@ -252,21 +435,26 @@ class MemoryService:
         Returns:
             List[Tuple[MemoryChunk, str]]: 记忆分块和时间描述列表
         """
-        if not self.config.memory_enabled:
+        with self._config_lock:
+            config = self.config
+            embedding_model = self.embedding_model
+
+        if not config.memory_enabled:
             return []
 
-        limit = limit or self.config.recall_limit
+        limit = limit or config.recall_limit
         ts = get_time_system()
         current_time = ts.get_scaled_timestamp()
 
         # 1. 向量检索 - 语义相似
         vector_results = []
         try:
-            query_embedding = await self.embedding_model.get_embedding(context)
+            query_embedding = await embedding_model.get_embedding(context)
             vector_results = self.vector_store.query(
                 query_embedding=query_embedding,
                 owner_id=owner_id,
-                n_results=self.config.recall_vector_results
+                n_results=config.recall_vector_results,
+                max_semantic_timestamp=max_semantic_timestamp,
             )
         except Exception as e:
             logger.warning("向量检索失败: %s", e)
@@ -277,33 +465,27 @@ class MemoryService:
             bm25_results = self.bm25_index.search(
                 query=context,
                 owner_id=owner_id,
-                limit=self.config.recall_bm25_results
+                limit=config.recall_bm25_results
             )
         except Exception as e:
             logger.warning("BM25检索失败: %s", e)
 
-        # 3. 并集去重
-        all_ids = set()
-        for r in vector_results:
-            all_ids.add(r["id"])
-        for r in bm25_results:
-            all_ids.add(r["id"])
+        # 3. 融合排名后再加载主数据，时间与重要度只作为过滤条件
+        fused_results = _reciprocal_rank_fusion(
+            [vector_results, bm25_results],
+            config.rrf_rank_constant,
+        )
+        ranked_memories = await self._load_ranked_memories(
+            fused_results,
+            lambda chunk: (
+                chunk.semantic_timestamp <= max_semantic_timestamp
+                and chunk.memory_coefficient >= config.threshold
+            ),
+        )
 
-        # 4. 获取实际数据，过滤出时间符合条件的记忆 + 系数过滤
-        all_memories = []
-        for memory_id in all_ids:
-            chunk = await self.db.get_memory(memory_id)
-            if (chunk
-                    and chunk.semantic_timestamp <= max_semantic_timestamp
-                    and chunk.memory_coefficient >= self.config.threshold):
-                all_memories.append(chunk)
-
-        # 5. 按系数降序排序
-        all_memories.sort(key=lambda x: x.memory_coefficient, reverse=True)
-
-        # 6. 生成结果（不触发 boost）
+        # 4. 生成结果（不触发 boost）
         result = []
-        for chunk in all_memories[:limit]:
+        for chunk in ranked_memories[:limit]:
             if chunk.semantic_timestamp > 0 and chunk.semantic_timestamp > 1000000:
                 time_desc = calculate_time_description_from_date(chunk.semantic_timestamp)
             else:
@@ -334,21 +516,26 @@ class MemoryService:
         Returns:
             List[Tuple[MemoryChunk, str]]: 记忆分块和时间描述列表
         """
-        if not self.config.memory_enabled:
+        with self._config_lock:
+            config = self.config
+            embedding_model = self.embedding_model
+
+        if not config.memory_enabled:
             return []
 
-        limit = limit or self.config.recall_limit
+        limit = limit or config.recall_limit
         ts = get_time_system()
         current_time = ts.get_scaled_timestamp()
 
         # 1. 向量检索 - 语义相似
         vector_results = []
         try:
-            query_embedding = await self.embedding_model.get_embedding(context)
+            query_embedding = await embedding_model.get_embedding(context)
             vector_results = self.vector_store.query(
                 query_embedding=query_embedding,
                 owner_id=owner_id,
-                n_results=self.config.recall_vector_results
+                n_results=config.recall_vector_results,
+                memory_type="static",
             )
         except Exception as e:
             logger.warning("向量检索失败: %s", e)
@@ -359,33 +546,27 @@ class MemoryService:
             bm25_results = self.bm25_index.search(
                 query=context,
                 owner_id=owner_id,
-                limit=self.config.recall_bm25_results
+                limit=config.recall_bm25_results
             )
         except Exception as e:
             logger.warning("BM25检索失败: %s", e)
 
-        # 3. 并集去重
-        all_ids = set()
-        for r in vector_results:
-            all_ids.add(r["id"])
-        for r in bm25_results:
-            all_ids.add(r["id"])
+        # 3. 融合排名后再加载主数据，类型与重要度只作为过滤条件
+        fused_results = _reciprocal_rank_fusion(
+            [vector_results, bm25_results],
+            config.rrf_rank_constant,
+        )
+        ranked_memories = await self._load_ranked_memories(
+            fused_results,
+            lambda chunk: (
+                chunk.memory_type == "static"
+                and chunk.memory_coefficient >= config.threshold
+            ),
+        )
 
-        # 4. 获取实际数据，过滤出静态记忆 + 系数过滤
-        all_memories = []
-        for memory_id in all_ids:
-            chunk = await self.db.get_memory(memory_id)
-            if (chunk
-                    and chunk.memory_type == "static"
-                    and chunk.memory_coefficient >= self.config.threshold):
-                all_memories.append(chunk)
-
-        # 5. 按系数降序排序
-        all_memories.sort(key=lambda x: x.memory_coefficient, reverse=True)
-
-        # 6. 生成结果（静态记忆不触发 boost）
+        # 4. 生成结果（静态记忆不触发 boost）
         result = []
-        for chunk in all_memories[:limit]:
+        for chunk in ranked_memories[:limit]:
             if chunk.semantic_timestamp > 0 and chunk.semantic_timestamp > 1000000:
                 time_desc = calculate_time_description_from_date(chunk.semantic_timestamp)
             else:
@@ -394,6 +575,35 @@ class MemoryService:
 
         logger.info("静态记忆召回成功: 查询='%s...', 召回%d条", context[:20], len(result))
         return result
+
+    async def _load_ranked_memories(
+        self,
+        fused_results: List[Tuple[str, float]],
+        predicate: Callable[[MemoryChunk], bool],
+    ) -> List[MemoryChunk]:
+        """
+        按融合排名批量语义加载候选记忆并执行主数据过滤。
+
+        当前候选池较小，仍逐条读取 SQLite；该方法集中保留融合分数，后续可在
+        不改变排序语义的前提下替换为批量查询。
+
+        Args:
+            fused_results: RRF 输出的记忆 ID 与融合分数。
+            predicate: 针对 SQLite 主数据执行的过滤函数。
+
+        Returns:
+            List[MemoryChunk]: 相关性优先、重要度仅作同分排序的记忆列表。
+        """
+        candidates: List[Tuple[MemoryChunk, float]] = []
+        for memory_id, fused_score in fused_results:
+            chunk = await self.db.get_memory(memory_id)
+            if chunk and predicate(chunk):
+                candidates.append((chunk, fused_score))
+
+        candidates.sort(
+            key=lambda item: (-item[1], -item[0].memory_coefficient, item[0].id),
+        )
+        return [chunk for chunk, _ in candidates]
 
     async def decay_memories(self, decay_rate: Optional[float] = None) -> List[str]:
         """
@@ -408,7 +618,13 @@ class MemoryService:
         Returns:
             List[str]: 被删除的记忆 ID 列表
         """
-        decay_rate = decay_rate or self.config.decay_rate
+        with self._config_lock:
+            config = self.config
+
+        if not config.memory_enabled:
+            return []
+
+        decay_rate = decay_rate or config.decay_rate
         ts = get_time_system()
         current_time = ts.get_scaled_timestamp()
 
@@ -421,12 +637,17 @@ class MemoryService:
             if chunk.memory_type == "static":
                 continue
 
-            time_delta = current_time - chunk.timestamp
-            # 衰减量与时间差成正比（按天计算）
+            last_decay_timestamp = chunk.last_decay_timestamp or chunk.timestamp
+            time_delta = max(0.0, current_time - last_decay_timestamp)
+            if time_delta == 0:
+                continue
+
+            # 仅扣除上次衰减后的新增时间，避免定时任务重复计算完整记忆年龄
             decay_amount = decay_rate * (time_delta / 86400)
             chunk.memory_coefficient -= decay_amount
+            chunk.last_decay_timestamp = current_time
 
-            if chunk.memory_coefficient < self.config.threshold:
+            if chunk.memory_coefficient < config.threshold:
                 # 低于阈值，删除记忆
                 await self.delete_memory(chunk.id)
                 deleted_ids.append(chunk.id)
@@ -509,6 +730,7 @@ class MemoryService:
 
 
 _memory_service: Optional[MemoryService] = None
+_memory_service_lock = threading.RLock()
 
 
 def get_memory_service(config: Optional[MemoryConfig] = None) -> MemoryService:
@@ -522,6 +744,29 @@ def get_memory_service(config: Optional[MemoryConfig] = None) -> MemoryService:
         MemoryService: 记忆服务实例
     """
     global _memory_service
-    if _memory_service is None:
-        _memory_service = MemoryService(config)
-    return _memory_service
+    with _memory_service_lock:
+        if _memory_service is None:
+            _memory_service = MemoryService(config)
+        return _memory_service
+
+
+def reload_memory_service(config: Optional[MemoryConfig] = None) -> MemoryService:
+    """
+    将最新配置应用到已存在的记忆服务和 Embedding 客户端。
+
+    存储索引对象保持不变，避免热更新时重复打开 Tantivy writer。
+
+    Args:
+        config: 可选的已重载配置；未提供时读取当前配置单例。
+
+    Returns:
+        MemoryService: 已应用新配置的全局记忆服务。
+    """
+    global _memory_service
+    resolved_config = config or get_memory_config()
+    with _memory_service_lock:
+        if _memory_service is None:
+            _memory_service = MemoryService(resolved_config)
+        else:
+            _memory_service.reload_config(resolved_config)
+        return _memory_service

@@ -1,10 +1,11 @@
 # ChromaDB 向量检索层
 # 提供基于向量语义相似度的记忆检索功能
 
+import threading
+from typing import Any, Dict, List, Optional
+
 import chromadb
 from chromadb.config import Settings
-from typing import List, Dict, Optional
-import numpy as np
 
 from agents.agents_scheduler.memory.config import MemoryConfig
 
@@ -27,6 +28,7 @@ class VectorStore:
             config: 记忆系统配置
         """
         self.config = config
+        self._lock = threading.RLock()
         self.client = chromadb.PersistentClient(
             path=config.get_chroma_db_path(),
             settings=Settings(anonymized_telemetry=False)
@@ -56,17 +58,20 @@ class VectorStore:
         meta = metadata or {}
         meta["owner_id"] = owner_id
 
-        self.collection.add(
-            embeddings=[embedding],
-            ids=[memory_id],
-            metadatas=[meta]
-        )
+        with self._lock:
+            self.collection.add(
+                embeddings=[embedding],
+                ids=[memory_id],
+                metadatas=[meta]
+            )
 
     def query(
         self,
         query_embedding: List[float],
         owner_id: int,
-        n_results: int = 5
+        n_results: int = 5,
+        memory_type: Optional[str] = None,
+        max_semantic_timestamp: Optional[float] = None,
     ) -> List[Dict]:
         """
         向量相似度检索
@@ -75,15 +80,30 @@ class VectorStore:
             query_embedding: 查询向量
             owner_id: 用户 ID（用于所有权过滤）
             n_results: 返回结果数量
+            memory_type: 可选的记忆类型过滤。
+            max_semantic_timestamp: 可选的最大语义时间戳。
 
         Returns:
             List[Dict]: 检索结果列表，每个结果包含 id, metadata, distance
         """
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where={"owner_id": owner_id}
-        )
+        filters: List[Dict[str, Any]] = [{"owner_id": owner_id}]
+        if memory_type is not None:
+            filters.append({"memory_type": memory_type})
+        if max_semantic_timestamp is not None:
+            filters.append({"semantic_timestamp": {"$lte": max_semantic_timestamp}})
+
+        where: Dict[str, Any]
+        if len(filters) == 1:
+            where = filters[0]
+        else:
+            where = {"$and": filters}
+
+        with self._lock:
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=n_results,
+                where=where,
+            )
 
         memories = []
         if results["ids"] and results["ids"][0]:
@@ -116,7 +136,36 @@ class VectorStore:
         if embedding:
             update_kwargs["embeddings"] = [embedding]
 
-        self.collection.update(**update_kwargs)
+        with self._lock:
+            self.collection.update(**update_kwargs)
+
+    def update_existing_metadatas(
+        self,
+        metadata_by_id: Dict[str, Dict[str, Any]],
+    ) -> int:
+        """
+        批量补齐已存在向量的完整元数据。
+
+        Args:
+            metadata_by_id: 记忆 ID 到完整 Chroma 元数据的映射。
+
+        Returns:
+            int: 实际更新的向量记录数量。
+        """
+        if not metadata_by_id:
+            return 0
+
+        with self._lock:
+            existing = self.collection.get()
+            existing_ids = set(existing.get("ids") or [])
+            ids = [memory_id for memory_id in metadata_by_id if memory_id in existing_ids]
+            if not ids:
+                return 0
+            self.collection.update(
+                ids=ids,
+                metadatas=[metadata_by_id[memory_id] for memory_id in ids],
+            )
+            return len(ids)
 
     def delete_vector(self, memory_id: str) -> None:
         """
@@ -125,7 +174,8 @@ class VectorStore:
         Args:
             memory_id: 要删除的记忆 ID
         """
-        self.collection.delete(ids=[memory_id])
+        with self._lock:
+            self.collection.delete(ids=[memory_id])
 
     def get_vector_count(self, owner_id: Optional[int] = None) -> int:
         """
@@ -138,8 +188,10 @@ class VectorStore:
             int: 向量数量
         """
         if owner_id is not None:
-            results = self.collection.get(
-                where={"owner_id": owner_id}
-            )
+            with self._lock:
+                results = self.collection.get(
+                    where={"owner_id": owner_id}
+                )
             return len(results["ids"]) if results["ids"] else 0
-        return self.collection.count()
+        with self._lock:
+            return self.collection.count()

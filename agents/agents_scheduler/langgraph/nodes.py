@@ -1,9 +1,10 @@
 # 节点定义模块
 # 定义 LangGraph 图结构中的各个节点，包括LLM决策、工具执行、总结等
+import json
 import logging
-from typing import Dict, Any, List, Optional, Callable
-from datetime import datetime
 import traceback
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
 
 from langchain_core.messages import AIMessage
 
@@ -16,7 +17,9 @@ from agents.agents_scheduler.langgraph.prompts import (
     build_summarize_system_prompt,
 )
 from agents.agents_scheduler.memory.config import get_memory_config
+from agents.agents_scheduler.memory.service import get_memory_service
 from agents.agents_scheduler.scheduler.context import is_stop_requested
+from agents.agents_scheduler.scheduler.time_system import get_time_system
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +145,69 @@ def _normalize_tool_calls_for_batch(tool_calls: List[Dict[str, Any]]) -> List[Di
     return result
 
 
+def _serialize_memory_query_value(value: Any, max_length: int = 3000) -> str:
+    """
+    将当前视野数据序列化为适合检索的紧凑文本。
+
+    Args:
+        value: 工具返回的当前视野数据。
+        max_length: 最长保留字符数，避免向量查询被超长页面内容淹没。
+
+    Returns:
+        str: 可用于向量与关键词检索的文本。
+    """
+    if isinstance(value, str):
+        text = value
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            text = str(value)
+
+    text = text.strip()
+    if len(text) <= max_length:
+        return text
+    return text[:max_length]
+
+
+def _build_memory_query_context(state: SessionState) -> str:
+    """
+    从当前视野和近期操作构造长期记忆检索查询。
+
+    查询刻意排除系统提示词、角色设定和上一轮自动召回结果，避免固定提示词
+    稀释检索主题，也避免已召回记忆反复检索自身形成反馈回路。
+
+    Args:
+        state: 当前 LangGraph 会话状态。
+
+    Returns:
+        str: 紧凑的检索查询；没有可检索上下文时返回空字符串。
+    """
+    query_parts: List[str] = []
+    last_tool_result = state.get("last_tool_result")
+
+    # 主动回想会把结果与页面内容合并；自动召回只使用页面内容，避免记忆自反馈。
+    if isinstance(last_tool_result, dict) and "current_view" in last_tool_result:
+        last_tool_result = last_tool_result.get("current_view")
+
+    if last_tool_result is not None:
+        serialized_result = _serialize_memory_query_value(last_tool_result)
+        if serialized_result:
+            query_parts.append(f"当前看到的内容：\n{serialized_result}")
+
+    recent_actions = state.get("action_history", [])[-3:]
+    if recent_actions:
+        action_lines = []
+        for record in recent_actions:
+            summary = str(record.get("summary", "")).strip()
+            action = str(record.get("action", "")).strip()
+            reason = str(record.get("reason", "")).strip()
+            action_lines.append(f"看到：{summary}；行动：{action}；原因：{reason}")
+        query_parts.append("近期操作：\n" + "\n".join(action_lines))
+
+    return "\n\n".join(query_parts)
+
+
 # ============================================================
 # 节点实现
 # ============================================================
@@ -186,8 +252,7 @@ def recall_memory_node(state: SessionState) -> SessionState:
     记忆召回节点
 
     在 LLM 决策之前执行，从长期记忆库检索相关记忆并注入 Prompt。
-    使用即将发送给 LLM 的完整提示词（system_prompt + user_prompt）作为查询语句，
-    确保记忆查询基于完整的上下文信息。
+    查询仅使用当前视野与近期操作，不使用系统提示词或上一轮召回结果。
 
     Args:
         state: 当前状态
@@ -218,31 +283,21 @@ def recall_memory_node(state: SessionState) -> SessionState:
     logger.info("recall_memory_node | 用户=%s | 开始记忆召回", username)
 
     try:
-        from agents.agents_scheduler.scheduler.time_system import get_time_system
         ts = get_time_system()
         current_time = ts.get_scaled_timestamp()
 
-        # 构建完整的提示词作为查询语句
-        system_prompt = build_system_prompt(
-            username=state["username"],
-            name=state.get("name", state["username"]),
-            personality_prompt=state["personality_prompt"],
-            personal_signature=state["personal_signature"],
-            session_prompt_injection=state.get("session_prompt_injection", ""),
-        )
+        query_context = _build_memory_query_context(state)
+        if not query_context:
+            state["recalled_memories"] = ""
+            logger.info("recall_memory_node | 用户=%s | 当前没有可检索上下文，跳过召回", username)
+            return state
 
-        user_prompt = build_decision_prompt(state)
-
-        # 合并 system_prompt 和 user_prompt 作为查询语句
-        query_context = f"{system_prompt}\n\n{user_prompt}"
-
-        from agents.agents_scheduler.memory.service import get_memory_service
         service = get_memory_service()
         recalled = asyncio.run(service.recall_memories(
             owner_id=owner_id,
             context=query_context,
             current_time=current_time,
-            limit=config.recall_limit
+            limit=config.recall_limit,
         ))
 
         # 构建记忆注入文本

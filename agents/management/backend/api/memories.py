@@ -420,7 +420,7 @@ async def upload_memory(
         if memory_type == "normal" and not semantic_time:
             raise HTTPException(status_code=400, detail="普通记忆必须提供 semantic_time（记忆产生时间）")
 
-        chunk_data_list = [{"content": content, "memory_coefficient": float(memory_coefficient)}]
+        chunk_data_list = [{"content": content, "memory_coefficient": memory_coefficient}]
 
     # 自动分块模式：必须提供 memory_coefficient 和 semantic_time（普通记忆）
     elif chunk_mode == "auto":
@@ -431,7 +431,7 @@ async def upload_memory(
             raise HTTPException(status_code=400, detail="普通记忆必须提供 semantic_time（记忆产生时间）")
 
         chunks = _auto_chunk_text(content)
-        chunk_data_list = [{"content": c, "memory_coefficient": float(memory_coefficient)} for c in chunks]
+        chunk_data_list = [{"content": c, "memory_coefficient": memory_coefficient} for c in chunks]
 
     # LLM 智能分块模式：必须提供 personality_prompt，记忆系数由 LLM 自动分配
     elif chunk_mode == "llm":
@@ -455,18 +455,21 @@ async def upload_memory(
     memory_ids = []
 
     for cd in chunk_data_list:
-        chunk_content = cd.get("content", "").strip()
+        chunk_content = cd.get("content", "")
         chunk_coef = cd.get("memory_coefficient", 0.85)
-        if not chunk_content:
+        if isinstance(chunk_content, str) and not chunk_content.strip():
             continue
 
-        memory_id = await service.write_memory(
-            content=chunk_content,
-            owner_id=owner_id,
-            memory_coefficient=float(chunk_coef),
-            semantic_timestamp=semantic_timestamp,
-            memory_type=memory_type,
-        )
+        try:
+            memory_id = await service.write_memory(
+                content=chunk_content,
+                owner_id=owner_id,
+                memory_coefficient=chunk_coef,
+                semantic_timestamp=semantic_timestamp,
+                memory_type=memory_type,
+            )
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         memory_ids.append(memory_id)
 
     create_log(

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
 
 from agents.agents_scheduler.langgraph.nodes import (
@@ -41,8 +41,8 @@ class TestRecallMemoryNode:
             result = recall_memory_node(state)
             assert result is state
 
-    def test_recall_memory_node_uses_full_prompt_as_query(self):
-        """测试 recall_memory_node 使用完整的 system_prompt + user_prompt 作为查询语句"""
+    def test_recall_memory_node_uses_current_context_as_query(self):
+        """测试自动召回只使用当前视野和近期操作，不引入固定提示词。"""
         state = {
             "user_id": 1,
             "username": "test_user",
@@ -55,14 +55,18 @@ class TestRecallMemoryNode:
                 {"step": 1, "timestamp": "2024-01-01", "summary": "看到帖子", "action": "浏览了帖子", "reason": "感兴趣"},
             ],
             "current_location": "主页（信息流）",
-            "last_tool_result": {"action": "查看了信息流"},
+            "last_tool_result": {
+                "action": "查看了信息流",
+                "data": {"posts": [{"content": "银狼发布了一篇技术帖"}]},
+            },
+            "recalled_memories": "上一轮已经召回的内容",
         }
 
         mock_config = MagicMock(memory_enabled=True, recall_limit=5)
         mock_chunk = MagicMock()
         mock_chunk.content = "这是一条测试记忆"
         mock_service = MagicMock()
-        mock_service.recall_memories = MagicMock(return_value=[(mock_chunk, "刚刚")])
+        mock_service.recall_memories = AsyncMock(return_value=[(mock_chunk, "刚刚")])
 
         with patch("agents.agents_scheduler.langgraph.nodes.get_memory_config", return_value=mock_config):
             with patch("agents.agents_scheduler.langgraph.nodes.get_time_system") as mock_time:
@@ -74,13 +78,14 @@ class TestRecallMemoryNode:
                     mock_service.recall_memories.assert_called_once()
                     call_kwargs = mock_service.recall_memories.call_args[1]
 
-                    # 验证查询上下文包含完整的提示词内容
+                    # 查询只包含当前语境，不包含固定角色信息或旧召回结果
                     query_context = call_kwargs["context"]
-                    assert "你是Test" in query_context  # system_prompt 部分
-                    assert "你是一个测试角色" in query_context  # personality_prompt
-                    assert "测试签名" in query_context  # personal_signature
-                    assert "📍 你当前在：主页（信息流）" in query_context  # user_prompt 部分
-                    assert "本次会话已执行: 2 步" in query_context
+                    assert "银狼发布了一篇技术帖" in query_context
+                    assert "看到帖子" in query_context
+                    assert "你是一个测试角色" not in query_context
+                    assert "测试签名" not in query_context
+                    assert "上一轮已经召回的内容" not in query_context
+                    assert "boost_on_recall" not in call_kwargs
 
                     # 验证召回的记忆被正确注入
                     assert result["recalled_memories"] != ""
@@ -104,7 +109,7 @@ class TestRecallMemoryNode:
 
         mock_config = MagicMock(memory_enabled=True, recall_limit=5)
         mock_service = MagicMock()
-        mock_service.recall_memories = MagicMock(return_value=[])
+        mock_service.recall_memories = AsyncMock(return_value=[])
 
         with patch("agents.agents_scheduler.langgraph.nodes.get_memory_config", return_value=mock_config):
             with patch("agents.agents_scheduler.langgraph.nodes.get_time_system") as mock_time:
@@ -114,6 +119,7 @@ class TestRecallMemoryNode:
 
                     # 验证 recalled_memories 为空字符串
                     assert result["recalled_memories"] == ""
+                    mock_service.recall_memories.assert_not_called()
 
     def test_recall_memory_node_exception_handling(self):
         """测试记忆召回异常时的处理"""

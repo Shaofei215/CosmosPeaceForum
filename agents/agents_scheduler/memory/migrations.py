@@ -45,10 +45,34 @@ def _migration_0003_memory_type(conn: sqlite3.Connection) -> None:
         )
 
 
+def _migration_0004_last_decay_timestamp(conn: sqlite3.Connection) -> None:
+    """
+    增加增量衰减游标，并初始化历史记忆的衰减起点。
+
+    Args:
+        conn: 已开启迁移事务的 SQLite 连接。
+
+    Returns:
+        None: 迁移完成后直接返回。
+
+    Raises:
+        sqlite3.Error: 修改表结构或初始化历史数据失败时抛出。
+    """
+    if "last_decay_timestamp" not in _column_names(conn, "memories"):
+        conn.execute(
+            "ALTER TABLE memories ADD COLUMN last_decay_timestamp REAL NOT NULL DEFAULT 0"
+        )
+        conn.execute(
+            "UPDATE memories SET last_decay_timestamp = timestamp "
+            "WHERE last_decay_timestamp = 0"
+        )
+
+
 MIGRATIONS: tuple[tuple[int, Migration], ...] = (
     (1, _migration_0001_initial_schema),
     (2, _migration_0002_semantic_timestamp),
     (3, _migration_0003_memory_type),
+    (4, _migration_0004_last_decay_timestamp),
 )
 
 
