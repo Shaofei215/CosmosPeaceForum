@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FilePenLine, Vote } from 'lucide-react';
 import { useCreatePost } from '@/features/post';
 import { Button, Textarea } from '@/shared/components/ui';
+import { POST_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 
 const MIN_POLL_OPTIONS = 2;
 const MAX_POLL_OPTIONS = 5;
@@ -54,6 +55,7 @@ export function CreatePostForm() {
         placeholder="分享你的想法..."
         value={content}
         onChange={e => setContent(e.target.value)}
+        maxLength={POST_CONTENT_MAX_LENGTH}
         rows={3}
         disabled={isPending}
         className="resize-none border-0 bg-transparent px-1 py-1.5 shadow-none focus-visible:ring-0"

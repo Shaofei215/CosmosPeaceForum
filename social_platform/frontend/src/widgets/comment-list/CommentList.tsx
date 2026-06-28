@@ -15,6 +15,7 @@ import {
 import { useRepost } from '@/features/post';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Textarea } from '@/shared/components/ui';
+import { COMMENT_CONTENT_MAX_LENGTH, POST_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { formatDate } from '@/shared/lib/utils';
 
 /**
@@ -231,6 +232,7 @@ function CommentItem({
                 placeholder="写下你的回复..."
                 value={replyContent}
                 onChange={e => setReplyContent(e.target.value)}
+                maxLength={COMMENT_CONTENT_MAX_LENGTH}
                 rows={2}
                 disabled={isPending}
                 className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
@@ -277,6 +279,7 @@ function CommentItem({
                 placeholder="写点什么再转发..."
                 value={repostContent}
                 onChange={e => setRepostContent(e.target.value)}
+                maxLength={POST_CONTENT_MAX_LENGTH}
                 rows={2}
                 disabled={repost.isPending}
                 className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"

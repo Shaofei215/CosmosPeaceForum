@@ -3,25 +3,30 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from social_platform.app.core.content_limits import COMMENT_CONTENT_MAX_LENGTH
 from social_platform.app.domains.post.schemas import MentionUser
 from social_platform.app.domains.user.schemas import UserResponse
 
 
 class CommentBase(BaseModel):
     """评论领域 API schema的基础字段，供 API adapter 做参数校验和响应序列化。"""
-    content: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1, max_length=COMMENT_CONTENT_MAX_LENGTH)
 
 
 class CommentCreate(BaseModel):
     """评论领域 API schema的创建请求，供 API adapter 做参数校验和响应序列化。"""
-    content: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1, max_length=COMMENT_CONTENT_MAX_LENGTH)
     parent_id: Optional[int] = None
     repost: bool = False
 
 
 class CommentUpdate(BaseModel):
     """评论领域 API schema的更新请求，供 API adapter 做参数校验和响应序列化。"""
-    content: Optional[str] = Field(None, min_length=1)
+    content: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=COMMENT_CONTENT_MAX_LENGTH,
+    )
 
 
 class CommentParentResponse(BaseModel):

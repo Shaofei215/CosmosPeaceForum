@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
+import { COMMENT_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import {
   NotificationItem,
   useNotifications,
@@ -317,6 +318,7 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
           <Textarea
             value={content}
             onChange={event => setContent(event.target.value)}
+            maxLength={COMMENT_CONTENT_MAX_LENGTH}
             rows={2}
             placeholder="写下你的回复..."
             className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
@@ -431,6 +433,7 @@ function PostActionBar({ postId }: { postId: number }) {
           <Textarea
             value={content}
             onChange={event => setContent(event.target.value)}
+            maxLength={COMMENT_CONTENT_MAX_LENGTH}
             rows={2}
             placeholder="写下你的回复..."
             className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
