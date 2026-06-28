@@ -1,8 +1,9 @@
 # SQLite 持久化存储层
 # 提供记忆分块的 CRUD 操作，作为记忆系统的主数据源
 
-import sqlite3
 import asyncio
+import sqlite3
+import threading
 from typing import Optional, List
 from pathlib import Path
 
@@ -39,6 +40,7 @@ class MemoryDB:
         """
         self.db_path = config.get_memory_db_path()
         self._conn: Optional[sqlite3.Connection] = None
+        self._lock = threading.RLock()
         self._init_db()
 
     def _init_db(self):
@@ -69,23 +71,28 @@ class MemoryDB:
 
     def _add_memory_sync(self, chunk: MemoryChunk):
         """同步版本的添加记忆"""
-        cursor = self._conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO memories (id, owner_id, content, timestamp, semantic_timestamp, memory_coefficient, memory_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                chunk.id,
-                chunk.owner_id,
-                chunk.content,
-                chunk.timestamp,
-                chunk.semantic_timestamp,
-                chunk.memory_coefficient,
-                chunk.memory_type,
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO memories (
+                    id, owner_id, content, timestamp, semantic_timestamp,
+                    memory_coefficient, memory_type, last_decay_timestamp
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    chunk.id,
+                    chunk.owner_id,
+                    chunk.content,
+                    chunk.timestamp,
+                    chunk.semantic_timestamp,
+                    chunk.memory_coefficient,
+                    chunk.memory_type,
+                    chunk.last_decay_timestamp,
+                )
             )
-        )
-        self._conn.commit()
+            self._conn.commit()
 
     async def get_memory(self, memory_id: str) -> Optional[MemoryChunk]:
         """
@@ -106,12 +113,13 @@ class MemoryDB:
 
     def _get_memory_sync(self, memory_id: str) -> Optional[MemoryChunk]:
         """同步版本的获取记忆"""
-        cursor = self._conn.cursor()
-        cursor.execute("SELECT * FROM memories WHERE id = ?", (memory_id,))
-        row = cursor.fetchone()
-        if row is None:
-            return None
-        return MemoryChunk.from_dict(dict(row))
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute("SELECT * FROM memories WHERE id = ?", (memory_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return MemoryChunk.from_dict(dict(row))
 
     async def update_memory(self, chunk: MemoryChunk) -> None:
         """
@@ -129,22 +137,26 @@ class MemoryDB:
 
     def _update_memory_sync(self, chunk: MemoryChunk):
         """同步版本的更新记忆"""
-        cursor = self._conn.cursor()
-        cursor.execute(
-            """
-            UPDATE memories 
-            SET content = ?, timestamp = ?, semantic_timestamp = ?, memory_coefficient = ?
-            WHERE id = ?
-            """,
-            (
-                chunk.content,
-                chunk.timestamp,
-                chunk.semantic_timestamp,
-                chunk.memory_coefficient,
-                chunk.id,
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                UPDATE memories
+                SET content = ?, timestamp = ?, semantic_timestamp = ?, memory_coefficient = ?,
+                    memory_type = ?, last_decay_timestamp = ?
+                WHERE id = ?
+                """,
+                (
+                    chunk.content,
+                    chunk.timestamp,
+                    chunk.semantic_timestamp,
+                    chunk.memory_coefficient,
+                    chunk.memory_type,
+                    chunk.last_decay_timestamp,
+                    chunk.id,
+                )
             )
-        )
-        self._conn.commit()
+            self._conn.commit()
 
     async def delete_memory(self, memory_id: str) -> None:
         """
@@ -162,9 +174,10 @@ class MemoryDB:
 
     def _delete_memory_sync(self, memory_id: str):
         """同步版本的删除记忆"""
-        cursor = self._conn.cursor()
-        cursor.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
-        self._conn.commit()
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+            self._conn.commit()
 
     async def get_all_memories(self) -> List[MemoryChunk]:
         """
@@ -181,9 +194,10 @@ class MemoryDB:
 
     def _get_all_memories_sync(self) -> List[MemoryChunk]:
         """同步版本的获取所有记忆"""
-        cursor = self._conn.cursor()
-        cursor.execute("SELECT * FROM memories ORDER BY timestamp DESC")
-        return [MemoryChunk.from_dict(dict(row)) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute("SELECT * FROM memories ORDER BY timestamp DESC")
+            return [MemoryChunk.from_dict(dict(row)) for row in cursor.fetchall()]
 
     async def get_user_memories(self, owner_id: int) -> List[MemoryChunk]:
         """
@@ -204,12 +218,13 @@ class MemoryDB:
 
     def _get_user_memories_sync(self, owner_id: int) -> List[MemoryChunk]:
         """同步版本的获取用户记忆"""
-        cursor = self._conn.cursor()
-        cursor.execute(
-            "SELECT * FROM memories WHERE owner_id = ? ORDER BY timestamp DESC",
-            (owner_id,)
-        )
-        return [MemoryChunk.from_dict(dict(row)) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                "SELECT * FROM memories WHERE owner_id = ? ORDER BY timestamp DESC",
+                (owner_id,)
+            )
+            return [MemoryChunk.from_dict(dict(row)) for row in cursor.fetchall()]
 
     async def clear_user_memories(self, owner_id: int) -> int:
         """
@@ -230,12 +245,13 @@ class MemoryDB:
 
     def _clear_user_memories_sync(self, owner_id: int) -> int:
         """同步版本的清除用户记忆"""
-        cursor = self._conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM memories WHERE owner_id = ?", (owner_id,))
-        count = cursor.fetchone()[0]
-        cursor.execute("DELETE FROM memories WHERE owner_id = ?", (owner_id,))
-        self._conn.commit()
-        return count
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM memories WHERE owner_id = ?", (owner_id,))
+            count = cursor.fetchone()[0]
+            cursor.execute("DELETE FROM memories WHERE owner_id = ?", (owner_id,))
+            self._conn.commit()
+            return count
 
     async def get_memories_above_threshold(
         self,
@@ -266,22 +282,24 @@ class MemoryDB:
         threshold: float
     ) -> List[MemoryChunk]:
         """同步版本的获取高于阈值的记忆"""
-        cursor = self._conn.cursor()
-        cursor.execute(
-            """
-            SELECT * FROM memories 
-            WHERE owner_id = ? AND memory_coefficient >= ?
-            ORDER BY memory_coefficient DESC
-            """,
-            (owner_id, threshold)
-        )
-        return [MemoryChunk.from_dict(dict(row)) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM memories
+                WHERE owner_id = ? AND memory_coefficient >= ?
+                ORDER BY memory_coefficient DESC
+                """,
+                (owner_id, threshold)
+            )
+            return [MemoryChunk.from_dict(dict(row)) for row in cursor.fetchall()]
 
     def close(self):
         """关闭数据库连接"""
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+        with self._lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
 
     def __del__(self):
         """析构函数，确保关闭数据库连接"""

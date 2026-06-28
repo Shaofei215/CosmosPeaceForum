@@ -99,12 +99,16 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             from agents.agents_scheduler.scheduler.config import reload_scheduler_config
             from agents.agents_scheduler.langgraph.config import reload_session_config
             from agents.agents_scheduler.memory.config import reload_memory_config
+            from agents.agents_scheduler.memory.embedding import reload_embedding_model
+            from agents.agents_scheduler.memory.service import reload_memory_service
             from agents.agents_scheduler.langgraph.executor import reload_llm_registry
             from agents.agents_scheduler.scheduler.time_system import reload_time_scale
 
             reload_scheduler_config()
             reload_session_config()
-            reload_memory_config()
+            memory_config = reload_memory_config()
+            reload_embedding_model(memory_config)
+            reload_memory_service(memory_config)
             reload_llm_registry()
             reload_time_scale()
 
@@ -215,13 +219,17 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             from agents.agents_scheduler.scheduler.config import reload_scheduler_config
             from agents.agents_scheduler.langgraph.config import reload_session_config
             from agents.agents_scheduler.memory.config import reload_memory_config
+            from agents.agents_scheduler.memory.embedding import reload_embedding_model
+            from agents.agents_scheduler.memory.service import reload_memory_service
             from agents.agents_scheduler.scheduler.relation_map import rebuild_relation_maps
             from agents.agents_scheduler.langgraph.executor import reload_llm_registry
             from agents.agents_scheduler.scheduler.time_system import reload_time_scale
 
             reload_scheduler_config()
             reload_session_config()
-            reload_memory_config()
+            memory_config = reload_memory_config()
+            reload_embedding_model(memory_config)
+            reload_memory_service(memory_config)
             reload_llm_registry()
             reload_time_scale()
             rebuild_relation_maps()

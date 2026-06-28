@@ -4,6 +4,8 @@
 所有业务配置均通过 management 数据库抽象层加载（system_configs 表）
 """
 
+import math
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,11 +24,13 @@ class MemoryConfig:
     """
     memory_enabled: bool = True
     recall_limit: int = 5
-    recall_vector_results: int = 5
-    recall_bm25_results: int = 5
-    threshold: float = 0.3
-    boost_factor: float = 0.3
+    recall_vector_results: int = 20
+    recall_bm25_results: int = 20
+    rrf_rank_constant: int = 60
+    threshold: float = 0.1
+    boost_factor: float = 0.1
     decay_rate: float = 0.01
+    decay_interval_seconds: int = 300
     embedding_base_url: str = ""
     embedding_api_key: str = ""
     embedding_model_name: str = "text-embedding-3-small"
@@ -47,11 +51,13 @@ class MemoryConfig:
         return cls(
             memory_enabled=_get("MEMORY_ENABLED", "true").lower() in ("true", "1", "yes"),
             recall_limit=int(_get("MEMORY_RECALL_LIMIT", "5")),
-            recall_vector_results=int(_get("MEMORY_RECALL_VECTOR_RESULTS", "5")),
-            recall_bm25_results=int(_get("MEMORY_RECALL_BM25_RESULTS", "5")),
-            threshold=float(_get("MEMORY_THRESHOLD", "0.3")),
-            boost_factor=float(_get("MEMORY_BOOST_FACTOR", "0.3")),
+            recall_vector_results=int(_get("MEMORY_RECALL_VECTOR_RESULTS", "20")),
+            recall_bm25_results=int(_get("MEMORY_RECALL_BM25_RESULTS", "20")),
+            rrf_rank_constant=int(_get("MEMORY_RRF_RANK_CONSTANT", "60")),
+            threshold=float(_get("MEMORY_THRESHOLD", "0.1")),
+            boost_factor=float(_get("MEMORY_BOOST_FACTOR", "0.1")),
             decay_rate=float(_get("MEMORY_DECAY_RATE", "0.01")),
+            decay_interval_seconds=int(_get("MEMORY_DECAY_INTERVAL_SECONDS", "300")),
             embedding_base_url=embedding_config.get("base_url", "") if embedding_config else "",
             embedding_api_key=embedding_config.get("api_key", "") if embedding_config else "",
             embedding_model_name=embedding_config.get("model_name", "text-embedding-3-small") if embedding_config else "text-embedding-3-small",
@@ -66,12 +72,16 @@ class MemoryConfig:
             raise ValueError("recall_vector_results 必须大于 0")
         if self.recall_bm25_results <= 0:
             raise ValueError("recall_bm25_results 必须大于 0")
+        if self.rrf_rank_constant <= 0:
+            raise ValueError("rrf_rank_constant 必须大于 0")
         if not 0.0 <= self.threshold <= 1.0:
             raise ValueError("threshold 必须在 0.0 到 1.0 之间")
         if not 0.0 <= self.boost_factor <= 1.0:
             raise ValueError("boost_factor 必须在 0.0 到 1.0 之间")
-        if self.decay_rate <= 0:
+        if not math.isfinite(self.decay_rate) or self.decay_rate <= 0:
             raise ValueError("decay_rate 必须大于 0")
+        if self.decay_interval_seconds <= 0:
+            raise ValueError("decay_interval_seconds 必须大于 0")
         if self.embedding_dimension <= 0:
             raise ValueError("embedding_dimension 必须大于 0")
 
@@ -99,18 +109,21 @@ class MemoryConfig:
 
 
 _memory_config: MemoryConfig | None = None
+_memory_config_lock = threading.RLock()
 
 
 def get_memory_config() -> MemoryConfig:
     """获取记忆系统配置单例"""
     global _memory_config
-    if _memory_config is None:
-        _memory_config = MemoryConfig.from_db()
-    return _memory_config
+    with _memory_config_lock:
+        if _memory_config is None:
+            _memory_config = MemoryConfig.from_db()
+        return _memory_config
 
 
 def reload_memory_config():
     """重载记忆系统配置（热更新）"""
     global _memory_config
-    _memory_config = MemoryConfig.from_db()
-    return _memory_config
+    with _memory_config_lock:
+        _memory_config = MemoryConfig.from_db()
+        return _memory_config

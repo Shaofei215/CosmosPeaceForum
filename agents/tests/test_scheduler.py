@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, patch, MagicMock
 import threading
 
 from agents.agents_scheduler.scheduler.scheduler import (
@@ -7,6 +7,7 @@ from agents.agents_scheduler.scheduler.scheduler import (
     AgentSchedulerManager,
     login_user,
 )
+from agents.agents_scheduler.memory.decay_scheduler import MemoryDecayScheduler
 
 
 class TestLoginUser:
@@ -149,11 +150,14 @@ class TestAgentSchedulerManager:
         assert len(manager.schedulers) == 0
 
     def test_manager_start_no_agents(self):
-        with patch("agents.agents_scheduler.scheduler.scheduler.get_db_client") as mock_db:
+        with patch("agents.agents_scheduler.scheduler.scheduler.get_db_client") as mock_db, \
+             patch("agents.agents_scheduler.scheduler.scheduler.MemoryDecayScheduler") as mock_decay:
             mock_db.return_value.get_agent_configs.return_value = []
             manager = AgentSchedulerManager()
             manager.start()
             assert len(manager.schedulers) == 0
+            mock_decay.return_value.start.assert_called_once_with()
+            manager.stop()
 
     def test_manager_stop(self):
         manager = AgentSchedulerManager()
@@ -190,3 +194,21 @@ class TestAgentSchedulerManager:
         manager = AgentSchedulerManager()
         result = manager.get_all_statuses()
         assert result == []
+
+
+class TestMemoryDecayScheduler:
+    """验证记忆衰减调度器与 MemoryService 的调用边界。"""
+
+    def test_run_decay_once_calls_memory_service(self):
+        """单次调度应完整等待异步衰减逻辑结束。"""
+        service = MagicMock()
+        service.decay_memories = AsyncMock(return_value=["deleted-memory"])
+        scheduler = MemoryDecayScheduler()
+
+        with patch(
+            "agents.agents_scheduler.memory.decay_scheduler.get_memory_service",
+            return_value=service,
+        ):
+            scheduler._run_decay_once()
+
+        service.decay_memories.assert_awaited_once_with()

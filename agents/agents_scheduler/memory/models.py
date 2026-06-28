@@ -2,8 +2,8 @@
 # 定义记忆分块的数据结构
 
 import uuid
-from dataclasses import dataclass, field
-from typing import Optional, Literal
+from dataclasses import dataclass
+from typing import Literal
 
 from agents.agents_scheduler.scheduler.time_system import get_time_system
 
@@ -23,6 +23,7 @@ class MemoryChunk:
         semantic_timestamp: 语义时间戳（记忆实际产生的时间，用于展示和上下文理解）
         memory_coefficient: 记忆系数 [0.0, 1.0]，越高记忆越重要越容易被想起
         memory_type: 记忆类型，"normal" 为普通记忆（参与衰减与唤醒），"static" 为静态记忆（不参与衰减与唤醒，系数恒定）
+        last_decay_timestamp: 上一次完成衰减计算的系统时间戳，用于避免重复衰减
     """
     id: str
     owner_id: int
@@ -31,6 +32,7 @@ class MemoryChunk:
     memory_coefficient: float
     semantic_timestamp: float = 0.0
     memory_type: Literal["normal", "static"] = "normal"
+    last_decay_timestamp: float = 0.0
 
     @classmethod
     def create(
@@ -68,6 +70,7 @@ class MemoryChunk:
             memory_coefficient=memory_coefficient,
             semantic_timestamp=semantic_timestamp,
             memory_type=memory_type,
+            last_decay_timestamp=system_ts,
         )
 
     def to_dict(self) -> dict:
@@ -85,6 +88,7 @@ class MemoryChunk:
             "semantic_timestamp": self.semantic_timestamp,
             "memory_coefficient": self.memory_coefficient,
             "memory_type": self.memory_type,
+            "last_decay_timestamp": self.last_decay_timestamp,
         }
 
     @classmethod
@@ -106,6 +110,7 @@ class MemoryChunk:
             memory_coefficient=data["memory_coefficient"],
             semantic_timestamp=data.get("semantic_timestamp", 0.0),
             memory_type=data.get("memory_type", "normal"),
+            last_decay_timestamp=data.get("last_decay_timestamp", data["timestamp"]),
         )
 
     def __repr__(self) -> str:

@@ -6,13 +6,14 @@ system_configs 只保存运行期可调的非敏感配置。基础设施和敏�
 统一从 agents/.env 或环境变量读取。
 """
 
+import math
 from datetime import datetime
-from agents.management.backend.core.timezone import local_now
 from typing import List, Optional
 
 from sqlmodel import Session, select
 
 from agents.management.backend.core.config import get_config
+from agents.management.backend.core.timezone import local_now
 from agents.management.backend.models.system_config import SystemConfig
 
 
@@ -33,11 +34,13 @@ DEFAULT_SYSTEM_CONFIGS = [
     ("TAVILY_API_KEY", "", "Tavily API Key"),
     ("MEMORY_ENABLED", "true", "是否启用记忆系统"),
     ("MEMORY_RECALL_LIMIT", "5", "召回记忆数量"),
-    ("MEMORY_RECALL_VECTOR_RESULTS", "5", "向量检索返回数量"),
-    ("MEMORY_RECALL_BM25_RESULTS", "5", "BM25 检索返回数量"),
-    ("MEMORY_THRESHOLD", "0.3", "记忆系数最低阈值"),
-    ("MEMORY_BOOST_FACTOR", "0.3", "唤醒时系数增量"),
+    ("MEMORY_RECALL_VECTOR_RESULTS", "20", "向量检索候选数量"),
+    ("MEMORY_RECALL_BM25_RESULTS", "20", "BM25 检索候选数量"),
+    ("MEMORY_RRF_RANK_CONSTANT", "60", "RRF 排名常数"),
+    ("MEMORY_THRESHOLD", "0.1", "记忆系数最低阈值"),
+    ("MEMORY_BOOST_FACTOR", "0.1", "唤醒时系数增量"),
     ("MEMORY_DECAY_RATE", "0.01", "衰减率（每日）"),
+    ("MEMORY_DECAY_INTERVAL_SECONDS", "300", "记忆衰减任务实时执行间隔（秒）"),
 ]
 
 
@@ -62,6 +65,41 @@ def validate_system_config_value(key: str, value: str) -> None:
             raise ValueError("Scheduler 时间倍率必须是数字") from exc
         if scale <= 0:
             raise ValueError("Scheduler 时间倍率必须大于 0")
+
+    positive_integer_keys = {
+        "MEMORY_RECALL_LIMIT",
+        "MEMORY_RECALL_VECTOR_RESULTS",
+        "MEMORY_RECALL_BM25_RESULTS",
+        "MEMORY_RRF_RANK_CONSTANT",
+        "MEMORY_DECAY_INTERVAL_SECONDS",
+    }
+    if key in positive_integer_keys:
+        try:
+            parsed_value = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{key} 必须是正整数") from exc
+        if parsed_value <= 0 or str(parsed_value) != value.strip():
+            raise ValueError(f"{key} 必须是正整数")
+
+    unit_interval_keys = {"MEMORY_THRESHOLD", "MEMORY_BOOST_FACTOR"}
+    if key in unit_interval_keys:
+        try:
+            parsed_value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{key} 必须在 0.0 到 1.0 之间") from exc
+        if not 0.0 <= parsed_value <= 1.0:
+            raise ValueError(f"{key} 必须在 0.0 到 1.0 之间")
+
+    if key == "MEMORY_DECAY_RATE":
+        try:
+            decay_rate = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("MEMORY_DECAY_RATE 必须大于 0") from exc
+        if not math.isfinite(decay_rate) or decay_rate <= 0:
+            raise ValueError("MEMORY_DECAY_RATE 必须大于 0")
+
+    if key == "MEMORY_ENABLED" and value.lower() not in {"true", "false"}:
+        raise ValueError("MEMORY_ENABLED 必须是 true 或 false")
 
 
 def list_system_configs(db: Session) -> List[SystemConfig]:
@@ -158,10 +196,12 @@ def get_config_value(db: Session, key: str, default: str = "") -> str:
         "TAVILY_API_KEY": "",
         "MEMORY_ENABLED": "true",
         "MEMORY_RECALL_LIMIT": "5",
-        "MEMORY_RECALL_VECTOR_RESULTS": "5",
-        "MEMORY_RECALL_BM25_RESULTS": "5",
-        "MEMORY_THRESHOLD": "0.3",
-        "MEMORY_BOOST_FACTOR": "0.3",
+        "MEMORY_RECALL_VECTOR_RESULTS": "20",
+        "MEMORY_RECALL_BM25_RESULTS": "20",
+        "MEMORY_RRF_RANK_CONSTANT": "60",
+        "MEMORY_THRESHOLD": "0.1",
+        "MEMORY_BOOST_FACTOR": "0.1",
         "MEMORY_DECAY_RATE": "0.01",
+        "MEMORY_DECAY_INTERVAL_SECONDS": "300",
     }
     return fallback_map.get(key, default)

@@ -32,6 +32,7 @@ from agents.agents_scheduler.scheduler.context import (
 )
 from agents.agents_scheduler.scheduler.session_injections import consume_prompt_injection_text
 from agents.agents_scheduler.scheduler.time_system import get_time_system
+from agents.agents_scheduler.memory.decay_scheduler import MemoryDecayScheduler
 from agents.management.backend.db_client import get_db_client
 
 logger = logging.getLogger(__name__)
@@ -296,6 +297,7 @@ class AgentSchedulerManager:
         self._is_running = False
         self.time_system = time_system or get_time_system()
         self._relation_map = None
+        self._memory_decay_scheduler: Optional[MemoryDecayScheduler] = None
 
     def start(self, relation_map=None):
         """
@@ -315,6 +317,7 @@ class AgentSchedulerManager:
 
         self._relation_map = relation_map
         self._is_running = True
+        self._start_memory_decay_scheduler()
 
         agents = get_db_client().get_agent_configs()
         if not agents:
@@ -332,6 +335,10 @@ class AgentSchedulerManager:
         """停止所有 Agent 调度线程"""
         logger.info("停止所有 Agent 调度线程...")
         self._is_running = False
+
+        if self._memory_decay_scheduler is not None:
+            self._memory_decay_scheduler.stop(wait=wait, timeout=timeout)
+            self._memory_decay_scheduler = None
 
         with self._thread_lock:
             schedulers = list(self.schedulers.values())
@@ -525,6 +532,22 @@ class AgentSchedulerManager:
         ]
         for agent_id in stopped_ids:
             del self.schedulers[agent_id]
+
+    def _start_memory_decay_scheduler(self) -> None:
+        """
+        启动由管理器唯一持有的记忆衰减线程。
+
+        Returns:
+            None: 线程已运行或启动完成后直接返回。
+        """
+        if (
+            self._memory_decay_scheduler is not None
+            and self._memory_decay_scheduler.is_alive()
+        ):
+            return
+
+        self._memory_decay_scheduler = MemoryDecayScheduler()
+        self._memory_decay_scheduler.start()
 
     @staticmethod
     def _get_scheduler_status_label(scheduler: AIUserScheduler) -> str:

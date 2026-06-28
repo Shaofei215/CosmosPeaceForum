@@ -2,9 +2,11 @@
 # 提供基于关键词匹配的记忆检索功能
 # 使用 jieba 搜索引擎模式进行中文分词
 
-import tantivy
+import threading
 from typing import List, Dict, Optional
 from pathlib import Path
+
+import tantivy
 
 from agents.agents_scheduler.memory.config import MemoryConfig
 from agents.agents_scheduler.memory.chinese_tokenizer import tokenize_chinese, tokenize_query
@@ -30,6 +32,7 @@ class BM25Index:
             config: 记忆系统配置
         """
         self.config = config
+        self._lock = threading.RLock()
         index_path = config.get_tantivy_index_path()
 
         # 定义 Schema
@@ -81,14 +84,15 @@ class BM25Index:
             content: 记忆内容
             owner_id: 用户 ID
         """
-        self._ensure_writer()
-        tokenized_content = tokenize_chinese(content)
-        self.writer.add_document(tantivy.Document(
-            id=memory_id,
-            content=tokenized_content,
-            owner_id=owner_id
-        ))
-        self._flush_writer()
+        with self._lock:
+            self._ensure_writer()
+            tokenized_content = tokenize_chinese(content)
+            self.writer.add_document(tantivy.Document(
+                id=memory_id,
+                content=tokenized_content,
+                owner_id=owner_id
+            ))
+            self._flush_writer()
 
     def search(
         self,
@@ -107,45 +111,44 @@ class BM25Index:
         Returns:
             List[Dict]: 检索结果列表，每个结果包含 id, score, content
         """
-        self._ensure_writer()
-        self._flush_writer()
-        self.index.reload()
-        searcher = self.index.searcher()
+        with self._lock:
+            self._ensure_writer()
+            self._flush_writer()
+            self.index.reload()
+            searcher = self.index.searcher()
 
-        # 使用 jieba 对查询分词，然后用空格连接供 tantivy 解析
-        tokenized_tokens = tokenize_query(query)
-        tokenized_query = " ".join(tokenized_tokens)
+            # 使用 jieba 对查询分词，然后用空格连接供 tantivy 解析
+            tokenized_tokens = tokenize_query(query)
+            tokenized_query = " ".join(tokenized_tokens)
 
-        # 使用 parse_query_lenient 构建查询
-        try:
-            parsed_query, errors = self.index.parse_query_lenient(tokenized_query, ["content"])
-        except Exception:
-            # 如果查询解析失败，返回空结果
-            return []
+            # 使用 parse_query_lenient 构建查询
+            try:
+                parsed_query, errors = self.index.parse_query_lenient(tokenized_query, ["content"])
+            except Exception:
+                # 如果查询解析失败，返回空结果
+                return []
 
-        # 执行搜索
-        # search 返回的 hits 是 (score, DocAddress) 元组列表
-        results = []
-        top_docs = searcher.search(parsed_query, limit=limit * 3)
+            # owner_id 在旧索引中不可检索，增大预取窗口降低跨用户候选挤占
+            results = []
+            prefetch_limit = max(limit * 10, limit)
+            top_docs = searcher.search(parsed_query, limit=prefetch_limit)
 
-        for hit in top_docs.hits:
-            # hit 是 (score, DocAddress) 元组
-            score, doc_address = hit
-            doc = searcher.doc(doc_address)
-            doc_owner_id = doc.get_first("owner_id")
+            for hit in top_docs.hits:
+                score, doc_address = hit
+                doc = searcher.doc(doc_address)
+                doc_owner_id = doc.get_first("owner_id")
 
-            # 所有权过滤
-            if doc_owner_id == owner_id:
-                results.append({
-                    "id": doc.get_first("id") or "",
-                    "score": score,
-                    "content": doc.get_first("content") or "",
-                })
+                if doc_owner_id == owner_id:
+                    results.append({
+                        "id": doc.get_first("id") or "",
+                        "score": score,
+                        "content": doc.get_first("content") or "",
+                    })
 
-            if len(results) >= limit:
-                break
+                if len(results) >= limit:
+                    break
 
-        return results
+            return results
 
     def delete_doc(self, memory_id: str) -> None:
         """
@@ -154,9 +157,10 @@ class BM25Index:
         Args:
             memory_id: 要删除的记忆 ID
         """
-        self._ensure_writer()
-        self.writer.delete_documents("id", memory_id)
-        self._flush_writer()
+        with self._lock:
+            self._ensure_writer()
+            self.writer.delete_documents("id", memory_id)
+            self._flush_writer()
 
     def get_doc_count(self, owner_id: Optional[int] = None) -> int:
         """
@@ -168,22 +172,23 @@ class BM25Index:
         Returns:
             int: 文档数量
         """
-        self._ensure_writer()
-        self._flush_writer()
-        self.index.reload()
-        searcher = self.index.searcher()
+        with self._lock:
+            self._ensure_writer()
+            self._flush_writer()
+            self.index.reload()
+            searcher = self.index.searcher()
 
-        if owner_id is not None:
-            # 遍历所有文档并过滤
-            count = 0
-            all_query, _ = self.index.parse_query_lenient("*", ["content"])
-            top_docs = searcher.search(all_query, limit=searcher.num_docs)
-            for hit in top_docs.hits:
-                score, doc_address = hit
-                doc = searcher.doc(doc_address)
-                doc_owner_id = doc.get_first("owner_id")
-                if doc_owner_id == owner_id:
-                    count += 1
-            return count
+            if owner_id is not None:
+                # 遍历所有文档并过滤
+                count = 0
+                all_query, _ = self.index.parse_query_lenient("*", ["content"])
+                top_docs = searcher.search(all_query, limit=searcher.num_docs)
+                for hit in top_docs.hits:
+                    score, doc_address = hit
+                    doc = searcher.doc(doc_address)
+                    doc_owner_id = doc.get_first("owner_id")
+                    if doc_owner_id == owner_id:
+                        count += 1
+                return count
 
-        return searcher.num_docs
+            return searcher.num_docs
