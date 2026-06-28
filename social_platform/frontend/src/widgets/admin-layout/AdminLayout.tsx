@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   FileText,
   Flame,
+  Github,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -127,6 +128,20 @@ export function AdminLayout() {
             );
           })}
         </nav>
+
+        <div className="p-2">
+          <a
+            href="https://github.com/Shaofei215/CosmosPeaceForum"
+            target="_blank"
+            rel="noreferrer"
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="查看 GitHub 仓库"
+            aria-label="查看 CosmosPeaceForum GitHub 仓库"
+          >
+            <Github size={22} className="shrink-0" />
+            {sidebarOpen && <span className="text-base">GitHub</span>}
+          </a>
+        </div>
 
         <div className="border-t border-border p-2.5">
           {sidebarOpen && (

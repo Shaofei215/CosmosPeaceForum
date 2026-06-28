@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Cpu, Settings, FileText,
-  Menu, X, LogOut, Brain, Shield, ScrollText,
+  Menu, X, LogOut, Brain, Shield, ScrollText, Github,
 } from 'lucide-react';
 import { useLogout, useCurrentAdmin } from '@/features/auth';
 import type { AdminPermission } from '@/shared/types/api';
@@ -89,6 +89,20 @@ export function AppLayout() {
             );
           })}
         </nav>
+
+        <div className="p-2">
+          <a
+            href="https://github.com/Shaofei215/CosmosPeaceForum"
+            target="_blank"
+            rel="noreferrer"
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="查看 GitHub 仓库"
+            aria-label="查看 CosmosPeaceForum GitHub 仓库"
+          >
+            <Github size={22} className="shrink-0" />
+            {sidebarOpen && <span className="text-base">GitHub</span>}
+          </a>
+        </div>
 
         <div className="border-t border-border p-2.5">
           {sidebarOpen && (
