@@ -87,8 +87,9 @@ class TestAgentSchemas:
         assert agent.is_active is True
 
     def test_agent_update(self):
-        update = AgentUpdate(name="NewName")
+        update = AgentUpdate(name="NewName", username="new_username")
         assert update.name == "NewName"
+        assert update.username == "new_username"
         assert update.monthly_logins is None
 
     def test_agent_response(self):

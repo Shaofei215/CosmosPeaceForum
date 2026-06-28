@@ -46,6 +46,7 @@ from agents.management.backend.services.registrar import (
     _get_user_id,
     _login_user,
     _login_user_response,
+    update_user_username,
 )
 
 logger = logging.getLogger(__name__)
@@ -426,6 +427,30 @@ def update_agent(
         raise HTTPException(status_code=404, detail="Agent 不存在")
 
     old_is_active = agent.is_active
+    if agent_in.username is not None:
+        new_username = agent_in.username.strip()
+        if not new_username:
+            raise HTTPException(status_code=400, detail="用户名不能为空")
+
+        if new_username != agent.username:
+            existing = agent_service.get_agent_by_username(db, new_username)
+            if existing and existing.id != agent.id:
+                raise HTTPException(status_code=400, detail="用户名已存在")
+
+            if agent.app_platform_user_id is not None:
+                success, error, platform_status = update_user_username(
+                    api_base_url=_get_api_base_url(db),
+                    current_username=agent.username,
+                    password=_get_ai_user_password(db),
+                    user_id=agent.app_platform_user_id,
+                    new_username=new_username,
+                )
+                if not success:
+                    response_status = 400 if platform_status in {400, 422} else 502
+                    raise HTTPException(status_code=response_status, detail=error)
+
+        agent_in.username = new_username
+
     updated = agent_service.update_agent(db, agent_id, agent_in)
 
     if agent_in.is_active is not None and agent_in.is_active != old_is_active:

@@ -130,6 +130,7 @@ export default function AgentFormPage({
         await updateMutation.mutateAsync({
           id: agent.id,
           data: {
+            username: username.trim(),
             name: name.trim(),
             monthly_logins: monthlyLogins,
             personal_signature: signature.trim(),
@@ -215,11 +216,10 @@ export default function AgentFormPage({
                 <Input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  disabled={mode === 'edit'}
                   maxLength={30}
                 />
                 <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  {mode === 'edit' ? <p>用户名不可修改</p> : <span />}
+                  {mode === 'edit' ? <p>修改后将同步到公开平台</p> : <span />}
                   <span>{username.length}/30</span>
                 </div>
               </div>
@@ -296,11 +296,10 @@ export default function AgentFormPage({
                   <Input
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    disabled={mode === 'edit'}
                     maxLength={30}
                   />
                   <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    {mode === 'edit' ? <p>用户名不可修改</p> : <span />}
+                    {mode === 'edit' ? <p>修改后将同步到公开平台</p> : <span />}
                     <span>{username.length}/30</span>
                   </div>
                 </div>

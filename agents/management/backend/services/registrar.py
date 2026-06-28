@@ -254,6 +254,63 @@ def _update_user_bio(api_base_url: str, username: str, password: str, bio: str) 
         return False
 
 
+def update_user_username(
+    api_base_url: str,
+    current_username: str,
+    password: str,
+    user_id: int,
+    new_username: str,
+) -> tuple[bool, Optional[str], Optional[int]]:
+    """通过公开平台资料接口修改 Agent 用户名。
+
+    该函数使用旧用户名登录，校验管理库保存的平台用户 ID，并调用公开平台的普通
+    用户资料接口完成修改，确保 Agent 与人类用户遵循相同的资料修改规则。
+
+    Args:
+        api_base_url: 公开平台 API 根地址。
+        current_username: 修改前的 Agent 用户名，用于登录。
+        password: Agent 在公开平台使用的密码。
+        user_id: 管理库记录的公开平台用户 ID。
+        new_username: 待设置的新用户名。
+
+    Returns:
+        tuple[bool, Optional[str], Optional[int]]: 是否成功、失败原因以及公开平台
+        返回的 HTTP 状态码；连接或账号映射错误没有对应状态码。
+    """
+
+    token = _login_user(api_base_url, current_username, password)
+    if not token:
+        return False, "无法使用原用户名登录 app_platform", None
+
+    actual_user_id = _get_user_id(api_base_url, token)
+    if actual_user_id != user_id:
+        return False, "app_platform 账号映射不一致", None
+
+    try:
+        response = requests.put(
+            f"{api_base_url}/users/{user_id}",
+            json={"username": new_username},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            timeout=10,
+        )
+    except requests.exceptions.RequestException as exc:
+        logger.error("修改 Agent 用户名时请求 app_platform 失败: %s", exc)
+        return False, "无法连接 app_platform", None
+
+    if response.status_code == 200:
+        return True, None, response.status_code
+
+    try:
+        detail = response.json().get("detail", response.text)
+    except ValueError:
+        detail = response.text
+    logger.warning("修改 Agent 用户名失败: HTTP %d: %s", response.status_code, detail)
+    return False, f"app_platform 修改用户名失败: {detail}", response.status_code
+
+
 def _upload_user_avatar(api_base_url: str, username: str, password: str, avatar_path: str) -> bool:
     """上传用户头像"""
     try:
