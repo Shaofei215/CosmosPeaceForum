@@ -27,8 +27,8 @@ class MemoryConfig:
     recall_vector_results: int = 20
     recall_bm25_results: int = 20
     rrf_rank_constant: int = 60
-    threshold: float = 0.3
-    boost_factor: float = 0.3
+    threshold: float = 0.1
+    boost_factor: float = 0.1
     decay_rate: float = 0.01
     decay_interval_seconds: int = 300
     embedding_base_url: str = ""
@@ -54,8 +54,8 @@ class MemoryConfig:
             recall_vector_results=int(_get("MEMORY_RECALL_VECTOR_RESULTS", "20")),
             recall_bm25_results=int(_get("MEMORY_RECALL_BM25_RESULTS", "20")),
             rrf_rank_constant=int(_get("MEMORY_RRF_RANK_CONSTANT", "60")),
-            threshold=float(_get("MEMORY_THRESHOLD", "0.3")),
-            boost_factor=float(_get("MEMORY_BOOST_FACTOR", "0.3")),
+            threshold=float(_get("MEMORY_THRESHOLD", "0.1")),
+            boost_factor=float(_get("MEMORY_BOOST_FACTOR", "0.1")),
             decay_rate=float(_get("MEMORY_DECAY_RATE", "0.01")),
             decay_interval_seconds=int(_get("MEMORY_DECAY_INTERVAL_SECONDS", "300")),
             embedding_base_url=embedding_config.get("base_url", "") if embedding_config else "",

@@ -175,3 +175,57 @@ def test_candidate_migration_updates_only_legacy_defaults(monkeypatch):
         )).one()
         assert vector_config.value == "20"
         assert bm25_config.value == "7"
+
+
+def test_boost_migration_updates_only_legacy_default(monkeypatch):
+    """唤醒系数迁移只应将旧默认 0.3 降低为 0.1。"""
+    migration = importlib.import_module(
+        "agents.management.alembic.versions.0007_reduce_memory_boost"
+    )
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as db:
+        db.add(SystemConfig(
+            key="MEMORY_BOOST_FACTOR",
+            value="0.3",
+            description="boost",
+        ))
+        db.commit()
+
+    with engine.begin() as connection:
+        monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
+        migration.upgrade()
+
+    with Session(engine) as db:
+        boost_config = db.exec(select(SystemConfig).where(
+            SystemConfig.key == "MEMORY_BOOST_FACTOR"
+        )).one()
+        assert boost_config.value == "0.1"
+
+
+def test_threshold_migration_updates_only_legacy_default(monkeypatch):
+    """记忆阈值迁移只应将旧默认 0.3 降低为 0.1。"""
+    migration = importlib.import_module(
+        "agents.management.alembic.versions.0008_reduce_memory_threshold"
+    )
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as db:
+        db.add(SystemConfig(
+            key="MEMORY_THRESHOLD",
+            value="0.3",
+            description="threshold",
+        ))
+        db.commit()
+
+    with engine.begin() as connection:
+        monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
+        migration.upgrade()
+
+    with Session(engine) as db:
+        threshold_config = db.exec(select(SystemConfig).where(
+            SystemConfig.key == "MEMORY_THRESHOLD"
+        )).one()
+        assert threshold_config.value == "0.1"

@@ -13,8 +13,8 @@ class TestMemoryConfig:
         assert config.recall_vector_results == 20
         assert config.recall_bm25_results == 20
         assert config.rrf_rank_constant == 60
-        assert config.threshold == 0.3
-        assert config.boost_factor == 0.3
+        assert config.threshold == 0.1
+        assert config.boost_factor == 0.1
         assert config.decay_rate == 0.01
         assert config.decay_interval_seconds == 300
 

@@ -24,8 +24,8 @@ class TestMemoryConfig:
         config = MemoryConfig()
         assert config.memory_enabled is True
         assert config.recall_limit == 5
-        assert config.threshold == 0.3
-        assert config.boost_factor == 0.3
+        assert config.threshold == 0.1
+        assert config.boost_factor == 0.1
         assert config.decay_rate == 0.01
 
     def test_config_validation(self):
