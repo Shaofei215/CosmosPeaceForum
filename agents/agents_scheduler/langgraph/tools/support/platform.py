@@ -4,7 +4,6 @@
 import re
 import threading
 import requests
-import os
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
@@ -17,6 +16,14 @@ from agents.agents_scheduler.langgraph.tools.support.registry import (
     get_relation_mapping_service as _get_relation_mapping_service,
 )
 from agents.agents_scheduler.langgraph.tools.types import ToolExecutionError, AuthenticationError, NotFoundError, ValidationError, UnauthorizedError
+from agents.platform_access import (
+    PlatformAccessError,
+    PlatformAuthenticationError,
+    PlatformClient,
+    PlatformConnectionError,
+    PlatformNotFoundError,
+    PlatformTimeoutError,
+)
 
 
 def _get_api_base_url() -> str:
@@ -111,39 +118,35 @@ def _make_request(
     if token is None:
         token = get_current_token()
 
-    url = f"{_get_api_base_url()}{endpoint}"
-    headers = {"Content-Type": "application/json"}
-
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-
     try:
-        response = requests.request(
-            method=method,
-            url=url,
-            headers=headers,
-            json=json_data,
-            params=params,
-            timeout=30
+        from agents.agents_scheduler.scheduler.config import get_scheduler_config
+
+        config = get_scheduler_config()
+        client = PlatformClient(
+            base_url=_get_api_base_url(),
+            service_token=config.agent_service_token,
         )
-
-        if response.status_code == 401:
-            raise AuthenticationError("认证失败，Token 可能已过期，请重新登录")
-        elif response.status_code == 404:
-            detail = response.json().get("detail", response.text) if response.content else "Not Found"
-            raise NotFoundError(f"资源不存在 (404): {detail}。请确保你使用的ID是之前工具返回的真实ID，不要编造ID。")
-        elif response.status_code >= 400:
-            detail = response.json().get("detail", response.text)
-            raise ToolExecutionError(f"请求失败 ({response.status_code}): {detail}")
-
-        return response.json() if response.content else {}
-
-    except requests.exceptions.ConnectionError:
+        return client.request(
+            method,
+            endpoint,
+            access_token=token,
+            json_data=json_data,
+            params=params,
+        )
+    except PlatformAuthenticationError as exc:
+        raise AuthenticationError(str(exc)) from exc
+    except PlatformNotFoundError as exc:
+        detail = exc.detail or "Not Found"
+        raise NotFoundError(
+            f"资源不存在 (404): {detail}。请确保你使用的ID是之前工具返回的真实ID，不要编造ID。"
+        ) from exc
+    except PlatformConnectionError as exc:
         raise ToolExecutionError("无法连接到 API 服务器，请检查网络连接")
-    except requests.exceptions.Timeout:
+    except PlatformTimeoutError as exc:
         raise ToolExecutionError("API 请求超时，请稍后重试")
-    except requests.exceptions.RequestException as e:
-        raise ToolExecutionError(f"请求异常: {str(e)}")
+    except PlatformAccessError as exc:
+        detail = f": {exc.detail}" if exc.detail else ""
+        raise ToolExecutionError(f"{exc}{detail}") from exc
 
 
 # ==================== 数据标准化辅助函数 ====================
@@ -442,6 +445,7 @@ def _standardize_post(
         "type": post_type,
         "content": content,
         "created_at": _format_display_time(post_data.get("created_at", "")),
+        "created_by_agent": post_data.get("created_by_agent", False),
         "like_count": post_data.get("like_count", 0),
         "comment_count": post_data.get("comment_count", 0),
         "is_liked": post_data.get("is_liked", post_data.get("is_liked_by_current_user", False)),
@@ -466,6 +470,7 @@ def _standardize_post(
             "total_votes": poll.get("total_votes", 0),
             "has_voted": poll.get("has_voted", False),
             "selected_option_id": poll.get("selected_option_id"),
+            "created_by_agent": poll.get("created_by_agent", False),
             "options": [
                 {
                     "id": option.get("id"),
@@ -505,6 +510,7 @@ def _standardize_post(
                 current_user_id,
             ),
             "created_at": _format_display_time(repost_origin.get("created_at", "")),
+            "created_by_agent": repost_origin.get("created_by_agent", False),
         }
 
     return standardized
@@ -554,6 +560,7 @@ def _standardize_comment(
         "author_username": author_username,
         "content": content,
         "created_at": _format_display_time(comment_data.get("created_at", "")),
+        "created_by_agent": comment_data.get("created_by_agent", False),
         "parent_id": comment_data.get("parent_id"),
         "root_comment_id": comment_data.get("root_comment_id"),
         "reply_to_author_id": parent.get("owner_id"),
@@ -617,6 +624,7 @@ def _standardize_notification(
         "comment_id": notification_data.get("comment_id"),
         "source_content": _expand_content_mentions_by_relation(raw_content, current_user_id),
         "is_read": notification_data.get("is_read", False),
+        "created_by_agent": notification_data.get("created_by_agent", False),
         "created_at": _format_display_time(notification_data.get("created_at", "")),
     }
 

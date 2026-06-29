@@ -125,8 +125,6 @@ class UserWithModerationResponse(BaseModel):
     email: Optional[str]
     bio: Optional[str]
     avatar_url: Optional[str]
-    is_ai_agent: bool
-    ai_config_id: Optional[int]
     created_at: datetime
     following_count: int
     followers_count: int

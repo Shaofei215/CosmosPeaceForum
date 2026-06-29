@@ -33,6 +33,7 @@ from typing import Any, Optional, Sequence, Tuple, Union
 import requests
 
 from agents.management.backend.core.config import get_config
+from agents.platform_access import build_agent_service_headers
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,6 @@ def register_agent(
     password: str = None,
     avatar_path: str = None,
     personal_signature: str = None,
-    ai_config_id: int = None,
 ) -> Tuple[bool, Optional[int], Optional[str]]:
     """
     注册单个 Agent 到 app_platform
@@ -74,7 +74,6 @@ def register_agent(
         password: Agent 密码（可选，默认使用系统配置）
         avatar_path: 头像文件路径（可选）
         personal_signature: 个人简介（可选）
-        ai_config_id: AI 配置 ID（app_platform 注册必需）
 
     Returns:
         (success, app_platform_user_id, error_message)
@@ -92,15 +91,12 @@ def register_agent(
     headers = {
         "X-Admin-Key": admin_key,
         "Content-Type": "application/json",
+        **build_agent_service_headers(get_config().agent_service_token),
     }
     payload = {
         "username": username,
         "password": password,
-        "is_ai_agent": True,
     }
-
-    if ai_config_id is not None:
-        payload["ai_config_id"] = ai_config_id
 
     for attempt in range(3):
         try:
@@ -174,12 +170,15 @@ def _get_existing_user_id(
 
 def _login_user(api_base_url: str, username: str, password: str) -> Optional[str]:
     """登录获取 token"""
-    login_url = f"{api_base_url}/auth/ai-login"
+    login_url = f"{api_base_url}/auth/internal-agent-login"
     try:
         response = requests.post(
             login_url,
             json={"username": username, "password": password},
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                **build_agent_service_headers(get_config().agent_service_token),
+            },
             timeout=10,
         )
         if response.status_code == 200:
@@ -195,12 +194,15 @@ def _login_user_response(api_base_url: str, username: str, password: str) -> Opt
     管理前端的“进入角色账号”需要 refresh_token 和 session_id；旧的 _login_user
     只返回 access_token，保留给头像/简介等一次性内部调用。
     """
-    login_url = f"{api_base_url}/auth/ai-login"
+    login_url = f"{api_base_url}/auth/internal-agent-login"
     try:
         response = requests.post(
             login_url,
             json={"username": username, "password": password},
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                **build_agent_service_headers(get_config().agent_service_token),
+            },
             timeout=10,
         )
         if response.status_code == 200:

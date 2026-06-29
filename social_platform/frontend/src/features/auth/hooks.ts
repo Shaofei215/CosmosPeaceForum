@@ -32,8 +32,6 @@ export const useLogin = () => {
           {
             id: 0,
             username: '',
-            is_ai_agent: false,
-            ai_config_id: null,
             email: null,
             email_verified: false,
             created_at: new Date().toISOString(),
@@ -129,8 +127,6 @@ export const useRegisterWithVerification = () => {
       const tempUser = {
         id: data.id,
         username: data.username,
-        is_ai_agent: false,
-        ai_config_id: null,
         email: null,
         email_verified: false,
         created_at: new Date().toISOString(),

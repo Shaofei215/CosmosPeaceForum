@@ -126,6 +126,7 @@ SOCIAL_PALTFORM_FRONTEND_URL = _get_env(
     "http://localhost:8000",
 ).rstrip("/")
 ADMIN_KEY = _get_env("ADMIN_KEY", "")
+AGENT_SERVICE_TOKEN = _get_env("AGENT_SERVICE_TOKEN", "")
 AI_USER_PASSWORD = _get_env("AI_USER_PASSWORD", "ChangeMe123!")
 LOG_LEVEL = _get_env("LOG_LEVEL", "INFO")
 PLATFORM_DISPLAY_NAME = _get_env("PLATFORM_DISPLAY_NAME", "宇宙和平论坛").strip() or "宇宙和平论坛"
@@ -166,6 +167,7 @@ class Settings:
     app_platform_api_base_url: str = APP_PLATFORM_API_BASE_URL
     social_platform_frontend_url: str = SOCIAL_PALTFORM_FRONTEND_URL
     admin_key: str = ADMIN_KEY
+    agent_service_token: str = AGENT_SERVICE_TOKEN
     ai_user_password: str = AI_USER_PASSWORD
     log_level: str = LOG_LEVEL
     platform_display_name: str = PLATFORM_DISPLAY_NAME

@@ -23,7 +23,7 @@ class TestExecutionResult:
             "user_id": 1,
             "username": "test_user",
             "name": "Test",
-            "ai_config_id": 1,
+            "agent_id": 1,
             "personality_prompt": "prompt",
             "personal_signature": "sig",
             "step_count": 5,
@@ -63,7 +63,7 @@ class TestExecutionResult:
             "user_id": 1,
             "username": "test_user",
             "name": "Test",
-            "ai_config_id": 1,
+            "agent_id": 1,
             "personality_prompt": "prompt",
             "personal_signature": "sig",
             "step_count": 0,
@@ -101,7 +101,7 @@ class TestSessionExecutor:
             executor = SessionExecutor(
                 user_id=1,
                 username="test_user",
-                ai_config_id=1,
+                agent_id=1,
                 personality_prompt="prompt",
                 personal_signature="sig",
             )
@@ -115,7 +115,7 @@ class TestSessionExecutor:
             executor = SessionExecutor(
                 user_id=1,
                 username="test_user",
-                ai_config_id=1,
+                agent_id=1,
                 personality_prompt="prompt",
                 personal_signature="sig",
                 name="DisplayName",
@@ -128,7 +128,7 @@ class TestSessionExecutor:
             executor = SessionExecutor(
                 user_id=1,
                 username="test_user",
-                ai_config_id=1,
+                agent_id=1,
                 personality_prompt="prompt",
                 personal_signature="sig",
             )
@@ -140,7 +140,7 @@ class TestSessionExecutor:
             executor = SessionExecutor(
                 user_id=1,
                 username="test_user",
-                ai_config_id=1,
+                agent_id=1,
                 personality_prompt="prompt",
                 personal_signature="sig",
             )
@@ -150,7 +150,7 @@ class TestSessionExecutor:
                 "user_id": 1,
                 "username": "test_user",
                 "name": "Test",
-                "ai_config_id": 1,
+                "agent_id": 1,
                 "personality_prompt": "prompt",
                 "personal_signature": "sig",
                 "step_count": 5,
@@ -178,7 +178,7 @@ class TestSessionExecutor:
             executor = SessionExecutor(
                 user_id=1,
                 username="test_user",
-                ai_config_id=1,
+                agent_id=1,
                 personality_prompt="prompt",
                 personal_signature="sig",
             )
@@ -188,7 +188,7 @@ class TestSessionExecutor:
                 "user_id": 1,
                 "username": "test_user",
                 "name": "Test",
-                "ai_config_id": 1,
+                "agent_id": 1,
                 "personality_prompt": "prompt",
                 "personal_signature": "sig",
                 "step_count": 5,
@@ -227,7 +227,7 @@ class TestSessionExecutor:
             executor = SessionExecutor(
                 user_id=1,
                 username="test_user",
-                ai_config_id=1,
+                agent_id=1,
                 personality_prompt="prompt",
                 personal_signature="sig",
             )
@@ -243,7 +243,7 @@ class TestSessionExecutor:
             executor = SessionExecutor(
                 user_id=1,
                 username="test_user",
-                ai_config_id=1,
+                agent_id=1,
                 personality_prompt="prompt",
                 personal_signature="sig",
             )

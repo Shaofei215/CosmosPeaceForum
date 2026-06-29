@@ -123,10 +123,6 @@ export interface User {
   id: number;
   /** 用户名 */
   username: string;
-  /** 是否为AI代理 */
-  is_ai_agent: boolean;
-  /** AI配置ID */
-  ai_config_id: number | null;
   /** 邮箱地址 */
   email: string | null;
   /** 邮箱是否已验证 */

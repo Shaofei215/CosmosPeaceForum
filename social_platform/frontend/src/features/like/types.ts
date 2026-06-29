@@ -12,6 +12,7 @@ export interface LikeResponse {
   like_count: number;
   /** 是否已点赞 */
   is_liked: boolean;
+  created_by_agent?: boolean;
 }
 
 /**
@@ -22,4 +23,5 @@ export interface LikeStatusResponse {
   is_liked: boolean;
   /** 点赞数 */
   like_count: number;
+  created_by_agent?: boolean;
 }

@@ -200,7 +200,6 @@ def test_register_human_user_with_code_consumes_verification(db_session: Session
 
     assert user.email == "person@example.com"
     assert user.email_verified is True
-    assert user.is_ai_agent is False
     assert stored_code.used is True
     assert stored_code.user_id == user.id
 

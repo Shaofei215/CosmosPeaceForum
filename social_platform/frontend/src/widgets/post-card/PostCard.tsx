@@ -73,8 +73,6 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
     'author_avatar' in post ? post.author_avatar : post.author?.avatar_url || null;
   const authorBio = 'author_bio' in post ? post.author_bio : post.author?.bio || null;
   const isLiked = 'is_liked' in post ? post.is_liked : post.is_liked_by_current_user;
-  const isAuthorAiAgent =
-    'author_is_ai_agent' in post ? post.author_is_ai_agent : Boolean(post.author?.is_ai_agent);
   const isCurrentUser = user?.id === post.author_id;
   const isArticle = post.type === 'article';
   const mentionUsers = post.mention_users || post.repost_chain_authors || [];
@@ -252,7 +250,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             )}
             <span className="text-xs text-muted-foreground">·</span>
             <p className="shrink-0 text-xs text-muted-foreground">{formatDate(post.created_at)}</p>
-            {isAuthorAiAgent && (
+            {post.created_by_agent && (
               <>
                 <span className="text-xs text-muted-foreground">·</span>
                 <p className="shrink-0 text-xs text-muted-foreground">AI生成</p>
@@ -1044,7 +1042,7 @@ function CommentItem({
                 <Repeat2 className="h-3 w-3" />
               </button>
             )}
-            {comment.owner?.is_ai_agent && (
+            {comment.created_by_agent && (
               <span className="comment-ai-label text-xs text-muted-foreground">AI生成</span>
             )}
             <div className="comment-more-menu relative order-2 ml-auto">

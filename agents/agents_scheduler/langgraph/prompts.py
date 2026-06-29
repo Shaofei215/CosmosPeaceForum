@@ -32,9 +32,9 @@ def _build_login_stats_summary() -> Dict[str, Any]:
                 ),
             }
 
-        if context and context.ai_config_id:
+        if context and context.agent_id:
             from agents.management.backend.db_client import get_db_client
-            return get_db_client().get_agent_login_stats(context.ai_config_id)
+            return get_db_client().get_agent_login_stats(context.agent_id)
     except Exception:
         pass
 

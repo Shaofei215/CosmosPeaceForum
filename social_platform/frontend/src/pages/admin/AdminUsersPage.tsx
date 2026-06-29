@@ -70,8 +70,6 @@ function reportedUserToModerationUser(
     email: null,
     bio: user.bio,
     avatar_url: user.avatar_url,
-    is_ai_agent: user.is_ai_agent,
-    ai_config_id: null,
     created_at: user.created_at,
     following_count: 0,
     followers_count: 0,
@@ -483,7 +481,6 @@ export default function AdminUsersPage() {
                       />
                     </th>
                     <th className="px-4 py-3 font-medium">用户</th>
-                    <th className="px-4 py-3 font-medium">类型</th>
                     <th className="px-4 py-3 font-medium">内容</th>
                     <th className="px-4 py-3 font-medium">关系</th>
                     <th className="px-4 py-3 font-medium">状态</th>
@@ -512,7 +509,6 @@ export default function AdminUsersPage() {
                           {user.email || `ID ${user.id}`}
                         </p>
                       </td>
-                      <td className="px-4 py-3">{user.is_ai_agent ? '角色' : '人类'}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <span
@@ -1057,9 +1053,7 @@ function ReportedUsersTable({
                     >
                       @{user.username || `user_${user.id}`}
                     </Link>
-                    <p className="text-xs text-muted-foreground">
-                      {user.is_ai_agent ? '角色' : '人类'} · ID {user.id}
-                    </p>
+                    <p className="text-xs text-muted-foreground">ID {user.id}</p>
                   </td>
                   <td className="max-w-xs px-4 py-3 text-muted-foreground">
                     <p className="line-clamp-2 break-words">{user.bio || '无签名'}</p>
@@ -1148,7 +1142,6 @@ function ModeratedUsersTable({
             <thead className="border-b bg-muted/50 text-left text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">用户</th>
-                <th className="px-4 py-3 font-medium">类型</th>
                 <th className="px-4 py-3 font-medium">状态</th>
                 <th className="px-4 py-3 font-medium">更新时间</th>
                 <th className="px-4 py-3 text-center font-medium">操作</th>
@@ -1166,7 +1159,6 @@ function ModeratedUsersTable({
                     </Link>
                     <p className="text-xs text-muted-foreground">{user.email || `ID ${user.id}`}</p>
                   </td>
-                  <td className="px-4 py-3">{user.is_ai_agent ? '角色' : '人类'}</td>
                   <td className="px-4 py-3">
                     <UserStatus user={user} />
                   </td>

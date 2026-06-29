@@ -7,6 +7,7 @@ export interface FollowToggleResponse {
   is_following: boolean;
   followers_count: number;
   following_count: number;
+  created_by_agent?: boolean;
 }
 
 export interface FollowStatusResponse {
@@ -14,6 +15,8 @@ export interface FollowStatusResponse {
   is_following: boolean;
   is_followed_by: boolean;
   is_mutual: boolean;
+  created_by_agent?: boolean;
+  followed_by_created_by_agent?: boolean;
 }
 
 export interface FollowUserItem {
@@ -24,6 +27,7 @@ export interface FollowUserItem {
   is_following: boolean;
   is_followed_by: boolean;
   created_at: string;
+  created_by_agent?: boolean;
 }
 
 export interface FollowListData {

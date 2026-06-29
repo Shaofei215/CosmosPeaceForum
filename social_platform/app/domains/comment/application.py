@@ -240,7 +240,8 @@ def create_comment(
     content: str,
     parent_id: Optional[int],
     db: Session,
-    repost: bool = False
+    repost: bool = False,
+    created_by_agent: bool = False,
 ) -> Comment:
     """
     创建评论或回复
@@ -312,7 +313,8 @@ def create_comment(
             root_comment_id=root_comment_id,
             content=content,
             like_count=0,
-            reply_count=0
+            reply_count=0,
+            created_by_agent=created_by_agent,
         )
         db.add(new_comment)
         db.flush()  # 刷新以获取新评论的 ID
@@ -330,6 +332,7 @@ def create_comment(
                 comment_id=new_comment.id,
                 sender_id=user_id,
                 parent_comment_id=parent_comment.id if parent_comment is not None else None,
+                created_by_agent=created_by_agent,
             ),
         )
 
@@ -341,6 +344,7 @@ def create_comment(
                 source_id=new_comment.id,
                 content=content,
                 commit=False,
+                created_by_agent=created_by_agent,
             )
 
         # 4. 提交事务
@@ -358,7 +362,8 @@ def create_comment(
 def toggle_like(
     comment_id: int,
     user_id: int,
-    db: Session
+    db: Session,
+    created_by_agent: bool = False,
 ) -> Tuple[bool, int]:
     """
     切换评论点赞状态（点赞/取消点赞）
@@ -414,6 +419,7 @@ def toggle_like(
                     previous_state=True,
                     current_state=False,
                     post_id=comment.post_id,
+                    created_by_agent=existing_like.created_by_agent,
                 ),
             )
             # 3. 提交事务
@@ -424,7 +430,11 @@ def toggle_like(
         else:
             # 未点赞，执行点赞操作
             # 1. 创建点赞记录
-            new_like = CommentLike(user_id=user_id, comment_id=comment_id)
+            new_like = CommentLike(
+                user_id=user_id,
+                comment_id=comment_id,
+                created_by_agent=created_by_agent,
+            )
             db.add(new_like)
             # 2. 增加评论点赞计数
             comment.like_count = comment.like_count + 1
@@ -438,6 +448,7 @@ def toggle_like(
                     previous_state=False,
                     current_state=True,
                     post_id=comment.post_id,
+                    created_by_agent=created_by_agent,
                 ),
             )
             # 3. 提交事务

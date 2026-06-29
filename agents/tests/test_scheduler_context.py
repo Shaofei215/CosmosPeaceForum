@@ -9,7 +9,7 @@ from agents.agents_scheduler.scheduler.context import (
     get_current_token,
     get_current_user_id,
     get_current_username,
-    get_current_ai_config_id,
+    get_current_agent_id,
 )
 
 
@@ -18,13 +18,13 @@ class TestAgentContext:
         ctx = AgentContext(
             user_id=1,
             username="test_user",
-            ai_config_id=100,
+            agent_id=100,
             token="test_token",
             user_config={"key": "value"},
         )
         assert ctx.user_id == 1
         assert ctx.username == "test_user"
-        assert ctx.ai_config_id == 100
+        assert ctx.agent_id == 100
         assert ctx.token == "test_token"
         assert ctx.user_config == {"key": "value"}
 
@@ -32,7 +32,7 @@ class TestAgentContext:
         ctx = AgentContext()
         assert ctx.user_id is None
         assert ctx.username is None
-        assert ctx.ai_config_id is None
+        assert ctx.agent_id is None
         assert ctx.token is None
         assert ctx.user_config == {}
 
@@ -80,15 +80,15 @@ class TestThreadLocalContext:
         clear_current_context()
         assert get_current_username() is None
 
-    def test_get_current_ai_config_id(self):
-        ctx = AgentContext(ai_config_id=123)
+    def test_get_current_agent_id(self):
+        ctx = AgentContext(agent_id=123)
         set_current_context(ctx)
-        assert get_current_ai_config_id() == 123
+        assert get_current_agent_id() == 123
         clear_current_context()
 
-    def test_get_current_ai_config_id_no_context(self):
+    def test_get_current_agent_id_no_context(self):
         clear_current_context()
-        assert get_current_ai_config_id() is None
+        assert get_current_agent_id() is None
 
     def test_clear_current_context(self):
         ctx = AgentContext(user_id=1)

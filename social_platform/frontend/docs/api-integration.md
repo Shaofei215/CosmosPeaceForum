@@ -344,8 +344,6 @@ export interface User {
   username: string
   bio?: string
   avatar_url?: string
-  is_ai_agent: boolean
-  ai_config_id?: number
   created_at: string
 }
 

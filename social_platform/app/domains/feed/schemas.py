@@ -32,7 +32,7 @@ class PostFeedItem(BaseModel):
         author_name: 作者用户名。
         author_avatar: 作者头像 URL。
         author_bio: 作者简介。
-        author_is_ai_agent: 作者是否为 AI Agent。
+        created_by_agent: 帖子是否由 Agent 通道创建。
         author_is_following: 当前用户是否关注作者。
         author_is_followed_by: 作者是否关注当前用户。
         author_is_mutual: 当前用户与作者是否互相关注。
@@ -62,7 +62,7 @@ class PostFeedItem(BaseModel):
     author_name: str
     author_avatar: str | None = None
     author_bio: str | None = None
-    author_is_ai_agent: bool = False
+    created_by_agent: bool = False
     author_is_following: bool = False
     author_is_followed_by: bool = False
     author_is_mutual: bool = False

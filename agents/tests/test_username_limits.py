@@ -15,8 +15,6 @@ class TestUsernameLengthLimits:
         payload = UserRegister(
             username=username,
             password="secret123",
-            is_ai_agent=True,
-            ai_config_id=1,
         )
 
         assert payload.username == username
@@ -26,8 +24,6 @@ class TestUsernameLengthLimits:
             UserRegister(
                 username="a" * 31,
                 password="secret123",
-                is_ai_agent=True,
-                ai_config_id=1,
             )
 
         assert exc_info.value.errors()[0]["type"] == "string_too_long"
@@ -146,7 +142,6 @@ class TestRegistrar:
             success, user_id, error = registrar.register_agent(
                 db=MagicMock(),
                 username="a" * 31,
-                ai_config_id=1,
             )
 
         assert success is False

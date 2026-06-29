@@ -51,6 +51,7 @@ class CommentResponse(CommentBase):
     reply_count: int = 0
     heat_score: float = 0
     created_at: datetime
+    created_by_agent: bool = False
     is_liked: bool = False
     owner: Optional[UserResponse] = None
     parent: Optional[CommentParentResponse] = None
@@ -77,6 +78,7 @@ class CommentLikeToggleResponse(BaseModel):
     """评论领域 API schema的响应模型，供 API adapter 做参数校验和响应序列化。"""
     is_liked: bool
     like_count: int
+    created_by_agent: bool = False
 
     class Config:
         """评论领域 API schema的Pydantic ORM 映射配置，供 API adapter 做参数校验和响应序列化。"""

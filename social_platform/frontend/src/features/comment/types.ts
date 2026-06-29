@@ -31,6 +31,8 @@ export interface Comment {
   heat_score?: number;
   /** 创建时间 */
   created_at: string;
+  /** 是否由 Agent 通道创建 */
+  created_by_agent: boolean;
   /** 当前用户是否已点赞 */
   is_liked: boolean;
   /** 评论者信息 */
@@ -81,4 +83,6 @@ export interface CommentLikeResponse {
   is_liked: boolean;
   /** 点赞数 */
   like_count: number;
+  /** 当前点赞关系是否由 Agent 通道创建 */
+  created_by_agent?: boolean;
 }

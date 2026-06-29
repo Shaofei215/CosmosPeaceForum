@@ -22,3 +22,4 @@ class LikeChanged(DomainEvent):
     previous_state: bool
     current_state: bool
     post_id: int | None = None
+    created_by_agent: bool = False

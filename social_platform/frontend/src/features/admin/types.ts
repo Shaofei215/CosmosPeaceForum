@@ -118,8 +118,6 @@ export interface UserWithModeration {
   email: string | null;
   bio: string | null;
   avatar_url: string | null;
-  is_ai_agent: boolean;
-  ai_config_id: number | null;
   created_at: string;
   following_count: number;
   followers_count: number;
@@ -192,6 +190,7 @@ export interface ContentItem {
   title: string | null;
   content: string;
   created_at: string;
+  created_by_agent: boolean;
   like_count: number;
   comment_count: number | null;
   reply_count: number | null;
@@ -222,7 +221,6 @@ export interface ReportedUserItem {
   username: string | null;
   bio: string | null;
   avatar_url: string | null;
-  is_ai_agent: boolean;
   created_at: string;
   report_count: number;
   report_reasons: ContentReportReason[];

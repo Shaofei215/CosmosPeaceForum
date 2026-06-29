@@ -15,12 +15,16 @@ from social_platform.app.domains.search import subscribers as search_subscribers
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.follow.models import Follow
 from social_platform.app.domains.notification.models import Notification
-from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.post.models import PollVote, Post
+from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.post.schemas import PostCreate
+from social_platform.app.domains.content_safety import application as report_service
+from social_platform.app.domains.content_safety.models import ContentReport
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.comment import application as comment_service
 from social_platform.app.domains.follow import application as follow_service
 from social_platform.app.domains.post import application as post_application
+from social_platform.app.domains.post import poll_application
 from social_platform.app.domains.reaction import application as like_service
 from social_platform.app.domains.reaction.events import LikeChanged
 from social_platform.app.domains.follow.events import FollowChanged
@@ -139,6 +143,66 @@ def test_post_like_creates_notification_and_unlike_does_not_create_more(db_sessi
     assert db_session.query(Notification).count() == 1
 
 
+def test_agent_post_like_and_notification_keep_operation_source(db_session):
+    """Agent 通道创建的点赞关系和派生通知应保存同一来源。"""
+
+    author, actor, post = _seed_users_and_post(db_session)
+
+    like_service.toggle_like(
+        post.id,
+        actor.id,
+        db_session,
+        created_by_agent=True,
+    )
+
+    like = db_session.query(Like).one()
+    notification = db_session.query(Notification).one()
+    assert like.created_by_agent is True
+    assert notification.created_by_agent is True
+
+
+def test_agent_source_is_saved_for_post_follow_vote_and_report(db_session):
+    """其余持久社交关系也应保存显式传入的 Agent 来源。"""
+
+    author = User(username="source_author")
+    actor = User(username="source_actor")
+    db_session.add_all([author, actor])
+    db_session.commit()
+
+    post = post_application.create_post(
+        db_session,
+        author,
+        PostCreate(content="poll", poll_options=["A", "B"]),
+        created_by_agent=True,
+    )
+    follow_service.toggle_follow(
+        db_session,
+        actor.id,
+        author.id,
+        created_by_agent=True,
+    )
+    poll_application.vote_poll(
+        db_session,
+        actor,
+        post.id,
+        post.poll_options[0].id,
+        created_by_agent=True,
+    )
+    report_service.create_content_report(
+        db_session,
+        reporter=actor,
+        target_type="post",
+        target_id=post.id,
+        reason="test",
+        created_by_agent=True,
+    )
+
+    assert post.created_by_agent is True
+    assert db_session.query(Follow).one().created_by_agent is True
+    assert db_session.query(PollVote).one().created_by_agent is True
+    assert db_session.query(ContentReport).one().created_by_agent is True
+
+
 def test_self_post_like_does_not_create_notification(db_session):
     author, _, post = _seed_users_and_post(db_session)
 
@@ -165,6 +229,25 @@ def test_comment_create_and_like_notifications_are_event_driven(db_session):
     assert len(notifications) == 2
     assert notifications[1].recipient_id == actor.id
     assert notifications[1].type == "comment_like"
+
+
+def test_agent_comment_and_notification_keep_operation_source(db_session):
+    """Agent 通道创建的评论及其通知应保存同一来源。"""
+
+    _, actor, post = _seed_users_and_post(db_session)
+
+    comment = comment_service.create_comment(
+        post.id,
+        actor.id,
+        "agent comment",
+        None,
+        db_session,
+        created_by_agent=True,
+    )
+
+    notification = db_session.query(Notification).one()
+    assert comment.created_by_agent is True
+    assert notification.created_by_agent is True
 
 
 def test_post_mention_creates_notification_for_each_existing_user_once(db_session):

@@ -16,8 +16,6 @@ export interface PostFeedItem extends Post {
   author_avatar: string | null;
   /** 作者签名 */
   author_bio: string | null;
-  /** 作者是否为AI代理 */
-  author_is_ai_agent?: boolean;
   /** 当前用户是否关注作者 */
   author_is_following?: boolean;
   /** 作者是否关注当前用户 */

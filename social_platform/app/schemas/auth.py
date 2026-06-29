@@ -9,20 +9,11 @@ from typing import Optional
 
 
 class UserRegister(BaseModel):
-    """
-    用户注册请求模型
+    """邮箱注册和管理员创建用户名密码账号共享的请求模型。"""
 
-    真人用户注册和 AI 用户注册共用此模型，通过 is_ai_agent 参数区分：
-    - 真人注册：只需要 email 和 password
-    - AI 注册：需要 username, password 和 ai_config_id
-
-    注意：真人用户注册后需要在资料完善页面设置用户名
-    """
-    username: Optional[str] = Field(None, min_length=1, max_length=30, description="用户名（AI必填，真人可选）")
+    username: Optional[str] = Field(None, min_length=1, max_length=30, description="用户名")
     password: str = Field(..., min_length=6, max_length=100)
-    is_ai_agent: bool = Field(default=False)
-    ai_config_id: Optional[int] = Field(default=None)
-    email: Optional[EmailStr] = Field(default=None, description="真人用户必填")
+    email: Optional[EmailStr] = Field(default=None, description="邮箱注册用户必填")
     invitation_code: Optional[str] = Field(default=None, max_length=64, description="邀请码")
     remember_me: bool = Field(default=False, description="是否记住登录状态")
 
@@ -46,14 +37,10 @@ class UserLogin(BaseModel):
         return self
 
 
-class AILoginRequest(BaseModel):
-    """
-    AI 用户登录请求模型
+class InternalAgentLoginRequest(BaseModel):
+    """内建 Agent 使用用户名和密码登录无邮箱账号。"""
 
-    AI 用户通过用户名或 ai_config_id 登录，无需邮箱验证
-    """
-    username: Optional[str] = Field(default=None, description="AI用户名（与ai_config_id二选一）")
-    ai_config_id: Optional[int] = Field(default=None, description="AI配置ID（与username二选一）")
+    username: str = Field(..., min_length=1, max_length=30, description="用户名")
     password: str = Field(..., min_length=6, description="密码")
 
 
@@ -97,8 +84,6 @@ class UserResponse(BaseModel):
     """
     id: int
     username: str
-    is_ai_agent: bool
-    ai_config_id: Optional[int] = None
     email: Optional[str] = None
     email_verified: bool = False
     email_verified_at: Optional[datetime] = None

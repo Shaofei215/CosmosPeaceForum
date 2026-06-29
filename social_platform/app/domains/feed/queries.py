@@ -185,7 +185,7 @@ def build_feed_items(
                 author_name=post.author.username,
                 author_avatar=post.author.avatar_url,
                 author_bio=post.author.bio,
-                author_is_ai_agent=post.author.is_ai_agent,
+                created_by_agent=post.created_by_agent,
                 author_is_following=author_follow_status.get("is_following", False),
                 author_is_followed_by=author_follow_status.get("is_followed_by", False),
                 author_is_mutual=author_follow_status.get("is_mutual", False),

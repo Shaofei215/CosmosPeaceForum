@@ -7,7 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, s
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from social_platform.app.api.deps import get_access_payload, get_db, get_current_user, security
+from social_platform.app.api.deps import (
+    get_access_payload,
+    get_db,
+    get_current_user,
+    require_agent_service,
+    security,
+)
 from social_platform.app.core.security import (
     get_password_hash,
     verify_password,
@@ -33,7 +39,7 @@ from social_platform.app.schemas.auth import (
     TokenResponse,
     UserResponse,
     RegisterResponse,
-    AILoginRequest,
+    InternalAgentLoginRequest,
     RefreshTokenRequest,
     SessionResponse,
 )
@@ -202,7 +208,7 @@ def send_login_verification_code(
         _raise_send_code_http_error(exc)
 
 
-# ========== 用户注册（AI 用户直接注册） ==========
+# ========== 管理员创建用户名密码账号 ==========
 
 
 @router.post(
@@ -216,9 +222,7 @@ def register(
     db: Session = Depends(get_db)
 ) -> UserResponse:
     """
-    用户注册（AI 用户专用）
-
-    AI 用户使用此接口直接注册，无需邮箱验证
+    管理员创建无邮箱的用户名密码账号。
 
     Args:
         user_data: 用户注册信息
@@ -232,63 +236,30 @@ def register(
         HTTPException 400: 用户名已存在
         HTTPException 400: AI 注册但未提供管理员密钥
         HTTPException 401: 管理员密钥无效
-        HTTPException 400: AI 注册但未提供 ai_config_id
+        HTTPException 400: 未提供用户名或用户名已存在
     """
-    # AI 用户注册
-    if user_data.is_ai_agent:
-        if x_admin_key is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="AI 注册需要提供管理员密钥"
-            )
-        if not verify_admin_key(x_admin_key):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="管理员密钥无效"
-            )
-        if user_data.ai_config_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="AI 注册需要提供 ai_config_id"
-            )
-        if not user_data.username:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="AI 注册需要提供用户名"
-            )
+    if x_admin_key is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="需要管理员密钥")
+    if not verify_admin_key(x_admin_key):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员密钥无效")
+    if not user_data.username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="需要提供用户名")
 
-        # 检查用户名是否已存在
-        existing_user = db.query(User).filter(
-            User.username == user_data.username
-        ).first()
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="用户名已存在"
-            )
+    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    if existing_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
 
-        password_hash = get_password_hash(user_data.password)
-
-        db_user = User(
-            username=user_data.username,
-            password_hash=password_hash,
-            is_ai_agent=True,
-            ai_config_id=user_data.ai_config_id,
-            email=None,
-            email_verified=False,
-        )
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        search_service.index_user(db_user)
-
-        return UserResponse.model_validate(db_user)
-
-    # 真人用户应使用 /register/verify 接口
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="真人用户注册请使用 /auth/register/verify 接口"
+    db_user = User(
+        username=user_data.username,
+        password_hash=get_password_hash(user_data.password),
+        email=None,
+        email_verified=False,
     )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    search_service.index_user(db_user)
+    return UserResponse.model_validate(db_user)
 
 
 # ========== 用户注册并验证邮箱（真人用户两步注册第二步） ==========
@@ -327,14 +298,7 @@ def verify_and_register(
         HTTPException 400: 验证码无效、已过期或尝试次数过多
         HTTPException 400: 验证码错误
     """
-    # 不允许 AI 用户使用此接口
-    if user_data.is_ai_agent:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="AI 用户请使用 POST /auth/register"
-        )
-
-    # 真人用户必须提供邮箱
+    # 邮箱注册必须提供邮箱
     if not user_data.email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -430,7 +394,6 @@ def login(
     user = db.query(User).filter(
         User.email == email,
         User.email_verified.is_(True),
-        User.is_ai_agent.is_(False),
     ).first()
 
     if not user:
@@ -478,51 +441,32 @@ def login(
     return TokenResponse(**token_pair)
 
 
-# ========== AI 用户登录 ==========
+# ========== 内建 Agent 登录 ==========
 
 
-@router.post("/ai-login", response_model=TokenResponse)
-def ai_login(
-    login_data: AILoginRequest,
+@router.post("/internal-agent-login", response_model=TokenResponse)
+def internal_agent_login(
+    login_data: InternalAgentLoginRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(require_agent_service),
 ) -> TokenResponse:
-    """
-    AI 用户登录
-
-    AI 用户通过用户名或 ai_config_id + 密码登录，返回 JWT Token
+    """供内建 Agent 使用用户名和密码登录管理员创建的无邮箱账号。
 
     Args:
-        login_data: AI 用户登录信息（username 或 ai_config_id + password）
+        login_data: 内建 Agent 的用户名和密码。
         db: 数据库会话
 
     Returns:
         TokenResponse: 包含 access_token 的响应
 
     Raises:
-        HTTPException 400: 参数错误（未提供 username 或 ai_config_id）
         HTTPException 401: 用户名或密码错误
     """
-    if login_data.username is None and login_data.ai_config_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="必须提供 username 或 ai_config_id"
-        )
-
-    if login_data.username is not None and login_data.ai_config_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="只需提供 username 或 ai_config_id 其中一个"
-        )
-
-    query = db.query(User).filter(User.is_ai_agent == True)
-
-    if login_data.username is not None:
-        query = query.filter(User.username == login_data.username)
-    else:
-        query = query.filter(User.ai_config_id == login_data.ai_config_id)
-
-    user = query.first()
+    user = db.query(User).filter(
+        User.username == login_data.username,
+        User.email.is_(None),
+    ).first()
 
     if not user:
         raise HTTPException(

@@ -426,7 +426,7 @@ class TestStartNode:
             "username": "test_user",
             "user_id": 42,
             "name": "Test",
-            "ai_config_id": 1,
+            "agent_id": 1,
             "personality_prompt": "prompt",
             "personal_signature": "sig",
             "step_count": 5,
@@ -445,7 +445,7 @@ class TestStartNode:
         assert result["username"] == "test_user"
         assert result["user_id"] == 42
         assert result["name"] == "Test"
-        assert result["ai_config_id"] == 1
+        assert result["agent_id"] == 1
 
 
 class TestRecallMemoryNode:

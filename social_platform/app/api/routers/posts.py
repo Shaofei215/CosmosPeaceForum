@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
-from social_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
+from social_platform.app.api.deps import (
+    get_agent_operation_source,
+    get_db,
+    get_current_user,
+    get_current_user_optional,
+)
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.reaction.models import Like
@@ -30,7 +35,8 @@ router = APIRouter()
 def create_post(
     post: PostCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    created_by_agent: bool = Depends(get_agent_operation_source),
 ):
     """
     创建新帖子
@@ -45,7 +51,12 @@ def create_post(
     """
     ensure_action_allowed(db, current_user, "publish")
     try:
-        db_post = post_application.create_post(db, current_user, post)
+        db_post = post_application.create_post(
+            db,
+            current_user,
+            post,
+            created_by_agent=created_by_agent,
+        )
         db_post.mention_users = post_queries.build_mention_users(db, db_post.content)
         db_post.topic_mentions = topic_queries.build_topic_mentions(db, db_post.id)
         db_post.poll = poll_queries.get_poll_response(db, db_post.id, current_user.id)
@@ -61,7 +72,8 @@ def vote_poll(
     post_id: int,
     data: PollVoteCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    created_by_agent: bool = Depends(get_agent_operation_source),
 ):
     """选择帖子投票选项。
 
@@ -80,7 +92,13 @@ def vote_poll(
 
     ensure_action_allowed(db, current_user, "interaction")
     try:
-        poll_application.vote_poll(db, current_user, post_id, data.option_id)
+        poll_application.vote_poll(
+            db,
+            current_user,
+            post_id,
+            data.option_id,
+            created_by_agent=created_by_agent,
+        )
     except poll_application.PollPostNotFoundError:
         raise HTTPException(status_code=404, detail="帖子不存在")
     except poll_application.PollOptionNotFoundError:
@@ -97,11 +115,17 @@ def vote_poll(
 def repost(
     data: RepostCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    created_by_agent: bool = Depends(get_agent_operation_source),
 ):
     ensure_action_allowed(db, current_user, "publish")
     try:
-        created_post = post_application.create_repost_for_user(db, current_user, data)
+        created_post = post_application.create_repost_for_user(
+            db,
+            current_user,
+            data,
+            created_by_agent=created_by_agent,
+        )
         created_post.topic_mentions = topic_queries.build_topic_mentions(db, created_post.id)
         return created_post
     except post_application.RepostSourceNotFoundError as e:
@@ -177,6 +201,7 @@ def get_post(
         title=post.title,
         type=post.type,
         content=post.content,
+        created_by_agent=post.created_by_agent,
         created_at=post.created_at,
         like_count=post.like_count,
         comment_count=post.comment_count,

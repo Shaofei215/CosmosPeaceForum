@@ -14,7 +14,7 @@ class AgentContext:
     Attributes:
         user_id: 当前 Agent 的用户 ID
         username: 当前 Agent 的用户名
-        ai_config_id: 当前 Agent 的配置 ID
+        agent_id: 当前 Agent 的配置 ID
         token: 当前 Agent 的访问令牌（JWT Token）
         user_config: 当前 Agent 的配置信息字典
 
@@ -27,14 +27,14 @@ class AgentContext:
         self,
         user_id: Optional[int] = None,
         username: Optional[str] = None,
-        ai_config_id: Optional[int] = None,
+        agent_id: Optional[int] = None,
         token: Optional[str] = None,
         user_config: Optional[Dict[str, Any]] = None,
         stop_event: Optional[threading.Event] = None,
     ):
         self.user_id = user_id
         self.username = username
-        self.ai_config_id = ai_config_id
+        self.agent_id = agent_id
         self.token = token
         self.user_config = user_config or {}
         self.stop_event = stop_event
@@ -115,7 +115,7 @@ def get_current_username() -> Optional[str]:
     return None
 
 
-def get_current_ai_config_id() -> Optional[int]:
+def get_current_agent_id() -> Optional[int]:
     """
     获取当前线程的 AI 配置 ID
 
@@ -124,7 +124,7 @@ def get_current_ai_config_id() -> Optional[int]:
     """
     context = get_current_context()
     if context:
-        return context.ai_config_id
+        return context.agent_id
     return None
 
 

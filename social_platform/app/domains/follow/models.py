@@ -1,6 +1,6 @@
 # 关注数据库模型
 # 定义关注表结构，记录用户之间的单向关注关系
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, UniqueConstraint, Index
+from sqlalchemy import Boolean, Column, Integer, DateTime, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
@@ -54,6 +54,7 @@ class Follow(Base):
 
     # 关注创建时间，自动设置为当前系统本地时间
     created_at = Column(DateTime, default=local_now)
+    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
 
     # 表级约束和索引配置
     __table_args__ = (

@@ -5,12 +5,7 @@
 import type { UserProfile } from '@/features/user/types';
 import type { TopicMention } from '@/features/topic/types';
 
-export type PostAuthor = Pick<
-  UserProfile,
-  'id' | 'username' | 'bio' | 'avatar_url' | 'created_at'
-> & {
-  is_ai_agent?: boolean;
-};
+export type PostAuthor = Pick<UserProfile, 'id' | 'username' | 'bio' | 'avatar_url' | 'created_at'>;
 
 /**
  * 帖子
@@ -27,6 +22,8 @@ export interface Post {
   content: string;
   /** 创建时间 */
   created_at: string;
+  /** 是否由 Agent 通道创建 */
+  created_by_agent: boolean;
   /** 点赞数 */
   like_count: number;
   /** 评论数 */
@@ -78,6 +75,7 @@ export interface RepostOriginPost {
   type: 'post' | 'article';
   content: string;
   created_at: string;
+  created_by_agent: boolean;
 }
 
 /**

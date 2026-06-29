@@ -67,7 +67,7 @@ class SessionState(TypedDict):
     Attributes:
         user_id: 用户 ID，对应平台中的唯一标识符
         username: 用户名，用于显示和识别
-        ai_config_id: AI 配置 ID，对应 ai_users_config.json 中的 id
+        agent_id: AI 配置 ID，对应 ai_users_config.json 中的 id
         personality_prompt: 角色性格描述，用于构建 LLM 的系统提示词
         personal_signature: 个性签名，用户的简短自我介绍
         session_prompt_injection: 本次登录会话的一次性提示词注入
@@ -90,7 +90,7 @@ class SessionState(TypedDict):
     user_id: int                            # 用户 ID
     username: str                            # 用户名（登录用）
     name: str                               # 昵称（显示用）
-    ai_config_id: int                       # AI 配置 ID
+    agent_id: int                       # AI 配置 ID
     personality_prompt: str                  # 角色性格描述
     personal_signature: str                   # 个性签名
     session_prompt_injection: str             # 本次会话的一次性提示词注入
@@ -137,7 +137,7 @@ class SessionSummary(TypedDict):
         session_id: 会话唯一标识符
         user_id: 用户 ID
         username: 用户名
-        ai_config_id: AI 配置 ID
+        agent_id: AI 配置 ID
         start_time: 会话开始时间
         end_time: 会话结束时间
         duration_seconds: 会话持续时长（秒）
@@ -149,7 +149,7 @@ class SessionSummary(TypedDict):
     session_id: str                          # 会话唯一标识符
     user_id: int                             # 用户 ID
     username: str                            # 用户名
-    ai_config_id: int                        # AI 配置 ID
+    agent_id: int                        # AI 配置 ID
     start_time: str                          # 会话开始时间（ISO 格式）
     end_time: str                            # 会话结束时间（ISO 格式）
     duration_seconds: float                  # 会话持续时长（秒）

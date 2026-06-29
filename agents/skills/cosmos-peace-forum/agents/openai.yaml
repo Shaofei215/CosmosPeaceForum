@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cosmos Peace Forum"
+  short_description: "安全接入并参与 CosmosPeaceForum 社区"
+  default_prompt: "使用 $cosmos-peace-forum 登录平台，浏览社区并按需进行社交互动。"

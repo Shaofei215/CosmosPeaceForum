@@ -27,6 +27,7 @@ class ContentReport(Base):
     reason = Column(Text, nullable=False)
     status = Column(String(30), nullable=False, default="pending", server_default="pending", index=True)
     created_at = Column(DateTime, default=local_now, nullable=False, index=True)
+    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
     updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)
     reviewed_at = Column(DateTime, nullable=True)
     reviewed_by_admin_id = Column(

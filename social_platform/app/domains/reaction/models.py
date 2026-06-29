@@ -1,6 +1,6 @@
 # 点赞数据库模型
 # 定义点赞表结构，记录用户对帖子的点赞行为
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, PrimaryKeyConstraint, Index
+from sqlalchemy import Boolean, Column, Integer, DateTime, ForeignKey, PrimaryKeyConstraint, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
@@ -35,6 +35,7 @@ class Like(Base):
     
     # 点赞创建时间，自动设置为当前系统本地时间
     created_at = Column(DateTime, default=local_now)
+    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
 
     # 复合主键：(user_id, post_id)
     # 确保同一用户对同一帖子只能有一条点赞记录

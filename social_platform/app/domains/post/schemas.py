@@ -53,6 +53,7 @@ class PollResponse(BaseModel):
     total_votes: int = 0
     has_voted: bool = False
     selected_option_id: Optional[int] = None
+    created_by_agent: bool = False
     options: List[PollOptionResponse] = Field(default_factory=list)
 
 
@@ -88,6 +89,7 @@ class RepostOriginPost(BaseModel):
     type: str = "post"
     content: str
     created_at: datetime
+    created_by_agent: bool = False
 
     class Config:
         """帖子领域 API schema的Pydantic ORM 映射配置，供 API adapter 做参数校验和响应序列化。"""
@@ -117,6 +119,7 @@ class PostResponse(PostBase):
     author_id: int
     author: Optional[UserResponse] = None
     created_at: datetime
+    created_by_agent: bool = False
     like_count: int = 0
     comment_count: int = 0
     repost_count: int = 0

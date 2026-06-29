@@ -1,6 +1,6 @@
 # 评论数据库模型
 # 定义评论表结构，支持两级评论和评论点赞功能
-from sqlalchemy import CheckConstraint, Column, Float, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, Float, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
 from sqlalchemy.orm import relationship, remote, foreign
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
@@ -77,6 +77,9 @@ class Comment(Base):
     
     # 评论内容，必填
     content = Column(String(COMMENT_CONTENT_MAX_LENGTH), nullable=False)
+
+    # 创建操作是否经可信 Agent 服务通道发起。
+    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
     
     # 点赞计数，冗余存储以提高查询性能
     like_count = Column(Integer, default=0, nullable=False)
@@ -151,6 +154,7 @@ class CommentLike(Base):
     
     # 点赞创建时间，自动设置为当前系统本地时间
     created_at = Column(DateTime, default=local_now)
+    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
 
     # 复合主键：(user_id, comment_id)
     # 确保同一用户对同一评论只能有一条点赞记录

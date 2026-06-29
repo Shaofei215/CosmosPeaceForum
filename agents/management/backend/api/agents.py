@@ -337,7 +337,6 @@ def create_agent(
         username=agent.username,
         avatar_path=avatar_path,
         personal_signature=agent.personal_signature if agent.personal_signature else None,
-        ai_config_id=agent.id,
     )
 
     if success and platform_id:
@@ -694,7 +693,6 @@ async def import_agents(
                 username=agent.username,
                 avatar_path=avatar_path,
                 personal_signature=agent.personal_signature if agent.personal_signature else None,
-                ai_config_id=agent.id,
             )
 
             if success and platform_id:
@@ -819,7 +817,6 @@ async def import_agents_stream(
                         username=agent.username,
                         avatar_path=avatar_path,
                         personal_signature=agent.personal_signature if agent.personal_signature else None,
-                        ai_config_id=agent.id,
                     )
 
                     if success and platform_id:

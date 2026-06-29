@@ -41,8 +41,8 @@ export function useLogin() {
     mutationFn: ({ username, password }: { username: string; password: string }) =>
       authApi.login(username, password),
     onSuccess: (data) => {
-      const { id, username, is_ai_agent } = data.data
-      login({ id, username, is_ai_agent }, data.data.access_token)
+      const { id, username } = data.data
+      login({ id, username }, data.data.access_token)
     },
   })
 }
@@ -314,7 +314,6 @@ export function useUploadAvatar() {
 interface User {
   id: number
   username: string
-  is_ai_agent: boolean
 }
 
 interface AuthState {

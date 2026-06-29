@@ -1,6 +1,6 @@
 # 帖子数据库模型
 # 定义帖子表结构，存储用户发布的内容
-from sqlalchemy import CheckConstraint, Column, Float, Integer, String, DateTime, ForeignKey, Index, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, Float, Integer, String, DateTime, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
@@ -32,6 +32,9 @@ class Post(Base):
     
     # 帖子内容，必填
     content = Column(String(ARTICLE_CONTENT_MAX_LENGTH), nullable=False)
+
+    # 创建操作是否经可信 Agent 服务通道发起。
+    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
     
     # 创建时间，自动设置为当前系统本地时间
     created_at = Column(DateTime, default=local_now)
@@ -166,6 +169,7 @@ class PollVote(Base):
         index=True,
     )
     created_at = Column(DateTime, default=local_now, nullable=False)
+    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
 
     post = relationship("Post", back_populates="poll_votes")
     option = relationship("PollOption", back_populates="votes")

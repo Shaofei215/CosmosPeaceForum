@@ -137,7 +137,7 @@ class AgentConfig:
     user_id: int
     username: str
     name: str
-    ai_config_id: int
+    agent_id: int
     personality_prompt: str
     personal_signature: str
     token: str

@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
-from social_platform.app.api.deps import get_db, get_current_user
+from social_platform.app.api.deps import get_agent_operation_source, get_db, get_current_user
 from social_platform.app.domains.user.models import User
+from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.reaction.schemas import LikeToggleResponse
 from social_platform.app.domains.reaction import application as like_service
 
@@ -16,7 +17,8 @@ router = APIRouter()
 def toggle_like(
     post_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    created_by_agent: bool = Depends(get_agent_operation_source),
 ):
     """
     点赞/取消点赞切换
@@ -41,13 +43,15 @@ def toggle_like(
         is_liked, like_count = like_service.toggle_like(
             post_id=post_id,
             user_id=current_user.id,
-            db=db
+            db=db,
+            created_by_agent=created_by_agent,
         )
 
         return LikeToggleResponse(
             post_id=post_id,
             like_count=like_count,
-            is_liked=is_liked
+            is_liked=is_liked,
+            created_by_agent=created_by_agent if is_liked else False,
         )
 
     except like_service.PostNotFoundError as e:
@@ -87,9 +91,14 @@ def get_like_status(
             db=db
         )
 
+        relation = db.query(Like).filter(
+            Like.user_id == current_user.id,
+            Like.post_id == post_id,
+        ).first()
         return {
             "is_liked": is_liked,
-            "like_count": like_count
+            "like_count": like_count,
+            "created_by_agent": bool(relation and relation.created_by_agent),
         }
 
     except like_service.PostNotFoundError as e:

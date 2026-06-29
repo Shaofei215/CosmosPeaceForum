@@ -4,9 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from social_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
+from social_platform.app.api.deps import (
+    get_agent_operation_source,
+    get_db,
+    get_current_user,
+    get_current_user_optional,
+)
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from social_platform.app.domains.user.models import User
+from social_platform.app.domains.comment.models import CommentLike
 from social_platform.app.domains.comment.schemas import (
     CommentCreate,
     CommentResponse,
@@ -23,7 +29,7 @@ router = APIRouter()
 def delete_comment_by_id(
     comment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     ensure_action_allowed(db, current_user, "comment")
     try:
@@ -47,7 +53,8 @@ def create_comment(
     post_id: int,
     comment_data: CommentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    created_by_agent: bool = Depends(get_agent_operation_source),
 ):
     """
     创建评论或回复
@@ -76,6 +83,7 @@ def create_comment(
             parent_id=comment_data.parent_id,
             db=db,
             repost=comment_data.repost,
+            created_by_agent=created_by_agent,
         )
 
         comment.is_liked = False
@@ -154,7 +162,8 @@ def toggle_comment_like(
     post_id: int,
     comment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    created_by_agent: bool = Depends(get_agent_operation_source),
 ):
     """
     评论点赞/取消点赞切换
@@ -175,12 +184,14 @@ def toggle_comment_like(
         is_liked, like_count = comment_service.toggle_like(
             comment_id=comment_id,
             user_id=current_user.id,
-            db=db
+            db=db,
+            created_by_agent=created_by_agent,
         )
 
         return CommentLikeToggleResponse(
             is_liked=is_liked,
-            like_count=like_count
+            like_count=like_count,
+            created_by_agent=created_by_agent if is_liked else False,
         )
 
     except comment_service.CommentNotFoundError as e:
@@ -217,9 +228,14 @@ def get_comment_like_status(
             db=db
         )
 
+        relation = db.query(CommentLike).filter(
+            CommentLike.user_id == current_user.id,
+            CommentLike.comment_id == comment_id,
+        ).first()
         return {
             "is_liked": is_liked,
-            "like_count": like_count
+            "like_count": like_count,
+            "created_by_agent": bool(relation and relation.created_by_agent),
         }
 
     except comment_service.CommentNotFoundError as e:

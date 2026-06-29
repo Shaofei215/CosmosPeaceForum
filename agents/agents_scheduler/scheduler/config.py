@@ -18,6 +18,7 @@ class SchedulerConfig:
     app_platform 地址、ADMIN_KEY、AI 默认密码和日志级别从 agents/.env 加载。
     """
     admin_key: str = ""
+    agent_service_token: str = ""
     ai_user_password: str = "ChangeMe123!"
     log_level: str = "INFO"
     api_base_url: str = "http://localhost:8000/api/v1"
@@ -31,6 +32,7 @@ class SchedulerConfig:
         config = get_config()
         return cls(
             admin_key=config.admin_key,
+            agent_service_token=config.agent_service_token,
             ai_user_password=config.ai_user_password,
             log_level=config.log_level,
             api_base_url=config.app_platform_api_base_url.rstrip('/'),

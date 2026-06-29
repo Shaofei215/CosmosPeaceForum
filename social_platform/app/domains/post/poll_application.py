@@ -139,7 +139,13 @@ def normalize_poll_options(options: list[str] | None) -> list[str]:
     return normalized
 
 
-def vote_poll(db: Session, current_user: User, post_id: int, option_id: int) -> None:
+def vote_poll(
+    db: Session,
+    current_user: User,
+    post_id: int,
+    option_id: int,
+    created_by_agent: bool = False,
+) -> None:
     """为帖子投票并更新选项统计。
 
     Args:
@@ -169,7 +175,12 @@ def vote_poll(db: Session, current_user: User, post_id: int, option_id: int) -> 
     if option is None:
         raise PollOptionNotFoundError(post_id, option_id)
 
-    vote = PollVote(post_id=post_id, option_id=option_id, user_id=current_user.id)
+    vote = PollVote(
+        post_id=post_id,
+        option_id=option_id,
+        user_id=current_user.id,
+        created_by_agent=created_by_agent,
+    )
     db.add(vote)
     option.vote_count += 1
     try:

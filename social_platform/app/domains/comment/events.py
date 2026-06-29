@@ -15,6 +15,7 @@ class CommentCreated(DomainEvent):
     comment_id: int
     sender_id: int
     parent_comment_id: int | None = None
+    created_by_agent: bool = False
 
 
 @dataclass(frozen=True)
