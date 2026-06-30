@@ -21,6 +21,8 @@ services:
     depends_on:
       social-platform:
         condition: service_healthy
+      agent-scheduler:
+        condition: service_started
     restart: unless-stopped
     networks:
       - cosmos-peace-forum

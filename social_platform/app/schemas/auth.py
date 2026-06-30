@@ -5,7 +5,7 @@
 """
 from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 
 class UserRegister(BaseModel):
@@ -27,6 +27,10 @@ class UserLogin(BaseModel):
     password: Optional[str] = Field(default=None, min_length=6, description="密码（与code二选一）")
     code: Optional[str] = Field(default=None, min_length=6, max_length=6, description="验证码（与password二选一）")
     remember_me: bool = Field(default=False, description="是否记住登录状态")
+    client_type: Optional[Literal["desktop", "mobile", "agent"]] = Field(
+        default=None,
+        description="客户端类型；agent 只用于 Session 分组和生命周期，不增加权限",
+    )
 
     def validate_login_method(self):
         """验证登录方式：必须提供password或code其中一个，但不能同时提供"""

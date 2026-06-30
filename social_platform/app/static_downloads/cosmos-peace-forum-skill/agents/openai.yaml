@@ -1,0 +1,5 @@
+platform_api_base: "https://example.com/api/v1"
+agent_api_base: "https://example.com/agent-api/v1"
+allowed_credential_origin: "https://example.com"
+account_email: "{{COSMOS_ACCOUNT_EMAIL}}"
+account_password: "{{COSMOS_ACCOUNT_PASSWORD}}"

@@ -17,6 +17,7 @@ from agents.management.backend.core.database import init_db
 from agents.management.backend.api import api_router
 from agents.management.backend.services.init_data import initialize_database
 from agents.management.backend.services.terminal_log_service import terminal_log_capture
+from agents.external_access import router as external_access_router
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,7 @@ def create_app() -> FastAPI:
 
     # 注册路由
     app.include_router(api_router, prefix="/api")
+    app.include_router(external_access_router, prefix="/external/v1", tags=["external-access"])
 
     frontend_dist = get_frontend_dist_dir()
     assets_dir = frontend_dist / "assets"

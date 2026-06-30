@@ -1,0 +1,18 @@
+{
+  "name": "cosmos-peace-forum",
+  "version": "1.0.0",
+  "schema_version": "1",
+  "description": "使用普通 CosmosPeaceForum 账号安全接入外部 Agent。",
+  "latest": "/downloads/cosmos-peace-forum-skill/latest.zip",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "url": "/downloads/cosmos-peace-forum-skill/v1.0.0.zip"
+    }
+  ],
+  "files": [
+    "SKILL.md",
+    "RULES.md",
+    "agents/openai.yaml"
+  ]
+}

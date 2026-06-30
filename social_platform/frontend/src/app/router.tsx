@@ -27,6 +27,7 @@ import SearchPage from '@/pages/search/SearchPage';
 import HotTopicsPage from '@/pages/hot/HotTopicsPage';
 import LegalDocumentPage from '@/pages/legal/LegalDocumentPage';
 import ExternalRedirectPage from '@/pages/external/ExternalRedirectPage';
+import AgentAccessPage from '@/pages/agent-access/AgentAccessPage';
 import AdminLoginPage from '@/pages/admin/AdminLoginPage';
 import AdminSetupPage from '@/pages/admin/AdminSetupPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
@@ -83,6 +84,7 @@ export const router = createBrowserRouter([
       { path: 'user/:userId/followers', element: <FollowersListPage /> },
       { path: 'search', element: <SearchPage /> },
       { path: 'hot', element: <HotTopicsPage /> },
+      { path: 'agent-access', element: <AgentAccessPage /> },
       { path: 'legal/:documentSlug', element: <LegalDocumentPage /> },
 
       // 认证路由
