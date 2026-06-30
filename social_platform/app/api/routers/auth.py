@@ -404,6 +404,7 @@ def login(
 
     Args:
         user_data: 用户登录信息（email + password 或 email + code）
+        request: 当前 HTTP 请求，用于记录 session 端类型、User-Agent 和 IP。
         db: 数据库会话
 
     Returns:
@@ -468,7 +469,7 @@ def login(
                 detail=str(exc),
             ) from exc
 
-    client_type, user_agent, ip_address = _request_session_context(request)
+    client_type, user_agent, ip_address = _request_session_context(request, user_data.client_type)
     token_pair = session_service.create_session_token_pair(
         db=db,
         account_id=user.id,

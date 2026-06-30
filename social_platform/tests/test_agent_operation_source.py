@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 from social_platform.app.api import deps
 from social_platform.app.api.routers import auth
-from social_platform.app.schemas.auth import InternalAgentLoginRequest
+from social_platform.app.schemas.auth import InternalAgentLoginRequest, UserLogin
 
 
 def test_agent_operation_source_requires_matching_source_and_token(monkeypatch) -> None:
@@ -65,4 +65,43 @@ def test_admin_agent_login_uses_admin_key_without_agent_service_identity(monkeyp
         user_agent=None,
         ip_address="127.0.0.1",
         revoke_same_client=False,
+    )
+
+
+def test_human_login_honors_agent_client_type(monkeypatch) -> None:
+    """普通账号登录声明 client_type=agent 时应创建 agent 分组 session。"""
+
+    db = MagicMock()
+    user = SimpleNamespace(id=8, password_hash="hashed")
+    db.query.return_value.filter.return_value.first.return_value = user
+    request = SimpleNamespace(headers={}, client=SimpleNamespace(host="127.0.0.1"))
+    token_pair = {
+        "access_token": "access",
+        "refresh_token": "refresh",
+        "token_type": "bearer",
+        "expires_in": 900,
+        "refresh_expires_in": 43200,
+        "session_id": "sid",
+    }
+    create_session = MagicMock(return_value=token_pair)
+
+    monkeypatch.setattr(auth, "verify_password", lambda plain, hashed: plain == "secret123")
+    monkeypatch.setattr(auth.session_service, "create_session_token_pair", create_session)
+
+    response = auth.login(
+        UserLogin(email="agent@example.com", password="secret123", client_type="agent"),
+        request,
+        db=db,
+    )
+
+    assert response.access_token == "access"
+    create_session.assert_called_once_with(
+        db=db,
+        account_id=8,
+        scope="user",
+        client_type="agent",
+        remember_me=False,
+        user_agent=None,
+        ip_address="127.0.0.1",
+        revoke_same_client=True,
     )
