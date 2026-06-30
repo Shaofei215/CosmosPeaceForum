@@ -44,9 +44,9 @@ def test_cursor_rejects_tampered_payload() -> None:
 
 
 def test_external_tool_whitelist_contains_v1_names() -> None:
-    """v1 工具集应保持文档中的白名单名称。"""
+    """v1 工具集必须精确等于文档中的外部白名单名称。"""
 
-    assert {
+    assert set(TOOLS.keys()) == {
         "get_global_feed",
         "expand_post",
         "view_post_comments",
@@ -61,7 +61,17 @@ def test_external_tool_whitelist_contains_v1_names() -> None:
         "toggle_post_like",
         "toggle_comment_like",
         "toggle_follow",
-    }.issubset(TOOLS.keys())
+    }
+
+
+def test_external_scroll_schema_requires_signed_cursor() -> None:
+    """外部 scroll schema 必须要求签名游标，但共享核心不直接持有该字段。"""
+
+    schema = TOOLS["scroll"].input_schema()
+
+    assert "scroll_cursor" in schema["required"]
+    assert schema["properties"]["scroll_cursor"]["minLength"] == 16
+    assert "count" in schema["properties"]
 
 
 def test_execute_tool_validates_arguments() -> None:
