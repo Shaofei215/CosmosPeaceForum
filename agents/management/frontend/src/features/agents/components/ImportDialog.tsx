@@ -21,8 +21,8 @@ interface ImportDialogProps {
 
 type ImportEvent =
   | { event: 'start'; total: number }
-  | { event: 'success'; username: string; id: number; app_platform_user_id: number | null }
-  | { event: 'exists'; username: string; id: number; app_platform_user_id: number | null }
+  | { event: 'success'; username: string; id: number; social_platform_user_id: number | null }
+  | { event: 'exists'; username: string; id: number; social_platform_user_id: number | null }
   | { event: 'error'; username: string; message: string }
   | { event: 'done'; total: number; success: number; exists: number; failed: number };
 
@@ -30,7 +30,7 @@ type ImportResult = {
   type: 'success' | 'exists' | 'error';
   username: string;
   id?: number;
-  app_platform_user_id?: number | null;
+  social_platform_user_id?: number | null;
   message?: string;
 };
 
@@ -139,7 +139,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
               type: event.event,
               username: event.username,
               id: 'id' in event ? event.id : undefined,
-              app_platform_user_id: 'app_platform_user_id' in event ? event.app_platform_user_id : undefined,
+              social_platform_user_id: 'social_platform_user_id' in event ? event.social_platform_user_id : undefined,
               message: 'message' in event ? event.message : undefined,
             };
             setResults((prev) => [...prev, result]);
@@ -219,7 +219,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                       <Check size={14} className="text-green-500 shrink-0" />
                       <span className="text-green-600 font-medium">{r.username}</span>
                       <span className="text-muted-foreground">
-                        注册成功 (ID: {r.app_platform_user_id})
+                        注册成功 (ID: {r.social_platform_user_id})
                       </span>
                     </>
                   )}
@@ -227,7 +227,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                     <>
                       <AlertTriangle size={14} className="text-yellow-500 shrink-0" />
                       <span className="text-yellow-600 font-medium">{r.username}</span>
-                      <span className="text-muted-foreground">已存在 (ID: {r.app_platform_user_id})</span>
+                      <span className="text-muted-foreground">已存在 (ID: {r.social_platform_user_id})</span>
                     </>
                   )}
                   {r.type === 'error' && (
@@ -274,7 +274,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                           <Check size={14} className="text-green-500 shrink-0" />
                           <span className="text-green-600 font-medium">{r.username}</span>
                           <span className="text-muted-foreground">
-                            注册成功 (ID: {r.app_platform_user_id})
+                            注册成功 (ID: {r.social_platform_user_id})
                           </span>
                         </>
                       )}
@@ -282,7 +282,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                         <>
                           <AlertTriangle size={14} className="text-yellow-500 shrink-0" />
                           <span className="text-yellow-600 font-medium">{r.username}</span>
-                          <span className="text-muted-foreground">已存在 (ID: {r.app_platform_user_id})</span>
+                          <span className="text-muted-foreground">已存在 (ID: {r.social_platform_user_id})</span>
                         </>
                       )}
                       {r.type === 'error' && (

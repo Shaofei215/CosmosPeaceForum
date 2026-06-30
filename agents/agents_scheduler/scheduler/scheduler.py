@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 def login_user(username: str, password: str) -> Optional[Dict]:
     """
-    通过 app_platform API 登录用户
+    通过 social_platform API 登录用户
 
     Args:
         username: 用户名
@@ -574,7 +574,7 @@ class AgentSchedulerManager:
         password = config.ai_user_password
         personality_prompt = agent_data.get('personality_prompt', '')
         personal_signature = agent_data.get('personal_signature', '')
-        app_platform_user_id = agent_data.get('app_platform_user_id')
+        social_platform_user_id = agent_data.get('social_platform_user_id')
         model_config_id = agent_data.get('model_config_id')
 
         scheduler = AIUserScheduler(
@@ -588,7 +588,7 @@ class AgentSchedulerManager:
             personal_signature=personal_signature,
             time_system=self.time_system,
             relation_map=self._relation_map,
-            pre_registered_user_id=app_platform_user_id,
+            pre_registered_user_id=social_platform_user_id,
             model_config_id=model_config_id,
         )
         scheduler.start()

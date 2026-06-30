@@ -20,8 +20,7 @@ from agents.management.backend.models.system_config import SystemConfig
 ENV_MANAGED_CONFIG_KEYS = {
     "ADMIN_KEY",
     "AI_USER_PASSWORD",
-    "API_BASE_URL",
-    "APP_PLATFORM_API_BASE_URL",
+    "SOCIAL_PLATFORM_API_BASE_URL",
     "LOG_LEVEL",
 }
 
@@ -176,8 +175,7 @@ def get_config_value(db: Session, key: str, default: str = "") -> str:
     env_value_map = {
         "ADMIN_KEY": env_config.admin_key,
         "AI_USER_PASSWORD": env_config.ai_user_password,
-        "API_BASE_URL": env_config.app_platform_api_base_url,
-        "APP_PLATFORM_API_BASE_URL": env_config.app_platform_api_base_url,
+        "SOCIAL_PLATFORM_API_BASE_URL": env_config.social_platform_api_base_url,
         "LOG_LEVEL": env_config.log_level,
     }
     if key in env_value_map:

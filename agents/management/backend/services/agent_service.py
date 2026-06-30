@@ -157,7 +157,7 @@ def agent_to_response(agent: AgentConfig) -> dict:
         "knows_ids": parse_knows_ids(agent),
         "is_active": agent.is_active,
         "model_config_id": agent.model_config_id,
-        "app_platform_user_id": agent.app_platform_user_id,
+        "social_platform_user_id": agent.social_platform_user_id,
         "last_login_at": agent.last_login_at,
         "last_login_timestamp": agent.last_login_timestamp,
         "total_login_count": agent.total_login_count,

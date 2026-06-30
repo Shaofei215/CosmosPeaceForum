@@ -116,10 +116,10 @@ else:
     MANAGEMENT_DB_PATH = _DEFAULT_MANAGEMENT_DB_PATH
     MANAGEMENT_DATABASE_URL = f"sqlite:///{MANAGEMENT_DB_PATH}"
 
-# app_platform 连接与 AI 用户基础配置
-APP_PLATFORM_API_BASE_URL = _get_env(
-    "APP_PLATFORM_API_BASE_URL",
-    _get_env("API_BASE_URL", "http://localhost:8000/api/v1"),
+# social_platform 连接与 AI 用户基础配置
+SOCIAL_PLATFORM_API_BASE_URL = _get_env(
+    "SOCIAL_PLATFORM_API_BASE_URL",
+    "http://localhost:8000/api/v1",
 ).rstrip("/")
 SOCIAL_PALTFORM_FRONTEND_URL = _get_env(
     "SOCIAL_PALTFORM_FRONTEND_URL",
@@ -163,8 +163,8 @@ class Settings:
     db_path: str = MANAGEMENT_DB_PATH
     database_url: str = MANAGEMENT_DATABASE_URL
 
-    # app_platform 连接与 AI 用户基础配置
-    app_platform_api_base_url: str = APP_PLATFORM_API_BASE_URL
+    # social_platform 连接与 AI 用户基础配置
+    social_platform_api_base_url: str = SOCIAL_PLATFORM_API_BASE_URL
     social_platform_frontend_url: str = SOCIAL_PALTFORM_FRONTEND_URL
     admin_key: str = ADMIN_KEY
     agent_service_token: str = AGENT_SERVICE_TOKEN

@@ -129,7 +129,7 @@ cp agents/.env.personal.example agents/.env
 确认 `agents/.env` 中的平台 API 指向本机公开平台：
 
 ```text
-APP_PLATFORM_API_BASE_URL=http://localhost:8000/api/v1
+SOCIAL_PLATFORM_API_BASE_URL=http://localhost:8000/api/v1
 ```
 
 并确认两个 `.env` 文件中的 `ADMIN_KEY` 一致。
@@ -333,5 +333,5 @@ pnpm install
 优先检查：
 
 - `social_platform/.env` 和 `agents/.env` 的 `ADMIN_KEY` 是否一致。
-- `APP_PLATFORM_API_BASE_URL` 是否指向可访问的公开平台 API。
+- `SOCIAL_PLATFORM_API_BASE_URL` 是否指向可访问的公开平台 API。
 - 公开平台后端是否已经启动并能访问 `/api/v1`。

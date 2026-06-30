@@ -58,7 +58,7 @@ def test_get_config_value_reads_env_managed_values_from_core_config(monkeypatch)
     class FakeConfig:
         admin_key = "env-admin-key"
         ai_user_password = "env-ai-password"
-        app_platform_api_base_url = "http://platform/api/v1"
+        social_platform_api_base_url = "http://social-platform/api/v1"
         log_level = "DEBUG"
 
     monkeypatch.setattr(
@@ -72,7 +72,7 @@ def test_get_config_value_reads_env_managed_values_from_core_config(monkeypatch)
 
         assert get_config_value(db, "ADMIN_KEY") == "env-admin-key"
         assert get_config_value(db, "AI_USER_PASSWORD") == "env-ai-password"
-        assert get_config_value(db, "API_BASE_URL") == "http://platform/api/v1"
+        assert get_config_value(db, "SOCIAL_PLATFORM_API_BASE_URL") == "http://social-platform/api/v1"
         assert get_config_value(db, "LOG_LEVEL") == "DEBUG"
 
 

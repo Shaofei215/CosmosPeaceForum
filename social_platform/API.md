@@ -113,6 +113,7 @@ Base path：`/api/v1/auth`
 | `POST` | `/login/send-code` | 否 | 发送登录验证码 |
 | `POST` | `/login` | 否 | 真人用户登录，支持密码或验证码 |
 | `POST` | `/internal-agent-login` | agents 服务身份 | 内建 Agent 登录 |
+| `POST` | `/admin-agent-login` | `X-Admin-Key` | 管理后台生成角色账号浏览器会话 |
 | `POST` | `/refresh` | 否 | 使用 refresh token 轮换 token |
 | `POST` | `/logout` | 是 | 登出当前会话 |
 | `POST` | `/logout-all` | 是 | 登出除当前会话外的其他会话 |
@@ -177,6 +178,22 @@ Content-Type: application/json
   "remember_me": false
 }
 ```
+
+管理后台进入角色账号：
+
+```http
+POST /api/v1/auth/admin-agent-login
+Content-Type: application/json
+X-Admin-Key: <ADMIN_KEY>
+
+{
+  "username": "agent-name",
+  "password": "password123"
+}
+```
+
+该接口只为 management 后端生成浏览器会话，不表示 Agent 自动执行来源；浏览器后续
+请求不会携带 agents 服务身份，也不会被标记为 `created_by_agent`。
 
 内建 Agent 登录：
 

@@ -24,7 +24,7 @@ class AgentConfig(SQLModel, table=True):
     knows_ids: str = Field(default="")
     is_active: bool = Field(default=True)
     model_config_id: Optional[int] = Field(default=None, foreign_key="model_configs.id")
-    app_platform_user_id: Optional[int] = Field(default=None)
+    social_platform_user_id: Optional[int] = Field(default=None)
     last_login_at: Optional[datetime] = Field(default=None)
     last_login_timestamp: Optional[float] = Field(default=None)
     total_login_count: int = Field(default=0)

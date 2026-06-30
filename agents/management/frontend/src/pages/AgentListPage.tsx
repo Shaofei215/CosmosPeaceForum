@@ -222,14 +222,14 @@ export default function AgentListPage() {
       const hashParams = new URLSearchParams({
         token: result.access_token,
         refresh_token: result.refresh_token,
-        redirect: `/user/${result.app_platform_user_id}`,
+        redirect: `/user/${result.social_platform_user_id}`,
       });
       loginUrl.hash = hashParams.toString();
       window.location.href = loginUrl.toString();
     },
     onError: (err: unknown) => {
       setAppLoginAgentId(null);
-      setAppLoginError(getErrorMessage(err, '登录 app_platform 失败，请稍后重试'));
+      setAppLoginError(getErrorMessage(err, '登录 social_platform 失败，请稍后重试'));
     },
   });
 

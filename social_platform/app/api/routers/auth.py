@@ -80,6 +80,48 @@ def _current_user_payload(credentials: HTTPAuthorizationCredentials, db: Session
     return get_access_payload(credentials.credentials, db, "user")
 
 
+def _authenticate_username_password_account(
+    db: Session,
+    username: str,
+    password: str,
+) -> User:
+    """校验管理员创建的无邮箱用户名密码账号。
+
+    该账号既可被内建 Agent 调度器使用，也可被管理后台以管理员授权方式生成
+    浏览器会话；校验逻辑集中在这里，避免两个登录入口出现行为分叉。
+
+    Args:
+        db: 当前数据库会话。
+        username: 管理员创建的用户名。
+        password: 对应明文密码。
+
+    Returns:
+        User: 校验通过的公开平台用户。
+
+    Raises:
+        HTTPException: 用户不存在或密码错误时返回统一的 401。
+    """
+
+    user = db.query(User).filter(
+        User.username == username,
+        User.email.is_(None),
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误"
+        )
+
+    if user.password_hash is None or not verify_password(password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误"
+        )
+
+    return user
+
+
 def _raise_send_code_http_error(exc: Exception) -> NoReturn:
     """把 identity 验证码发送异常映射成 HTTP 错误。"""
     if isinstance(exc, verification_service.VerificationCodeFrequencyError):
@@ -463,26 +505,57 @@ def internal_agent_login(
     Raises:
         HTTPException 401: 用户名或密码错误
     """
-    user = db.query(User).filter(
-        User.username == login_data.username,
-        User.email.is_(None),
-    ).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误"
-        )
-
-    if user.password_hash is None or not verify_password(
-        login_data.password, user.password_hash
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误"
-        )
+    user = _authenticate_username_password_account(db, login_data.username, login_data.password)
 
     client_type, user_agent, ip_address = _request_session_context(request, client_type="agent")
+    token_pair = session_service.create_session_token_pair(
+        db=db,
+        account_id=user.id,
+        scope="user",
+        client_type=client_type,
+        remember_me=False,
+        user_agent=user_agent,
+        ip_address=ip_address,
+        revoke_same_client=False,
+    )
+
+    return TokenResponse(**token_pair)
+
+
+@router.post("/admin-agent-login", response_model=TokenResponse)
+def admin_agent_login(
+    login_data: InternalAgentLoginRequest,
+    request: Request,
+    x_admin_key: str | None = Header(None, alias="X-Admin-Key", description="管理员密钥"),
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    """供管理后台以管理员授权方式生成角色账号浏览器会话。
+
+    这个入口解决的是“管理员进入角色账号”的管理动作，不代表 Agent 调度器
+    自动执行，因此不要求 agents 服务身份，也不会让后续浏览器请求带有
+    ``created_by_agent`` 来源。真正的 Agent 自动登录仍使用
+    ``/internal-agent-login`` 并由服务身份保护。
+
+    Args:
+        login_data: 角色账号用户名与密码。
+        request: 当前 HTTP 请求，用于记录会话端信息。
+        x_admin_key: 管理后台持有的公开平台管理员密钥。
+        db: 当前数据库会话。
+
+    Returns:
+        TokenResponse: 可写入公开平台前端 tokenStorage 的 token 对。
+
+    Raises:
+        HTTPException: 管理员密钥缺失/无效，或用户名密码错误。
+    """
+
+    if x_admin_key is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="需要管理员密钥")
+    if not verify_admin_key(x_admin_key):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员密钥无效")
+
+    user = _authenticate_username_password_account(db, login_data.username, login_data.password)
+    client_type, user_agent, ip_address = _request_session_context(request)
     token_pair = session_service.create_session_token_pair(
         db=db,
         account_id=user.id,

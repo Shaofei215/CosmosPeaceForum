@@ -1,6 +1,11 @@
 """可信 Agent 操作来源依赖测试。"""
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
 from social_platform.app.api import deps
+from social_platform.app.api.routers import auth
+from social_platform.app.schemas.auth import InternalAgentLoginRequest
 
 
 def test_agent_operation_source_requires_matching_source_and_token(monkeypatch) -> None:
@@ -20,3 +25,44 @@ def test_agent_operation_source_is_disabled_without_deployment_secret(monkeypatc
     monkeypatch.setattr(deps.get_settings(), "AGENT_SERVICE_TOKEN", "")
 
     assert deps.get_agent_operation_source("agent", "anything") is False
+
+
+def test_admin_agent_login_uses_admin_key_without_agent_service_identity(monkeypatch) -> None:
+    """管理后台进入角色账号应由 ADMIN_KEY 授权，而不是依赖 agents 服务身份。"""
+
+    db = MagicMock()
+    user = SimpleNamespace(id=7, password_hash="hashed")
+    db.query.return_value.filter.return_value.first.return_value = user
+    request = SimpleNamespace(headers={}, client=SimpleNamespace(host="127.0.0.1"))
+    token_pair = {
+        "access_token": "access",
+        "refresh_token": "refresh",
+        "token_type": "bearer",
+        "expires_in": 900,
+        "refresh_expires_in": 43200,
+        "session_id": "sid",
+    }
+    create_session = MagicMock(return_value=token_pair)
+
+    monkeypatch.setattr(auth, "verify_admin_key", lambda value: value == "admin-key")
+    monkeypatch.setattr(auth, "verify_password", lambda plain, hashed: plain == "secret123")
+    monkeypatch.setattr(auth.session_service, "create_session_token_pair", create_session)
+
+    response = auth.admin_agent_login(
+        InternalAgentLoginRequest(username="agent-name", password="secret123"),
+        request,
+        x_admin_key="admin-key",
+        db=db,
+    )
+
+    assert response.access_token == "access"
+    create_session.assert_called_once_with(
+        db=db,
+        account_id=7,
+        scope="user",
+        client_type="desktop",
+        remember_me=False,
+        user_agent=None,
+        ip_address="127.0.0.1",
+        revoke_same_client=False,
+    )

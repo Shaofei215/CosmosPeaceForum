@@ -1,9 +1,9 @@
 """
 Management Backend - Agent 注册服务
-将管理系统中的 Agent 配置注册到 app_platform
+将管理系统中的 Agent 配置注册到 social_platform
 
 职责：
-1. 单个 Agent 注册（调用 app_platform API）
+1. 单个 Agent 注册（调用 social_platform API）
 2. 批量 Agent 注册
 3. 头像上传
 4. 个人简介更新
@@ -16,11 +16,11 @@ POST /api/agents
 management 后端：保存 Agent 配置到数据库
     ↓
 registrar.service.register_agent()：
-    1. 调用 app_platform API 注册用户
+    1. 调用 social_platform API 注册用户
     2. 上传头像（如有）
-    3. 返回 app_platform_user_id
+    3. 返回 social_platform_user_id
     ↓
-management 后端更新数据库中的 app_platform_user_id
+management 后端更新数据库中的 social_platform_user_id
 """
 
 import logging
@@ -33,7 +33,6 @@ from typing import Any, Optional, Sequence, Tuple, Union
 import requests
 
 from agents.management.backend.core.config import get_config
-from agents.platform_access import build_agent_service_headers
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +48,30 @@ def _get_ai_user_password(db) -> str:
 
 
 def _get_api_base_url(db) -> str:
-    """获取 app_platform API 地址"""
-    return get_config().app_platform_api_base_url
+    """获取 social_platform API 地址"""
+    return get_config().social_platform_api_base_url
 
 
 def _get_scheduler_internal_url() -> str:
     """获取 scheduler 内部接口地址"""
     return get_config().scheduler_internal_base_url
+
+
+def _get_admin_login_headers() -> dict[str, str]:
+    """构造管理后台调用公开平台角色登录桥所需 Header。
+
+    管理端“进入角色账号”是管理员授权动作，认证依据是既有的 ``ADMIN_KEY``；
+    它不能依赖 agents 服务身份，否则会把管理后台和调度器的来源语义混在一起。
+
+    Returns:
+        dict[str, str]: 包含 JSON 类型和管理员密钥的请求 Header。
+    """
+
+    headers = {"Content-Type": "application/json"}
+    admin_key = get_config().admin_key
+    if admin_key:
+        headers["X-Admin-Key"] = admin_key
+    return headers
 
 
 def register_agent(
@@ -66,7 +82,7 @@ def register_agent(
     personal_signature: str = None,
 ) -> Tuple[bool, Optional[int], Optional[str]]:
     """
-    注册单个 Agent 到 app_platform
+    注册单个 Agent 到 social_platform
 
     Args:
         db: 数据库会话
@@ -76,7 +92,7 @@ def register_agent(
         personal_signature: 个人简介（可选）
 
     Returns:
-        (success, app_platform_user_id, error_message)
+        (success, social_platform_user_id, error_message)
     """
     if password is None:
         password = _get_ai_user_password(db)
@@ -91,7 +107,6 @@ def register_agent(
     headers = {
         "X-Admin-Key": admin_key,
         "Content-Type": "application/json",
-        **build_agent_service_headers(get_config().agent_service_token),
     }
     payload = {
         "username": username,
@@ -170,15 +185,12 @@ def _get_existing_user_id(
 
 def _login_user(api_base_url: str, username: str, password: str) -> Optional[str]:
     """登录获取 token"""
-    login_url = f"{api_base_url}/auth/internal-agent-login"
+    login_url = f"{api_base_url}/auth/admin-agent-login"
     try:
         response = requests.post(
             login_url,
             json={"username": username, "password": password},
-            headers={
-                "Content-Type": "application/json",
-                **build_agent_service_headers(get_config().agent_service_token),
-            },
+            headers=_get_admin_login_headers(),
             timeout=10,
         )
         if response.status_code == 200:
@@ -194,15 +206,12 @@ def _login_user_response(api_base_url: str, username: str, password: str) -> Opt
     管理前端的“进入角色账号”需要 refresh_token 和 session_id；旧的 _login_user
     只返回 access_token，保留给头像/简介等一次性内部调用。
     """
-    login_url = f"{api_base_url}/auth/internal-agent-login"
+    login_url = f"{api_base_url}/auth/admin-agent-login"
     try:
         response = requests.post(
             login_url,
             json={"username": username, "password": password},
-            headers={
-                "Content-Type": "application/json",
-                **build_agent_service_headers(get_config().agent_service_token),
-            },
+            headers=_get_admin_login_headers(),
             timeout=10,
         )
         if response.status_code == 200:
@@ -282,11 +291,11 @@ def update_user_username(
 
     token = _login_user(api_base_url, current_username, password)
     if not token:
-        return False, "无法使用原用户名登录 app_platform", None
+        return False, "无法使用原用户名登录 social_platform", None
 
     actual_user_id = _get_user_id(api_base_url, token)
     if actual_user_id != user_id:
-        return False, "app_platform 账号映射不一致", None
+        return False, "social_platform 账号映射不一致", None
 
     try:
         response = requests.put(
@@ -299,8 +308,8 @@ def update_user_username(
             timeout=10,
         )
     except requests.exceptions.RequestException as exc:
-        logger.error("修改 Agent 用户名时请求 app_platform 失败: %s", exc)
-        return False, "无法连接 app_platform", None
+        logger.error("修改 Agent 用户名时请求 social_platform 失败: %s", exc)
+        return False, "无法连接 social_platform", None
 
     if response.status_code == 200:
         return True, None, response.status_code
@@ -310,7 +319,7 @@ def update_user_username(
     except ValueError:
         detail = response.text
     logger.warning("修改 Agent 用户名失败: HTTP %d: %s", response.status_code, detail)
-    return False, f"app_platform 修改用户名失败: {detail}", response.status_code
+    return False, f"social_platform 修改用户名失败: {detail}", response.status_code
 
 
 def _upload_user_avatar(api_base_url: str, username: str, password: str, avatar_path: str) -> bool:

@@ -71,7 +71,7 @@ class AgentAppLoginResponse(BaseModel):
     expires_in: int
     refresh_expires_in: int
     session_id: str
-    app_platform_user_id: int
+    social_platform_user_id: int
     social_platform_frontend_url: str
     username: str
 
@@ -151,7 +151,7 @@ class AgentResponse(BaseModel):
     knows_ids: List[int]
     is_active: bool
     model_config_id: Optional[int] = None
-    app_platform_user_id: Optional[int] = None
+    social_platform_user_id: Optional[int] = None
     last_login_at: Optional[datetime] = None
     last_login_timestamp: Optional[float] = None
     total_login_count: int = 0

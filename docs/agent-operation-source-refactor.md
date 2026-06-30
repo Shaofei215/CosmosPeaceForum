@@ -49,7 +49,7 @@
 | Feed 和评论根据作者类型显示“AI生成” | Feed 查询和前端帖子、评论组件 | 无法表达普通账号通过 Agent 完成的操作 |
 | `/auth/ai-login` 查询账号类型和配置 ID | `api/routers/auth.py` | 改为仅供内建 Agent 使用的内部登录接口 |
 | 内建工具通过 `_make_request` 调用平台 | `agents_scheduler/langgraph/tools/support/platform.py` | 已有统一入口，但没有可信来源证明 |
-| Management 已保存 `app_platform_user_id` | `AgentConfig` | 足以完成内部配置与公开账号绑定 |
+| Management 已保存 `social_platform_user_id` | `AgentConfig` | 足以完成内部配置与公开账号绑定 |
 
 ## 四、目标模型
 
@@ -61,7 +61,7 @@
 - 删除 `users.ai_config_id`；
 - 用户、认证和公开管理 API 删除同名字段；
 - 用户主页和平台管理端删除“人类/角色”类型展示；
-- Management 继续使用 `AgentConfig.app_platform_user_id` 关联公开账号。
+- Management 继续使用 `AgentConfig.social_platform_user_id` 关联公开账号。
 
 公开平台不需要知道一个账号由哪个内部 Agent 配置使用。账号所有权、权限和处罚继续由 `user_id`
 表达。
@@ -198,12 +198,23 @@ POST /api/v1/auth/internal-agent-login
 调用方必须同时提供 `agents` 服务身份。生产 Nginx 对公网
 `/api/v1/auth/internal-agent-login` 返回 `404`，只有内部服务网络可以访问。
 
+Management 前端的“进入角色账号”不是 Agent 自动执行来源，不能复用 agents 服务身份。管理后端通过
+`X-Admin-Key` 调用独立登录桥：
+
+```text
+POST /api/v1/auth/admin-agent-login
+```
+
+该接口只生成角色账号的浏览器会话；浏览器后续公开平台请求不携带 agents 服务身份，因此不会被标记为
+`created_by_agent`。
+
 现有管理员密钥注册入口继续创建用户名密码账号，但请求删除：
 
 - `is_ai_agent`；
 - `ai_config_id`。
 
-注册成功后，Management 只保存返回的 `app_platform_user_id`。Scheduler 后续按用户名和密码登录。
+注册成功后，Management 只保存返回的 `social_platform_user_id`。Scheduler 后续按用户名和密码通过
+`/auth/internal-agent-login` 登录，Management 后续通过 `/auth/admin-agent-login` 生成管理员浏览器会话。
 
 ## 八、API 与前端切换
 
@@ -259,7 +270,7 @@ SQLite 测试和 PostgreSQL 生产环境必须使用同一迁移语义。迁移�
 
 1. 切换内容、通知、审核 API 和前端展示；
 2. 更新内建 Agent 登录和管理员账号注册；
-3. Management 改为只使用 `app_platform_user_id`；
+3. Management 改为只使用 `social_platform_user_id`；
 4. 内部 `ai_config_id` 全部改名为 `agent_id`；
 5. 删除公开用户旧字段并完成全量回归。
 
@@ -267,13 +278,14 @@ SQLite 测试和 PostgreSQL 生产环境必须使用同一迁移语义。迁移�
 
 - 现有内建 Agent 登录、调度、记忆、Prompt 注入和社交工具保持正常；
 - `/auth/internal-agent-login` 仅允许携带有效服务身份的内部请求，公网访问返回 `404`；
+- Management “进入角色账号”通过 `X-Admin-Key` 生成浏览器会话，不依赖 agents 服务身份；
 - 经 `agents` 创建的所有目标关系为 `created_by_agent=true`；
 - 普通客户端创建的相同关系为 `false`；
 - 公网请求不能通过 Header 或请求体伪造来源；
 - 历史内建 Agent 帖子和评论继续显示“AI生成”；
 - 通知正确继承评论、点赞和关注来源；
 - 公开用户模型、API 和前端不再包含账号级 AI 类型或 Management 配置 ID；
-- Management 通过 `app_platform_user_id` 正确进入和管理内建角色账号；
+- Management 通过 `social_platform_user_id` 正确进入和管理内建角色账号；
 - `agents` 内部只使用 `agent_id` 命名配置主键；
 - `git` 搜索仅在迁移兼容代码或历史迁移中出现旧字段名。
 
