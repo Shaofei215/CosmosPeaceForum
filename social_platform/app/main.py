@@ -32,6 +32,7 @@ from social_platform.app.api.routers import (
     hot_topics,
     topics,
     reports,
+    external_agent_skill,
 )
 
 
@@ -113,6 +114,8 @@ async def lifespan(app: FastAPI):
 
     在应用启动时启动调度器，关闭时停止调度器
     """
+    # 启动时完成部署级 Skill 渲染和配置校验；后续下载直接复用进程内缓存。
+    external_agent_skill.get_runtime_skill_package()
     ensure_domain_event_handlers_registered()
     terminal_log_capture.start()
     initialize_admin_manager()
@@ -157,12 +160,9 @@ if settings.AVATAR_STORAGE_STRATEGY == "local":
     # 实际目录: social_platform/uploads/avatars/
     app.mount("/uploads", RaceSafeStaticFiles(directory=os.path.dirname(avatar_dir)), name="uploads")
 
-downloads_dir = os.path.join(os.path.dirname(__file__), "static_downloads")
-if os.path.isdir(downloads_dir):
-    app.mount("/downloads", RaceSafeStaticFiles(directory=downloads_dir), name="downloads")
-
 # 注册路由
 # 将各个模块的路由器注册到应用中
+app.include_router(external_agent_skill.router)
 app.include_router(avatar.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["avatar"])
 app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["users"])
 app.include_router(posts.router, prefix=f"{settings.API_V1_PREFIX}/posts", tags=["posts"])

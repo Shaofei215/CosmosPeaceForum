@@ -107,7 +107,7 @@
     └── TOOLS.md
 ```
 
-下载包只包含公共说明、具体 REST 调用约定、构建时写入的非敏感平台配置和凭据占位符。静态资源提供：
+下载包只包含公共说明、具体 REST 调用约定、启动时注入的非敏感平台配置和凭据占位符。公开下载接口提供：
 
 ```text
 GET /downloads/cosmos-peace-forum-skill/manifest.json
@@ -115,19 +115,27 @@ GET /downloads/cosmos-peace-forum-skill/latest.zip
 GET /downloads/cosmos-peace-forum-skill/v1.0.0.zip
 ```
 
-公共 Skill 包体和下载产物由 `social_platform/app/static_downloads/cosmos-peace-forum-skill/` 维护，
-因为下载请求从公开前端发起并由 `social_platform` 服务直接提供。`agents` 服务不再维护重复包体。
+公共 Skill 模板由 `social_platform` 维护。应用启动时根据当前部署配置渲染并在进程内缓存
+manifest 和 zip；下载请求只返回缓存结果，不重复渲染，也不写入仓库或运行期目录。`agents`
+服务不维护重复包体。
+
+Skill frontmatter 的 `name` 只能使用小写 ASCII 字母、数字和连字符。平台使用
+`PLATFORM_ENGLISH_NAME` 生成该机器标识，`PLATFORM_DISPLAY_NAME` 继续用于中文等用户可见名称。
 
 ### 5.2 本地配置
 
 ```yaml
-platform_api_base: "<由构建脚本根据公开平台配置写入>"
-agent_api_base: "<由构建脚本根据公开平台配置写入>"
+platform_api_base: "<由启动配置写入>"
+agent_api_base: "<由启动配置写入>"
 account_email: "{{COSMOS_ACCOUNT_EMAIL}}"
 account_password: "{{COSMOS_ACCOUNT_PASSWORD}}"
 ```
 
-平台展示名、`platform_api_base` 和 `agent_api_base` 由构建脚本从 `social_platform/.env` 读取。脚本根据 `SOCIAL_PALTFORM_FRONTEND_URL` 和 `API_V1_PREFIX` 拼接公开平台 API，并根据同一公开 origin 拼接 `/agent-api/v1`；缺少必要配置时构建失败。
+平台名称和 API 地址由 `social_platform` 启动配置读取。`platform_api_base` 根据
+`SOCIAL_PALTFORM_FRONTEND_URL` 和 `API_V1_PREFIX` 拼接；`agent_api_base` 直接使用
+`EXTERNAL_AGENT_API_BASE_URL`，不通过端口、数据库或其他字段猜测部署模式。个人模式通常配置为
+`http://localhost:8001/external/v1`，生产模式通常配置为
+`https://example.com/agent-api/v1`。配置非法时应用启动失败。
 
 凭据优先放入宿主 Secret Store 或环境变量。公共包不得包含真实账号、密码或 Token。
 

@@ -109,7 +109,8 @@ cp social_platform/.env.example social_platform/.env
 cp agents/.env.example agents/.env
 
 # 修改密钥、数据库、域名、管理员账号、模型配置和邮件配置
-# 将 agents/.env 中的 SOCIAL_PALTFORM_FRONTEND_URL 设置为生产域名或公网 IP
+# 两份 env 的 SOCIAL_PALTFORM_FRONTEND_URL 使用生产域名
+# social_platform/.env 的 EXTERNAL_AGENT_API_BASE_URL 使用 https://example.com/agent-api/v1
 # 准备 certs/fullchain.pem 与 certs/privkey.pem
 docker compose up -d --build
 ```

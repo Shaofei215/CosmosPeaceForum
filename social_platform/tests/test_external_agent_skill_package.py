@@ -1,74 +1,143 @@
-"""外部 Agent 公共 Skill 下载包测试。"""
+"""外部 Agent 公共 Skill 运行时渲染与下载测试。"""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from io import BytesIO
+from types import SimpleNamespace
 from zipfile import ZipFile
 
-from social_platform.scripts import build_external_agent_skill
+import pytest
+
+from social_platform.app.api.routers import external_agent_skill as skill_router
+from social_platform.app.services.external_agent_skill import (
+    SKILL_VERSION,
+    SOURCE_FILES,
+    SkillPackage,
+    build_skill_package,
+    create_skill_build_config,
+    normalize_skill_name,
+)
 
 
-def _skill_dir() -> Path:
-    """返回测试使用的公共 Skill 静态下载目录。
+def _build_package(agent_api_base: str) -> SkillPackage:
+    """构建测试使用的自定义品牌 Skill 包。
+
+    Args:
+        agent_api_base: 当前测试场景的外部工具网关根地址。
 
     Returns:
-        Path: ``social_platform`` 侧 Skill 下载目录。
+        SkillPackage: 已完成渲染的内存包。
     """
 
-    return build_external_agent_skill._skill_dir()
+    config = create_skill_build_config(
+        platform_display_name="星海社区",
+        platform_english_name="Stellar Community",
+        public_frontend_url="https://community.example",
+        api_v1_prefix="/api/v1",
+        external_agent_api_base_url=agent_api_base,
+    )
+    return build_skill_package(config)
 
 
-def test_skill_manifest_matches_latest_zip_contents() -> None:
-    """manifest 文件列表必须与 latest.zip 内部文件完全一致。"""
+def test_skill_name_uses_normalized_platform_english_name() -> None:
+    """平台外文名必须生成满足 Skill 规范的 ASCII 机器标识。"""
 
-    skill_dir = _skill_dir()
-    config = build_external_agent_skill._skill_build_config()
-    manifest = json.loads((skill_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert normalize_skill_name("Cosmos Peace Forum") == "cosmos-peace-forum"
+    assert normalize_skill_name("Café Agents") == "cafe-agents"
 
-    with ZipFile(skill_dir / "latest.zip") as archive:
-        names = sorted(item.filename for item in archive.infolist() if not item.is_dir())
-        total_size = sum(item.file_size for item in archive.infolist())
-
-    assert total_size > 0
-    assert manifest["platform_display_name"] == config.platform_display_name
-    assert manifest["platform_api_base"] == config.platform_api_base
-    assert manifest["agent_api_base"] == config.agent_api_base
-    assert sorted(manifest["files"]) == names
-    assert set(names) == {
-        "SKILL.md",
-        "RULES.md",
-        "references/API.md",
-        "references/TOOLS.md",
-    }
+    with pytest.raises(ValueError, match="ASCII letters or digits"):
+        normalize_skill_name("宇宙和平论坛")
+    with pytest.raises(ValueError, match="64 characters"):
+        normalize_skill_name("a" * 65)
 
 
-def test_skill_zip_uses_social_platform_source_files() -> None:
-    """zip 内文件内容必须来自 social_platform 静态目录源文件和构建配置。"""
+@pytest.mark.parametrize(
+    "agent_api_base",
+    [
+        "http://localhost:8001/external/v1",
+        "https://community.example/agent-api/v1",
+    ],
+)
+def test_skill_package_renders_deployment_specific_urls(agent_api_base: str) -> None:
+    """个人与生产部署的真实工具网关地址必须分别写入整个 Skill 包。"""
 
-    skill_dir = _skill_dir()
-    config = build_external_agent_skill._skill_build_config()
+    package = _build_package(agent_api_base)
 
-    with ZipFile(skill_dir / "latest.zip") as archive:
-        for relative_path in build_external_agent_skill.SOURCE_FILES:
-            archived = archive.read(relative_path).decode("utf-8")
-            source = build_external_agent_skill._read_source_file(skill_dir, relative_path, config)
+    with ZipFile(BytesIO(package.archive)) as archive:
+        names = tuple(item.filename for item in archive.infolist() if not item.is_dir())
+        rendered_files = {
+            name: archive.read(name).decode("utf-8")
+            for name in names
+        }
 
-            assert archived == source
+    assert names == SOURCE_FILES
+    assert package.manifest["name"] == "stellar-community"
+    assert package.manifest["platform_display_name"] == "星海社区"
+    assert package.manifest["platform_english_name"] == "Stellar Community"
+    assert package.manifest["platform_api_base"] == "https://community.example/api/v1"
+    assert package.manifest["agent_api_base"] == agent_api_base
+    assert package.download_filename == f"stellar-community-skill-v{SKILL_VERSION}.zip"
+
+    assert rendered_files["SKILL.md"].startswith("---\nname: stellar-community\n")
+    assert 'platform_api_base: "https://community.example/api/v1"' in rendered_files["SKILL.md"]
+    assert f'agent_api_base: "{agent_api_base}"' in rendered_files["SKILL.md"]
+    assert 'platform_api_base: "https://community.example/api/v1"' in rendered_files[
+        "references/API.md"
+    ]
+    assert f'agent_api_base: "{agent_api_base}"' in rendered_files["references/API.md"]
+    assert all("星海社区" in text for text in rendered_files.values())
+    assert all("CosmosPeaceForum" not in text for text in rendered_files.values())
+    assert all("{{SKILL_NAME}}" not in text for text in rendered_files.values())
+    assert "{{COSMOS_ACCOUNT_EMAIL}}" in rendered_files["SKILL.md"]
+    assert "{{COSMOS_ACCOUNT_PASSWORD}}" in rendered_files["SKILL.md"]
 
 
-def test_skill_zip_uses_real_platform_config_without_credential_origin() -> None:
-    """Skill 配置必须使用构建配置，且不再暴露 allowed_credential_origin。"""
+@pytest.mark.parametrize(
+    "invalid_url,error",
+    [
+        ("localhost:8001/external/v1", "absolute HTTP"),
+        ("https://user:secret@example.com/external/v1", "credentials"),
+        ("https://example.com/external/v1?mode=agent", "query or fragment"),
+    ],
+)
+def test_skill_config_rejects_unsafe_public_urls(invalid_url: str, error: str) -> None:
+    """写入 Skill 的公开 URL 不得为相对地址或携带敏感及不稳定部分。"""
 
-    skill_dir = _skill_dir()
-    config = build_external_agent_skill._skill_build_config()
+    with pytest.raises(ValueError, match=error):
+        create_skill_build_config(
+            platform_display_name="星海社区",
+            platform_english_name="Stellar Community",
+            public_frontend_url="https://community.example",
+            api_v1_prefix="/api/v1",
+            external_agent_api_base_url=invalid_url,
+        )
 
-    with ZipFile(skill_dir / "latest.zip") as archive:
-        skill_md = archive.read("SKILL.md").decode("utf-8")
 
-    rendered_files = skill_md
-    assert config.platform_display_name in rendered_files
-    assert f'platform_api_base: "{config.platform_api_base}"' in rendered_files
-    assert f'agent_api_base: "{config.agent_api_base}"' in rendered_files
-    assert "https://example.com" not in rendered_files
-    assert "allowed_credential_origin" not in rendered_files
+def test_download_routes_return_cached_runtime_package(monkeypatch: pytest.MonkeyPatch) -> None:
+    """下载端点必须返回同一份部署级缓存以及平台化下载文件名。"""
+
+    settings = SimpleNamespace(
+        PLATFORM_DISPLAY_NAME="星海社区",
+        PLATFORM_ENGLISH_NAME="Stellar Community",
+        SOCIAL_PALTFORM_FRONTEND_URL="http://localhost:8000",
+        API_V1_PREFIX="/api/v1",
+        EXTERNAL_AGENT_API_BASE_URL="http://localhost:8001/external/v1",
+    )
+    monkeypatch.setattr(skill_router, "get_settings", lambda: settings)
+    skill_router.get_runtime_skill_package.cache_clear()
+
+    manifest_response = skill_router.download_skill_manifest()
+    latest_response = skill_router.download_latest_skill()
+    version_response = skill_router.download_versioned_skill()
+
+    assert manifest_response.status_code == 200
+    assert b'"agent_api_base":"http://localhost:8001/external/v1"' in manifest_response.body
+    assert latest_response.status_code == 200
+    assert latest_response.media_type == "application/zip"
+    assert latest_response.headers["content-disposition"] == (
+        f'attachment; filename="stellar-community-skill-v{SKILL_VERSION}.zip"'
+    )
+    assert latest_response.body == version_response.body
+    assert skill_router.get_runtime_skill_package.cache_info().misses == 1
+
+    skill_router.get_runtime_skill_package.cache_clear()

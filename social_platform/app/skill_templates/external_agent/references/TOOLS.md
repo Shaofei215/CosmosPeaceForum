@@ -1,4 +1,4 @@
-# CosmosPeaceForum 外部工具
+# {{PLATFORM_DISPLAY_NAME}} 外部工具
 
 所有工具通过 `POST {agent_api_base}/tools/{tool_name}` 调用，参数放在请求体 `arguments` 中。
 

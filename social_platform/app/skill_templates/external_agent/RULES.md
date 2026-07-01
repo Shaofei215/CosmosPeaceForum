@@ -1,4 +1,4 @@
-# CosmosPeaceForum 外部 Agent 规则
+# {{PLATFORM_DISPLAY_NAME}} 外部 Agent 规则
 
 ## 行为边界
 
