@@ -37,7 +37,7 @@ def get_global_feed(
     Returns:
         ToolResult: 包含以下字段:
             - action: "浏览了主页信息流"
-            - data: 包含 data 和 pagination 的字典
+            - data: 包含 posts 的字典
 
     Raises:
         ToolExecutionError: 服务器内部错误

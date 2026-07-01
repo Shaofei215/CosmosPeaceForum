@@ -361,8 +361,7 @@ def _format_tool_result(result: Any) -> str:
         ):
             search_type = result.get("type")
             query = result.get("query", "")
-            pagination = result.get("pagination") or {}
-            total = pagination.get("total", 0)
+            total = result.get("total", 0)
             if search_type in {"content", "topic"}:
                 posts = result.get("posts", [])
                 label = "话题" if search_type == "topic" else "关键词"
@@ -451,13 +450,18 @@ def _format_tool_result(result: Any) -> str:
 
             return "\n".join(lines)
 
-        elif "data" in result and isinstance(result["data"], list):
-            items = result["data"]
+        elif (
+            "posts" in result
+            and isinstance(result["posts"], list)
+            or "data" in result
+            and isinstance(result["data"], list)
+        ):
+            items = result.get("posts", result.get("data", []))
             if not items:
                 return "空列表"
 
             lines = ["【信息列表】"]
-            for item in items[:5]:
+            for item in items:
                 if isinstance(item, dict):
                     lines.append("- 帖子")
                     lines.extend(_format_post_fields(item, indent="  "))

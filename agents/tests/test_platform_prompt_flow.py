@@ -283,8 +283,8 @@ def test_scroll_continues_global_feed_without_args(monkeypatch):
     first = feed.get_global_feed.invoke({})
     second = feed.scroll.invoke({})
 
-    assert [post["id"] for post in first["data"]["data"]] == [1, 2, 3, 4, 5]
-    assert [post["id"] for post in second["data"]["data"]] == [6, 7, 8, 9, 10]
+    assert [post["id"] for post in first["data"]["posts"]] == [1, 2, 3, 4, 5]
+    assert [post["id"] for post in second["data"]["posts"]] == [6, 7, 8, 9, 10]
 
 
 def test_scroll_continues_post_comments(monkeypatch):
@@ -343,7 +343,7 @@ def test_scroll_continues_user_profile_posts(monkeypatch):
     next_posts = feed.scroll.invoke({})
 
     assert [post["id"] for post in profile["data"]["recent_posts"]] == [1, 2, 3, 4, 5]
-    assert [post["id"] for post in next_posts["data"]["data"]] == [6, 7, 8, 9, 10]
+    assert [post["id"] for post in next_posts["data"]["posts"]] == [6, 7, 8, 9, 10]
 
 
 def test_notification_prompt_marks_comment_id_as_create_comment_parent_id():

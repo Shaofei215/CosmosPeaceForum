@@ -16,7 +16,6 @@ from agents.platform_tools import (
     PlatformToolContext,
     PlatformToolError,
     PlatformToolResult,
-    PresentationMode,
     execute_platform_tool,
 )
 from agents.platform_tools.registry import PlatformToolDefinition
@@ -118,7 +117,6 @@ def execute_tool(name: str, arguments: dict[str, Any], context: ExternalToolCont
         client=context.client,
         access_token=context.access_token,
         current_user=context.current_user,
-        mode=PresentationMode.EXTERNAL,
         cursor=cursor,
     )
     try:

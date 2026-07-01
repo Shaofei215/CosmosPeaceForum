@@ -16,7 +16,7 @@ from agents.platform_access import (
     PlatformNotFoundError,
     PlatformTimeoutError,
 )
-from agents.platform_tools import PlatformToolContext, PlatformToolError, PlatformToolResult, PresentationMode, execute_platform_tool
+from agents.platform_tools import PlatformToolContext, PlatformToolError, PlatformToolResult, execute_platform_tool
 
 
 def _get_api_base_url() -> str:
@@ -40,7 +40,6 @@ def _build_internal_context() -> PlatformToolContext:
         client=PlatformClient(base_url=_get_api_base_url(), admin_key=config.admin_key),
         access_token=token,
         current_user=current_user,
-        mode=PresentationMode.INTERNAL,
         cursor=_get_scroll_cursor(),
         relation_expander=get_relation_mapping_service(),
     )

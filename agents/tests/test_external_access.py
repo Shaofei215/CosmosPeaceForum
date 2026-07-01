@@ -11,6 +11,7 @@ from agents.agents_scheduler.langgraph.tools import feed, social
 from agents.external_access.cursor import CursorError, decode_cursor, encode_cursor
 from agents.external_access.schemas import ToolMeta
 from agents.external_access.tools import TOOLS, ExternalToolContext, ExternalToolError, execute_tool
+from agents.platform_tools import PlatformToolContext, execute_platform_tool
 
 
 class FakePlatformClient:
@@ -167,10 +168,39 @@ def test_execute_feed_returns_signed_cursor() -> None:
 
     result = execute_tool("get_global_feed", {}, context)
 
+    assert set(result.data) == {"posts"}
     assert result.scroll_cursor is not None
     payload = decode_cursor(result.scroll_cursor, "secret")
     assert payload["kind"] == "global_feed"
     assert "token" not in payload
+
+
+def test_external_feed_content_matches_internal_builder() -> None:
+    """外部适配器返回的数据必须与内部共享构建结果完全一致。"""
+
+    internal = execute_platform_tool(
+        "get_global_feed",
+        {},
+        PlatformToolContext(
+            client=FakePlatformClient(),
+            access_token="token",
+            current_user={"id": 1},
+        ),
+    )
+    external = execute_tool(
+        "get_global_feed",
+        {},
+        ExternalToolContext(
+            client=FakePlatformClient(),
+            access_token="token",
+            current_user={"id": 1},
+            cursor_secret="secret",
+        ),
+    )
+
+    assert external.action == internal.action
+    assert external.data == internal.data
+    assert "pagination" not in external.data
 
 
 def test_external_notifications_scroll_with_signed_cursor() -> None:
@@ -196,4 +226,6 @@ def test_external_notifications_scroll_with_signed_cursor() -> None:
         context,
     )
     assert second.data["notifications"][0]["id"] == 202
+    assert set(first.data) == {"notifications", "total", "unread_count"}
+    assert set(second.data) == {"notifications", "total", "unread_count"}
     assert second.scroll_cursor is None

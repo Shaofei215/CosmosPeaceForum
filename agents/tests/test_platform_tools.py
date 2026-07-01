@@ -14,7 +14,6 @@ from agents.agents_scheduler.langgraph.tools.support import shared_platform
 from agents.platform_tools import (
     PlatformToolContext,
     PlatformToolError,
-    PresentationMode,
     execute_platform_tool,
 )
 
@@ -109,33 +108,21 @@ class FakePlatformClient:
         raise AssertionError(f"unexpected endpoint: {endpoint}")
 
 
-def test_expand_post_formats_article_differently_by_presentation_mode() -> None:
-    """内部模式保留 Prompt 提示，外部模式返回原始 Markdown 正文。"""
+def test_expand_post_uses_shared_agent_content_format() -> None:
+    """内外部适配器共用内部 Agent 既有的文章内容格式。"""
 
     client = FakePlatformClient()
-    internal = execute_platform_tool(
+    result = execute_platform_tool(
         "expand_post",
         {"post_id": 1},
         PlatformToolContext(
             client=client,
             access_token="token",
             current_user={"id": 1},
-            mode=PresentationMode.INTERNAL,
-        ),
-    )
-    external = execute_platform_tool(
-        "expand_post",
-        {"post_id": 1},
-        PlatformToolContext(
-            client=client,
-            access_token="token",
-            current_user={"id": 1},
-            mode=PresentationMode.EXTERNAL,
         ),
     )
 
-    assert internal.data["post"]["content"].startswith("文章标题：长文")
-    assert external.data["post"]["content"] == "# 标题\n正文内容"
+    assert result.data["post"]["content"].startswith("文章标题：长文")
 
 
 def test_feed_uses_explicit_token_and_returns_cursor() -> None:
@@ -149,7 +136,6 @@ def test_feed_uses_explicit_token_and_returns_cursor() -> None:
             client=client,
             access_token="token",
             current_user={"id": 1},
-            mode=PresentationMode.EXTERNAL,
         ),
     )
 
@@ -160,6 +146,7 @@ def test_feed_uses_explicit_token_and_returns_cursor() -> None:
         "feed_type": "recommended",
         "seed": "abc",
     }
+    assert set(result.data) == {"posts"}
     assert result.cursor == {"kind": "global_feed", "feed_type": "recommended", "seed": "abc", "offset": 1}
 
 
@@ -171,7 +158,6 @@ def test_notifications_and_scroll_share_cursor() -> None:
         client=client,
         access_token="token",
         current_user={"id": 1},
-        mode=PresentationMode.INTERNAL,
     )
 
     first = execute_platform_tool(
@@ -186,13 +172,14 @@ def test_notifications_and_scroll_share_cursor() -> None:
             client=client,
             access_token="token",
             current_user={"id": 1},
-            mode=PresentationMode.INTERNAL,
             cursor=first.cursor,
         ),
     )
 
     assert first.cursor == {"kind": "notifications", "offset": 1}
     assert second.data["notifications"][0]["id"] == 102
+    assert set(first.data) == {"notifications", "total", "unread_count"}
+    assert set(second.data) == {"notifications", "total", "unread_count"}
     assert second.cursor is None
     assert client.calls[-1]["params"] == {"skip": 1, "limit": 1}
 
@@ -210,7 +197,6 @@ def test_internal_adapter_keeps_notification_scroll_state(monkeypatch: pytest.Mo
             client=client,
             access_token="token",
             current_user={"id": 1},
-            mode=PresentationMode.INTERNAL,
             cursor=stored_cursor,
         )
 

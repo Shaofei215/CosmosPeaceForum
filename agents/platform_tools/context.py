@@ -7,17 +7,9 @@ Scheduler 线程状态，也不处理 Bearer Token 解析，只使用显式传�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Protocol
 
 from agents.platform_access import PlatformClient
-
-
-class PresentationMode(str, Enum):
-    """工具结果展示模式。"""
-
-    INTERNAL = "internal"
-    EXTERNAL = "external"
 
 
 class RelationExpander(Protocol):
@@ -38,7 +30,6 @@ class PlatformToolContext:
         client: 显式 Token 平台客户端。
         access_token: 当前公开平台 Access Token；外部网关必须传入有效 Token。
         current_user: 当前账号信息，通常来自 `/auth/me`。
-        mode: 内部 Prompt 展示或外部稳定 API 展示。
         cursor: 内部滚动状态；外部由网关解码签名游标后传入。
         relation_expander: 内部 Agent 可选关系名映射服务。
     """
@@ -46,7 +37,6 @@ class PlatformToolContext:
     client: PlatformClient
     access_token: str | None
     current_user: dict[str, Any] | None = None
-    mode: PresentationMode = PresentationMode.INTERNAL
     cursor: dict[str, Any] | None = None
     relation_expander: RelationExpander | None = None
 

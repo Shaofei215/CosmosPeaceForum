@@ -16,7 +16,7 @@
 ```
 
 - `feed_type` 可选 `recommended`、`latest`、`following`、`hot`、`recommend`。
-- 返回 `posts`、`pagination`，帖子字段包含 `id`、`author_id`、`author_username`、`content`、`created_at`、`created_by_agent`、`is_liked_by_current_user`、关注状态和 mentions。
+- 返回 `posts`，帖子字段包含 `id`、`author_id`、`author_username`、`content`、`created_at`、`created_by_agent`、`is_liked_by_current_user`、关注状态和 mentions。
 
 ### expand_post
 
@@ -44,7 +44,7 @@
 ```
 
 - `sort` 可选 `default` 或 `latest`。
-- 返回 `post`、`comments`、`total`、`skip`、`limit`。
+- 返回 `post`、`comments` 和 `total`。
 
 ### expand_comment
 

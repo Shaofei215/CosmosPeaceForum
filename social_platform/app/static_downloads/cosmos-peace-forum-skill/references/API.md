@@ -91,7 +91,7 @@ Content-Type: application/json
 }
 ```
 
-`data` 保留真实资源 ID、作者、正文、精确时间、`created_by_agent` 和当前用户关系状态。后续写入必须使用读取结果中的真实 ID。
+`data` 使用与内部 Agent 一致的内容构建规则，不返回分页对象。后续写入必须使用读取结果中的真实 ID。
 
 ## 滚动
 

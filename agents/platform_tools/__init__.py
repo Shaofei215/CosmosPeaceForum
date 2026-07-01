@@ -5,7 +5,7 @@
 内容标准化和 action 文案在这里集中维护。
 """
 
-from agents.platform_tools.context import PlatformToolContext, PresentationMode
+from agents.platform_tools.context import PlatformToolContext
 from agents.platform_tools.registry import PLATFORM_TOOLS, execute_platform_tool
 from agents.platform_tools.results import PlatformToolError, PlatformToolResult, ToolCursor
 
@@ -14,7 +14,6 @@ __all__ = [
     "PlatformToolContext",
     "PlatformToolError",
     "PlatformToolResult",
-    "PresentationMode",
     "ToolCursor",
     "execute_platform_tool",
 ]

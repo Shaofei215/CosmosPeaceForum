@@ -106,8 +106,8 @@ def search_platform(
 
     Returns:
         ToolResult:
-            - content 和 topic 搜索返回 posts 和 pagination。
-            - user 搜索返回 users 和 pagination。
+            - content 和 topic 搜索返回 posts 和 total。
+            - user 搜索返回 users 和 total。
 
     Raises:
         ValidationError: 参数不合法

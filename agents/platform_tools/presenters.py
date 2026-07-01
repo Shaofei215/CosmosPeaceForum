@@ -1,7 +1,7 @@
 """共享平台工具内容构建。
 
-本模块把公开平台响应转换为 Agent 工具结果。内部模式保留适合 Prompt 的相对时间、
-关系名扩展和文章提示；外部模式保留精确时间、原始正文和稳定资源字段。
+本模块把公开平台响应转换为内外部 Agent 共用的工具结果。关系名扩展仅在内部
+Scheduler 提供映射服务时生效，其余内容构建保持一致。
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 from typing import Any
 
-from agents.platform_tools.context import PlatformToolContext, PresentationMode
+from agents.platform_tools.context import PlatformToolContext
 
 
 def truncate_text(text: str | None, max_len: int = 100) -> str:
@@ -102,7 +102,7 @@ def format_display_time(value: Any) -> str:
 def _expand_username(ctx: PlatformToolContext, username: str, user_id: int | None) -> str:
     """按内部关系映射扩展用户名；外部模式保持原值。"""
 
-    if ctx.mode != PresentationMode.INTERNAL or not ctx.relation_expander:
+    if not ctx.relation_expander:
         return username
     try:
         return ctx.relation_expander.expand_author(username, user_id, ctx.current_user_id)
@@ -113,7 +113,7 @@ def _expand_username(ctx: PlatformToolContext, username: str, user_id: int | Non
 def _expand_content(ctx: PlatformToolContext, content: str) -> str:
     """按内部关系映射扩展正文；外部模式保持原值。"""
 
-    if ctx.mode != PresentationMode.INTERNAL or not ctx.relation_expander:
+    if not ctx.relation_expander:
         return content
     try:
         return ctx.relation_expander.expand_content_mentions(content, ctx.current_user_id)
@@ -128,7 +128,7 @@ def _format_content_mentions_for_llm(
 ) -> str:
     """把正文中的提及格式化为内部 Agent 可直接引用的用户 ID 形式。"""
 
-    if ctx.mode != PresentationMode.INTERNAL or not content:
+    if not content:
         return content
     mention_by_name = {
         str(item.get("username")): item.get("user_id")
@@ -170,10 +170,7 @@ def _format_article_content(
     *,
     full: bool,
 ) -> str:
-    """按展示模式格式化文章内容。"""
-
-    if ctx.mode == PresentationMode.EXTERNAL:
-        return markdown_content
+    """按内部 Agent 既有格式构建文章内容。"""
     safe_title = (title or "Untitled").strip()
     if full:
         return f"文章标题：{safe_title}\n正文（Markdown）：\n{markdown_content}"
@@ -191,10 +188,8 @@ def _embedded_follow_status(
     user_id: int | None,
     prefix: str,
 ) -> str | None:
-    """从后端嵌入字段生成内部 Prompt 使用的关注状态文本。"""
+    """从后端嵌入字段生成 Agent 使用的关注状态文本。"""
 
-    if ctx.mode != PresentationMode.INTERNAL:
-        return None
     if not ctx.current_user_id or not user_id or ctx.current_user_id == user_id:
         return ""
     following_key = f"{prefix}is_following"
@@ -208,9 +203,9 @@ def _embedded_follow_status(
 
 
 def get_follow_status_text(ctx: PlatformToolContext, user_id: int | None) -> str:
-    """获取内部 Prompt 使用的关注状态文本。"""
+    """获取 Agent 使用的关注状态文本。"""
 
-    if ctx.mode != PresentationMode.INTERNAL or not ctx.current_user_id or not user_id:
+    if not ctx.current_user_id or not user_id:
         return ""
     if ctx.current_user_id == user_id:
         return ""
@@ -242,10 +237,9 @@ def normalize_user(data: dict[str, Any] | None, ctx: PlatformToolContext) -> dic
         "is_mutual": data.get("is_mutual"),
         "created_by_agent": data.get("created_by_agent", False),
     }
-    if ctx.mode == PresentationMode.INTERNAL:
-        result["follow_status"] = (
-            "self" if ctx.current_user_id == data.get("id") else get_follow_status_text(ctx, data.get("id"))
-        )
+    result["follow_status"] = (
+        "self" if ctx.current_user_id == data.get("id") else get_follow_status_text(ctx, data.get("id"))
+    )
     return result
 
 
@@ -283,11 +277,10 @@ def normalize_post(
         "author_id": author_id,
         "author_username": _expand_username(ctx, raw_username, author_id),
         "author_bio": data.get("author_bio") or author.get("bio", ""),
-        "author": normalize_user(author, ctx) if author and ctx.mode == PresentationMode.EXTERNAL else None,
         "title": data.get("title"),
         "type": post_type,
         "content": content,
-        "created_at": format_display_time(created_at) if ctx.mode == PresentationMode.INTERNAL else created_at,
+        "created_at": format_display_time(created_at),
         "created_by_agent": data.get("created_by_agent", False),
         "like_count": data.get("like_count", 0),
         "comment_count": data.get("comment_count", 0),
@@ -323,8 +316,7 @@ def normalize_post(
                 for option in poll.get("options", [])
             ],
         }
-        if ctx.mode == PresentationMode.INTERNAL:
-            result["poll"]["instruction"] = "这是帖子投票；如要选择选项，请调用 vote_post_poll(post_id, option_id)。"
+        result["poll"]["instruction"] = "这是帖子投票；如要选择选项，请调用 vote_post_poll(post_id, option_id)。"
     if data.get("repost_origin"):
         result["repost_origin"] = normalize_post(data.get("repost_origin"), ctx, include_article_full=False)
     return result
@@ -352,9 +344,8 @@ def normalize_comment(data: dict[str, Any] | None, ctx: PlatformToolContext) -> 
         "post_id": data.get("post_id"),
         "author_id": author_id,
         "author_username": _expand_username(ctx, owner.get("username", ""), author_id),
-        "author": normalize_user(owner, ctx) if owner and ctx.mode == PresentationMode.EXTERNAL else None,
         "content": _format_content_mentions_for_llm(ctx, data.get("content", ""), mention_users),
-        "created_at": format_display_time(created_at) if ctx.mode == PresentationMode.INTERNAL else created_at,
+        "created_at": format_display_time(created_at),
         "created_by_agent": data.get("created_by_agent", False),
         "parent_id": data.get("parent_id"),
         "root_comment_id": data.get("root_comment_id"),
@@ -386,7 +377,6 @@ def normalize_notification(data: dict[str, Any], ctx: PlatformToolContext) -> di
         "type": data.get("type"),
         "sender_id": sender_id,
         "sender_username": _expand_username(ctx, sender.get("username", ""), sender_id),
-        "sender": normalize_user(sender, ctx) if sender and ctx.mode == PresentationMode.EXTERNAL else None,
         "sender_bio": sender.get("bio", ""),
         "sender_follow_status": get_follow_status_text(ctx, sender_id),
         "resource_type": data.get("resource_type"),
@@ -394,10 +384,10 @@ def normalize_notification(data: dict[str, Any], ctx: PlatformToolContext) -> di
         "post_id": data.get("post_id"),
         "comment_id": data.get("comment_id"),
         "source_post_type": data.get("source_post_type"),
-        "source_content": _expand_content(ctx, raw_content) if ctx.mode == PresentationMode.INTERNAL else raw_content,
+        "source_content": _expand_content(ctx, raw_content),
         "is_read": data.get("is_read", False),
         "created_by_agent": data.get("created_by_agent", False),
-        "created_at": format_display_time(created_at) if ctx.mode == PresentationMode.INTERNAL else created_at,
+        "created_at": format_display_time(created_at),
     }
 
 

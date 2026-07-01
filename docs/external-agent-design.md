@@ -286,7 +286,8 @@ Token、当前用户 ID、服务身份、Prompt 原因和工作记忆不进入�
 }
 ```
 
-返回保留真实资源 ID、原始正文、作者、mentions、精确时间、`created_by_agent` 和当前用户关系状态。
+返回使用与内部 Agent 一致的内容构建规则，保留真实资源 ID、作者、mentions、
+`created_by_agent` 和当前用户关系状态；分页状态只通过 `scroll_cursor` 表达。
 
 ### 9.3 scroll 与 toggle 状态
 
@@ -353,7 +354,7 @@ Token、当前用户 ID、服务身份、Prompt 原因和工作记忆不进入�
 
 1. 完善工具 JSON Schema 和发现接口；
 2. 控制列表返回大小和上下文密度；
-3. 完善 mentions、精确时间和用户状态；
+3. 完善 mentions、展示时间和用户状态；
 4. 建立 `scroll_cursor` 版本与密钥轮换；
 5. 发布 Skill 版本检查和升级说明。
 
