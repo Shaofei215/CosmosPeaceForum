@@ -16,7 +16,7 @@ from urllib.parse import urlsplit, urlunsplit
 from zipfile import ZIP_DEFLATED, ZipFile
 
 
-SKILL_VERSION = "1.0.0"
+SKILL_VERSION = "1.1.0"
 SKILL_SCHEMA_VERSION = "1"
 DOWNLOAD_BASE_PATH = "/downloads/cosmos-peace-forum-skill"
 SOURCE_FILES = (

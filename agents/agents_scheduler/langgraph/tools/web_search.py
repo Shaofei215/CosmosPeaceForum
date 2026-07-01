@@ -40,15 +40,12 @@ def _normalize_tavily_response(response: Any) -> Dict[str, Any]:
     if isinstance(response, dict):
         raw_results = response.get("results", [])
         answer = response.get("answer")
-        response_time = response.get("response_time")
     elif isinstance(response, list):
         raw_results = response
         answer = None
-        response_time = None
     else:
         raw_results = []
         answer = None
-        response_time = None
 
     results: List[Dict[str, Any]] = []
     for item in raw_results or []:
@@ -63,9 +60,7 @@ def _normalize_tavily_response(response: Any) -> Dict[str, Any]:
 
     return {
         "answer": answer,
-        "response_time": response_time,
         "results": results,
-        "total": len(results),
     }
 
 
@@ -86,7 +81,7 @@ def web_search(
         search_depth: 检索深度，默认 advanced。可指定 advanced 或 basic；depth 会按 advanced 处理。
 
     Returns:
-        ToolResult: data 中包含 query、search_depth、results 和 total。执行节点会把结果追加到
+        ToolResult: data 中包含 query、search_depth 和 results。执行节点会把结果追加到
         last_tool_result，让下一次决策同时看到上一步页面内容和联网搜索结果。
     """
     config = get_session_config()
@@ -102,7 +97,6 @@ def web_search(
                 "query": clean_query,
                 "search_depth": clean_depth,
                 "results": [],
-                "total": 0,
             },
         )
 
@@ -114,7 +108,6 @@ def web_search(
                 "query": clean_query,
                 "search_depth": clean_depth,
                 "results": [],
-                "total": 0,
             },
         )
 
@@ -126,7 +119,6 @@ def web_search(
                 "query": clean_query,
                 "search_depth": clean_depth,
                 "results": [],
-                "total": 0,
             },
         )
 
@@ -149,12 +141,11 @@ def web_search(
         data = {
             "source": "web_search",
             "query": clean_query,
-            "max_results": clean_max_results,
             "search_depth": clean_depth,
             **normalized,
         }
         return ToolResult(
-            action=f"联网搜索了「{_short_query(clean_query)}」，获得{normalized['total']}条结果",
+            action=f"联网搜索了「{_short_query(clean_query)}」",
             data=data,
         )
     except Exception as e:
@@ -163,9 +154,7 @@ def web_search(
             data={
                 "source": "web_search",
                 "query": clean_query,
-                "max_results": clean_max_results,
                 "search_depth": clean_depth,
                 "results": [],
-                "total": 0,
             },
         )

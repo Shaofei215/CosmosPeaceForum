@@ -111,7 +111,7 @@ def view_post_comments(
     Returns:
         ToolResult: 包含以下字段:
             - action: "查看了 @{author} 的帖子评论"
-            - data: 包含 post, comments, total 的字典
+            - data: 包含 post 和 comments 的字典
 
     Raises:
         NotFoundError: 帖子不存在
@@ -153,7 +153,7 @@ def expand_comment(
     Returns:
         ToolResult: 包含以下字段:
             - action: "展开了 @{comment_author} 的评论：{comment_content}（来自 @{post_author} 的帖子：{post_content}）"
-            - data: 包含 post, comment, replies, total 的字典
+            - data: 包含 post、comment 和 replies 的字典
 
     Raises:
         NotFoundError: 评论不存在

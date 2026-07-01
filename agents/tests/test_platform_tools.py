@@ -61,6 +61,8 @@ class FakePlatformClient:
                 "comment_count": 1,
                 "is_liked": False,
             }
+        if endpoint == "/posts/1/comments":
+            return {"items": [], "total": 12, "skip": 0, "limit": 5}
         if endpoint == "/users/10/follow-status":
             return {"is_following": False, "is_mutual": False, "is_followed_by": False}
         if endpoint == "/feeds/feed/all":
@@ -93,6 +95,19 @@ class FakePlatformClient:
                 "skip": skip,
                 "limit": (params or {}).get("limit", 1),
             }
+        if endpoint == "/search":
+            return {
+                "data": [],
+                "pagination": {
+                    "page": 1,
+                    "page_size": 5,
+                    "total": 12,
+                    "total_pages": 3,
+                    "has_next": True,
+                },
+            }
+        if endpoint == "/hot-topics":
+            return [{"rank": 1, "title": "热榜", "summary": "摘要", "search_query": "关键词"}]
         if endpoint == "/users/11/follow-status":
             return {"is_following": True, "is_mutual": False, "is_followed_by": False}
         if endpoint == "/posts/":
@@ -105,6 +120,8 @@ class FakePlatformClient:
                 "content": json_data["content"],
                 "created_at": "2026-06-30T00:00:00+08:00",
             }
+        if endpoint == "/auth/logout":
+            return {"message": "登出成功"}
         raise AssertionError(f"unexpected endpoint: {endpoint}")
 
 
@@ -178,8 +195,8 @@ def test_notifications_and_scroll_share_cursor() -> None:
 
     assert first.cursor == {"kind": "notifications", "offset": 1}
     assert second.data["notifications"][0]["id"] == 102
-    assert set(first.data) == {"notifications", "total", "unread_count"}
-    assert set(second.data) == {"notifications", "total", "unread_count"}
+    assert set(first.data) == {"notifications"}
+    assert set(second.data) == {"notifications"}
     assert second.cursor is None
     assert client.calls[-1]["params"] == {"skip": 1, "limit": 1}
 
@@ -229,3 +246,44 @@ def test_create_post_rejects_poll_on_article_before_platform_request() -> None:
         )
 
     assert client.calls == []
+
+
+def test_logout_revokes_external_platform_session() -> None:
+    """共享登出处理器必须撤销外部 Agent 当前使用的公开平台 Session。"""
+
+    client = FakePlatformClient()
+
+    result = execute_platform_tool(
+        "logout",
+        {},
+        PlatformToolContext(client=client, access_token="token", current_user={"id": 1}),
+    )
+
+    assert result.data == {}
+    assert client.calls[-1]["method"] == "POST"
+    assert client.calls[-1]["endpoint"] == "/auth/logout"
+
+
+def test_list_tools_return_entities_without_pagination_or_totals() -> None:
+    """各列表工具应在构造结果时明确丢弃上游分页与总数字段。"""
+
+    client = FakePlatformClient()
+    context = PlatformToolContext(client=client, access_token="token", current_user={"id": 1})
+
+    comments = execute_platform_tool(
+        "view_post_comments",
+        {"post_id": 1},
+        context,
+    )
+    search = execute_platform_tool(
+        "search_platform",
+        {"type": "content", "query": "关键词"},
+        context,
+    )
+    notifications = execute_platform_tool("view_notifications", {}, context)
+    hot_topics = execute_platform_tool("view_full_hot_topics", {}, context)
+
+    assert set(comments.data) == {"post", "comments"}
+    assert set(search.data) == {"type", "query", "posts"}
+    assert set(notifications.data) == {"notifications"}
+    assert set(hot_topics.data) == {"hot_topics"}

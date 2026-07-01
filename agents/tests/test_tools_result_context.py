@@ -9,7 +9,7 @@ from agents.agents_scheduler.langgraph.tools.support.result_context import (
 class TestToolResultContext:
     def test_merge_recall_memory_result_wraps_previous_result(self):
         previous = {"post": {"id": 1, "content": "hello"}}
-        recall = {"query": "hello", "memories": [{"content": "old hello"}], "total": 1}
+        recall = {"query": "hello", "memories": [{"content": "old hello"}]}
 
         result = merge_recall_memory_result(previous, recall)
 
@@ -21,10 +21,10 @@ class TestToolResultContext:
     def test_merge_recall_memory_result_keeps_existing_searches(self):
         previous = {
             "current_view": {"post": {"id": 1}},
-            "explicit_recalls": [{"query": "first", "memories": [], "total": 0}],
-            "web_searches": [{"query": "news", "results": [], "total": 0}],
+            "explicit_recalls": [{"query": "first", "memories": []}],
+            "web_searches": [{"query": "news", "results": []}],
         }
-        recall = {"query": "second", "memories": [], "total": 0}
+        recall = {"query": "second", "memories": []}
 
         result = merge_recall_memory_result(previous, recall)
 
@@ -35,9 +35,9 @@ class TestToolResultContext:
     def test_merge_recall_memory_result_accepts_legacy_context_shape(self):
         previous = {
             "current_view": {"post": {"id": 1}},
-            "explicit_recalls": [{"query": "first", "memories": [], "total": 0}],
+            "explicit_recalls": [{"query": "first", "memories": []}],
         }
-        recall = {"query": "second", "memories": [], "total": 0}
+        recall = {"query": "second", "memories": []}
 
         result = merge_recall_memory_result(previous, recall)
 
@@ -47,7 +47,7 @@ class TestToolResultContext:
 
     def test_merge_web_search_result_wraps_previous_result(self):
         previous = {"post": {"id": 1, "content": "hello"}}
-        search = {"query": "hello", "results": [{"title": "Hello"}], "total": 1}
+        search = {"query": "hello", "results": [{"title": "Hello"}]}
 
         result = merge_web_search_result(previous, search)
 
@@ -59,10 +59,10 @@ class TestToolResultContext:
     def test_merge_web_search_result_keeps_existing_recalls(self):
         previous = {
             "current_view": {"post": {"id": 1}},
-            "explicit_recalls": [{"query": "first", "memories": [], "total": 0}],
+            "explicit_recalls": [{"query": "first", "memories": []}],
             "web_searches": [],
         }
-        search = {"query": "second", "results": [], "total": 0}
+        search = {"query": "second", "results": []}
 
         result = merge_web_search_result(previous, search)
 
@@ -77,7 +77,6 @@ class TestToolResultContext:
                 {
                     "query": "hello",
                     "memories": [{"content": "old hello", "time_description": "刚刚"}],
-                    "total": 1,
                 }
             ],
             "web_searches": [
@@ -85,7 +84,6 @@ class TestToolResultContext:
                     "query": "LangChain Tavily",
                     "search_depth": "advanced",
                     "results": [{"title": "Tavily", "url": "https://example.com", "content": "Search docs"}],
-                    "total": 1,
                 }
             ],
         }
@@ -100,3 +98,10 @@ class TestToolResultContext:
         assert "old hello" in formatted
         assert "联网搜索" in formatted
         assert "https://example.com" in formatted
+
+    def test_merge_removes_stale_unread_count_from_previous_view(self):
+        previous = {"post": {"id": 1}, "unread_count": 5}
+
+        result = merge_recall_memory_result(previous, {"query": "hello", "memories": []})
+
+        assert result["current_view"] == {"post": {"id": 1}}

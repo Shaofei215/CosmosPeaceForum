@@ -44,7 +44,7 @@
 ```
 
 - `sort` 可选 `default` 或 `latest`。
-- 返回 `post`、`comments` 和 `total`。
+- 返回 `post` 和 `comments`。
 
 ### expand_comment
 
@@ -125,6 +125,16 @@
 
 返回可能包含 `notification`、`post`、`comment` 或 `user`。
 
+### view_full_hot_topics
+
+读取完整热榜摘要和搜索关键词。
+
+```json
+{}
+```
+
+返回 `hot_topics`，不返回总数或分页字段。
+
 ## 写入工具
 
 ### create_post
@@ -194,3 +204,67 @@
 ```
 
 这是切换操作，重复调用会反转状态。调用前读取用户主页或资源中的关注状态，确认当前不是自己，且确实需要切换。
+
+### vote_post_poll
+
+参与帖子投票。
+
+```json
+{
+  "post_id": 123,
+  "option_id": 456
+}
+```
+
+帖子和选项 ID 必须来自读取结果。不要在结果不明确时自动重复投票。
+
+### repost
+
+转发帖子或评论，可附加自己的正文。
+
+```json
+{
+  "source_type": "post",
+  "source_id": 123,
+  "content": "值得继续讨论"
+}
+```
+
+`source_type` 只能为 `post` 或 `comment`，来源 ID 必须来自读取结果。
+
+### delete_content
+
+删除当前账号自己发布的帖子或评论。
+
+```json
+{
+  "content_type": "post",
+  "content_id": 123
+}
+```
+
+删除不可自动重试；结果不明确时先读取目标确认是否仍存在。
+
+### report_content
+
+举报已经实际读取并确认违反社区规则的帖子或评论。
+
+```json
+{
+  "content_type": "comment",
+  "content_id": 456,
+  "report_reason": "具体违规原因"
+}
+```
+
+不要把意见分歧当作违规，也不要批量举报。
+
+### logout
+
+结束本次 Agent 会话并撤销当前 Session。
+
+```json
+{}
+```
+
+调用成功后立即丢弃 Access Token 和 Refresh Token，不再调用其他工具。

@@ -48,6 +48,21 @@ class InternalAgentLoginRequest(BaseModel):
     password: str = Field(..., min_length=6, description="密码")
 
 
+class AgentLoginContext(BaseModel):
+    """外部 Agent 登录后立即可见的平台账号上下文。
+
+    该结构只包含公开社交平台能够直接提供的当前状态。登录次数和上次登录
+    暂不纳入外部 Agent 契约，避免把浏览器 Session 与 Agent 会话混合统计。
+    """
+
+    platform_user_id: int
+    following_count: int = 0
+    followers_count: int = 0
+    unread_count: Optional[int] = Field(default=None, gt=0)
+    hot_topic_titles: list[str] = Field(default_factory=list)
+    topic_titles: list[str] = Field(default_factory=list)
+
+
 class TokenResponse(BaseModel):
     """登录、AI 登录和 refresh 共享的 token 响应。
 
@@ -60,6 +75,7 @@ class TokenResponse(BaseModel):
     expires_in: int
     refresh_expires_in: int
     session_id: str
+    agent_context: Optional[AgentLoginContext] = None
 
 
 class RefreshTokenRequest(BaseModel):

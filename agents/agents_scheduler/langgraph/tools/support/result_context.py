@@ -4,6 +4,16 @@
 from typing import Any, Callable, Dict
 
 
+def _without_unread_reminder(value: Any) -> Any:
+    """从被保留的旧页面视野中移除已经过时的未读提醒。"""
+
+    if not isinstance(value, dict) or "unread_count" not in value:
+        return value
+    result = dict(value)
+    result.pop("unread_count", None)
+    return result
+
+
 def is_merged_tool_context_result(result: Any) -> bool:
     """判断 last_tool_result 是否为“页面内容 + 主动查询结果”的合并结构。"""
     return (
@@ -16,11 +26,11 @@ def is_merged_tool_context_result(result: Any) -> bool:
 def _split_previous_result(previous_result: Any) -> tuple[Any, list, list]:
     if is_merged_tool_context_result(previous_result):
         return (
-            previous_result.get("current_view"),
+            _without_unread_reminder(previous_result.get("current_view")),
             list(previous_result.get("explicit_recalls") or []),
             list(previous_result.get("web_searches") or []),
         )
-    return previous_result, [], []
+    return _without_unread_reminder(previous_result), [], []
 
 
 def merge_recall_memory_result(
@@ -75,8 +85,7 @@ def format_merged_tool_context_result(
     for recall in explicit_recalls:
         query = recall.get("query", "")
         memories = recall.get("memories", [])
-        total = recall.get("total", len(memories))
-        lines.append(f"\n【主动回想】查询：{query}，共{total}条")
+        lines.append(f"\n【主动回想】查询：{query}")
         if not memories:
             lines.append("没有回想起相关记忆")
             continue
@@ -88,9 +97,8 @@ def format_merged_tool_context_result(
     for search in web_searches:
         query = search.get("query", "")
         results = search.get("results", [])
-        total = search.get("total", len(results))
         depth = search.get("search_depth", "advanced")
-        lines.append(f"\n【联网搜索】查询：{query}，深度：{depth}，共{total}条")
+        lines.append(f"\n【联网搜索】查询：{query}，深度：{depth}")
         answer = search.get("answer")
         if answer:
             lines.append(f"概览：{answer}")

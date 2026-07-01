@@ -7,6 +7,7 @@ from agents.agents_scheduler.langgraph.nodes import (
     TOOLS_WITH_RETURN_VALUE,
     TOOL_NO_RETURN_VALUE,
     _get_location_after_tool,
+    _attach_current_unread_count,
     parse_tool_calls,
     _normalize_tool_calls_for_batch,
     start_node,
@@ -18,6 +19,25 @@ from agents.agents_scheduler.langgraph.nodes import (
     end_node,
 )
 from agents.agents_scheduler.langgraph.state import ExitReason
+
+
+def test_attach_current_unread_count_only_returns_positive_values() -> None:
+    """内部工具结果只在确有未读消息时增加提醒字段。"""
+
+    with patch(
+        "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
+        return_value={"unread_count": 3},
+    ):
+        assert _attach_current_unread_count({"posts": []}) == {
+            "posts": [],
+            "unread_count": 3,
+        }
+
+    with patch(
+        "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
+        return_value={"unread_count": 0},
+    ):
+        assert _attach_current_unread_count({"posts": [], "unread_count": 9}) == {"posts": []}
 
 
 class TestRecallMemoryNode:

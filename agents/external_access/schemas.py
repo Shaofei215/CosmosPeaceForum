@@ -52,6 +52,7 @@ class ToolErrorResponse(BaseModel):
     error_code: str
     message: str
     tool: str | None = None
+    data: dict[str, Any] | None = None
     meta: ToolMeta
 
 

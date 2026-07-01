@@ -5,13 +5,27 @@
 
 from __future__ import annotations
 
-import pytest
+import json
+import importlib
+from types import SimpleNamespace
 
-from agents.agents_scheduler.langgraph.tools import feed, social
+import pytest
+from fastapi import Request
+from fastapi.security import HTTPAuthorizationCredentials
+
+from agents.agents_scheduler.langgraph.tools import feed, hot_topic, social
 from agents.external_access.cursor import CursorError, decode_cursor, encode_cursor
-from agents.external_access.schemas import ToolMeta
-from agents.external_access.tools import TOOLS, ExternalToolContext, ExternalToolError, execute_tool
+from agents.external_access.schemas import ToolExecutionRequest, ToolMeta
+from agents.external_access.tools import (
+    TOOLS,
+    ExternalToolContext,
+    ExternalToolError,
+    ExternalToolResult,
+    execute_tool,
+)
 from agents.platform_tools import PlatformToolContext, execute_platform_tool
+
+external_router = importlib.import_module("agents.external_access.router")
 
 
 class FakePlatformClient:
@@ -50,6 +64,24 @@ class FakePlatformClient:
         raise AssertionError(f"unexpected endpoint: {endpoint}")
 
 
+class FakeGatewayClient:
+    """模拟外部网关认证预检和未读数量查询。"""
+
+    unread_count = 0
+
+    def __init__(self, **_: object) -> None:
+        """忽略真实客户端构造参数。"""
+
+    def request(self, method, endpoint, *, access_token, json_data=None, params=None, extra_headers=None):
+        """返回当前账号和测试配置的未读数量。"""
+
+        if endpoint == "/auth/me":
+            return {"id": 1, "username": "agent"}
+        if endpoint == "/notifications/unread-count":
+            return {"unread_count": self.unread_count}
+        raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+
 def test_cursor_rejects_tampered_payload() -> None:
     """游标被篡改时应拒绝解码。"""
 
@@ -78,6 +110,12 @@ def test_external_tool_whitelist_contains_v1_names() -> None:
         "toggle_post_like",
         "toggle_comment_like",
         "toggle_follow",
+        "vote_post_poll",
+        "delete_content",
+        "report_content",
+        "repost",
+        "view_full_hot_topics",
+        "logout",
     }
 
 
@@ -117,6 +155,12 @@ def test_external_business_parameters_match_internal_tools() -> None:
         "toggle_post_like": social.toggle_post_like,
         "toggle_comment_like": social.toggle_comment_like,
         "toggle_follow": social.toggle_follow,
+        "vote_post_poll": social.vote_post_poll,
+        "delete_content": social.delete_content,
+        "report_content": social.report_content,
+        "repost": social.repost,
+        "view_full_hot_topics": hot_topic.view_full_hot_topics,
+        "logout": social.logout,
     }
 
     for name, internal_tool in internal_tools.items():
@@ -226,6 +270,86 @@ def test_external_notifications_scroll_with_signed_cursor() -> None:
         context,
     )
     assert second.data["notifications"][0]["id"] == 202
-    assert set(first.data) == {"notifications", "total", "unread_count"}
-    assert set(second.data) == {"notifications", "total", "unread_count"}
+    assert set(first.data) == {"notifications"}
+    assert set(second.data) == {"notifications"}
     assert second.scroll_cursor is None
+
+
+@pytest.mark.parametrize("unread_count,expected", [(3, 3), (0, None)])
+def test_external_tool_response_only_includes_positive_unread_count(
+    monkeypatch: pytest.MonkeyPatch,
+    unread_count: int,
+    expected: int | None,
+) -> None:
+    """外部工具每次成功执行后查询未读数，零值不进入 data。"""
+
+    FakeGatewayClient.unread_count = unread_count
+    monkeypatch.setattr(external_router, "PlatformClient", FakeGatewayClient)
+    monkeypatch.setattr(
+        external_router,
+        "get_config",
+        lambda: SimpleNamespace(
+            jwt_secret_key="secret",
+            social_platform_api_base_url="http://platform/api/v1",
+            admin_key="admin",
+        ),
+    )
+    monkeypatch.setattr(
+        external_router,
+        "execute_tool",
+        lambda name, arguments, context: ExternalToolResult(
+            action="浏览了主页信息流",
+            data={"posts": []},
+        ),
+    )
+    request = Request({"type": "http", "method": "POST", "path": "/", "headers": []})
+
+    response = external_router.run_tool(
+        "get_global_feed",
+        ToolExecutionRequest(arguments={}),
+        request,
+        HTTPAuthorizationCredentials(scheme="Bearer", credentials="token"),
+    )
+
+    assert not hasattr(response, "body")
+    if expected is None:
+        assert "unread_count" not in response.data
+    else:
+        assert response.data["unread_count"] == expected
+
+
+def test_authenticated_external_tool_error_can_include_unread_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """认证仍有效的工具参数错误应尽量携带正数未读提醒。"""
+
+    FakeGatewayClient.unread_count = 2
+    monkeypatch.setattr(external_router, "PlatformClient", FakeGatewayClient)
+    monkeypatch.setattr(
+        external_router,
+        "get_config",
+        lambda: SimpleNamespace(
+            jwt_secret_key="secret",
+            social_platform_api_base_url="http://platform/api/v1",
+            admin_key="admin",
+        ),
+    )
+
+    def raise_invalid(*_: object) -> ExternalToolResult:
+        """模拟共享工具参数校验失败。"""
+
+        raise ExternalToolError("参数无效")
+
+    monkeypatch.setattr(external_router, "execute_tool", raise_invalid)
+    request = Request({"type": "http", "method": "POST", "path": "/", "headers": []})
+
+    response = external_router.run_tool(
+        "get_global_feed",
+        ToolExecutionRequest(arguments={}),
+        request,
+        HTTPAuthorizationCredentials(scheme="Bearer", credentials="token"),
+    )
+    payload = json.loads(response.body)
+
+    assert response.status_code == 422
+    assert payload["data"] == {"unread_count": 2}

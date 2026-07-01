@@ -49,33 +49,25 @@ def _paged_items(response: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[s
     return response.get("data", []), response.get("pagination", {})
 
 
-def _offset_pagination(response: dict[str, Any], offset: int, limit: int, returned: int) -> dict[str, Any]:
-    """为内部 offset 滚动补充分页字段。"""
-
-    pagination = response.get("pagination") or {}
-    total = pagination.get("total", offset + returned)
-    response["pagination"] = {
-        **pagination,
-        "offset": offset,
-        "limit": limit,
-        "returned": returned,
-        "has_next": offset + returned < total,
-    }
-    return response
-
-
-def _fetch_paged_posts_after_offset(fetcher, offset: int, count: int) -> dict[str, Any]:
-    """按 offset 读取平台页码型帖子列表。"""
+def _fetch_paged_items_after_offset(
+    fetcher: Callable[..., dict[str, Any]],
+    offset: int,
+    count: int,
+) -> tuple[list[dict[str, Any]], bool]:
+    """按 offset 读取页码型平台列表，并只返回实体与是否可继续滚动。"""
 
     request_size = offset + count
     if request_size <= 100:
         response = fetcher(page=1, page_size=request_size)
         all_items = response.get("data", [])
-        response["data"] = all_items[offset : offset + count]
-        return _offset_pagination(response, offset, count, len(response["data"]))
-    page = (offset // count) + 1
-    response = fetcher(page=page, page_size=count)
-    return _offset_pagination(response, offset, count, len(response.get("data", [])))
+        items = all_items[offset : offset + count]
+        pagination = response.get("pagination") or {}
+        total = int(pagination.get("total", len(all_items)) or 0)
+        return items, offset + len(items) < total
+
+    response = fetcher(page=(offset // count) + 1, page_size=count)
+    items = response.get("data", [])
+    return items, has_next_from_pagination(response.get("pagination"), len(items))
 
 
 def _get_global_feed(ctx: PlatformToolContext, args: schemas.FeedArguments) -> PlatformToolResult:
@@ -147,7 +139,7 @@ def _view_post_comments(ctx: PlatformToolContext, args: schemas.ViewPostComments
         action = f"查看了帖子 {args.post_id} 的评论"
     return PlatformToolResult(
         action=action,
-        data={"post": post, "comments": comments, "total": total},
+        data={"post": post, "comments": comments},
         cursor={
             "kind": "post_comments",
             "post_id": args.post_id,
@@ -193,7 +185,6 @@ def _expand_comment(ctx: PlatformToolContext, args: schemas.ExpandCommentArgumen
             "post": post,
             "comment": comment,
             "replies": replies,
-            "total": total,
         },
         cursor={
             "kind": "comment_replies",
@@ -215,7 +206,7 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
     offset = int(cursor.get("offset", 0) or 0)
     if kind == "global_feed":
         feed_type = normalize_feed_type(str(cursor.get("feed_type", "recommended")))
-        response = _fetch_paged_posts_after_offset(
+        items, has_more = _fetch_paged_items_after_offset(
             lambda page, page_size: ctx.request(
                 "GET",
                 "/feeds/feed/all",
@@ -229,8 +220,7 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
             offset,
             count,
         )
-        posts = normalize_posts(response.get("data", []), ctx)
-        has_more = has_next_from_pagination(response.get("pagination"), len(posts))
+        posts = normalize_posts(items, ctx)
         return PlatformToolResult(
             action=f"向下滑动浏览了更多{feed_type_label(feed_type)}信息流帖子",
             data={"posts": posts},
@@ -238,7 +228,7 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
         )
     if kind == "user_posts":
         user_id = int(cursor.get("user_id"))
-        response = _fetch_paged_posts_after_offset(
+        items, has_more = _fetch_paged_items_after_offset(
             lambda page, page_size: ctx.request(
                 "GET",
                 f"/feeds/feed/user/{user_id}",
@@ -247,8 +237,7 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
             offset,
             count,
         )
-        posts = normalize_posts(response.get("data", []), ctx)
-        has_more = has_next_from_pagination(response.get("pagination"), len(posts))
+        posts = normalize_posts(items, ctx)
         target_username = cursor.get("username", "") or (posts[0].get("author_username", "") if posts else "")
         action = (
             f"向下滑动浏览了 @{target_username} 的更多帖子"
@@ -263,7 +252,7 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
     if kind == "search_results":
         search_type = str(cursor.get("search_type", "content"))
         query = str(cursor.get("query", ""))
-        response = _fetch_paged_posts_after_offset(
+        items, has_more = _fetch_paged_items_after_offset(
             lambda page, page_size: ctx.request(
                 "GET",
                 "/search",
@@ -272,17 +261,13 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
             offset,
             count,
         )
-        items = response.get("data", [])
-        pagination = response.get("pagination") or {}
-        has_more = has_next_from_pagination(pagination, len(items))
-        total = int(pagination.get("total", offset + len(items)) or 0)
         if search_type == "user":
             users = [normalize_user(item, ctx) for item in items]
-            data = {"type": "user", "query": query, "users": users, "total": total}
+            data = {"type": "user", "query": query, "users": users}
             action = f"向下滑动浏览了更多「{truncate_text(query, 30)}」的用户搜索结果"
         else:
             posts = normalize_posts(items, ctx)
-            data = {"type": search_type, "query": query, "posts": posts, "total": total}
+            data = {"type": search_type, "query": query, "posts": posts}
             action = f"向下滑动浏览了更多「{truncate_text(query, 30)}」的帖子搜索结果"
         return PlatformToolResult(
             action=action,
@@ -313,7 +298,7 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
         )
         return PlatformToolResult(
             action=action,
-            data={"post": post, "comments": comments, "total": total},
+            data={"post": post, "comments": comments},
             cursor={**cursor, "offset": offset + len(comments)} if has_more else None,
         )
     if kind == "comment_replies":
@@ -344,7 +329,6 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
                 "post": post,
                 "comment": comment,
                 "replies": replies,
-                "total": total,
             },
             cursor={**cursor, "offset": offset + len(replies)} if has_more else None,
         )
@@ -355,12 +339,8 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
         total = int(response.get("total", offset + len(notifications)) or 0)
         has_more = offset + len(notifications) < total
         return PlatformToolResult(
-            action=f"向下滑动浏览了更多消息，共看到 {len(notifications)} 条消息",
-            data={
-                "notifications": notifications,
-                "total": total,
-                "unread_count": response.get("unread_count", 0),
-            },
+            action="向下滑动浏览了更多消息",
+            data={"notifications": notifications},
             cursor={**cursor, "offset": offset + len(notifications)} if has_more else None,
         )
     raise PlatformToolError(
@@ -416,16 +396,15 @@ def _search_platform(ctx: PlatformToolContext, args: schemas.SearchArguments) ->
     )
     items, pagination = _paged_items(response)
     has_more = has_next_from_pagination(pagination, len(items))
-    total = int(pagination.get("total", len(items)) or 0)
     if args.type == "user":
         users = [normalize_user(item, ctx) for item in items]
-        data = {"type": "user", "query": args.query, "users": users, "total": total}
-        action = f"搜索了用户关键词「{truncate_text(args.query, 30)}」，看到 {len(users)} 位用户"
+        data = {"type": "user", "query": args.query, "users": users}
+        action = f"搜索了用户关键词「{truncate_text(args.query, 30)}」"
     else:
         posts = normalize_posts(items, ctx)
-        data = {"type": args.type, "query": args.query, "posts": posts, "total": total}
+        data = {"type": args.type, "query": args.query, "posts": posts}
         label = "话题" if args.type == "topic" else "内容关键词"
-        action = f"搜索了{label}「{truncate_text(args.query, 30)}」，看到 {len(posts)} 条结果"
+        action = f"搜索了{label}「{truncate_text(args.query, 30)}」"
     return PlatformToolResult(
         action=action,
         data=data,
@@ -449,12 +428,8 @@ def _view_notifications(ctx: PlatformToolContext, args: schemas.NotificationList
     total = int(response.get("total", len(notifications)) or 0)
     has_more = len(notifications) < total
     return PlatformToolResult(
-        action=f"查看了消息列表，共看到 {len(notifications)} 条消息",
-        data={
-            "notifications": notifications,
-            "total": total,
-            "unread_count": response.get("unread_count", 0),
-        },
+        action="查看了消息列表",
+        data={"notifications": notifications},
         cursor={
             "kind": "notifications",
             "offset": len(notifications),
@@ -721,19 +696,17 @@ def _view_full_hot_topics(ctx: PlatformToolContext, args: schemas.EmptyArguments
         for index, topic in enumerate(topics)
     ]
     if normalized:
-        action = (
-            f"查看了更多热榜，共 {len(normalized)} 条，榜首是"
-            f"「{truncate_text(normalized[0].get('title', ''), 30)}」"
-        )
+        action = f"查看了更多热榜，榜首是「{truncate_text(normalized[0].get('title', ''), 30)}」"
     else:
         action = "查看了更多热榜，当前暂无热榜内容"
-    return PlatformToolResult(action=action, data={"hot_topics": normalized, "total": len(normalized)})
+    return PlatformToolResult(action=action, data={"hot_topics": normalized})
 
 
 def _logout(ctx: PlatformToolContext, args: schemas.EmptyArguments) -> PlatformToolResult:
-    """返回内部会话退出信号。"""
+    """撤销外部 Session；内部 LangGraph 会在调用处理器前拦截该信号。"""
 
-    return PlatformToolResult(action="结束了本次会话", data={})
+    ctx.request("POST", "/auth/logout")
+    return PlatformToolResult(action="结束了本次会话并撤销了当前 Session", data={})
 
 
 PLATFORM_TOOLS: dict[str, PlatformToolDefinition] = {
@@ -855,6 +828,7 @@ PLATFORM_TOOLS: dict[str, PlatformToolDefinition] = {
         "write",
         schemas.VotePostPollArguments,
         _vote_post_poll,
+        True,
     ),
     "delete_content": PlatformToolDefinition(
         "delete_content",
@@ -862,6 +836,7 @@ PLATFORM_TOOLS: dict[str, PlatformToolDefinition] = {
         "write",
         schemas.DeleteContentArguments,
         _delete_content,
+        True,
     ),
     "report_content": PlatformToolDefinition(
         "report_content",
@@ -869,16 +844,32 @@ PLATFORM_TOOLS: dict[str, PlatformToolDefinition] = {
         "write",
         schemas.ReportContentArguments,
         _report_content,
+        True,
     ),
-    "repost": PlatformToolDefinition("repost", "转发帖子或评论", "write", schemas.RepostArguments, _repost),
+    "repost": PlatformToolDefinition(
+        "repost",
+        "转发帖子或评论",
+        "write",
+        schemas.RepostArguments,
+        _repost,
+        True,
+    ),
     "view_full_hot_topics": PlatformToolDefinition(
         "view_full_hot_topics",
         "读取完整热榜",
         "read",
         schemas.EmptyArguments,
         _view_full_hot_topics,
+        True,
     ),
-    "logout": PlatformToolDefinition("logout", "结束内部 Agent 会话", "write", schemas.EmptyArguments, _logout),
+    "logout": PlatformToolDefinition(
+        "logout",
+        "结束会话并撤销当前 Session",
+        "write",
+        schemas.EmptyArguments,
+        _logout,
+        True,
+    ),
 }
 
 

@@ -35,7 +35,7 @@ def recall_memory(query: str, reason: str = "", summary: str = "") -> ToolResult
         summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
 
     Returns:
-        ToolResult: data 中包含 query、memories 和 total。执行节点会把结果追加到 last_tool_result，
+        ToolResult: data 中包含 query 和 memories。执行节点会把结果追加到 last_tool_result，
         让下一次决策同时看到上一步页面内容和主动回想内容。
     """
     owner_id = get_current_user_id()
@@ -45,19 +45,19 @@ def recall_memory(query: str, reason: str = "", summary: str = "") -> ToolResult
     if not config.memory_enabled:
         return ToolResult(
             action="记忆系统未启用，无法回想",
-            data={"query": clean_query, "memories": [], "total": 0}
+            data={"query": clean_query, "memories": []}
         )
 
     if not owner_id:
         return ToolResult(
             action="当前用户不存在，无法回想长期记忆",
-            data={"query": clean_query, "memories": [], "total": 0}
+            data={"query": clean_query, "memories": []}
         )
 
     if not clean_query:
         return ToolResult(
             action="没有提供回想查询，无法回想长期记忆",
-            data={"query": clean_query, "memories": [], "total": 0}
+            data={"query": clean_query, "memories": []}
         )
 
     try:
@@ -81,13 +81,13 @@ def recall_memory(query: str, reason: str = "", summary: str = "") -> ToolResult
         ]
 
         return ToolResult(
-            action=f"回想了与「{_short_query(clean_query)}」相关的{len(memories)}条记忆",
-            data={"query": clean_query, "memories": memories, "total": len(memories)}
+            action=f"回想了与「{_short_query(clean_query)}」相关的记忆",
+            data={"query": clean_query, "memories": memories}
         )
     except Exception as e:
         return ToolResult(
             action=f"记忆回想失败: {str(e)}",
-            data={"query": clean_query, "memories": [], "total": 0}
+            data={"query": clean_query, "memories": []}
         )
 
 

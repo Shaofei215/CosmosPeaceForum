@@ -31,13 +31,11 @@ def view_notifications(
 
     Returns:
         ToolResult:
-            - action: 自然语言操作记录，例如 "查看了消息列表，共看到 5 条消息"
+            - action: 自然语言操作记录，例如 "查看了消息列表"
             - data.notifications: 消息列表。每条消息包含 type、sender_id、sender_username、resource_type、
               post_id、comment_id、source_content、created_at 等字段。
               如果要直接回复评论类消息，请使用该消息的 post_id 调用 create_comment.post_id，
               并把该消息的 comment_id 填入 create_comment.parent_id；省略 parent_id 会创建一级评论。
-            - data.total: 当前账号全部消息总数
-            - data.unread_count: 本次查看后服务端返回的未读数量，通常为 0
             - 查看后可以调用 scroll 继续读取后续消息
     """
 

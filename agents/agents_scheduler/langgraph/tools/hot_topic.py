@@ -29,7 +29,6 @@ def view_full_hot_topics(
         ToolResult:
             - action: 自然语言操作记录
             - data.hot_topics: 热榜列表。每条包含 rank、title、summary、search_query。
-            - data.total: 本次返回的热榜数量
     """
 
     result = run_shared_tool("view_full_hot_topics", {})

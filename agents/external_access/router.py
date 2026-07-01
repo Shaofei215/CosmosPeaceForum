@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from uuid import uuid4
 
@@ -40,6 +41,7 @@ from agents.platform_access import (
 
 router = APIRouter()
 security = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 def _request_id(request: Request) -> str:
@@ -55,6 +57,7 @@ def _error_payload(
     message: str,
     request_id: str,
     tool: str | None = None,
+    unread_count: int | None = None,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     """构造稳定错误响应，避免暴露内部异常、URL、Header 或 Secret。"""
@@ -63,16 +66,22 @@ def _error_payload(
         error_code=error_code,
         message=message,
         tool=tool,
+        data={"unread_count": unread_count} if unread_count and unread_count > 0 else None,
         meta=ToolMeta(request_id=request_id),
     )
     return JSONResponse(
         status_code=status_code,
-        content=payload.model_dump(),
+        content=payload.model_dump(exclude_none=True),
         headers=headers,
     )
 
 
-def _platform_error_response(exc: PlatformAccessError, request_id: str, tool: str) -> JSONResponse:
+def _platform_error_response(
+    exc: PlatformAccessError,
+    request_id: str,
+    tool: str,
+    unread_count: int | None = None,
+) -> JSONResponse:
     """把平台访问异常映射为外部协议错误。"""
 
     if isinstance(exc, PlatformAuthenticationError):
@@ -82,6 +91,7 @@ def _platform_error_response(exc: PlatformAccessError, request_id: str, tool: st
             message="认证失败，请刷新或重新登录",
             request_id=request_id,
             tool=tool,
+            unread_count=unread_count,
         )
     if isinstance(exc, PlatformNotFoundError):
         return _error_payload(
@@ -90,6 +100,7 @@ def _platform_error_response(exc: PlatformAccessError, request_id: str, tool: st
             message=exc.detail or "资源不存在",
             request_id=request_id,
             tool=tool,
+            unread_count=unread_count,
         )
     if isinstance(exc, PlatformTimeoutError):
         return _error_payload(
@@ -98,6 +109,7 @@ def _platform_error_response(exc: PlatformAccessError, request_id: str, tool: st
             message="平台请求超时",
             request_id=request_id,
             tool=tool,
+            unread_count=unread_count,
         )
     if isinstance(exc, PlatformConnectionError):
         return _error_payload(
@@ -106,6 +118,7 @@ def _platform_error_response(exc: PlatformAccessError, request_id: str, tool: st
             message="平台服务暂不可用",
             request_id=request_id,
             tool=tool,
+            unread_count=unread_count,
         )
 
     code = exc.status_code or status.HTTP_503_SERVICE_UNAVAILABLE
@@ -116,6 +129,7 @@ def _platform_error_response(exc: PlatformAccessError, request_id: str, tool: st
             message=exc.detail or "操作被拒绝",
             request_id=request_id,
             tool=tool,
+            unread_count=unread_count,
         )
     if code == status.HTTP_429_TOO_MANY_REQUESTS:
         return _error_payload(
@@ -124,6 +138,7 @@ def _platform_error_response(exc: PlatformAccessError, request_id: str, tool: st
             message=exc.detail or "请求过于频繁",
             request_id=request_id,
             tool=tool,
+            unread_count=unread_count,
         )
     if code in {status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY}:
         return _error_payload(
@@ -132,6 +147,7 @@ def _platform_error_response(exc: PlatformAccessError, request_id: str, tool: st
             message=exc.detail or "参数无效",
             request_id=request_id,
             tool=tool,
+            unread_count=unread_count,
         )
     return _error_payload(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE if code >= 500 else code,
@@ -139,7 +155,32 @@ def _platform_error_response(exc: PlatformAccessError, request_id: str, tool: st
         message=exc.detail or "平台请求失败",
         request_id=request_id,
         tool=tool,
+        unread_count=unread_count,
     )
+
+
+def _get_unread_count(client: PlatformClient, access_token: str) -> int | None:
+    """读取正数未读消息数量，失败时不影响原工具响应。
+
+    Args:
+        client: 当前显式凭据平台客户端。
+        access_token: 当前普通账号 Access Token。
+
+    Returns:
+        int | None: 正数未读数量；无未读或读取失败时返回 ``None``。
+    """
+
+    try:
+        payload = client.request(
+            "GET",
+            "/notifications/unread-count",
+            access_token=access_token,
+        )
+        unread_count = int(payload.get("unread_count", 0) or 0)
+        return unread_count if unread_count > 0 else None
+    except PlatformAccessError:
+        logger.warning("外部工具响应读取未读消息数量失败", exc_info=True)
+        return None
 
 
 def _output_schema() -> dict[str, Any]:
@@ -229,6 +270,7 @@ def run_tool(
         admin_key=config.admin_key,
     )
 
+    unread_before_logout: int | None = None
     try:
         current_user = client.request("GET", "/auth/me", access_token=access_token)
         context = ExternalToolContext(
@@ -237,6 +279,8 @@ def run_tool(
             current_user=current_user,
             cursor_secret=cursor_secret,
         )
+        if tool_name == "logout":
+            unread_before_logout = _get_unread_count(client, access_token)
         result = execute_tool(tool_name, payload.arguments, context)
     except ExternalToolError as exc:
         return _error_payload(
@@ -245,9 +289,23 @@ def run_tool(
             message=str(exc),
             request_id=request_id,
             tool=tool_name,
+            unread_count=_get_unread_count(client, access_token),
         )
     except PlatformAccessError as exc:
-        return _platform_error_response(exc, request_id, tool_name)
+        return _platform_error_response(
+            exc,
+            request_id,
+            tool_name,
+            unread_count=_get_unread_count(client, access_token),
+        )
+
+    unread_count = (
+        unread_before_logout
+        if tool_name == "logout"
+        else _get_unread_count(client, access_token)
+    )
+    if unread_count is not None:
+        result.data["unread_count"] = unread_count
 
     return ToolExecutionResponse(
         tool=tool_name,

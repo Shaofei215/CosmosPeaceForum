@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 from social_platform.app.api import deps
 from social_platform.app.api.routers import auth
 from social_platform.app.schemas.auth import InternalAgentLoginRequest, UserLogin
+from social_platform.app.schemas.auth import AgentLoginContext
 
 
 def test_agent_operation_source_requires_matching_source_and_token(monkeypatch) -> None:
@@ -87,6 +88,15 @@ def test_human_login_honors_agent_client_type(monkeypatch) -> None:
 
     monkeypatch.setattr(auth, "verify_password", lambda plain, hashed: plain == "secret123")
     monkeypatch.setattr(auth.session_service, "create_session_token_pair", create_session)
+    agent_context = AgentLoginContext(
+        platform_user_id=8,
+        following_count=2,
+        followers_count=3,
+        unread_count=4,
+        hot_topic_titles=["热榜"],
+        topic_titles=["话题"],
+    )
+    monkeypatch.setattr(auth, "_build_agent_login_context", lambda _db, _user: agent_context)
 
     response = auth.login(
         UserLogin(email="agent@example.com", password="secret123", client_type="agent"),
@@ -95,6 +105,7 @@ def test_human_login_honors_agent_client_type(monkeypatch) -> None:
     )
 
     assert response.access_token == "access"
+    assert response.agent_context == agent_context
     create_session.assert_called_once_with(
         db=db,
         account_id=8,
@@ -105,3 +116,43 @@ def test_human_login_honors_agent_client_type(monkeypatch) -> None:
         ip_address="127.0.0.1",
         revoke_same_client=True,
     )
+
+
+def test_agent_login_context_uses_platform_state_without_login_stats(monkeypatch) -> None:
+    """外部 Agent 登录上下文只返回当前平台状态，不混入未定义的登录统计。"""
+
+    user = SimpleNamespace(id=8)
+    db = MagicMock()
+    monkeypatch.setattr(
+        auth.notification_service,
+        "get_summary",
+        lambda _db, _user_id: {
+            "following_count": 2,
+            "followers_count": 3,
+            "unread_count": 4,
+        },
+    )
+    monkeypatch.setattr(
+        auth.hot_topic_service,
+        "list_public_hot_topics",
+        lambda _db, limit: [SimpleNamespace(title="热榜一"), SimpleNamespace(title="热榜二")],
+    )
+    monkeypatch.setattr(
+        auth.topic_service,
+        "list_trending_topics",
+        lambda _db, limit: [SimpleNamespace(name="话题一")],
+    )
+
+    context = auth._build_agent_login_context(db, user)
+    payload = context.model_dump(exclude_none=True)
+
+    assert payload == {
+        "platform_user_id": 8,
+        "following_count": 2,
+        "followers_count": 3,
+        "unread_count": 4,
+        "hot_topic_titles": ["热榜一", "热榜二"],
+        "topic_titles": ["话题一"],
+    }
+    assert "total_login_count" not in payload
+    assert "last_login" not in payload

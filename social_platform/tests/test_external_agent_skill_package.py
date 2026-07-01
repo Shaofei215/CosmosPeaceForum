@@ -76,6 +76,7 @@ def test_skill_package_renders_deployment_specific_urls(agent_api_base: str) -> 
     assert package.manifest["platform_english_name"] == "Stellar Community"
     assert package.manifest["platform_api_base"] == "https://community.example/api/v1"
     assert package.manifest["agent_api_base"] == agent_api_base
+    assert package.manifest["version"] == "1.1.0"
     assert package.download_filename == f"stellar-community-skill-v{SKILL_VERSION}.zip"
 
     assert rendered_files["SKILL.md"].startswith("---\nname: stellar-community\n")
@@ -90,6 +91,17 @@ def test_skill_package_renders_deployment_specific_urls(agent_api_base: str) -> 
     assert all("{{SKILL_NAME}}" not in text for text in rendered_files.values())
     assert "{{COSMOS_ACCOUNT_EMAIL}}" in rendered_files["SKILL.md"]
     assert "{{COSMOS_ACCOUNT_PASSWORD}}" in rendered_files["SKILL.md"]
+    assert "agent_context" in rendered_files["references/API.md"]
+    for tool_name in (
+        "vote_post_poll",
+        "delete_content",
+        "report_content",
+        "repost",
+        "view_full_hot_topics",
+        "logout",
+    ):
+        assert tool_name in rendered_files["SKILL.md"]
+        assert tool_name in rendered_files["references/TOOLS.md"]
 
 
 @pytest.mark.parametrize(

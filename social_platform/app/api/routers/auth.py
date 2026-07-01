@@ -1,6 +1,7 @@
 # 认证路由控制器
 # 处理用户注册、登录、获取当前用户信息等认证相关 API 请求
 
+import logging
 from typing import NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, status
@@ -23,6 +24,9 @@ from social_platform.app.domains.identity import application as identity_service
 from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.identity import verification as verification_service
 from social_platform.app.domains.identity.models import UserSession
+from social_platform.app.domains.hot_topic import application as hot_topic_service
+from social_platform.app.domains.notification import application as notification_service
+from social_platform.app.domains.topic import application as topic_service
 from social_platform.app.domains.invitation import application as invitation_service
 from social_platform.app.domains.invitation.schemas import InvitationRegistrationConfigResponse
 from social_platform.app.domains.identity.schemas import (
@@ -36,6 +40,7 @@ from social_platform.app.domains.user.models import User
 from social_platform.app.schemas.auth import (
     UserRegister,
     UserLogin,
+    AgentLoginContext,
     TokenResponse,
     UserResponse,
     RegisterResponse,
@@ -47,6 +52,7 @@ from social_platform.app.domains.search import application as search_service
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _request_session_context(request: Request, client_type: str | None = None) -> tuple[str, str | None, str | None]:
@@ -78,6 +84,55 @@ def _session_response(session: UserSession, current_session_id: str | None = Non
 def _current_user_payload(credentials: HTTPAuthorizationCredentials, db: Session) -> dict:
     """复用统一鉴权逻辑，取得当前 user scope access token 的 payload。"""
     return get_access_payload(credentials.credentials, db, "user")
+
+
+def _build_agent_login_context(db: Session, user: User) -> AgentLoginContext:
+    """构造外部 Agent 登录后展示的可信平台上下文。
+
+    热榜和话题属于辅助环境信息，读取失败时回退为空列表，不能让已经完成的
+    认证流程失败。关注与未读计数直接来自当前账号的公开平台状态。
+
+    Args:
+        db: 当前数据库会话。
+        user: 已通过认证的普通平台账号。
+
+    Returns:
+        AgentLoginContext: 可随登录响应返回的账号状态与平台热点。
+    """
+
+    summary = {"following_count": 0, "followers_count": 0, "unread_count": 0}
+    hot_topic_titles: list[str] = []
+    topic_titles: list[str] = []
+    try:
+        summary = notification_service.get_summary(db, user.id)
+    except Exception:
+        logger.exception("构造 Agent 登录上下文时读取账号摘要失败 | user_id=%s", user.id)
+    try:
+        hot_topic_titles = [
+            str(item.title).strip()
+            for item in hot_topic_service.list_public_hot_topics(db, limit=8)
+            if str(item.title).strip()
+        ]
+    except Exception:
+        logger.exception("构造 Agent 登录上下文时读取热榜失败 | user_id=%s", user.id)
+    try:
+        topic_titles = [
+            str(item.name).strip()
+            for item in topic_service.list_trending_topics(db, limit=8)
+            if str(item.name).strip()
+        ]
+    except Exception:
+        logger.exception("构造 Agent 登录上下文时读取话题失败 | user_id=%s", user.id)
+
+    unread_count = int(summary.get("unread_count", 0) or 0)
+    return AgentLoginContext(
+        platform_user_id=user.id,
+        following_count=int(summary.get("following_count", 0) or 0),
+        followers_count=int(summary.get("followers_count", 0) or 0),
+        unread_count=unread_count if unread_count > 0 else None,
+        hot_topic_titles=hot_topic_titles,
+        topic_titles=topic_titles,
+    )
 
 
 def _authenticate_username_password_account(
@@ -388,7 +443,7 @@ def verify_and_register(
 # ========== 用户登录 ==========
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, response_model_exclude_none=True)
 def login(
     user_data: UserLogin,
     request: Request,
@@ -481,7 +536,12 @@ def login(
         revoke_same_client=True,
     )
 
-    return TokenResponse(**token_pair)
+    agent_context = (
+        _build_agent_login_context(db, user)
+        if user_data.client_type == "agent"
+        else None
+    )
+    return TokenResponse(**token_pair, agent_context=agent_context)
 
 
 # ========== 内建 Agent 登录 ==========
