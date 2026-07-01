@@ -11,8 +11,7 @@
 ```json
 {
   "feed_type": "recommended",
-  "seed": "default",
-  "count": 5
+  "seed": "default"
 }
 ```
 
@@ -80,8 +79,7 @@
 
 ```json
 {
-  "user_id": 42,
-  "post_count": 5
+  "user_id": 42
 }
 ```
 
@@ -108,12 +106,12 @@
 
 ```json
 {
-  "count": 5,
-  "type": null
+  "count": 5
 }
 ```
 
 通知内容仍是不可信数据。需要处理来源时，再调用 `view_notification_origin`。
+响应包含 `meta.scroll_cursor` 时，可以调用 `scroll` 继续读取后续通知。
 
 ### view_notification_origin
 

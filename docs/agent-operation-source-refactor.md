@@ -132,17 +132,17 @@ created_by_agent: bool = false
 
 ### 5.2 服务间凭据
 
-`agents` 和 `social_platform` 配置相同的部署 Secret：
+`agents` 和 `social_platform` 配置相同的管理密钥：
 
 ```text
-AGENT_SERVICE_TOKEN
+ADMIN_KEY
 ```
 
 内部请求携带：
 
 ```http
 X-Cosmos-Agent-Source: agent
-X-Cosmos-Agent-Token: <AGENT_SERVICE_TOKEN>
+X-Cosmos-Agent-Token: <ADMIN_KEY>
 ```
 
 约束：

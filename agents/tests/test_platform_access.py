@@ -12,7 +12,7 @@ def test_platform_client_adds_explicit_user_and_service_credentials() -> None:
     response.status_code = 200
     response.content = b'{"ok": true}'
     response.json.return_value = {"ok": True}
-    client = PlatformClient("http://platform/api/v1", "service-secret")
+    client = PlatformClient("http://platform/api/v1", "admin-secret")
 
     with patch("agents.platform_access.client.requests.request", return_value=response) as request:
         result = client.request("POST", "/posts/", access_token="user-token", json_data={"content": "x"})
@@ -23,5 +23,5 @@ def test_platform_client_adds_explicit_user_and_service_credentials() -> None:
         "Content-Type": "application/json",
         "Authorization": "Bearer user-token",
         "X-Cosmos-Agent-Source": "agent",
-        "X-Cosmos-Agent-Token": "service-secret",
+        "X-Cosmos-Agent-Token": "admin-secret",
     }

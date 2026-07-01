@@ -25,14 +25,14 @@ def get_agent_operation_source(
 
     Args:
         source: agents 服务声明的固定来源值。
-        token: agents 与公开平台共享的部署 Secret。
+        token: agents 与公开平台共享的 ADMIN_KEY。
 
     Returns:
-        bool: 仅在来源值和 Secret 均有效时返回 ``True``；伪造或缺失 Header 返回
+        bool: 仅在来源值和 ADMIN_KEY 均有效时返回 ``True``；伪造或缺失 Header 返回
         ``False``，且不会把 Secret 写入日志或错误响应。
     """
 
-    expected_token = get_settings().AGENT_SERVICE_TOKEN
+    expected_token = get_settings().ADMIN_KEY
     if source != "agent" or not token or not expected_token:
         return False
     return secrets.compare_digest(token, expected_token)

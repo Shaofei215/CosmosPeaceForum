@@ -55,7 +55,7 @@ def login_user(username: str, password: str) -> Optional[Dict]:
 
         client = PlatformClient(
             base_url=config.api_base_url,
-            service_token=config.agent_service_token,
+            admin_key=config.admin_key,
             timeout_seconds=10,
         )
         result = client.request(

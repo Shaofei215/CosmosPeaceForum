@@ -86,8 +86,7 @@ Content-Type: application/json
   "meta": {
     "request_id": "request-id",
     "schema_version": "1",
-    "scroll_cursor": null,
-    "has_more": false
+    "scroll_cursor": null
   }
 }
 ```
@@ -96,7 +95,7 @@ Content-Type: application/json
 
 ## 滚动
 
-当读取响应的 `meta.has_more` 为 `true` 且 `meta.scroll_cursor` 非空时，继续浏览：
+当读取响应的 `meta.scroll_cursor` 非空时，可以继续浏览：
 
 ```json
 {

@@ -9,9 +9,9 @@ from social_platform.app.schemas.auth import InternalAgentLoginRequest, UserLogi
 
 
 def test_agent_operation_source_requires_matching_source_and_token(monkeypatch) -> None:
-    """只有固定来源值和常量时间校验通过的 Secret 才能标记 Agent 来源。"""
+    """只有固定来源值和常量时间校验通过的 ADMIN_KEY 才能标记 Agent 来源。"""
 
-    monkeypatch.setattr(deps.get_settings(), "AGENT_SERVICE_TOKEN", "shared-secret")
+    monkeypatch.setattr(deps.get_settings(), "ADMIN_KEY", "shared-secret")
 
     assert deps.get_agent_operation_source("agent", "shared-secret") is True
     assert deps.get_agent_operation_source("agent", "wrong-secret") is False
@@ -22,7 +22,7 @@ def test_agent_operation_source_requires_matching_source_and_token(monkeypatch) 
 def test_agent_operation_source_is_disabled_without_deployment_secret(monkeypatch) -> None:
     """平台未配置部署 Secret 时任何 Header 都不能伪造 Agent 来源。"""
 
-    monkeypatch.setattr(deps.get_settings(), "AGENT_SERVICE_TOKEN", "")
+    monkeypatch.setattr(deps.get_settings(), "ADMIN_KEY", "")
 
     assert deps.get_agent_operation_source("agent", "anything") is False
 

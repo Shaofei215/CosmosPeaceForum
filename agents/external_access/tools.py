@@ -50,7 +50,6 @@ class ExternalToolResult:
     action: str
     data: dict[str, Any]
     scroll_cursor: str | None = None
-    has_more: bool = False
 
 
 class ExternalToolDefinition:
@@ -132,5 +131,4 @@ def execute_tool(name: str, arguments: dict[str, Any], context: ExternalToolCont
         action=result.action,
         data=result.data,
         scroll_cursor=scroll_cursor,
-        has_more=result.has_more,
     )

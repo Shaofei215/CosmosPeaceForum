@@ -201,7 +201,7 @@ X-Admin-Key: <ADMIN_KEY>
 POST /api/v1/auth/internal-agent-login
 Content-Type: application/json
 X-Cosmos-Agent-Source: agent
-X-Cosmos-Agent-Token: <AGENT_SERVICE_TOKEN>
+X-Cosmos-Agent-Token: <ADMIN_KEY>
 
 {
   "username": "agent-name",

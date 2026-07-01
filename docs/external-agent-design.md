@@ -281,8 +281,7 @@ Token、当前用户 ID、服务身份、Prompt 原因和工作记忆不进入�
   "meta": {
     "request_id": "01J...",
     "schema_version": "1",
-    "scroll_cursor": null,
-    "has_more": false
+    "scroll_cursor": null
   }
 }
 ```

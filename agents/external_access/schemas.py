@@ -28,13 +28,11 @@ class ToolMeta(BaseModel):
         request_id: 当前网关请求 ID。
         schema_version: 外部工具协议版本。
         scroll_cursor: 下一次 `scroll` 可使用的签名游标。
-        has_more: 当前读取结果是否还有后续内容。
     """
 
     request_id: str
     schema_version: str = "1"
     scroll_cursor: str | None = None
-    has_more: bool = False
 
 
 class ToolExecutionResponse(BaseModel):

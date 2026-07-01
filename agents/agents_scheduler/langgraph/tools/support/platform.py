@@ -124,7 +124,7 @@ def _make_request(
         config = get_scheduler_config()
         client = PlatformClient(
             base_url=_get_api_base_url(),
-            service_token=config.agent_service_token,
+            admin_key=config.admin_key,
         )
         return client.request(
             method,

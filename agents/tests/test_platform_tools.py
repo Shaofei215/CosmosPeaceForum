@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from agents.agents_scheduler.langgraph.tools.support import shared_platform
 from agents.platform_tools import (
     PlatformToolContext,
     PlatformToolError,
@@ -77,6 +78,22 @@ class FakePlatformClient:
                 ],
                 "pagination": {"page": 1, "page_size": 1, "total": 2, "total_pages": 2, "has_next": True},
             }
+        if endpoint == "/notifications":
+            skip = int((params or {}).get("skip", 0))
+            return {
+                "items": [
+                    {
+                        "id": 101 + skip,
+                        "type": "comment",
+                        "source_content": f"notification {101 + skip}",
+                        "created_at": "2026-06-30T00:00:00+08:00",
+                    }
+                ],
+                "total": 2,
+                "unread_count": 0,
+                "skip": skip,
+                "limit": (params or {}).get("limit", 1),
+            }
         if endpoint == "/users/11/follow-status":
             return {"is_following": True, "is_mutual": False, "is_followed_by": False}
         if endpoint == "/posts/":
@@ -127,7 +144,7 @@ def test_feed_uses_explicit_token_and_returns_cursor() -> None:
     client = FakePlatformClient()
     result = execute_platform_tool(
         "get_global_feed",
-        {"count": 1, "feed_type": "hot", "seed": "abc"},
+        {"feed_type": "hot", "seed": "abc"},
         PlatformToolContext(
             client=client,
             access_token="token",
@@ -139,12 +156,78 @@ def test_feed_uses_explicit_token_and_returns_cursor() -> None:
     assert client.calls[0]["access_token"] == "token"
     assert client.calls[0]["params"] == {
         "page": 1,
-        "page_size": 1,
+        "page_size": 5,
         "feed_type": "recommended",
         "seed": "abc",
     }
     assert result.cursor == {"kind": "global_feed", "feed_type": "recommended", "seed": "abc", "offset": 1}
-    assert result.has_more is True
+
+
+def test_notifications_and_scroll_share_cursor() -> None:
+    """内部和外部共用的通知读取核心必须支持继续滚动。"""
+
+    client = FakePlatformClient()
+    context = PlatformToolContext(
+        client=client,
+        access_token="token",
+        current_user={"id": 1},
+        mode=PresentationMode.INTERNAL,
+    )
+
+    first = execute_platform_tool(
+        "view_notifications",
+        {"count": 1},
+        context,
+    )
+    second = execute_platform_tool(
+        "scroll",
+        {"count": 1},
+        PlatformToolContext(
+            client=client,
+            access_token="token",
+            current_user={"id": 1},
+            mode=PresentationMode.INTERNAL,
+            cursor=first.cursor,
+        ),
+    )
+
+    assert first.cursor == {"kind": "notifications", "offset": 1}
+    assert second.data["notifications"][0]["id"] == 102
+    assert second.cursor is None
+    assert client.calls[-1]["params"] == {"skip": 1, "limit": 1}
+
+
+def test_internal_adapter_keeps_notification_scroll_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """内部 LangGraph 适配器必须保存通知游标供下一次 scroll 使用。"""
+
+    client = FakePlatformClient()
+    stored_cursor: dict[str, Any] | None = None
+
+    def build_context() -> PlatformToolContext:
+        """按内部线程当前保存的游标构造测试上下文。"""
+
+        return PlatformToolContext(
+            client=client,
+            access_token="token",
+            current_user={"id": 1},
+            mode=PresentationMode.INTERNAL,
+            cursor=stored_cursor,
+        )
+
+    def save_cursor(cursor: dict[str, Any] | None) -> None:
+        """模拟内部执行上下文保存最近一次滚动游标。"""
+
+        nonlocal stored_cursor
+        stored_cursor = cursor
+
+    monkeypatch.setattr(shared_platform, "_build_internal_context", build_context)
+    monkeypatch.setattr(shared_platform, "_set_scroll_cursor", save_cursor)
+
+    shared_platform.run_shared_tool("view_notifications", {"count": 1})
+    second = shared_platform.run_shared_tool("scroll", {"count": 1})
+
+    assert second.data["notifications"][0]["id"] == 102
+    assert stored_cursor is None
 
 
 def test_create_post_rejects_poll_on_article_before_platform_request() -> None:

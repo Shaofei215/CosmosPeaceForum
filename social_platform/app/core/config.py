@@ -63,9 +63,6 @@ class Settings(BaseSettings):
 
     ADMIN_KEY: str
 
-    # agents 服务调用公开平台时使用的来源证明。为空时所有请求均视为普通客户端来源。
-    AGENT_SERVICE_TOKEN: str = ""
-
     SMTP_HOST: str
     SMTP_PORT: int
     SMTP_USER: str

@@ -23,7 +23,7 @@ class TestLoginUser:
         with patch("requests.request", side_effect=[mock_response, mock_me_response]):
             with patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config") as mock_config:
                 mock_config.return_value.api_base_url = "http://localhost:8000/api/v1"
-                mock_config.return_value.agent_service_token = "service-secret"
+                mock_config.return_value.admin_key = "admin-secret"
                 result = login_user("test_user", "password")
                 assert result is not None
                 assert "access_token" in result
@@ -35,7 +35,7 @@ class TestLoginUser:
         with patch("requests.request", return_value=mock_response):
             with patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config") as mock_config:
                 mock_config.return_value.api_base_url = "http://localhost:8000/api/v1"
-                mock_config.return_value.agent_service_token = "service-secret"
+                mock_config.return_value.admin_key = "admin-secret"
                 result = login_user("test_user", "wrong_password")
                 assert result is None
 
@@ -44,7 +44,7 @@ class TestLoginUser:
         with patch("requests.request", side_effect=req.exceptions.RequestException("Network error")):
             with patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config") as mock_config:
                 mock_config.return_value.api_base_url = "http://localhost:8000/api/v1"
-                mock_config.return_value.agent_service_token = "service-secret"
+                mock_config.return_value.admin_key = "admin-secret"
                 result = login_user("test_user", "password")
                 assert result is None
 

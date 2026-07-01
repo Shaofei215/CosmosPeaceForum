@@ -38,6 +38,7 @@ def view_notifications(
               并把该消息的 comment_id 填入 create_comment.parent_id；省略 parent_id 会创建一级评论。
             - data.total: 当前账号全部消息总数
             - data.unread_count: 本次查看后服务端返回的未读数量，通常为 0
+            - 查看后可以调用 scroll 继续读取后续消息
     """
 
     result = run_shared_tool("view_notifications", {"count": count})
@@ -530,5 +531,5 @@ def get_user_profile(
         ToolExecutionError: 服务器内部错误
     """
 
-    result = run_shared_tool("get_user_profile", {"user_id": user_id, "post_count": 5})
+    result = run_shared_tool("get_user_profile", {"user_id": user_id})
     return ToolResult(action=result.action, data=result.data)

@@ -43,7 +43,7 @@ def get_global_feed(
         ToolExecutionError: 服务器内部错误
     """
 
-    result = run_shared_tool("get_global_feed", {"feed_type": feed_type, "seed": seed, "count": 5})
+    result = run_shared_tool("get_global_feed", {"feed_type": feed_type, "seed": seed})
     return ToolResult(action=result.action, data=result.data)
 
 
@@ -179,7 +179,7 @@ def scroll(
     该工具不需要知道当前位置，会自动延续最近一次打开的可滚动页面：
     get_global_feed 之后继续加载主页信息流；search_platform 之后继续加载搜索结果；
     view_post_comments 之后继续加载一级评论；expand_comment 之后继续加载该评论下的回复；
-    get_user_profile 之后继续加载用户主页帖子。
+    get_user_profile 之后继续加载用户主页帖子；view_notifications 之后继续加载通知。
 
     注意：此工具会自动从当前执行上下文获取认证信息（如有）。
 
@@ -193,7 +193,7 @@ def scroll(
     Returns:
         ToolResult: 包含以下字段:
             - action: "向下滑动浏览了更多内容"
-            - data: 后续帖子、评论或回复
+            - data: 后续帖子、评论、回复或通知
 
     Raises:
         ToolExecutionError: 服务器内部错误

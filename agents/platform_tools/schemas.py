@@ -20,7 +20,6 @@ class FeedArguments(BaseModel):
 
     feed_type: Literal["recommended", "latest", "following", "hot", "recommend"] = "recommended"
     seed: str = Field(default="default", max_length=64)
-    count: int = Field(default=5, ge=1, le=20)
 
 
 class PostIdArguments(BaseModel):
@@ -63,7 +62,6 @@ class UserProfileArguments(BaseModel):
     """用户主页读取参数。"""
 
     user_id: int = Field(..., gt=0)
-    post_count: int = Field(default=5, ge=1, le=20)
 
 
 class SearchArguments(BaseModel):
@@ -78,7 +76,6 @@ class NotificationListArguments(BaseModel):
     """通知列表读取参数。"""
 
     count: int = Field(default=5, ge=1, le=20)
-    type: str | None = Field(default=None, max_length=64)
 
 
 class NotificationOriginArguments(BaseModel):

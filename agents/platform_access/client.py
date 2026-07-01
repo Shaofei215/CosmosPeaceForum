@@ -14,21 +14,21 @@ import requests
 from agents.platform_access.presenters import normalize_platform_response
 
 
-def build_agent_service_headers(service_token: str) -> dict[str, str]:
+def build_agent_service_headers(admin_key: str) -> dict[str, str]:
     """构造可信 Agent 来源 Header；未配置 Secret 时返回空字典。
 
     Args:
-        service_token: 部署环境中的共享 Secret。
+        admin_key: agents 与公开平台共享的管理密钥。
 
     Returns:
         dict[str, str]: 可合并到内部 HTTP 请求的来源 Header。
     """
 
-    if not service_token:
+    if not admin_key:
         return {}
     return {
         "X-Cosmos-Agent-Source": "agent",
-        "X-Cosmos-Agent-Token": service_token,
+        "X-Cosmos-Agent-Token": admin_key,
     }
 
 
@@ -73,13 +73,13 @@ class PlatformClient:
 
     Args:
         base_url: 公开平台 API 根地址，例如 ``http://social-platform:8000/api/v1``。
-        service_token: 与公开平台共享的 ``AGENT_SERVICE_TOKEN``。
+        admin_key: 与公开平台共享的 ``ADMIN_KEY``。
         timeout_seconds: 单次请求超时秒数。
     """
 
-    def __init__(self, base_url: str, service_token: str, timeout_seconds: float = 30) -> None:
+    def __init__(self, base_url: str, admin_key: str, timeout_seconds: float = 30) -> None:
         self._base_url = base_url.rstrip("/")
-        self._service_token = service_token
+        self._admin_key = admin_key
         self._timeout_seconds = timeout_seconds
 
     def request(
@@ -115,7 +115,7 @@ class PlatformClient:
         headers = {"Content-Type": "application/json"}
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
-        headers.update(build_agent_service_headers(self._service_token))
+        headers.update(build_agent_service_headers(self._admin_key))
         if extra_headers:
             headers.update(extra_headers)
 

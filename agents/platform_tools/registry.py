@@ -82,7 +82,7 @@ def _get_global_feed(ctx: PlatformToolContext, args: schemas.FeedArguments) -> P
     """读取主页信息流。"""
 
     feed_type = normalize_feed_type(args.feed_type)
-    count = normalize_count(args.count)
+    count = 5
     response = ctx.request(
         "GET",
         "/feeds/feed/all",
@@ -105,7 +105,6 @@ def _get_global_feed(ctx: PlatformToolContext, args: schemas.FeedArguments) -> P
         }
         if has_more
         else None,
-        has_more=has_more,
     )
 
 
@@ -125,7 +124,7 @@ def _expand_post(ctx: PlatformToolContext, args: schemas.PostIdArguments) -> Pla
         action = f"展开了 @{author} 的帖子详情"
     else:
         action = f"展开了帖子 {args.post_id} 的详情"
-    return PlatformToolResult(action=action, data={"post": post}, cursor=None, has_more=False)
+    return PlatformToolResult(action=action, data={"post": post}, cursor=None)
 
 
 def _view_post_comments(ctx: PlatformToolContext, args: schemas.ViewPostCommentsArguments) -> PlatformToolResult:
@@ -161,7 +160,6 @@ def _view_post_comments(ctx: PlatformToolContext, args: schemas.ViewPostComments
         }
         if has_more
         else None,
-        has_more=has_more,
     )
 
 
@@ -210,7 +208,6 @@ def _expand_comment(ctx: PlatformToolContext, args: schemas.ExpandCommentArgumen
         }
         if has_more
         else None,
-        has_more=has_more,
     )
 
 
@@ -245,7 +242,6 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
             action=f"向下滑动浏览了更多{feed_type_label(feed_type)}信息流帖子",
             data=data,
             cursor={**cursor, "offset": offset + len(posts)} if has_more else None,
-            has_more=has_more,
         )
     if kind == "user_posts":
         user_id = int(cursor.get("user_id"))
@@ -270,7 +266,6 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
             action=action,
             data={"posts": posts, "pagination": response.get("pagination", {}), "data": posts},
             cursor={**cursor, "offset": offset + len(posts)} if has_more else None,
-            has_more=has_more,
         )
     if kind == "search_results":
         search_type = str(cursor.get("search_type", "content"))
@@ -298,7 +293,6 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
             action=action,
             data=data,
             cursor={**cursor, "offset": offset + len(items)} if has_more else None,
-            has_more=has_more,
         )
     if kind == "post_comments":
         post_id = int(cursor.get("post_id"))
@@ -326,7 +320,6 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
             action=action,
             data={"post": post, "comments": comments, "total": total, "skip": offset, "limit": count},
             cursor={**cursor, "offset": offset + len(comments)} if has_more else None,
-            has_more=has_more,
         )
     if kind == "comment_replies":
         post_id = int(cursor.get("post_id"))
@@ -361,11 +354,27 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
                 "limit": count,
             },
             cursor={**cursor, "offset": offset + len(replies)} if has_more else None,
-            has_more=has_more,
+        )
+    if kind == "notifications":
+        params: dict[str, Any] = {"skip": offset, "limit": count}
+        response = ctx.request("GET", "/notifications", params=params)
+        notifications = normalize_notifications(response.get("items", []), ctx)
+        total = int(response.get("total", offset + len(notifications)) or 0)
+        has_more = offset + len(notifications) < total
+        return PlatformToolResult(
+            action=f"向下滑动浏览了更多消息，共看到 {len(notifications)} 条消息",
+            data={
+                "notifications": notifications,
+                "total": total,
+                "unread_count": response.get("unread_count", 0),
+                "skip": offset,
+                "limit": count,
+            },
+            cursor={**cursor, "offset": offset + len(notifications)} if has_more else None,
         )
     raise PlatformToolError(
         "当前页面没有可继续滚动的内容，请先调用 get_global_feed、search_platform、"
-        "view_post_comments、expand_comment 或 get_user_profile。"
+        "view_post_comments、expand_comment、get_user_profile 或 view_notifications。"
     )
 
 
@@ -379,7 +388,7 @@ def _get_user_profile(ctx: PlatformToolContext, args: schemas.UserProfileArgumen
     response = ctx.request(
         "GET",
         f"/feeds/feed/user/{args.user_id}",
-        params={"page": 1, "page_size": normalize_count(args.post_count)},
+        params={"page": 1, "page_size": 5},
     )
     items, pagination = _paged_items(response)
     posts = normalize_posts(items, ctx)
@@ -398,7 +407,6 @@ def _get_user_profile(ctx: PlatformToolContext, args: schemas.UserProfileArgumen
         }
         if has_more
         else None,
-        has_more=has_more,
     )
 
 
@@ -437,7 +445,6 @@ def _search_platform(ctx: PlatformToolContext, args: schemas.SearchArguments) ->
         }
         if has_more
         else None,
-        has_more=has_more,
     )
 
 
@@ -445,11 +452,10 @@ def _view_notifications(ctx: PlatformToolContext, args: schemas.NotificationList
     """读取通知列表。"""
 
     params: dict[str, Any] = {"skip": 0, "limit": normalize_count(args.count)}
-    if args.type:
-        params["type"] = args.type
     response = ctx.request("GET", "/notifications", params=params)
     notifications = normalize_notifications(response.get("items", []), ctx)
     total = int(response.get("total", len(notifications)) or 0)
+    has_more = len(notifications) < total
     return PlatformToolResult(
         action=f"查看了消息列表，共看到 {len(notifications)} 条消息",
         data={
@@ -459,7 +465,12 @@ def _view_notifications(ctx: PlatformToolContext, args: schemas.NotificationList
             "skip": 0,
             "limit": params["limit"],
         },
-        has_more=len(notifications) < total,
+        cursor={
+            "kind": "notifications",
+            "offset": len(notifications),
+        }
+        if has_more
+        else None,
     )
 
 

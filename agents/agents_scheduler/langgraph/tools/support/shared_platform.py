@@ -37,7 +37,7 @@ def _build_internal_context() -> PlatformToolContext:
     user_id = get_current_user_id()
     current_user = {"id": user_id} if user_id is not None else None
     return PlatformToolContext(
-        client=PlatformClient(base_url=_get_api_base_url(), service_token=config.agent_service_token),
+        client=PlatformClient(base_url=_get_api_base_url(), admin_key=config.admin_key),
         access_token=token,
         current_user=current_user,
         mode=PresentationMode.INTERNAL,

@@ -223,10 +223,10 @@ def run_tool(
         )
 
     config = get_config()
-    cursor_secret = config.agent_service_token or config.jwt_secret_key
+    cursor_secret = config.jwt_secret_key
     client = PlatformClient(
         base_url=config.social_platform_api_base_url,
-        service_token=config.agent_service_token,
+        admin_key=config.admin_key,
     )
 
     try:
@@ -256,6 +256,5 @@ def run_tool(
         meta=ToolMeta(
             request_id=request_id,
             scroll_cursor=result.scroll_cursor,
-            has_more=result.has_more,
         ),
     )
