@@ -11,7 +11,7 @@ import { authApi } from '@/features/auth/api';
 import { useAuthStore } from '@/features/auth';
 import { setTokens } from '@/features/auth/tokenStorage';
 import { Card, CardContent } from '@/shared/components/ui';
-import { BigLogo } from '@/shared/components/auth/BigLogo';
+import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
 
 function getSafeRedirect(value: string | null): string {
   if (!value || !value.startsWith('/') || value.startsWith('//')) {
@@ -54,6 +54,7 @@ export default function ManagementLoginPage() {
 
   return (
     <div className="auth-page" data-auth-word="Login">
+      <AuthIllustration />
       <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardContent className="auth-card-content p-6 text-center text-sm text-muted-foreground">

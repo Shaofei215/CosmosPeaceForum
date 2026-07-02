@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/shared/components/ui';
 import { useAdminProfileUpdate } from '@/features/admin';
-import { BigLogo } from '@/shared/components/auth/BigLogo';
+import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
 
 export default function AdminSetupPage() {
   const navigate = useNavigate();
@@ -30,6 +30,7 @@ export default function AdminSetupPage() {
 
   return (
     <div className="auth-page management-compact bg-background" data-auth-word="Setup">
+      <AuthIllustration />
       <BigLogo />
       <Card className="auth-card w-full max-w-lg rounded-lg bg-white shadow-sm border">
         <CardHeader>

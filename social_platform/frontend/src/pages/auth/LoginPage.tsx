@@ -8,7 +8,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import { useLogin, useSendLoginCode } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
-import { BigLogo } from '@/shared/components/auth/BigLogo';
+import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
 
 type LoginMethod = 'password' | 'code';
 
@@ -158,6 +158,7 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page" data-auth-word="Login">
+      <AuthIllustration />
       <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">

@@ -6,14 +6,14 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ArrowRight } from 'lucide-react';
 import {
   useInvitationRegistrationConfig,
   useRegisterWithVerification,
   useSendVerificationCode,
 } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
-import { BigLogo } from '@/shared/components/auth/BigLogo';
+import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -143,6 +143,7 @@ export default function RegisterPage() {
 
   return (
     <div className="auth-page" data-auth-word="Register">
+      <AuthIllustration />
       <BigLogo />
       <Card className="auth-card auth-register-card rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1 pb-4">
@@ -221,6 +222,8 @@ export default function RegisterPage() {
                   type="button"
                   variant="outline"
                   onClick={handleSendCode}
+                  aria-label={countdown > 0 ? `${countdown}秒后可重新发送` : '获取验证码'}
+                  title={countdown > 0 ? `${countdown}秒后可重新发送` : '获取验证码'}
                   disabled={
                     isSendingCode ||
                     countdown > 0 ||
@@ -229,7 +232,16 @@ export default function RegisterPage() {
                   }
                   className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
                 >
-                  {countdown > 0 ? `${countdown}秒后重试` : '获取验证码'}
+                  <span className="auth-code-button-label">
+                    {countdown > 0 ? `${countdown}秒后重试` : '获取验证码'}
+                  </span>
+                  <span className="auth-code-button-compact hidden items-center justify-center">
+                    {countdown > 0 ? (
+                      countdown
+                    ) : (
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </span>
                 </Button>
               </div>
             </div>

@@ -26,7 +26,7 @@ export default function ErrorPage({ code = '404', title = 'Not Found' }: ErrorPa
   const restTitle = titleParts.slice(1).join(' ');
 
   return (
-    <main className="auth-page">
+    <main className="flex min-h-screen flex-col items-center overflow-hidden bg-background px-4 py-4">
       <BigLogo className="mt-2" />
 
       <section
