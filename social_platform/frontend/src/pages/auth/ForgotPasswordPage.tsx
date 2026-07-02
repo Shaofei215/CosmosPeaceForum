@@ -154,7 +154,7 @@ export default function ForgotPasswordPage() {
                   type="button"
                   variant="outline"
                   onClick={handleSendCode}
-                  disabled={countdown > 0 || isSending}
+                  disabled={isSending || countdown > 0 || !email.trim()}
                   className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
                 >
                   {countdown > 0 ? `${countdown}秒后重试` : isSending ? '发送中...' : '获取验证码'}

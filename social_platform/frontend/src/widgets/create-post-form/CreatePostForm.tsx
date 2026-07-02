@@ -92,7 +92,7 @@ export function CreatePostForm() {
           aria-label="投票"
           onClick={() => setIsPollOpen(value => !value)}
           className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:opacity-85 ${
-            isPollOpen ? 'bg-zinc-950 text-white' : 'bg-slate-100 text-slate-600'
+            isPollOpen ? 'bg-zinc-950 text-white' : 'bg-zinc-100/80 text-zinc-600'
           }`}
         >
           <Vote className="h-[18px] w-[18px]" />
