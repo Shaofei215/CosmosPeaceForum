@@ -150,10 +150,7 @@ export default function RegisterPage() {
           <CardTitle className="auth-title text-2xl font-bold text-center">注册</CardTitle>
         </CardHeader>
         <CardContent className="auth-card-content">
-          <form
-            onSubmit={handleSubmit}
-            className="auth-form grid grid-cols-2 gap-3.5"
-          >
+          <form onSubmit={handleSubmit} className="auth-form grid grid-cols-2 gap-3.5">
             {error && (
               <div className="auth-alert col-span-2 text-sm">
                 <AlertCircle className="h-4 w-4 shrink-0" />
