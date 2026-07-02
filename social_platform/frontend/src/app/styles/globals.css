@@ -364,21 +364,6 @@ textarea:focus {
     var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 
-@media (max-width: 640px) {
-  .auth-page {
-    min-height: 100svh;
-  }
-
-  .auth-card-header {
-    padding-top: 1rem;
-    padding-bottom: 0.75rem;
-  }
-
-  .auth-card-content {
-    padding-bottom: 1rem;
-  }
-}
-
 /* ============================================
    图片样式
    ============================================ */

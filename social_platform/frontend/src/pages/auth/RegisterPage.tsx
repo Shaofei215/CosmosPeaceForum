@@ -152,17 +152,17 @@ export default function RegisterPage() {
         <CardContent className="auth-card-content">
           <form
             onSubmit={handleSubmit}
-            className="auth-form grid grid-cols-1 gap-3.5 md:grid-cols-2"
+            className="auth-form grid grid-cols-2 gap-3.5"
           >
             {error && (
-              <div className="auth-alert text-sm md:col-span-2">
+              <div className="auth-alert col-span-2 text-sm">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
             {/* 邮箱 */}
-            <div className="auth-field space-y-2 md:col-span-2">
+            <div className="auth-field col-span-2 space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
                 邮箱
               </label>
@@ -315,7 +315,7 @@ export default function RegisterPage() {
 
             <Button
               type="submit"
-              className="auth-submit w-full rounded-lg md:col-span-2"
+              className="auth-submit col-span-2 w-full rounded-lg"
               disabled={isPending}
             >
               {isRegistering ? '注册中...' : '注册'}
