@@ -25,6 +25,8 @@ from agents.platform_access import (
     PlatformTimeoutError,
 )
 
+AGENT_POST_PREVIEW_MAX_LENGTH = 470
+
 
 def _get_api_base_url() -> str:
     """
@@ -332,7 +334,10 @@ def _format_repost_chain_for_llm(
     return " //".join(formatted_segments)
 
 
-def _plain_markdown_excerpt(content: str, max_len: int = 220) -> str:
+def _plain_markdown_excerpt(
+    content: str,
+    max_len: int = AGENT_POST_PREVIEW_MAX_LENGTH,
+) -> str:
     text = re.sub(r"```[\s\S]*?```", " ", content or "")
     text = re.sub(r"`([^`]*)`", r"\1", text)
     text = re.sub(r"!\[[^\]]*\]\([^)]+\)", " ", text)
@@ -421,13 +426,18 @@ def _standardize_post(
             content,
             full=include_article_full,
         )
+    elif not include_article_full:
+        content = _truncate(content, AGENT_POST_PREVIEW_MAX_LENGTH)
     formatted_repost_chain = _format_repost_chain_for_llm(
         raw_repost_chain,
         repost_chain_authors,
         current_user_id,
     )
     if formatted_repost_chain:
-        content = formatted_repost_chain
+        content = formatted_repost_chain if include_article_full else _truncate(
+            formatted_repost_chain,
+            AGENT_POST_PREVIEW_MAX_LENGTH,
+        )
 
     embedded_follow_status = _get_embedded_follow_status_text(
         post_data,

@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAdminAuthStore, useAdminLogout, type AdminPermission } from '@/features/admin';
+import { BrandImage } from '@/shared/components/BrandImage';
 
 const navItems = [
   {
@@ -80,16 +81,11 @@ export function AdminLayout() {
       >
         <div className="flex h-12 items-center justify-between border-b border-border px-3">
           {sidebarOpen && (
-            <img
-              src="/biglogo.png"
+            <BrandImage
+              name="biglogo"
+              fallbackNames={['logo']}
               alt="平台管理后台"
               className="h-8 max-w-36 object-contain"
-              onError={event => {
-                if (event.currentTarget.dataset.fallback !== 'true') {
-                  event.currentTarget.dataset.fallback = 'true';
-                  event.currentTarget.src = '/logo.png';
-                }
-              }}
             />
           )}
           <button

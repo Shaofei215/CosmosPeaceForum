@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
 import { useProfileUpdate } from '@/features/auth';
-import { BigLogo } from '@/shared/components/auth/BigLogo';
+import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/shared/components/ui';
 
 export default function SetupPage() {
@@ -38,6 +38,7 @@ export default function SetupPage() {
 
   return (
     <div className="auth-page" data-auth-word="Setup">
+      <AuthIllustration />
       <BigLogo />
       <Card className="auth-card w-full max-w-lg rounded-lg bg-white shadow-sm border">
         <CardHeader className="space-y-2 text-center">

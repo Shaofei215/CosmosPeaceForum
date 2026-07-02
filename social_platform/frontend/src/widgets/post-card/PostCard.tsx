@@ -36,6 +36,8 @@ import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer'
 import { LinkedMentions as MentionText } from '@/shared/components/mention/LinkedMentions';
 import { stripMarkdown } from '@/shared/components/markdown/markdownUtils';
 
+const CONTENT_PREVIEW_LINES = 10;
+
 interface PostCardProps {
   post: PostFeedItem | PostWithLikeStatus;
   expanded?: boolean;
@@ -55,6 +57,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const [isCommentsExpanded, setIsCommentsExpanded] = useState(expanded);
   const [isContentExpanded, setIsContentExpanded] = useState(expanded);
   const [isContentTruncated, setIsContentTruncated] = useState(false);
+  const [expandedContentHeight, setExpandedContentHeight] = useState<number>();
   const [newCommentContent, setNewCommentContent] = useState('');
   // 评论排序是每张帖子卡片自己的状态，避免展开多个帖子时互相影响。
   const [commentSort, setCommentSort] = useState<CommentSort>('default');
@@ -65,7 +68,8 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportError, setReportError] = useState('');
   const [repostContent, setRepostContent] = useState('');
-  const contentRef = useRef<HTMLParagraphElement>(null);
+  const articleContentRef = useRef<HTMLDivElement>(null);
+  const postContentRef = useRef<HTMLParagraphElement>(null);
 
   const authorName =
     'author_name' in post ? post.author_name : post.author?.username || `用户${post.author_id}`;
@@ -120,11 +124,20 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   });
 
   useEffect(() => {
-    if (isArticle) return;
-    if (!contentRef.current) return;
-    const lineHeight = parseInt(getComputedStyle(contentRef.current).lineHeight) || 24;
-    setIsContentTruncated(contentRef.current.scrollHeight > lineHeight * 3 + 1);
-  }, [isArticle, post.content]);
+    const contentElement = isArticle ? articleContentRef.current : postContentRef.current;
+    if (!contentElement || expanded) return;
+
+    const updateTruncation = (): void => {
+      const naturalHeight = contentElement.scrollHeight;
+      setExpandedContentHeight(naturalHeight);
+      setIsContentTruncated(naturalHeight > CONTENT_PREVIEW_LINES * 24 + 1);
+    };
+
+    updateTruncation();
+    const resizeObserver = new ResizeObserver(updateTruncation);
+    resizeObserver.observe(contentElement);
+    return () => resizeObserver.disconnect();
+  }, [expanded, isArticle, post.content, post.title]);
 
   const { data: commentsData, isLoading: isCommentsLoading } = useComments(
     post.id,
@@ -301,16 +314,37 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               onKeyDown={handleArticlePreviewKeyDown}
               className="block cursor-pointer rounded-md transition-colors hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              <h3 className="mb-2 line-clamp-2 text-xl font-semibold leading-7 text-foreground sm:text-2xl sm:leading-8">
-                {post.title || 'Untitled'}
-              </h3>
-              <MarkdownRenderer
-                content={post.content}
-                compact
-                className="text-sm leading-6 text-muted-foreground"
-                mentionUsers={mentionUsers}
-                topicMentions={topicMentions}
-              />
+              <div className="space-y-4">
+                <h1 className="text-xl font-semibold leading-8 text-foreground sm:text-2xl sm:leading-9">
+                  {post.title}
+                </h1>
+                <div className="relative">
+                  <div
+                    ref={articleContentRef}
+                    className={`content-expansion-transition ${
+                      isContentExpanded ? '' : 'article-content-preview'
+                    }`}
+                    style={
+                      {
+                        '--content-preview-lines': CONTENT_PREVIEW_LINES,
+                        maxHeight:
+                          isContentExpanded && expandedContentHeight
+                            ? `${expandedContentHeight}px`
+                            : undefined,
+                      } as React.CSSProperties
+                    }
+                  >
+                    <MarkdownRenderer
+                      content={post.content}
+                      mentionUsers={mentionUsers}
+                      topicMentions={topicMentions}
+                    />
+                  </div>
+                  {!isContentExpanded && isContentTruncated && (
+                    <div className="article-preview-fade" aria-hidden="true" />
+                  )}
+                </div>
+              </div>
             </div>
           )
         ) : (
@@ -321,10 +355,19 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               </Link>
             )}
             <p
-              ref={contentRef}
-              className={`whitespace-pre-wrap break-words text-foreground/90 ${
-                isContentExpanded ? '' : 'line-clamp-3'
+              ref={postContentRef}
+              className={`content-expansion-transition whitespace-pre-wrap break-words text-foreground/90 ${
+                isContentExpanded ? '' : 'post-content-preview'
               }`}
+              style={
+                {
+                  '--content-preview-lines': CONTENT_PREVIEW_LINES,
+                  maxHeight:
+                    isContentExpanded && expandedContentHeight
+                      ? `${expandedContentHeight}px`
+                      : undefined,
+                } as React.CSSProperties
+              }
             >
               <MentionText
                 text={post.content}
@@ -339,7 +382,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         {post.poll && <PollBlock postId={post.id} poll={post.poll} requireLogin={requireLogin} />}
         {post.repost_origin && <RepostOriginBlock origin={post.repost_origin} />}
         {!post.repost_origin && post.repost_origin_missing && <MissingRepostOriginBlock />}
-        {!isArticle && isContentTruncated && (
+        {!expanded && isContentTruncated && (
           <button
             onClick={event => {
               event.preventDefault();

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, Bot, Flame, Home, PlusCircle, UserRound, X } from 'lucide-react';
+import { Bell, Flame, Home, PlusCircle, UserRound, X } from 'lucide-react';
 import { useAuthStore } from '@/features/auth';
 import { useNotificationUnreadCount } from '@/features/notification';
 import { CreatePostForm } from '@/widgets/create-post-form';
@@ -59,7 +59,7 @@ export function MobileBottomBar() {
       )}
 
       <nav className="mobile-bottom-nav fixed inset-x-2 bottom-2 z-50 rounded-[2rem] border border-white/40 bg-white/45 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-white/35">
-        <div className="grid grid-cols-6 items-center gap-1">
+        <div className="grid grid-cols-5 items-center gap-1">
           <MobileNavLink
             to="/feed"
             label="主页"
@@ -69,13 +69,6 @@ export function MobileBottomBar() {
           </MobileNavLink>
           <MobileNavLink to="/hot" label="热门" active={location.pathname === '/hot'}>
             <Flame className="h-5 w-5" />
-          </MobileNavLink>
-          <MobileNavLink
-            to="/agent-access"
-            label="Agent"
-            active={location.pathname === '/agent-access'}
-          >
-            <Bot className="h-5 w-5" />
           </MobileNavLink>
           <MobileNavLink
             to={notificationPath}

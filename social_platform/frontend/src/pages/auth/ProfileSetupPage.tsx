@@ -10,7 +10,7 @@ import { useCompleteProfile, useUploadAvatar, useDeleteAvatar } from '@/features
 import { useAuthStore } from '@/features/auth';
 import { AvatarUpload } from '@/shared/components/avatar-upload';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
-import { BigLogo } from '@/shared/components/auth/BigLogo';
+import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
 
 function extractErrorMessage(err: unknown): string | null {
   if (typeof err === 'object' && err !== null) {
@@ -101,6 +101,7 @@ export default function ProfileSetupPage() {
 
   return (
     <div className="auth-page" data-auth-word="Profile">
+      <AuthIllustration />
       <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">

@@ -12,6 +12,8 @@ from typing import Any
 
 from agents.platform_tools.context import PlatformToolContext
 
+AGENT_POST_PREVIEW_MAX_LENGTH = 470
+
 
 def truncate_text(text: str | None, max_len: int = 100) -> str:
     """截断用于 action 文案的摘要文本。"""
@@ -149,7 +151,10 @@ def _format_content_mentions_for_llm(
     return re.sub(r"@([a-zA-Z0-9_一-龥]+)", replace, content)
 
 
-def _plain_markdown_excerpt(content: str, max_len: int = 220) -> str:
+def _plain_markdown_excerpt(
+    content: str,
+    max_len: int = AGENT_POST_PREVIEW_MAX_LENGTH,
+) -> str:
     """提取 Markdown 文章摘要。"""
 
     text = re.sub(r"```[\s\S]*?```", " ", content or "")
@@ -269,6 +274,8 @@ def normalize_post(
             content,
             full=include_article_full,
         )
+    elif not include_article_full:
+        content = truncate_text(content, AGENT_POST_PREVIEW_MAX_LENGTH)
 
     created_at = data.get("created_at", "")
     embedded_status = _embedded_follow_status(data, ctx, author_id, "author_")

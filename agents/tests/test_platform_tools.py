@@ -16,6 +16,7 @@ from agents.platform_tools import (
     PlatformToolError,
     execute_platform_tool,
 )
+from agents.platform_tools.presenters import _plain_markdown_excerpt
 
 
 class FakePlatformClient:
@@ -147,6 +148,14 @@ def test_expand_post_uses_shared_agent_content_format() -> None:
     )
 
     assert result.data["post"]["content"].startswith("文章标题：长文")
+
+
+def test_article_feed_excerpt_uses_ten_line_character_budget() -> None:
+    """文章预览应按桌面端十行正文对应的 470 字截断。"""
+
+    content = "文" * 471
+
+    assert _plain_markdown_excerpt(content) == "文" * 470 + "..."
 
 
 def test_feed_uses_explicit_token_and_returns_cursor() -> None:

@@ -1,7 +1,8 @@
 /**
- * 左侧栏页脚组件。
+ * 公开平台页脚组件。
  *
- * 展示实例可配置页脚链接、固定协议入口，以及 CosmosPeaceForum 开源项目署名。
+ * 供桌面左侧栏与移动端页面底部复用，展示实例可配置页脚链接、固定协议入口，
+ * 以及 CosmosPeaceForum 开源项目署名。
  */
 
 import type { ReactElement } from 'react';
@@ -26,9 +27,9 @@ const COSMOS_PEACE_FORUM_POWERED_BY_LOGO_SRC =
   COSMOS_PEACE_FORUM_POWERED_BY_LOGOS[COSMOS_PEACE_FORUM_POWERED_BY_LOGO_PATH];
 
 /**
- * 渲染公开平台桌面左栏页脚。
+ * 渲染公开平台通用页脚。
  *
- * @returns 左栏页脚元素。
+ * @returns 可在桌面侧栏或移动端页面底部展示的页脚元素。
  */
 export function SidebarFooter(): ReactElement {
   const { copyright, links } = SIDEBAR_FOOTER_CONFIG;

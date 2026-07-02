@@ -246,6 +246,27 @@ class TestStandardizePost:
             assert result["author_username"] == "nested_user"
             assert result["author_bio"] == "nested bio"
 
+    def test_standardize_post_limits_feed_preview_to_470_characters(self):
+        """信息流中的普通帖子预览应与前端十行正文的容量保持一致。"""
+
+        content = "文" * 471
+        post_data = {
+            "id": 1,
+            "author_id": 10,
+            "author_name": "testuser",
+            "content": content,
+            "created_at": "",
+        }
+        with patch(
+            "agents.agents_scheduler.langgraph.tools.support.platform._get_follow_status_text",
+            return_value="",
+        ):
+            result = _standardize_post(post_data)
+            expanded_result = _standardize_post(post_data, include_article_full=True)
+
+        assert result["content"] == "文" * 470 + "..."
+        assert expanded_result["content"] == content
+
     def test_standardize_post_uses_embedded_follow_status(self):
         post_data = {
             "id": 1,
