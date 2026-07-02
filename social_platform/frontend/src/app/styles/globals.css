@@ -458,14 +458,16 @@ img {
   max-height: calc(var(--content-preview-lines, 10) * 1.5rem);
 }
 
-.article-preview-fade {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 4rem;
-  pointer-events: none;
-  background: linear-gradient(to bottom, rgb(255 255 255 / 0), rgb(255 255 255));
+.content-preview-faded {
+  mask-image: linear-gradient(to bottom, black 0, black calc(100% - 4rem), transparent 100%);
+  mask-repeat: no-repeat;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black 0,
+    black calc(100% - 4rem),
+    transparent 100%
+  );
+  -webkit-mask-repeat: no-repeat;
 }
 
 @media (prefers-reduced-motion: reduce) {
