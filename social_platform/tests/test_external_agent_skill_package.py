@@ -100,9 +100,12 @@ def test_skill_package_renders_deployment_specific_urls(agent_api_base: str) -> 
         "report_content",
         "repost",
         "view_full_hot_topics",
+        "update_profile",
         "logout",
     ):
         assert tool_name in rendered_files["references/TOOLS.md"]
+    assert "/profile/avatar" in rendered_files["references/API.md"]
+    assert "最大 5MB" in rendered_files["references/API.md"]
 
     license_directory = Path(__file__).resolve().parents[1] / "license"
     agreement_sources = {

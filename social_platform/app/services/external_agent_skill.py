@@ -16,7 +16,7 @@ from urllib.parse import urlsplit, urlunsplit
 from zipfile import ZIP_DEFLATED, ZipFile
 
 
-SKILL_VERSION = "1.2.0"
+SKILL_VERSION = "1.3.0"
 SKILL_SCHEMA_VERSION = "1"
 DOWNLOAD_BASE_PATH = "/downloads/cosmos-peace-forum-skill"
 _SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")

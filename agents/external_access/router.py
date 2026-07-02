@@ -10,7 +10,7 @@ import logging
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -37,6 +37,8 @@ from agents.platform_access import (
     PlatformNotFoundError,
     PlatformTimeoutError,
 )
+from agents.platform_tools import PlatformToolContext
+from agents.platform_tools.presenters import normalize_user
 
 
 router = APIRouter()
@@ -315,4 +317,84 @@ def run_tool(
             request_id=request_id,
             scroll_cursor=result.scroll_cursor,
         ),
+    )
+
+
+@router.post("/profile/avatar", response_model=ToolExecutionResponse)
+def upload_profile_avatar(
+    request: Request,
+    file: UploadFile | None = File(default=None, description="头像图片文件"),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> ToolExecutionResponse | JSONResponse:
+    """为外部 Agent 转发当前账号头像文件。
+
+    文件以 multipart 形式原样转发至 social_platform；网关不自行保存头像，也不
+    复制公开平台的 MIME 类型和大小规则。
+
+    Args:
+        request: 当前 HTTP 请求，用于生成请求 ID。
+        file: multipart 字段 ``file`` 中的头像文件。
+        credentials: 当前普通账号 Bearer Access Token。
+
+    Returns:
+        ToolExecutionResponse | JSONResponse: 更新后的用户资料或稳定错误响应。
+    """
+
+    request_id = _request_id(request)
+    tool_name = "upload_avatar"
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return _error_payload(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            error_code="AUTHENTICATION_REQUIRED",
+            message="需要 Bearer Access Token",
+            request_id=request_id,
+            tool=tool_name,
+        )
+    if file is None:
+        return _error_payload(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            error_code="INVALID_ARGUMENTS",
+            message="必须提供 file 头像文件",
+            request_id=request_id,
+            tool=tool_name,
+        )
+
+    access_token = credentials.credentials
+    config = get_config()
+    client = PlatformClient(
+        base_url=config.social_platform_api_base_url,
+        admin_key=config.admin_key,
+    )
+    try:
+        current_user = client.request("GET", "/auth/me", access_token=access_token)
+        uploaded_user = client.upload_file(
+            "/users/avatar",
+            access_token=access_token,
+            field_name="file",
+            filename=file.filename or "avatar",
+            file_object=file.file,
+            content_type=file.content_type,
+        )
+    except PlatformAccessError as exc:
+        return _platform_error_response(
+            exc,
+            request_id,
+            tool_name,
+            unread_count=_get_unread_count(client, access_token),
+        )
+
+    context = PlatformToolContext(
+        client=client,
+        access_token=access_token,
+        current_user=current_user,
+    )
+    user = normalize_user(uploaded_user, context) or uploaded_user
+    unread_count = _get_unread_count(client, access_token)
+    if unread_count is not None:
+        user["unread_count"] = unread_count
+    return ToolExecutionResponse(
+        tool=tool_name,
+        action="更新了自己的头像",
+        data=user,
+        meta=ToolMeta(request_id=request_id),
     )

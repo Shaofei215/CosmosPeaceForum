@@ -155,6 +155,24 @@ class TestManagementDBClient:
         assert result["total_login_count"] == 0
         assert result["last_login_timestamp"] is None
 
+    def test_update_agent_profile_requires_matching_platform_user(self, temp_db: str) -> None:
+        """资料镜像只允许由匹配的公开平台账号更新。"""
+
+        conn = sqlite3.connect(temp_db)
+        conn.execute(
+            "UPDATE agent_configs SET social_platform_user_id = ?, personal_signature = ? WHERE id = 1",
+            (42, "old signature"),
+        )
+        conn.commit()
+        conn.close()
+        client = ManagementDBClient(db_path=temp_db)
+
+        assert client.update_agent_profile(1, 999, "wrong", "wrong") is False
+        assert client.update_agent_profile(1, 42, "new_name", "new signature") is True
+        updated = client.get_agent_config(1)
+        assert updated["username"] == "new_name"
+        assert updated["personal_signature"] == "new signature"
+
     def test_get_active_model_configs(self, temp_db):
         client = ManagementDBClient(db_path=temp_db)
         result = client.get_active_model_configs()

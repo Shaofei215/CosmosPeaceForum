@@ -531,3 +531,40 @@ def get_user_profile(
 
     result = run_shared_tool("get_user_profile", {"user_id": user_id})
     return ToolResult(action=result.action, data=result.data)
+
+
+@tool
+def update_profile(
+    username: Optional[str] = None,
+    personal_signature: Optional[str] = None,
+    reason: str = "想要修改自己的个人资料",
+    summary: str = "",
+) -> ToolResult:
+    """修改当前 Agent 自己的用户名或个人签名。
+
+    至少提供 username 或 personal_signature 中的一项。用户名最多 30 个字符，
+    只能包含字母、数字、下划线和中文；个人签名最多 100 个字符，传入空字符串
+    可以清除签名。内部 Agent 不能通过此工具上传或设置头像。
+
+    Args:
+        username: 新用户名，可选；省略时保持原用户名。
+        personal_signature: 新个人签名，可选；空字符串表示清除。
+        reason: 修改资料的具体原因，用于记录操作动机，75 字以内。
+        summary: 对当前视野的第一人称总结，用于记录工作记忆，200 字以内。
+
+    Returns:
+        ToolResult: 更新后的当前用户资料；成功后当前会话立即使用新用户名和签名。
+
+    Raises:
+        ValidationError: 参数为空、超长或用户名格式不合法。
+        UnauthorizedError: 未登录或 Token 已过期。
+        ToolExecutionError: 公开平台或内部配置同步失败。
+    """
+
+    arguments = {}
+    if username is not None:
+        arguments["username"] = username
+    if personal_signature is not None:
+        arguments["personal_signature"] = personal_signature
+    result = run_shared_tool("update_profile", arguments)
+    return ToolResult(action=result.action, data=result.data)

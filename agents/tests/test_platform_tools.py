@@ -122,6 +122,13 @@ class FakePlatformClient:
             }
         if endpoint == "/auth/logout":
             return {"message": "登出成功"}
+        if endpoint == "/users/1" and method == "PUT":
+            return {
+                "id": 1,
+                "username": (json_data or {}).get("username", "old_name"),
+                "bio": (json_data or {}).get("bio", "old signature"),
+                "avatar_url": None,
+            }
         raise AssertionError(f"unexpected endpoint: {endpoint}")
 
 
@@ -262,6 +269,73 @@ def test_logout_revokes_external_platform_session() -> None:
     assert result.data == {}
     assert client.calls[-1]["method"] == "POST"
     assert client.calls[-1]["endpoint"] == "/auth/logout"
+
+
+def test_update_profile_syncs_internal_configuration() -> None:
+    """资料工具应更新公开平台，并把确认后的完整资料交给内部同步回调。"""
+
+    client = FakePlatformClient()
+    synchronized_profiles: list[dict[str, Any]] = []
+
+    def synchronize(profile: dict[str, Any]) -> bool:
+        """记录共享核心传给内部 Scheduler 的资料。"""
+
+        synchronized_profiles.append(profile)
+        return True
+
+    result = execute_platform_tool(
+        "update_profile",
+        {"username": "new_name", "personal_signature": "new signature"},
+        PlatformToolContext(
+            client=client,
+            access_token="token",
+            current_user={"id": 1, "username": "old_name", "bio": "old signature"},
+            profile_sync=synchronize,
+        ),
+    )
+
+    assert client.calls[-1]["json_data"] == {"username": "new_name", "bio": "new signature"}
+    assert synchronized_profiles[0]["username"] == "new_name"
+    assert result.data["username"] == "new_name"
+    assert result.data["bio"] == "new signature"
+
+
+def test_update_profile_rolls_back_platform_when_internal_sync_fails() -> None:
+    """内部配置写入失败时必须恢复公开平台的旧用户名和签名。"""
+
+    client = FakePlatformClient()
+    context = PlatformToolContext(
+        client=client,
+        access_token="token",
+        current_user={"id": 1, "username": "old_name", "bio": "old signature"},
+        profile_sync=lambda _: False,
+    )
+
+    with pytest.raises(PlatformToolError, match="已自动回滚"):
+        execute_platform_tool(
+            "update_profile",
+            {"username": "new_name", "personal_signature": "new signature"},
+            context,
+        )
+
+    profile_calls = [call for call in client.calls if call["endpoint"] == "/users/1"]
+    assert profile_calls[-1]["json_data"] == {
+        "username": "old_name",
+        "bio": "old signature",
+    }
+
+
+def test_update_profile_requires_at_least_one_field() -> None:
+    """空资料更新必须在请求公开平台前被参数模型拒绝。"""
+
+    client = FakePlatformClient()
+    with pytest.raises(PlatformToolError):
+        execute_platform_tool(
+            "update_profile",
+            {},
+            PlatformToolContext(client=client, access_token="token", current_user={"id": 1}),
+        )
+    assert client.calls == []
 
 
 def test_list_tools_return_entities_without_pagination_or_totals() -> None:

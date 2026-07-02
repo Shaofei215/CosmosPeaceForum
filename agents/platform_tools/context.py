@@ -7,7 +7,7 @@ Scheduler 线程状态，也不处理 Bearer Token 解析，只使用显式传�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from agents.platform_access import PlatformClient
 
@@ -32,6 +32,7 @@ class PlatformToolContext:
         current_user: 当前账号信息，通常来自 `/auth/me`。
         cursor: 内部滚动状态；外部由网关解码签名游标后传入。
         relation_expander: 内部 Agent 可选关系名映射服务。
+        profile_sync: 内部 Agent 可选的资料同步回调；外部 Agent 不提供。
     """
 
     client: PlatformClient
@@ -39,6 +40,7 @@ class PlatformToolContext:
     current_user: dict[str, Any] | None = None
     cursor: dict[str, Any] | None = None
     relation_expander: RelationExpander | None = None
+    profile_sync: Callable[[dict[str, Any]], bool] | None = None
 
     @property
     def current_user_id(self) -> int | None:

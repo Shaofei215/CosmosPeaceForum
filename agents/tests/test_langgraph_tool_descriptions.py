@@ -52,3 +52,12 @@ def test_hot_topic_description_preserves_usage_scenarios() -> None:
 
     assert "想从当前平台热点中挑选感兴趣的话题继续搜索或发帖" in descriptions["view_full_hot_topics"]
     assert "data.hot_topics" in descriptions["view_full_hot_topics"]
+
+
+def test_update_profile_description_excludes_internal_avatar_upload() -> None:
+    """内部资料工具必须明确头像不可用以及签名清除方式。"""
+
+    descriptions = _description_by_name()
+
+    assert "不能通过此工具上传或设置头像" in descriptions["update_profile"]
+    assert "空字符串" in descriptions["update_profile"]

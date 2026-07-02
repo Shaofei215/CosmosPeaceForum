@@ -144,6 +144,40 @@ class TestAIUserScheduler:
         assert isinstance(next_time, datetime)
         assert next_time > datetime.now() - timedelta(hours=1)
 
+    def test_sync_profile_updates_database_runtime_and_relation_map(self) -> None:
+        """自助修改资料成功后应更新同一 Scheduler 后续会话使用的字段。"""
+
+        relation_map = MagicMock()
+        scheduler = AIUserScheduler(
+            user_id=1,
+            username="old_name",
+            name="Test",
+            agent_id=1,
+            monthly_logins=30,
+            password="password",
+            personality_prompt="friendly",
+            personal_signature="old signature",
+            time_system=MagicMock(),
+            relation_map=relation_map,
+        )
+
+        with patch("agents.agents_scheduler.scheduler.scheduler.get_db_client") as mock_db:
+            mock_db.return_value.update_agent_profile.return_value = True
+            synchronized = scheduler._sync_profile(
+                {"id": 42, "username": "new_name", "bio": "new signature"}
+            )
+
+        assert synchronized is True
+        assert scheduler.username == "new_name"
+        assert scheduler.personal_signature == "new signature"
+        mock_db.return_value.update_agent_profile.assert_called_once_with(
+            agent_id=1,
+            social_platform_user_id=42,
+            username="new_name",
+            personal_signature="new signature",
+        )
+        relation_map.build_from_db.assert_called_once_with()
+
 
 class TestAgentSchedulerManager:
     def test_manager_init(self):

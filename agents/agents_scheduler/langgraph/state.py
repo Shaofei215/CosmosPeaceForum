@@ -53,7 +53,7 @@ class SessionState(TypedDict):
     包含了身份信息、会话控制、工作记忆、当前位置等。
 
     设计要点：
-    - 身份信息在初始化时设置，之后不可更改
+    - 身份信息在初始化时设置；仅 update_profile 成功后允许更新用户名和个人签名
     - action_history 是工作记忆，让 LLM 知道自己做了什么决策
     - last_tool_result 是上一次工具调用的完整返回值，给下一次决策看
     - current_location 追踪 LLM 当前所在的"页面"
@@ -86,7 +86,7 @@ class SessionState(TypedDict):
 
         summary: 会话总结，登出后由总结节点生成，准备写入 RAG 记忆库
     """
-    # === 身份信息（初始化时设置，过程中不可更改）===
+    # === 身份信息（初始化时设置；资料工具可更新用户名和个人签名）===
     user_id: int                            # 用户 ID
     username: str                            # 用户名（登录用）
     name: str                               # 昵称（显示用）

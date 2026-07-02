@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Callable
 
 from pydantic import BaseModel, ValidationError as PydanticValidationError
@@ -24,6 +25,9 @@ from agents.platform_tools.presenters import (
     truncate_text,
 )
 from agents.platform_tools.results import PlatformToolError, PlatformToolResult
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -378,6 +382,65 @@ def _get_user_profile(ctx: PlatformToolContext, args: schemas.UserProfileArgumen
         }
         if has_more
         else None,
+    )
+
+
+def _update_profile(ctx: PlatformToolContext, args: schemas.UpdateProfileArguments) -> PlatformToolResult:
+    """更新当前账号用户名和个人签名，并同步内部 Agent 配置。
+
+    Args:
+        ctx: 当前平台工具执行上下文。
+        args: 用户名与个人签名的部分更新参数。
+
+    Returns:
+        PlatformToolResult: 更新后的标准化用户资料。
+
+    Raises:
+        PlatformToolError: 当前用户缺失，或内部配置同步及补偿回滚失败。
+    """
+
+    user_id = ctx.current_user_id
+    if user_id is None:
+        raise PlatformToolError("当前账号信息缺失，无法修改个人资料")
+
+    payload: dict[str, Any] = {}
+    rollback_payload: dict[str, Any] = {}
+    current_user = ctx.current_user or {}
+    if args.username is not None:
+        payload["username"] = args.username
+        rollback_payload["username"] = current_user.get("username")
+    if args.personal_signature is not None:
+        payload["bio"] = args.personal_signature
+        rollback_payload["bio"] = current_user.get("bio")
+
+    updated_user = ctx.request("PUT", f"/users/{user_id}", json_data=payload)
+    if ctx.profile_sync is not None:
+        try:
+            synchronized = ctx.profile_sync(updated_user)
+        except Exception:
+            logger.exception("内部 Agent 资料同步失败: agent_user_id=%s", user_id)
+            synchronized = False
+
+        if not synchronized:
+            if any(value is None for value in rollback_payload.values()):
+                raise PlatformToolError("内部配置同步失败，且缺少旧资料无法自动回滚")
+            try:
+                ctx.request("PUT", f"/users/{user_id}", json_data=rollback_payload)
+            except Exception as exc:
+                logger.exception("内部 Agent 资料补偿回滚失败: agent_user_id=%s", user_id)
+                raise PlatformToolError("内部配置同步失败，公开平台资料自动回滚也失败") from exc
+            raise PlatformToolError("内部配置同步失败，公开平台资料已自动回滚")
+
+    ctx.current_user = updated_user
+    user = normalize_user(updated_user, ctx) or updated_user
+    changed_fields = []
+    if args.username is not None:
+        changed_fields.append("用户名")
+    if args.personal_signature is not None:
+        changed_fields.append("个人签名")
+    return PlatformToolResult(
+        action=f"修改了自己的{'和'.join(changed_fields)}",
+        data=user,
     )
 
 
@@ -756,6 +819,14 @@ PLATFORM_TOOLS: dict[str, PlatformToolDefinition] = {
         "read",
         schemas.UserProfileArguments,
         _get_user_profile,
+        True,
+    ),
+    "update_profile": PlatformToolDefinition(
+        "update_profile",
+        "修改当前账号的用户名和个人签名",
+        "write",
+        schemas.UpdateProfileArguments,
+        _update_profile,
         True,
     ),
     "search_platform": PlatformToolDefinition(

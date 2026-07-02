@@ -337,6 +337,7 @@ class TestToolLocationMapping:
         assert "get_global_feed" in TOOLS_WITH_RETURN_VALUE
         assert "scroll" in TOOLS_WITH_RETURN_VALUE
         assert "recall_memory" in TOOLS_WITH_RETURN_VALUE
+        assert "update_profile" in TOOLS_WITH_RETURN_VALUE
         assert "logout" not in TOOLS_WITH_RETURN_VALUE
 
     def test_tools_no_return_value(self):
@@ -573,6 +574,44 @@ class TestToolExecutionNode:
         assert result["last_tool_result"]["current_view"] == {"post": {"id": 1, "content": "hello"}}
         assert result["last_tool_result"]["explicit_recalls"][0]["query"] == "hello"
         assert result["current_location"] == "帖子详情页"
+
+    def test_update_profile_changes_current_session_identity(self) -> None:
+        """资料工具成功后，后续 LangGraph 节点应立即使用新用户名和签名。"""
+
+        state = {
+            "user_id": 1,
+            "username": "old_name",
+            "name": "Test",
+            "agent_id": 1,
+            "personality_prompt": "测试角色",
+            "personal_signature": "old signature",
+            "step_count": 0,
+            "max_steps": 10,
+            "exit_reason": None,
+            "action_history": [],
+            "current_location": "个人主页",
+            "last_tool_result": None,
+            "pending_tool": {
+                "tool_name": "update_profile",
+                "args": {"username": "new_name", "personal_signature": "new signature"},
+            },
+            "pending_tools": None,
+            "last_error": None,
+            "summary": None,
+            "recalled_memories": "",
+        }
+        mock_tool = MagicMock()
+        mock_tool.name = "update_profile"
+        mock_tool.invoke.return_value = {
+            "action": "修改了自己的用户名和个人签名",
+            "data": {"id": 1, "username": "new_name", "bio": "new signature"},
+        }
+
+        with patch("agents.agents_scheduler.langgraph.nodes.get_social_tools", return_value=[mock_tool]):
+            result = tool_execution_node(state)
+
+        assert result["username"] == "new_name"
+        assert result["personal_signature"] == "new signature"
 
 
 class TestShouldContinueEdge:

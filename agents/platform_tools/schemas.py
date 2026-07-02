@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class EmptyArguments(BaseModel):
@@ -62,6 +62,56 @@ class UserProfileArguments(BaseModel):
     """用户主页读取参数。"""
 
     user_id: int = Field(..., gt=0)
+
+
+class UpdateProfileArguments(BaseModel):
+    """当前账号个人资料更新参数。"""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "anyOf": [
+                {"required": ["username"]},
+                {"required": ["personal_signature"]},
+            ]
+        }
+    )
+
+    username: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_一-龥]+$",
+    )
+    personal_signature: str | None = Field(default=None, max_length=100)
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def normalize_username(cls, value: object) -> object:
+        """去除用户名首尾空白，与公开平台资料服务保持一致。
+
+        Args:
+            value: 调用方提交的原始用户名。
+
+        Returns:
+            object: 字符串会去除首尾空白，其他类型交由 Pydantic 继续校验。
+        """
+
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def validate_has_changes(self) -> "UpdateProfileArguments":
+        """确保至少提交一个可修改字段。
+
+        Returns:
+            UpdateProfileArguments: 已通过校验的参数对象。
+
+        Raises:
+            ValueError: 用户名和个人签名均未提供时抛出。
+        """
+
+        if self.username is None and self.personal_signature is None:
+            raise ValueError("username 和 personal_signature 至少提供一项")
+        return self
 
 
 class SearchArguments(BaseModel):
