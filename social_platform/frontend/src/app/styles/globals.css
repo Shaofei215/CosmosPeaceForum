@@ -489,11 +489,30 @@ img {
   margin-top: 0.375rem;
 }
 
-.markdown-body-compact p {
-  display: -webkit-box;
+.content-expansion-transition {
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  transition: max-height 300ms ease-in-out;
+}
+
+.post-content-preview,
+.article-content-preview {
+  max-height: calc(var(--content-preview-lines, 10) * 1.5rem);
+}
+
+.article-preview-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4rem;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0), rgb(255 255 255));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-expansion-transition {
+    transition: none;
+  }
 }
 
 .markdown-link,

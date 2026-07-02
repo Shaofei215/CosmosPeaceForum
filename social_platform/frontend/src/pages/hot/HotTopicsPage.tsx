@@ -6,7 +6,7 @@ import { Skeleton } from '@/shared/components/ui';
 
 export default function HotTopicsPage() {
   const { data: hotTopics = [], isLoading } = useHotTopics(50);
-  const { data: trendingTopics = [], isLoading: isTopicsLoading } = useTrendingTopics(12);
+  const { data: trendingTopics = [], isLoading: isTopicsLoading } = useTrendingTopics(8);
 
   return (
     <div className="space-y-3">
