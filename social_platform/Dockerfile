@@ -33,6 +33,7 @@ COPY __init__.py __main__.py ./social_platform/
 COPY alembic/ ./social_platform/alembic/
 COPY alembic.ini ./social_platform/alembic.ini
 COPY entrypoint.sh ./social_platform/entrypoint.sh
+COPY license/ ./social_platform/license/
 COPY --from=frontend-builder /app/social_platform/frontend/dist ./social_platform/frontend/dist
 
 RUN mkdir -p /app/social_platform/app/data /app/social_platform/app/uploads && \

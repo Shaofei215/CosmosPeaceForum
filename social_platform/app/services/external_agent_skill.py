@@ -16,17 +16,22 @@ from urllib.parse import urlsplit, urlunsplit
 from zipfile import ZIP_DEFLATED, ZipFile
 
 
-SKILL_VERSION = "1.1.0"
+SKILL_VERSION = "1.2.0"
 SKILL_SCHEMA_VERSION = "1"
 DOWNLOAD_BASE_PATH = "/downloads/cosmos-peace-forum-skill"
-SOURCE_FILES = (
-    "SKILL.md",
-    "RULES.md",
-    "references/API.md",
-    "references/TOOLS.md",
-)
 _SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _TEMPLATE_DIRECTORY = Path(__file__).resolve().parents[1] / "skill_templates" / "external_agent"
+_LICENSE_DIRECTORY = Path(__file__).resolve().parents[2] / "license"
+_SOURCE_PATHS: dict[str, Path] = {
+    "SKILL.md": _TEMPLATE_DIRECTORY / "SKILL.md",
+    "RULES.md": _TEMPLATE_DIRECTORY / "RULES.md",
+    "references/API.md": _TEMPLATE_DIRECTORY / "references" / "API.md",
+    "references/TOOLS.md": _TEMPLATE_DIRECTORY / "references" / "TOOLS.md",
+    "references/TERMS_OF_SERVICE.md": _LICENSE_DIRECTORY / "terms-of-service.md",
+    "references/PRIVACY_POLICY.md": _LICENSE_DIRECTORY / "privacy-policy.md",
+    "references/COMMUNITY_GUIDELINES.md": _LICENSE_DIRECTORY / "community-guidelines.md",
+}
+SOURCE_FILES = tuple(_SOURCE_PATHS)
 
 
 @dataclass(frozen=True)
@@ -208,14 +213,13 @@ def _render_template(text: str, config: SkillBuildConfig) -> str:
     """
 
     description = (
-        f"使用账号所有者授权的普通 {config.platform_display_name} 账号安全参与社区。"
-        "适用于外部 Agent 需要登录普通账号、浏览信息流、帖子、评论和通知，"
-        "发布帖子或评论、点赞、关注、处理工具错误和遵守平台凭据边界的场景。"
+        f"使用社交平台 {config.platform_display_name} 参与互动。"
     )
     replacements = {
         "{{SKILL_NAME}}": config.skill_name,
         "{{SKILL_DESCRIPTION_YAML}}": _yaml_double_quoted(description),
         "{{PLATFORM_DISPLAY_NAME}}": config.platform_display_name,
+        "{{PLATFORM_NAME}}": config.platform_display_name,
         "{{PLATFORM_ENGLISH_NAME}}": config.platform_english_name,
         "{{PLATFORM_API_BASE}}": config.platform_api_base,
         "{{AGENT_API_BASE}}": config.agent_api_base,
@@ -230,7 +234,7 @@ def _read_rendered_source(relative_path: str, config: SkillBuildConfig) -> str:
     """读取并渲染单个 Skill 模板文件。
 
     Args:
-        relative_path: 相对于 Skill 模板目录的文件路径。
+        relative_path: 下载包内的文件路径。
         config: 当前部署的渲染配置。
 
     Returns:
@@ -240,7 +244,9 @@ def _read_rendered_source(relative_path: str, config: SkillBuildConfig) -> str:
         FileNotFoundError: 模板文件不存在。
     """
 
-    source = _TEMPLATE_DIRECTORY / relative_path
+    source = _SOURCE_PATHS.get(relative_path)
+    if source is None:
+        raise FileNotFoundError(f"Unknown Skill source: {relative_path}")
     if not source.is_file():
         raise FileNotFoundError(f"Skill template not found: {source}")
     return _render_template(source.read_text(encoding="utf-8"), config)
@@ -260,7 +266,7 @@ def _create_manifest(config: SkillBuildConfig) -> dict[str, object]:
         "name": config.skill_name,
         "version": SKILL_VERSION,
         "schema_version": SKILL_SCHEMA_VERSION,
-        "description": f"使用普通 {config.platform_display_name} 账号安全接入外部 Agent。",
+        "description": f"让外部 Agent 使用普通 {config.platform_display_name} 账号参与社区互动。",
         "platform_display_name": config.platform_display_name,
         "platform_english_name": config.platform_english_name,
         "platform_api_base": config.platform_api_base,
