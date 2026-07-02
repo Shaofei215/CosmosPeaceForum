@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronDown as ExpandIcon,
@@ -38,6 +46,63 @@ import { stripMarkdown } from '@/shared/components/markdown/markdownUtils';
 
 const CONTENT_PREVIEW_LINES = 10;
 
+interface ContentPreviewMeasurement {
+  height: number;
+  lineCount: number;
+}
+
+/**
+ * 测量正文真实文本行，并返回指定行数末行底边对应的预览高度。
+ *
+ * 相比用固定行高相乘，此方法会纳入 Markdown 标题、列表和段间距，确保裁切点
+ * 落在第十行文字的底边，而不是落在某一行中间或段间空白中。
+ *
+ * @param element 正文内容根元素。
+ * @param maximumLines 折叠状态最多展示的文本行数。
+ * @returns 正文总行数及折叠预览应使用的像素高度。
+ */
+function measureContentPreview(
+  element: HTMLElement,
+  maximumLines: number
+): ContentPreviewMeasurement {
+  const elementTop = element.getBoundingClientRect().top;
+  const textRectangles: DOMRect[] = [];
+  const treeWalker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let textNode = treeWalker.nextNode();
+
+  while (textNode) {
+    if (textNode.textContent?.length) {
+      const range = document.createRange();
+      range.selectNodeContents(textNode);
+      textRectangles.push(...Array.from(range.getClientRects()).filter(rect => rect.height > 0));
+      range.detach();
+    }
+    textNode = treeWalker.nextNode();
+  }
+
+  textRectangles.sort((left, right) => left.top - right.top || left.left - right.left);
+  const lines: Array<{ top: number; bottom: number }> = [];
+
+  for (const rectangle of textRectangles) {
+    const currentLine = lines[lines.length - 1];
+    if (currentLine && Math.abs(currentLine.top - rectangle.top) <= 2) {
+      currentLine.bottom = Math.max(currentLine.bottom, rectangle.bottom);
+      continue;
+    }
+    lines.push({ top: rectangle.top, bottom: rectangle.bottom });
+  }
+
+  if (lines.length <= maximumLines) {
+    return { height: element.scrollHeight, lineCount: lines.length };
+  }
+
+  const lastVisibleLine = lines[maximumLines - 1];
+  return {
+    height: Math.min(element.scrollHeight, Math.ceil(lastVisibleLine.bottom - elementTop)),
+    lineCount: lines.length,
+  };
+}
+
 interface PostCardProps {
   post: PostFeedItem | PostWithLikeStatus;
   expanded?: boolean;
@@ -58,6 +123,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const [isContentExpanded, setIsContentExpanded] = useState(expanded);
   const [isContentTruncated, setIsContentTruncated] = useState(false);
   const [expandedContentHeight, setExpandedContentHeight] = useState<number>();
+  const [previewContentHeight, setPreviewContentHeight] = useState<number>();
   const [newCommentContent, setNewCommentContent] = useState('');
   // 评论排序是每张帖子卡片自己的状态，避免展开多个帖子时互相影响。
   const [commentSort, setCommentSort] = useState<CommentSort>('default');
@@ -125,14 +191,16 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
     initialData: initialFollowStatus,
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const contentElement = isArticle ? articleContentRef.current : postContentRef.current;
     if (!contentElement || expanded) return;
 
     const updateTruncation = (): void => {
       const naturalHeight = contentElement.scrollHeight;
+      const previewMeasurement = measureContentPreview(contentElement, CONTENT_PREVIEW_LINES);
       setExpandedContentHeight(naturalHeight);
-      setIsContentTruncated(naturalHeight > CONTENT_PREVIEW_LINES * 24 + 1);
+      setPreviewContentHeight(previewMeasurement.height);
+      setIsContentTruncated(previewMeasurement.lineCount > CONTENT_PREVIEW_LINES);
     };
 
     updateTruncation();
@@ -393,14 +461,16 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                     ref={articleContentRef}
                     className={`content-expansion-transition ${
                       isContentExpanded ? '' : 'article-content-preview'
-                    }`}
+                    } ${!isContentExpanded && isContentTruncated ? 'content-preview-faded' : ''}`}
                     style={
                       {
                         '--content-preview-lines': CONTENT_PREVIEW_LINES,
                         maxHeight:
                           isContentExpanded && expandedContentHeight
                             ? `${expandedContentHeight}px`
-                            : undefined,
+                            : previewContentHeight
+                              ? `${previewContentHeight}px`
+                              : undefined,
                       } as React.CSSProperties
                     }
                   >
@@ -410,9 +480,6 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                       topicMentions={topicMentions}
                     />
                   </div>
-                  {!isContentExpanded && isContentTruncated && (
-                    <div className="article-preview-fade" aria-hidden="true" />
-                  )}
                 </div>
               </div>
             </div>
@@ -424,29 +491,33 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                 <h3 className="mb-2 line-clamp-2 text-lg font-semibold">{post.title}</h3>
               </Link>
             )}
-            <p
-              ref={postContentRef}
-              className={`content-expansion-transition whitespace-pre-wrap break-words text-foreground/90 ${
-                isContentExpanded ? '' : 'post-content-preview'
-              }`}
-              style={
-                {
-                  '--content-preview-lines': CONTENT_PREVIEW_LINES,
-                  maxHeight:
-                    isContentExpanded && expandedContentHeight
-                      ? `${expandedContentHeight}px`
-                      : undefined,
-                } as React.CSSProperties
-              }
-            >
-              <MentionText
-                text={post.content}
-                users={mentionUsers}
-                topics={topicMentions}
-                onMentionClick={event => event.stopPropagation()}
-                onTopicClick={event => event.stopPropagation()}
-              />
-            </p>
+            <div className="relative">
+              <p
+                ref={postContentRef}
+                className={`content-expansion-transition whitespace-pre-wrap break-words text-foreground/90 ${
+                  isContentExpanded ? '' : 'post-content-preview'
+                } ${!isContentExpanded && isContentTruncated ? 'content-preview-faded' : ''}`}
+                style={
+                  {
+                    '--content-preview-lines': CONTENT_PREVIEW_LINES,
+                    maxHeight:
+                      isContentExpanded && expandedContentHeight
+                        ? `${expandedContentHeight}px`
+                        : previewContentHeight
+                          ? `${previewContentHeight}px`
+                          : undefined,
+                  } as React.CSSProperties
+                }
+              >
+                <MentionText
+                  text={post.content}
+                  users={mentionUsers}
+                  topics={topicMentions}
+                  onMentionClick={event => event.stopPropagation()}
+                  onTopicClick={event => event.stopPropagation()}
+                />
+              </p>
+            </div>
           </>
         )}
         {post.poll && <PollBlock postId={post.id} poll={post.poll} requireLogin={requireLogin} />}
