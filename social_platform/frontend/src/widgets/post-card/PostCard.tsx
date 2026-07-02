@@ -70,6 +70,8 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const [repostContent, setRepostContent] = useState('');
   const articleContentRef = useRef<HTMLDivElement>(null);
   const postContentRef = useRef<HTMLParagraphElement>(null);
+  const contentToggleRef = useRef<HTMLButtonElement>(null);
+  const collapseViewportCleanupRef = useRef<(() => void) | null>(null);
 
   const authorName =
     'author_name' in post ? post.author_name : post.author?.username || `用户${post.author_id}`;
@@ -138,6 +140,74 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
     resizeObserver.observe(contentElement);
     return () => resizeObserver.disconnect();
   }, [expanded, isArticle, post.content, post.title]);
+
+  useEffect(
+    () => () => {
+      collapseViewportCleanupRef.current?.();
+    },
+    []
+  );
+
+  /**
+   * 切换长内容的展开状态，并在收起期间锚定操作按钮的视口位置。
+   *
+   * 内容高度缩小时，按按钮相对视口的位移同步上滑页面，避免读者停留在后续帖子中。
+   * 浏览器若已完成原生滚动锚定，按钮位置不变，因此不会产生重复补偿。
+   *
+   * @param event 展开或收起按钮的点击事件。
+   */
+  const handleContentExpansionToggle = (event: MouseEvent<HTMLButtonElement>): void => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    collapseViewportCleanupRef.current?.();
+
+    if (!isContentExpanded) {
+      setIsContentExpanded(true);
+      return;
+    }
+
+    const contentElement = isArticle ? articleContentRef.current : postContentRef.current;
+    const toggleElement = contentToggleRef.current;
+    if (!contentElement || !toggleElement) {
+      setIsContentExpanded(false);
+      return;
+    }
+
+    const anchorTop = toggleElement.getBoundingClientRect().top;
+
+    const resizeObserver = new ResizeObserver(() => {
+      const viewportOffset = toggleElement.getBoundingClientRect().top - anchorTop;
+      if (Math.abs(viewportOffset) < 0.5) return;
+
+      window.scrollBy({ top: viewportOffset, left: 0, behavior: 'auto' });
+    });
+
+    const stopViewportTracking = (): void => {
+      resizeObserver.disconnect();
+      contentElement.removeEventListener('transitionend', handleTransitionEnd);
+      window.clearTimeout(timeoutId);
+      if (collapseViewportCleanupRef.current === stopViewportTracking) {
+        collapseViewportCleanupRef.current = null;
+      }
+    };
+
+    const handleTransitionEnd = (transitionEvent: TransitionEvent): void => {
+      if (
+        transitionEvent.target !== contentElement ||
+        transitionEvent.propertyName !== 'max-height'
+      ) {
+        return;
+      }
+      stopViewportTracking();
+    };
+
+    resizeObserver.observe(contentElement);
+    contentElement.addEventListener('transitionend', handleTransitionEnd);
+    const timeoutId = window.setTimeout(stopViewportTracking, 350);
+    collapseViewportCleanupRef.current = stopViewportTracking;
+    setIsContentExpanded(false);
+  };
 
   const { data: commentsData, isLoading: isCommentsLoading } = useComments(
     post.id,
@@ -384,11 +454,8 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
         {!post.repost_origin && post.repost_origin_missing && <MissingRepostOriginBlock />}
         {!expanded && isContentTruncated && (
           <button
-            onClick={event => {
-              event.preventDefault();
-              event.stopPropagation();
-              setIsContentExpanded(!isContentExpanded);
-            }}
+            ref={contentToggleRef}
+            onClick={handleContentExpansionToggle}
             className="mt-2 flex items-center gap-1 text-sm text-zinc-950 transition-colors hover:opacity-80"
           >
             {isContentExpanded ? (
