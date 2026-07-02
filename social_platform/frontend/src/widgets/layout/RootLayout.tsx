@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
-import { LeftSidebar } from '@/widgets/left-sidebar';
+import { LeftSidebar, SidebarFooter } from '@/widgets/left-sidebar';
 import { RightSidebar } from '@/widgets/right-sidebar';
 import { TopBar } from '@/widgets/top-bar';
 import { cn } from '@/shared/lib/utils';
@@ -87,6 +87,11 @@ export function RootLayout() {
 
           <div className={cn('w-full flex-shrink-0', isAuthPage ? 'max-w-none' : 'max-w-2xl')}>
             <Outlet />
+            {!isAuthPage && (
+              <div className="mx-2 mt-6 border-t border-border/60 px-2 py-6 lg:hidden">
+                <SidebarFooter />
+              </div>
+            )}
           </div>
 
           {showTopAndRight && (
