@@ -69,6 +69,7 @@ TOOL_TO_LOCATION = {
     "view_post_comments": "评论页",
     "expand_comment": "评论页",
     "get_user_profile": "用户主页",
+    "update_profile": None,
     "toggle_post_like": None,
     "toggle_comment_like": None,
     "toggle_follow": None,
@@ -89,6 +90,7 @@ TOOLS_WITH_RETURN_VALUE = {
     "view_full_hot_topics",
     "search_platform",
     "get_user_profile",
+    "update_profile",
     "get_global_feed",
     "expand_post",
     "view_post_comments",
@@ -606,6 +608,14 @@ def tool_execution_node(state: SessionState) -> SessionState:
         )
     last_tool_result = _attach_current_unread_count(last_tool_result)
 
+    profile_state_updates: dict[str, Any] = {}
+    if tool_name == "update_profile" and isinstance(last_tool_result, dict):
+        updated_username = last_tool_result.get("username")
+        if updated_username:
+            profile_state_updates["username"] = str(updated_username)
+        if "bio" in last_tool_result:
+            profile_state_updates["personal_signature"] = str(last_tool_result.get("bio") or "")
+
     new_location = _get_location_after_tool(tool_name)
     current_location = new_location if new_location is not None else state.get("current_location", "主页（信息流）")
 
@@ -613,6 +623,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
         logger.info("tool_execution_node | 用户=%s | 步骤=%d | 批量工具还有 %d 个待执行", username, step_count, len(pending_tools))
         return {
             **state,
+            **profile_state_updates,
             "action_history": state["action_history"] + [new_record],
             "current_location": current_location,
             "last_tool_result": last_tool_result if last_tool_result else state.get("last_tool_result"),
@@ -624,6 +635,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
 
     return {
         **state,
+        **profile_state_updates,
         "step_count": state["step_count"] + 1,
         "action_history": state["action_history"] + [new_record],
         "current_location": current_location,

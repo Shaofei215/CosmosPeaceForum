@@ -6,7 +6,7 @@ from typing import Any
 
 from agents.agents_scheduler.langgraph.tools.support.registry import get_relation_mapping_service
 from agents.agents_scheduler.langgraph.tools.types import AuthenticationError, NotFoundError, ToolExecutionError
-from agents.agents_scheduler.scheduler.context import get_current_token, get_current_user_id
+from agents.agents_scheduler.scheduler.context import get_current_context, get_current_token, get_current_user_id
 from agents.agents_scheduler.langgraph.tools.support import platform as legacy_platform
 from agents.platform_access import (
     PlatformAccessError,
@@ -35,13 +35,23 @@ def _build_internal_context() -> PlatformToolContext:
     config = get_scheduler_config()
     token = get_current_token()
     user_id = get_current_user_id()
-    current_user = {"id": user_id} if user_id is not None else None
+    agent_context = get_current_context()
+    current_user = (
+        {
+            "id": user_id,
+            "username": agent_context.username if agent_context else None,
+            "bio": agent_context.personal_signature if agent_context else None,
+        }
+        if user_id is not None
+        else None
+    )
     return PlatformToolContext(
         client=PlatformClient(base_url=_get_api_base_url(), admin_key=config.admin_key),
         access_token=token,
         current_user=current_user,
         cursor=_get_scroll_cursor(),
         relation_expander=get_relation_mapping_service(),
+        profile_sync=agent_context.profile_sync if agent_context else None,
     )
 
 

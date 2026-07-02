@@ -228,10 +228,13 @@ class AIUserScheduler(threading.Thread):
             self.is_logged_in = True
             agent_ctx = AgentContext(
                 user_id=user_id,
+                username=self.username,
                 token=token,
                 agent_id=self.agent_id,
                 user_config=login_stats,
                 stop_event=self._stop_event,
+                personal_signature=self.personal_signature,
+                profile_sync=self._sync_profile,
             )
             set_current_context(agent_ctx)
 
@@ -271,6 +274,46 @@ class AIUserScheduler(threading.Thread):
         finally:
             self.is_logged_in = False
             clear_current_context()
+
+    def _sync_profile(self, profile: Dict[str, object]) -> bool:
+        """同步 Agent 自助修改后的公开资料到运行配置。
+
+        Args:
+            profile: social_platform 返回的最新用户资料。
+
+        Returns:
+            bool: management 数据库与当前 Scheduler 实例均同步成功时返回 ``True``。
+        """
+
+        platform_user_id = profile.get("id")
+        username = profile.get("username")
+        if platform_user_id is None or not username:
+            return False
+        personal_signature = profile.get("bio") or ""
+        synchronized = get_db_client().update_agent_profile(
+            agent_id=self.agent_id,
+            social_platform_user_id=int(platform_user_id),
+            username=str(username),
+            personal_signature=str(personal_signature),
+        )
+        if not synchronized:
+            return False
+
+        self.username = str(username)
+        self.personal_signature = str(personal_signature)
+        current_context = get_current_context()
+        if current_context is not None:
+            current_context.username = self.username
+            current_context.personal_signature = self.personal_signature
+
+        if self.relation_map is not None and hasattr(self.relation_map, "build_from_db"):
+            try:
+                self.relation_map.build_from_db()
+            except Exception:
+                # 资料主链路已经提交成功；关系展示缓存可在后续热更新时恢复，
+                # 不能因此触发公开平台的补偿回滚并造成 management 再次失配。
+                logger.exception("[%s] 重建关系用户名映射失败", self.username)
+        return True
 
 
 class AgentSchedulerManager:

@@ -1,7 +1,7 @@
 # 线程局部存储模块
 # 用于在多线程环境中存储每个 Agent 的上下文信息
 import threading
-from typing import Optional, Dict, Any
+from typing import Any, Callable, Dict, Optional
 
 
 class AgentContext:
@@ -31,13 +31,30 @@ class AgentContext:
         token: Optional[str] = None,
         user_config: Optional[Dict[str, Any]] = None,
         stop_event: Optional[threading.Event] = None,
+        personal_signature: Optional[str] = None,
+        profile_sync: Optional[Callable[[Dict[str, Any]], bool]] = None,
     ):
+        """初始化当前调度线程的 Agent 上下文。
+
+        Args:
+            user_id: 当前公开平台用户 ID。
+            username: 当前用户名。
+            agent_id: management 中的 Agent 配置 ID。
+            token: 当前公开平台访问令牌。
+            user_config: 当前登录统计等会话配置。
+            stop_event: 调度线程停止事件。
+            personal_signature: 当前公开平台个人签名。
+            profile_sync: 资料更新成功后的内部同步回调。
+        """
+
         self.user_id = user_id
         self.username = username
         self.agent_id = agent_id
         self.token = token
         self.user_config = user_config or {}
         self.stop_event = stop_event
+        self.personal_signature = personal_signature
+        self.profile_sync = profile_sync
 
 
 _thread_local = threading.local()

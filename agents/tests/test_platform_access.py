@@ -1,5 +1,6 @@
 """共享公开平台访问客户端测试。"""
 
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 from agents.platform_access import PlatformClient
@@ -25,3 +26,30 @@ def test_platform_client_adds_explicit_user_and_service_credentials() -> None:
         "X-Cosmos-Agent-Source": "agent",
         "X-Cosmos-Agent-Token": "admin-secret",
     }
+
+
+def test_platform_client_uploads_file_without_overriding_multipart_content_type() -> None:
+    """文件上传应让 requests 生成 multipart 边界，并保留用户与服务凭据。"""
+
+    response = MagicMock()
+    response.status_code = 200
+    response.content = b'{"avatar_url": "uploads/avatar.png"}'
+    response.json.return_value = {"avatar_url": "uploads/avatar.png"}
+    client = PlatformClient("http://platform/api/v1", "admin-secret")
+    image = BytesIO(b"png-data")
+
+    with patch("agents.platform_access.client.requests.request", return_value=response) as request:
+        result = client.upload_file(
+            "/users/avatar",
+            access_token="user-token",
+            field_name="file",
+            filename="avatar.png",
+            file_object=image,
+            content_type="image/png",
+        )
+
+    assert result == {"avatar_url": "uploads/avatar.png"}
+    kwargs = request.call_args.kwargs
+    assert "Content-Type" not in kwargs["headers"]
+    assert kwargs["headers"]["Authorization"] == "Bearer user-token"
+    assert kwargs["files"]["file"] == ("avatar.png", image, "image/png")

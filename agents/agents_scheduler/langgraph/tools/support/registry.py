@@ -35,6 +35,7 @@ def get_social_tools(relation_map=None) -> List:
             report_content,
             logout,
             get_user_profile,
+            update_profile,
         )
         from agents.agents_scheduler.langgraph.tools.feed import (
             get_global_feed,
@@ -62,6 +63,7 @@ def get_social_tools(relation_map=None) -> List:
             report_content,
             logout,
             get_user_profile,
+            update_profile,
             get_global_feed,
             expand_post,
             view_post_comments,

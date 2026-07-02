@@ -278,6 +278,56 @@ class ManagementDBClient:
         """记录 Agent 最近一次成功登录时间。"""
         result = self.record_agent_login(agent_id=agent_id, login_at=login_at)
         return result.get("total_login_count", 0) > 0
+
+    def update_agent_profile(
+        self,
+        agent_id: int,
+        social_platform_user_id: int,
+        username: str,
+        personal_signature: str,
+    ) -> bool:
+        """原子更新内部 Agent 的公开资料镜像。
+
+        仅当 Agent 配置 ID 与公开平台用户 ID 同时匹配时才写入，防止线程上下文
+        或账号映射异常时修改错误角色。
+
+        Args:
+            agent_id: management 中的 Agent 配置 ID。
+            social_platform_user_id: 当前登录的公开平台用户 ID。
+            username: 公开平台已确认的新用户名。
+            personal_signature: 公开平台已确认的新个人签名。
+
+        Returns:
+            bool: 成功更新唯一一条配置时返回 ``True``，否则返回 ``False``。
+        """
+
+        try:
+            conn = self._get_connection()
+            try:
+                updated_at = local_now().isoformat(sep=" ")
+                cursor = conn.execute(
+                    """
+                    UPDATE agent_configs
+                    SET username = ?, personal_signature = ?, updated_at = ?
+                    WHERE id = ? AND social_platform_user_id = ?
+                    """,
+                    (
+                        username,
+                        personal_signature,
+                        updated_at,
+                        agent_id,
+                        social_platform_user_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    conn.rollback()
+                    return False
+                conn.commit()
+                return True
+            finally:
+                conn.close()
+        except (sqlite3.Error, ValueError, TypeError):
+            return False
     
     def get_active_model_configs(self) -> list:
         """

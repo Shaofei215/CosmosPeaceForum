@@ -7,11 +7,14 @@ from __future__ import annotations
 
 import json
 import importlib
+from io import BytesIO
 from types import SimpleNamespace
+from typing import Any, BinaryIO
 
 import pytest
 from fastapi import Request
 from fastapi.security import HTTPAuthorizationCredentials
+from starlette.datastructures import Headers, UploadFile
 
 from agents.agents_scheduler.langgraph.tools import feed, hot_topic, social
 from agents.external_access.cursor import CursorError, decode_cursor, encode_cursor
@@ -23,6 +26,7 @@ from agents.external_access.tools import (
     ExternalToolResult,
     execute_tool,
 )
+from agents.platform_access import PlatformAccessError
 from agents.platform_tools import PlatformToolContext, execute_platform_tool
 
 external_router = importlib.import_module("agents.external_access.router")
@@ -81,6 +85,26 @@ class FakeGatewayClient:
             return {"unread_count": self.unread_count}
         raise AssertionError(f"unexpected endpoint: {endpoint}")
 
+    def upload_file(
+        self,
+        endpoint: str,
+        *,
+        access_token: str,
+        field_name: str,
+        filename: str,
+        file_object: BinaryIO,
+        content_type: str | None,
+    ) -> dict[str, Any]:
+        """模拟头像文件被转发至公开平台。"""
+
+        assert endpoint == "/users/avatar"
+        assert access_token == "token"
+        assert field_name == "file"
+        assert filename == "avatar.png"
+        assert content_type == "image/png"
+        assert file_object.read() == b"png-data"
+        return {"id": 1, "username": "agent", "bio": "bio", "avatar_url": "uploads/avatar.png"}
+
 
 def test_cursor_rejects_tampered_payload() -> None:
     """游标被篡改时应拒绝解码。"""
@@ -102,6 +126,7 @@ def test_external_tool_whitelist_contains_v1_names() -> None:
         "expand_comment",
         "scroll",
         "get_user_profile",
+        "update_profile",
         "search_platform",
         "view_notifications",
         "view_notification_origin",
@@ -147,6 +172,7 @@ def test_external_business_parameters_match_internal_tools() -> None:
         "expand_comment": feed.expand_comment,
         "scroll": feed.scroll,
         "get_user_profile": social.get_user_profile,
+        "update_profile": social.update_profile,
         "search_platform": social.search_platform,
         "view_notifications": social.view_notifications,
         "view_notification_origin": social.view_notification_origin,
@@ -353,3 +379,81 @@ def test_authenticated_external_tool_error_can_include_unread_count(
 
     assert response.status_code == 422
     assert payload["data"] == {"unread_count": 2}
+
+
+def test_external_avatar_endpoint_forwards_multipart_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """外部头像入口应保留 Bearer 身份和 multipart 文件元数据。"""
+
+    FakeGatewayClient.unread_count = 0
+    monkeypatch.setattr(external_router, "PlatformClient", FakeGatewayClient)
+    monkeypatch.setattr(
+        external_router,
+        "get_config",
+        lambda: SimpleNamespace(
+            social_platform_api_base_url="http://platform/api/v1",
+            admin_key="admin",
+        ),
+    )
+    request = Request({"type": "http", "method": "POST", "path": "/profile/avatar", "headers": []})
+    upload = UploadFile(
+        file=BytesIO(b"png-data"),
+        filename="avatar.png",
+        headers=Headers({"content-type": "image/png"}),
+    )
+
+    response = external_router.upload_profile_avatar(
+        request,
+        upload,
+        HTTPAuthorizationCredentials(scheme="Bearer", credentials="token"),
+    )
+
+    assert response.tool == "upload_avatar"
+    assert response.data["avatar_url"] == "uploads/avatar.png"
+
+
+def test_external_avatar_endpoint_preserves_social_platform_size_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """social_platform 的头像大小拒绝应映射为外部参数错误。"""
+
+    class OversizedAvatarClient(FakeGatewayClient):
+        """模拟公开平台拒绝超过 5MB 的头像。"""
+
+        def upload_file(self, *args: object, **kwargs: object) -> dict[str, Any]:
+            """抛出公开平台返回的头像大小错误。"""
+
+            raise PlatformAccessError(
+                "请求失败 (400)",
+                status_code=400,
+                detail="图片大小不能超过 5MB",
+            )
+
+    OversizedAvatarClient.unread_count = 0
+    monkeypatch.setattr(external_router, "PlatformClient", OversizedAvatarClient)
+    monkeypatch.setattr(
+        external_router,
+        "get_config",
+        lambda: SimpleNamespace(
+            social_platform_api_base_url="http://platform/api/v1",
+            admin_key="admin",
+        ),
+    )
+    request = Request({"type": "http", "method": "POST", "path": "/profile/avatar", "headers": []})
+    upload = UploadFile(
+        file=BytesIO(b"oversized"),
+        filename="avatar.png",
+        headers=Headers({"content-type": "image/png"}),
+    )
+
+    response = external_router.upload_profile_avatar(
+        request,
+        upload,
+        HTTPAuthorizationCredentials(scheme="Bearer", credentials="token"),
+    )
+    payload = json.loads(response.body)
+
+    assert response.status_code == 400
+    assert payload["error_code"] == "INVALID_ARGUMENTS"
+    assert payload["message"] == "图片大小不能超过 5MB"
