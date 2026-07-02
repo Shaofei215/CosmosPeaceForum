@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { BrandImage } from '@/shared/components/BrandImage';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 import { cn } from '@/shared/lib/utils';
 
@@ -9,25 +9,22 @@ import { cn } from '@/shared/lib/utils';
  */
 export function AuthIllustration() {
   return (
-    <div className="auth-illustration" aria-hidden="true">
-      <img src="/background.png" alt="" />
-    </div>
+    <>
+      <BrandImage name="background" alt="" className="auth-mobile-background" aria-hidden="true" />
+      <div className="auth-illustration" aria-hidden="true">
+        <BrandImage name="background" alt="" />
+      </div>
+    </>
   );
 }
 
 export function BigLogo({ className }: { className?: string }) {
-  const [src, setSrc] = useState('/biglogo.png');
-
   return (
-    <img
-      src={src}
+    <BrandImage
+      name="biglogo"
+      fallbackNames={['logo']}
       alt={PLATFORM_DISPLAY_NAME}
       className={cn('auth-big-logo', className)}
-      onError={() => {
-        if (src !== '/logo.png') {
-          setSrc('/logo.png');
-        }
-      }}
     />
   );
 }

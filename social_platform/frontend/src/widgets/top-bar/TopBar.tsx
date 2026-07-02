@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Flame, Clock, Users, ArrowLeft, FileText, User } from 'lucide-react';
 import { Input } from '@/shared/components/ui';
+import { BrandImage } from '@/shared/components/BrandImage';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 import { cn } from '@/shared/lib/utils';
 import type { SearchType } from '@/features/search';
@@ -128,8 +129,8 @@ export function TopBar() {
           aria-label="回到主页并刷新"
           className="flex h-9 min-w-9 max-w-36 shrink-0 items-center justify-start overflow-hidden rounded-[1.5rem] transition-opacity hover:opacity-85 sm:h-10 sm:max-w-48"
         >
-          <img
-            src="/logo.png"
+          <BrandImage
+            name="logo"
             alt={PLATFORM_DISPLAY_NAME}
             className="h-full w-auto object-contain"
           />

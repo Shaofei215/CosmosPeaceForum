@@ -145,7 +145,16 @@ textarea:focus {
   justify-content: flex-start;
   overflow: hidden;
   padding: clamp(0.75rem, 2.6vh, 1.75rem) 1rem 1rem;
-  background: url('/background.png') center / cover no-repeat;
+  background: hsl(var(--card));
+}
+
+.auth-mobile-background {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .auth-page::before {
@@ -184,6 +193,10 @@ textarea:focus {
     overflow-y: auto;
     padding: 0;
     background: hsl(var(--card));
+  }
+
+  .auth-mobile-background {
+    display: none;
   }
 
   .auth-illustration {

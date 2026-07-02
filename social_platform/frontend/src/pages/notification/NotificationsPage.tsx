@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Avatar, Button, Skeleton, Textarea } from '@/shared/components/ui';
 import { formatDate } from '@/shared/lib/utils';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
+import { BrandImage } from '@/shared/components/BrandImage';
 import { COMMENT_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import {
   NotificationItem,
@@ -86,8 +87,16 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
           <Link to={`/user/${sender.id}`} onClick={e => e.stopPropagation()}>
             <Avatar src={sender.avatar_url} alt={sender.username ?? '用户'} size="md" />
           </Link>
+        ) : isPlatformSystem ? (
+          <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full">
+            <BrandImage
+              name="logo"
+              alt={senderName}
+              className="aspect-square h-full w-full object-cover"
+            />
+          </div>
         ) : (
-          <Avatar src={isPlatformSystem ? '/logo.png' : undefined} alt={senderName} size="md" />
+          <Avatar alt={senderName} size="md" />
         )}
 
         <div className="min-w-0 flex-1">
