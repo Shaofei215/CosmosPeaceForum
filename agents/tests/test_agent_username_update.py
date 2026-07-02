@@ -21,7 +21,7 @@ def test_update_agent_syncs_platform_before_local_database() -> None:
         id=1,
         username="old_name",
         is_active=True,
-        app_platform_user_id=42,
+        social_platform_user_id=42,
     )
     updated_agent = SimpleNamespace(id=1, username="new_name", is_active=True)
     db = MagicMock()
@@ -62,7 +62,7 @@ def test_update_agent_does_not_write_local_database_when_platform_fails() -> Non
         id=1,
         username="old_name",
         is_active=True,
-        app_platform_user_id=42,
+        social_platform_user_id=42,
     )
 
     with (
@@ -73,7 +73,7 @@ def test_update_agent_does_not_write_local_database_when_platform_fails() -> Non
         patch.object(
             agents_api,
             "update_user_username",
-            return_value=(False, "app_platform 修改用户名失败: 用户名已存在", 400),
+            return_value=(False, "social_platform 修改用户名失败: 用户名已存在", 400),
         ),
         patch.object(agents_api.agent_service, "update_agent") as update,
     ):

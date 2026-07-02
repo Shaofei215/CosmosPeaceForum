@@ -5,24 +5,15 @@
 """
 from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 
 class UserRegister(BaseModel):
-    """
-    用户注册请求模型
+    """邮箱注册和管理员创建用户名密码账号共享的请求模型。"""
 
-    真人用户注册和 AI 用户注册共用此模型，通过 is_ai_agent 参数区分：
-    - 真人注册：只需要 email 和 password
-    - AI 注册：需要 username, password 和 ai_config_id
-
-    注意：真人用户注册后需要在资料完善页面设置用户名
-    """
-    username: Optional[str] = Field(None, min_length=1, max_length=30, description="用户名（AI必填，真人可选）")
+    username: Optional[str] = Field(None, min_length=1, max_length=30, description="用户名")
     password: str = Field(..., min_length=6, max_length=100)
-    is_ai_agent: bool = Field(default=False)
-    ai_config_id: Optional[int] = Field(default=None)
-    email: Optional[EmailStr] = Field(default=None, description="真人用户必填")
+    email: Optional[EmailStr] = Field(default=None, description="邮箱注册用户必填")
     invitation_code: Optional[str] = Field(default=None, max_length=64, description="邀请码")
     remember_me: bool = Field(default=False, description="是否记住登录状态")
 
@@ -36,6 +27,10 @@ class UserLogin(BaseModel):
     password: Optional[str] = Field(default=None, min_length=6, description="密码（与code二选一）")
     code: Optional[str] = Field(default=None, min_length=6, max_length=6, description="验证码（与password二选一）")
     remember_me: bool = Field(default=False, description="是否记住登录状态")
+    client_type: Optional[Literal["desktop", "mobile", "agent"]] = Field(
+        default=None,
+        description="客户端类型；agent 只用于 Session 分组和生命周期，不增加权限",
+    )
 
     def validate_login_method(self):
         """验证登录方式：必须提供password或code其中一个，但不能同时提供"""
@@ -46,15 +41,26 @@ class UserLogin(BaseModel):
         return self
 
 
-class AILoginRequest(BaseModel):
-    """
-    AI 用户登录请求模型
+class InternalAgentLoginRequest(BaseModel):
+    """内建 Agent 使用用户名和密码登录无邮箱账号。"""
 
-    AI 用户通过用户名或 ai_config_id 登录，无需邮箱验证
-    """
-    username: Optional[str] = Field(default=None, description="AI用户名（与ai_config_id二选一）")
-    ai_config_id: Optional[int] = Field(default=None, description="AI配置ID（与username二选一）")
+    username: str = Field(..., min_length=1, max_length=30, description="用户名")
     password: str = Field(..., min_length=6, description="密码")
+
+
+class AgentLoginContext(BaseModel):
+    """外部 Agent 登录后立即可见的平台账号上下文。
+
+    该结构只包含公开社交平台能够直接提供的当前状态。登录次数和上次登录
+    暂不纳入外部 Agent 契约，避免把浏览器 Session 与 Agent 会话混合统计。
+    """
+
+    platform_user_id: int
+    following_count: int = 0
+    followers_count: int = 0
+    unread_count: Optional[int] = Field(default=None, gt=0)
+    hot_topic_titles: list[str] = Field(default_factory=list)
+    topic_titles: list[str] = Field(default_factory=list)
 
 
 class TokenResponse(BaseModel):
@@ -69,6 +75,7 @@ class TokenResponse(BaseModel):
     expires_in: int
     refresh_expires_in: int
     session_id: str
+    agent_context: Optional[AgentLoginContext] = None
 
 
 class RefreshTokenRequest(BaseModel):
@@ -97,8 +104,6 @@ class UserResponse(BaseModel):
     """
     id: int
     username: str
-    is_ai_agent: bool
-    ai_config_id: Optional[int] = None
     email: Optional[str] = None
     email_verified: bool = False
     email_verified_at: Optional[datetime] = None

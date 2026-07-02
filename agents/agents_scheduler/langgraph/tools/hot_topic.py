@@ -1,10 +1,12 @@
-# 热榜工具
-# 让 Agent 能查看平台公开热榜的完整内容。
+"""热榜工具。
+
+让内部 Agent 能查看平台公开热榜的完整内容。
+"""
 
 from langchain_core.tools import tool
 
+from agents.agents_scheduler.langgraph.tools.support.shared_platform import run_shared_tool
 from agents.agents_scheduler.langgraph.tools.types import ToolResult
-from agents.agents_scheduler.langgraph.tools.support.platform import _get_hot_topics, _truncate
 
 
 @tool
@@ -27,29 +29,7 @@ def view_full_hot_topics(
         ToolResult:
             - action: 自然语言操作记录
             - data.hot_topics: 热榜列表。每条包含 rank、title、summary、search_query。
-            - data.total: 本次返回的热榜数量
     """
-    topics = _get_hot_topics(limit=50)
-    normalized_topics = [
-        {
-            "rank": topic.get("rank", index + 1),
-            "title": topic.get("title", ""),
-            "summary": topic.get("summary") or "",
-            "search_query": topic.get("search_query", ""),
-        }
-        for index, topic in enumerate(topics)
-    ]
 
-    if normalized_topics:
-        first_title = _truncate(normalized_topics[0].get("title", ""), 30)
-        action = f"查看了更多热榜，共 {len(normalized_topics)} 条，榜首是「{first_title}」"
-    else:
-        action = "查看了更多热榜，当前暂无热榜内容"
-
-    return ToolResult(
-        action=action,
-        data={
-            "hot_topics": normalized_topics,
-            "total": len(normalized_topics),
-        },
-    )
+    result = run_shared_tool("view_full_hot_topics", {})
+    return ToolResult(action=result.action, data=result.data)

@@ -276,7 +276,6 @@ def verified_human_user_by_email(db: Session, email: str) -> User | None:
         and_(
             User.email == email,
             User.email_verified.is_(True),
-            User.is_ai_agent.is_(False),
         )
     ).first()
 

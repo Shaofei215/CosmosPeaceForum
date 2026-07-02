@@ -44,7 +44,7 @@ export default function MemoryListPage() {
     queryFn: () => memoryApi.listOwners(),
   });
 
-  const configuredAgents = agents?.items.filter((a) => a.app_platform_user_id) ?? [];
+  const configuredAgents = agents?.items.filter((a) => a.social_platform_user_id) ?? [];
   
   // 将记忆数据转换为以 owner_id 为 key 的映射表，方便查找
   const memoryOwnerMap = new Map(
@@ -53,7 +53,7 @@ export default function MemoryListPage() {
 
   // 构建完整的角色列表，包含记忆信息（即使没有记忆也会显示）
   const agentsWithMemoryInfo = configuredAgents.map((agent) => {
-    const ownerId = agent.app_platform_user_id!;
+    const ownerId = agent.social_platform_user_id!;
     const memoryInfo = memoryOwnerMap.get(ownerId);
     return {
       agent,
@@ -148,7 +148,7 @@ function BatchUploadDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  agents: Array<Pick<AgentConfig, 'id' | 'name' | 'app_platform_user_id' | 'personality_prompt'>>;
+  agents: Array<Pick<AgentConfig, 'id' | 'name' | 'social_platform_user_id' | 'personality_prompt'>>;
 }) {
   const queryClient = useQueryClient();
   const [selectedOwnerIds, setSelectedOwnerIds] = useState<number[]>([]);
@@ -176,7 +176,7 @@ function BatchUploadDialog({
   };
 
   const selectAll = () => {
-    setSelectedOwnerIds(agents.map((a) => a.app_platform_user_id!));
+    setSelectedOwnerIds(agents.map((a) => a.social_platform_user_id!));
   };
 
   const resetForm = () => {
@@ -202,7 +202,7 @@ function BatchUploadDialog({
     if (!content.trim()) { setError('请输入记忆内容'); return; }
     if (chunkMode === 'auto' && memoryType === 'normal' && !semanticTime) { setError('动态记忆的自动分块模式必须选择记忆发生时间'); return; }
     if (chunkMode === 'none' && memoryType === 'normal' && !semanticTime) { setError('动态记忆的不分块模式必须选择记忆发生时间'); return; }
-    if (chunkMode === 'llm' && !agents.some((a) => selectedOwnerIds.includes(a.app_platform_user_id!) && a.personality_prompt?.trim())) {
+    if (chunkMode === 'llm' && !agents.some((a) => selectedOwnerIds.includes(a.social_platform_user_id!) && a.personality_prompt?.trim())) {
       setError('LLM 分块模式下，至少一个被选角色需要配置个性提示词');
       return;
     }
@@ -214,7 +214,7 @@ function BatchUploadDialog({
 
     for (let i = 0; i < selectedOwnerIds.length; i++) {
       const ownerId = selectedOwnerIds[i];
-      const agent = agents.find((a) => a.app_platform_user_id === ownerId);
+      const agent = agents.find((a) => a.social_platform_user_id === ownerId);
       const agentName = agent?.name ?? `User-${ownerId}`;
 
       setProgress({ current: i + 1, total: selectedOwnerIds.length, currentAgent: agentName, status: 'pending' });
@@ -340,17 +340,17 @@ function BatchUploadDialog({
               <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
                 {agents.map((a) => (
                   <label
-                    key={a.app_platform_user_id}
+                    key={a.social_platform_user_id}
                     className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer"
                   >
                     <input
                       type="checkbox"
-                      checked={selectedOwnerIds.includes(a.app_platform_user_id!)}
-                      onChange={() => toggleAgent(a.app_platform_user_id!)}
+                      checked={selectedOwnerIds.includes(a.social_platform_user_id!)}
+                      onChange={() => toggleAgent(a.social_platform_user_id!)}
                       disabled={uploading}
                       className="accent-primary"
                     />
-                    <span className="text-sm">{a.name || `User-${a.app_platform_user_id}`}</span>
+                    <span className="text-sm">{a.name || `User-${a.social_platform_user_id}`}</span>
                   </label>
                 ))}
               </div>

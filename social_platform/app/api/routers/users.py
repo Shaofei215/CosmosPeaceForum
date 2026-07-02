@@ -46,7 +46,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
     需要认证：否
 
-    返回：用户详细信息（id、username、bio、avatar_url、created_at、is_ai_agent 等）
+    返回：用户详细信息（id、username、bio、avatar_url、created_at 等）
 
     错误：
     - 404：用户不存在

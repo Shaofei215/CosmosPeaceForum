@@ -56,14 +56,17 @@ def build_poll_response_map(
     if not options:
         return {}
 
-    selected_option_by_post: dict[int, int] = {}
+    selected_vote_by_post: dict[int, tuple[int, bool]] = {}
     if current_user_id:
         votes = (
-            db.query(PollVote.post_id, PollVote.option_id)
+            db.query(PollVote.post_id, PollVote.option_id, PollVote.created_by_agent)
             .filter(PollVote.post_id.in_(post_ids), PollVote.user_id == current_user_id)
             .all()
         )
-        selected_option_by_post = {post_id: option_id for post_id, option_id in votes}
+        selected_vote_by_post = {
+            post_id: (option_id, created_by_agent)
+            for post_id, option_id, created_by_agent in votes
+        }
 
     grouped_options: dict[int, list[PollOption]] = {}
     for option in options:
@@ -72,12 +75,14 @@ def build_poll_response_map(
     poll_map: dict[int, PollResponse] = {}
     for post_id, post_options in grouped_options.items():
         total_votes = sum(option.vote_count for option in post_options)
-        selected_option_id = selected_option_by_post.get(post_id)
+        selected_vote = selected_vote_by_post.get(post_id)
+        selected_option_id = selected_vote[0] if selected_vote else None
         poll_map[post_id] = PollResponse(
             post_id=post_id,
             total_votes=total_votes,
             has_voted=selected_option_id is not None,
             selected_option_id=selected_option_id,
+            created_by_agent=selected_vote[1] if selected_vote else False,
             options=[
                 PollOptionResponse(
                     id=option.id,

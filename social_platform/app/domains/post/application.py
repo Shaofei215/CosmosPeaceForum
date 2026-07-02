@@ -94,7 +94,12 @@ class InvalidRepostSourceError(Exception):
         super().__init__(f"Invalid repost source type: {source_type}")
 
 
-def create_post(db: Session, current_user: User, post_data: PostCreate) -> Post:
+def create_post(
+    db: Session,
+    current_user: User,
+    post_data: PostCreate,
+    created_by_agent: bool = False,
+) -> Post:
     """创建帖子并发布帖子创建事件。
 
     Args:
@@ -118,17 +123,30 @@ def create_post(db: Session, current_user: User, post_data: PostCreate) -> Post:
         title=post_data.title,
         type=post_data.type,
         content=post_data.content,
+        created_by_agent=created_by_agent,
     )
     db.add(post)
     db.flush()
     poll_application.create_poll_options(db, post.id, post_data.type, post_data.poll_options)
-    publish_domain_event(db, PostCreated(post_id=post.id, author_id=current_user.id))
+    publish_domain_event(
+        db,
+        PostCreated(
+            post_id=post.id,
+            author_id=current_user.id,
+            created_by_agent=created_by_agent,
+        ),
+    )
     commit_session(db)
     db.refresh(post)
     return post
 
 
-def create_repost_for_user(db: Session, current_user: User, data: RepostCreate) -> Post:
+def create_repost_for_user(
+    db: Session,
+    current_user: User,
+    data: RepostCreate,
+    created_by_agent: bool = False,
+) -> Post:
     """为当前登录用户创建转发。
 
     Args:
@@ -152,6 +170,7 @@ def create_repost_for_user(db: Session, current_user: User, data: RepostCreate) 
         source_type=data.source_type,
         source_id=data.source_id,
         content=data.content,
+        created_by_agent=created_by_agent,
     )
 
 
@@ -233,6 +252,7 @@ def create_repost(
     source_id: int,
     content: str | None = None,
     commit: bool = True,
+    created_by_agent: bool = False,
 ) -> Post:
     """创建转发帖子并发布转发创建事件。
 
@@ -279,6 +299,7 @@ def create_repost(
         repost_source_id=source_id,
         repost_root_post_id=root_post.id,
         repost_chain=chain_content,
+        created_by_agent=created_by_agent,
     )
     db.add(repost)
     db.flush()
@@ -297,6 +318,7 @@ def create_repost(
             source_post_id=source_post.id if source_post is not None else None,
             source_comment_id=source_comment.id if source_comment is not None else None,
             source_content=chain_content,
+            created_by_agent=created_by_agent,
         ),
     )
 

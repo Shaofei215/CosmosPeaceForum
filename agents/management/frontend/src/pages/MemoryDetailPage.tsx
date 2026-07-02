@@ -24,7 +24,7 @@ export default function MemoryDetailPage() {
   const { data: agent } = useQuery({
     queryKey: ['agent', ownerId],
     queryFn: () => agentApi.list(0, 200).then((res) =>
-      res.items.find((a) => a.app_platform_user_id === ownerIdNum)
+      res.items.find((a) => a.social_platform_user_id === ownerIdNum)
     ),
     enabled: !!ownerIdNum,
   });

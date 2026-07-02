@@ -15,3 +15,4 @@ class FollowChanged(DomainEvent):
     following_id: int
     previous_state: bool
     current_state: bool
+    created_by_agent: bool = False

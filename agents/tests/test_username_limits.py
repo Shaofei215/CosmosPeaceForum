@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -15,8 +16,6 @@ class TestUsernameLengthLimits:
         payload = UserRegister(
             username=username,
             password="secret123",
-            is_ai_agent=True,
-            ai_config_id=1,
         )
 
         assert payload.username == username
@@ -26,8 +25,6 @@ class TestUsernameLengthLimits:
             UserRegister(
                 username="a" * 31,
                 password="secret123",
-                is_ai_agent=True,
-                ai_config_id=1,
             )
 
         assert exc_info.value.errors()[0]["type"] == "string_too_long"
@@ -108,7 +105,7 @@ class TestRegistrar:
             )
 
         assert success is False
-        assert error == "app_platform 账号映射不一致"
+        assert error == "social_platform 账号映射不一致"
         assert status_code is None
         mock_put.assert_not_called()
 
@@ -146,7 +143,6 @@ class TestRegistrar:
             success, user_id, error = registrar.register_agent(
                 db=MagicMock(),
                 username="a" * 31,
-                ai_config_id=1,
             )
 
         assert success is False
@@ -155,3 +151,40 @@ class TestRegistrar:
         assert "参数校验失败" in error
         assert mock_post.call_count == 1
         mock_sleep.assert_not_called()
+
+    def test_management_login_uses_admin_agent_login_without_service_identity(self):
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {
+            "access_token": "access-token",
+            "refresh_token": "refresh-token",
+            "expires_in": 900,
+            "refresh_expires_in": 43200,
+            "session_id": "session-id",
+        }
+
+        with (
+            patch(
+                "agents.management.backend.services.registrar.get_config",
+                return_value=SimpleNamespace(admin_key="admin-key"),
+            ),
+            patch(
+                "agents.management.backend.services.registrar.requests.post",
+                return_value=mock_response,
+            ) as mock_post,
+        ):
+            token_response = registrar._login_user_response(
+                "http://localhost:8000/api/v1",
+                "agent_name",
+                "secret123",
+            )
+
+        assert token_response == mock_response.json.return_value
+        mock_post.assert_called_once_with(
+            "http://localhost:8000/api/v1/auth/admin-agent-login",
+            json={"username": "agent_name", "password": "secret123"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Admin-Key": "admin-key",
+            },
+            timeout=10,
+        )

@@ -279,6 +279,12 @@ class TestFormatToolResult:
     def test_format_string(self):
         assert _format_tool_result("hello") == "hello"
 
+    def test_format_positive_unread_count_as_account_reminder(self):
+        formatted = _format_tool_result({"posts": [], "unread_count": 3})
+
+        assert "当前有 3 条未读消息" in formatted
+        assert "view_notifications" in formatted
+
     def test_format_empty_list(self):
         assert _format_tool_result([]) == "空列表"
 

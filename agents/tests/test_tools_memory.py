@@ -39,9 +39,9 @@ class TestRecallMemory:
 
         result = recall_memory.invoke({"query": "银狼 技术帖"})
 
-        assert result["action"] == "回想了与「银狼 技术帖」相关的1条记忆"
+        assert result["action"] == "回想了与「银狼 技术帖」相关的记忆"
         assert result["data"]["query"] == "银狼 技术帖"
-        assert result["data"]["total"] == 1
+        assert "total" not in result["data"]
         assert result["data"]["memories"][0]["content"] == "我之前关注过银狼的技术帖。"
         mock_service_instance.recall_memories.assert_called_once_with(
             owner_id=1,

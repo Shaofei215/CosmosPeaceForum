@@ -337,18 +337,17 @@ def create_agent(
         username=agent.username,
         avatar_path=avatar_path,
         personal_signature=agent.personal_signature if agent.personal_signature else None,
-        ai_config_id=agent.id,
     )
 
     if success and platform_id:
-        agent.app_platform_user_id = platform_id
+        agent.social_platform_user_id = platform_id
         db.add(agent)
         db.commit()
         db.refresh(agent)
     else:
-        logger.error("创建 Agent: 注册到 app_platform 失败: %s，回滚数据库记录", error)
+        logger.error("创建 Agent: 注册到 social_platform 失败: %s，回滚数据库记录", error)
         agent_service.delete_agent(db, agent.id)
-        raise HTTPException(status_code=502, detail=f"Agent 注册到 app_platform 失败: {error}")
+        raise HTTPException(status_code=502, detail=f"Agent 注册到 social_platform 失败: {error}")
 
     if agent.is_active:
         notify_scheduler_reload("agent", agent.id, action="start")
@@ -372,7 +371,7 @@ def get_agent(
 
 
 @router.post("/{agent_id}/app-login", response_model=AgentAppLoginResponse)
-def login_agent_app_platform_account(
+def login_agent_social_platform_account(
     agent_id: int,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
@@ -386,21 +385,21 @@ def login_agent_app_platform_account(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent 不存在")
 
-    if not agent.app_platform_user_id:
-        raise HTTPException(status_code=400, detail="Agent 尚未注册到 app_platform")
+    if not agent.social_platform_user_id:
+        raise HTTPException(status_code=400, detail="Agent 尚未注册到 social_platform")
 
     api_base_url = _get_api_base_url(db)
     password = _get_ai_user_password(db)
     token_response = _login_user_response(api_base_url, agent.username, password)
     if not token_response or not token_response.get("access_token"):
-        raise HTTPException(status_code=502, detail="无法登录 app_platform")
+        raise HTTPException(status_code=502, detail="无法登录 social_platform")
 
     token = token_response["access_token"]
     platform_user_id = _get_user_id(api_base_url, token)
-    if platform_user_id != agent.app_platform_user_id:
-        raise HTTPException(status_code=502, detail="app_platform 账号映射不一致")
+    if platform_user_id != agent.social_platform_user_id:
+        raise HTTPException(status_code=502, detail="social_platform 账号映射不一致")
 
-    create_log(db, current_admin, "login_agent_app_platform", "agent", agent.id)
+    create_log(db, current_admin, "login_agent_social_platform", "agent", agent.id)
 
     return AgentAppLoginResponse(
         access_token=token,
@@ -408,7 +407,7 @@ def login_agent_app_platform_account(
         expires_in=token_response["expires_in"],
         refresh_expires_in=token_response["refresh_expires_in"],
         session_id=token_response["session_id"],
-        app_platform_user_id=agent.app_platform_user_id,
+        social_platform_user_id=agent.social_platform_user_id,
         social_platform_frontend_url=get_config().social_platform_frontend_url,
         username=agent.username,
     )
@@ -437,12 +436,12 @@ def update_agent(
             if existing and existing.id != agent.id:
                 raise HTTPException(status_code=400, detail="用户名已存在")
 
-            if agent.app_platform_user_id is not None:
+            if agent.social_platform_user_id is not None:
                 success, error, platform_status = update_user_username(
                     api_base_url=_get_api_base_url(db),
                     current_username=agent.username,
                     password=_get_ai_user_password(db),
-                    user_id=agent.app_platform_user_id,
+                    user_id=agent.social_platform_user_id,
                     new_username=new_username,
                 )
                 if not success:
@@ -694,11 +693,10 @@ async def import_agents(
                 username=agent.username,
                 avatar_path=avatar_path,
                 personal_signature=agent.personal_signature if agent.personal_signature else None,
-                ai_config_id=agent.id,
             )
 
             if success and platform_id:
-                agent.app_platform_user_id = platform_id
+                agent.social_platform_user_id = platform_id
                 db.add(agent)
                 db.commit()
                 db.refresh(agent)
@@ -790,7 +788,7 @@ async def import_agents_stream(
                             'event': 'exists',
                             'username': username,
                             'id': existing.id,
-                            'app_platform_user_id': existing.app_platform_user_id,
+                            'social_platform_user_id': existing.social_platform_user_id,
                         }
                         yield f"event: progress\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
                         continue
@@ -819,11 +817,10 @@ async def import_agents_stream(
                         username=agent.username,
                         avatar_path=avatar_path,
                         personal_signature=agent.personal_signature if agent.personal_signature else None,
-                        ai_config_id=agent.id,
                     )
 
                     if success and platform_id:
-                        agent.app_platform_user_id = platform_id
+                        agent.social_platform_user_id = platform_id
                         db.add(agent)
                         db.commit()
                         db.refresh(agent)
@@ -832,7 +829,7 @@ async def import_agents_stream(
                             'event': 'success',
                             'username': username,
                             'id': agent.id,
-                            'app_platform_user_id': platform_id,
+                            'social_platform_user_id': platform_id,
                         }
                     else:
                         failed_count += 1
@@ -905,8 +902,8 @@ async def upload_agent_avatar(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent 不存在")
 
-    if not agent.app_platform_user_id:
-        raise HTTPException(status_code=400, detail="Agent 尚未注册到 app_platform")
+    if not agent.social_platform_user_id:
+        raise HTTPException(status_code=400, detail="Agent 尚未注册到 social_platform")
 
     avatar_dir = _get_avatar_dir()
     os.makedirs(avatar_dir, exist_ok=True)
@@ -925,7 +922,7 @@ async def upload_agent_avatar(
     import mimetypes
     token = _login_user(api_base_url, agent.username, password)
     if not token:
-        raise HTTPException(status_code=502, detail="无法登录 app_platform")
+        raise HTTPException(status_code=502, detail="无法登录 social_platform")
 
     avatar_url = f"{api_base_url}/users/avatar"
     mime_type, _ = mimetypes.guess_type(avatar_path)

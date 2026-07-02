@@ -1,18 +1,57 @@
 # 依赖注入模块
 # 提供 API 路由所需的公共依赖
+import secrets
 from typing import Generator, Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from social_platform.app.core.security import decode_access_token
+from social_platform.app.core.config import get_settings
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.user.models import User
 
 
 security = HTTPBearer()
+
+
+def get_agent_operation_source(
+    source: Optional[str] = Header(default=None, alias="X-Cosmos-Agent-Source"),
+    token: Optional[str] = Header(default=None, alias="X-Cosmos-Agent-Token"),
+) -> bool:
+    """验证服务间来源证明并返回当前操作是否由 Agent 通道发起。
+
+    Args:
+        source: agents 服务声明的固定来源值。
+        token: agents 与公开平台共享的 ADMIN_KEY。
+
+    Returns:
+        bool: 仅在来源值和 ADMIN_KEY 均有效时返回 ``True``；伪造或缺失 Header 返回
+        ``False``，且不会把 Secret 写入日志或错误响应。
+    """
+
+    expected_token = get_settings().ADMIN_KEY
+    if source != "agent" or not token or not expected_token:
+        return False
+    return secrets.compare_digest(token, expected_token)
+
+
+def require_agent_service(
+    created_by_agent: bool = Depends(get_agent_operation_source),
+) -> None:
+    """限制仅可信 agents 服务可访问的内部公开平台路由。
+
+    Args:
+        created_by_agent: 已验证的 Agent 操作来源。
+
+    Raises:
+        HTTPException: 服务身份缺失或无效时返回 404，避免暴露内部端点语义。
+    """
+
+    if not created_by_agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
 
 def get_db() -> Generator[Session, None, None]:

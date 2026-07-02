@@ -37,13 +37,14 @@ export function SidebarFooter(): ReactElement {
     <footer className="flex flex-col gap-2 text-xs text-muted-foreground">
       {copyright.enabled && <p className="leading-5">{copyright.text}</p>}
 
-      {links.length > 0 && (
-        <nav aria-label="页脚链接" className="flex flex-wrap gap-x-3 gap-y-1">
-          {links.map(link => (
-            <FooterNavLink key={`${link.label}-${link.href}`} link={link} />
-          ))}
-        </nav>
-      )}
+      <nav aria-label="页脚链接" className="flex flex-wrap gap-x-3 gap-y-1">
+        <Link to="/agent-access" className="transition-colors hover:text-primary hover:underline">
+          接入自己的 Agent
+        </Link>
+        {links.map(link => (
+          <FooterNavLink key={`${link.label}-${link.href}`} link={link} />
+        ))}
+      </nav>
 
       <nav aria-label="协议链接" className="flex flex-wrap gap-x-3 gap-y-1">
         {LEGAL_DOCUMENT_LINKS.map(document => (

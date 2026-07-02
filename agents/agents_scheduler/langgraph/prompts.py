@@ -32,9 +32,9 @@ def _build_login_stats_summary() -> Dict[str, Any]:
                 ),
             }
 
-        if context and context.ai_config_id:
+        if context and context.agent_id:
             from agents.management.backend.db_client import get_db_client
-            return get_db_client().get_agent_login_stats(context.ai_config_id)
+            return get_db_client().get_agent_login_stats(context.agent_id)
     except Exception:
         pass
 
@@ -276,6 +276,19 @@ def _build_action_history_text(
 
 
 def _format_tool_result(result: Any) -> str:
+    """格式化工具结果，并优先展示正数未读消息提醒。"""
+
+    if not isinstance(result, dict) or not result.get("unread_count"):
+        return _format_tool_result_content(result)
+
+    content = dict(result)
+    unread_count = content.pop("unread_count")
+    formatted = _format_tool_result_content(content)
+    reminder = f"【账号提醒】当前有 {unread_count} 条未读消息，可调用 view_notifications 查看。"
+    return f"{reminder}\n{formatted}" if formatted and formatted != "无" else reminder
+
+
+def _format_tool_result_content(result: Any) -> str:
     """
     格式化工具返回值，用于在 prompt 中显示
 
@@ -300,9 +313,8 @@ def _format_tool_result(result: Any) -> str:
         if result.get("source") == "web_search":
             query = result.get("query", "")
             results = result.get("results", [])
-            total = result.get("total", len(results))
             depth = result.get("search_depth", "advanced")
-            lines = [f"【联网搜索】查询：{query}，深度：{depth}，共{total}条："]
+            lines = [f"【联网搜索】查询：{query}，深度：{depth}"]
             answer = result.get("answer")
             if answer:
                 lines.append(f"概览：{answer}")
@@ -317,8 +329,7 @@ def _format_tool_result(result: Any) -> str:
 
         if "notifications" in result:
             notifications = result.get("notifications", [])
-            total = result.get("total", 0)
-            lines = [f"【消息列表】共{total}条，显示{len(notifications)}条："]
+            lines = ["【消息列表】"]
             if not notifications:
                 lines.append("暂无消息")
             for item in notifications:
@@ -328,8 +339,7 @@ def _format_tool_result(result: Any) -> str:
 
         if "hot_topics" in result:
             topics = result.get("hot_topics", [])
-            total = result.get("total", len(topics))
-            lines = [f"【更多热榜】共{total}条，显示{len(topics)}条："]
+            lines = ["【更多热榜】"]
             if not topics:
                 lines.append("暂无热榜")
             for topic in topics:
@@ -361,12 +371,10 @@ def _format_tool_result(result: Any) -> str:
         ):
             search_type = result.get("type")
             query = result.get("query", "")
-            pagination = result.get("pagination") or {}
-            total = pagination.get("total", 0)
             if search_type in {"content", "topic"}:
                 posts = result.get("posts", [])
                 label = "话题" if search_type == "topic" else "关键词"
-                lines = [f"【帖子搜索结果】{label}：{query}，共{total}条，显示{len(posts)}条："]
+                lines = [f"【帖子搜索结果】{label}：{query}"]
                 if not posts:
                     lines.append("暂无帖子结果")
                 for post in posts:
@@ -375,7 +383,7 @@ def _format_tool_result(result: Any) -> str:
                 return "\n".join(lines)
 
             users = result.get("users", [])
-            lines = [f"【用户搜索结果】关键词：{query}，共{total}位，显示{len(users)}位："]
+            lines = [f"【用户搜索结果】关键词：{query}"]
             if not users:
                 lines.append("暂无用户结果")
             for user in users:
@@ -397,7 +405,6 @@ def _format_tool_result(result: Any) -> str:
             comment = result.get("comment", {})
             post = result.get("post", {})
             replies = result.get("replies", [])
-            total = result.get("total", 0)
 
             lines = []
             lines.append("【评论详情】")
@@ -407,12 +414,12 @@ def _format_tool_result(result: Any) -> str:
             lines.extend(_format_post_fields(post, indent=""))
 
             if replies:
-                lines.append(f"\n【回复】(共{total}条，显示{len(replies)}条):")
+                lines.append("\n【回复】")
                 for r in replies:
                     lines.append("  - 回复")
                     lines.extend(_format_comment_tree(r, indent="    "))
             else:
-                lines.append(f"\n【回复】(共{total}条，暂无回复)")
+                lines.append("\n【回复】暂无回复")
 
             return "\n".join(lines)
 
@@ -440,24 +447,28 @@ def _format_tool_result(result: Any) -> str:
 
             if "comments" in result:
                 comments = result.get("comments", [])
-                total = result.get("total", 0)
                 if comments:
-                    lines.append(f"\n【评论】(共{total}条，显示{len(comments)}条):")
+                    lines.append("\n【评论】")
                     for c in comments:
                         lines.append("  - 评论")
                         lines.extend(_format_comment_tree(c, indent="    "))
                 else:
-                    lines.append(f"\n【评论】(共{total}条，暂无评论)")
+                    lines.append("\n【评论】暂无评论")
 
             return "\n".join(lines)
 
-        elif "data" in result and isinstance(result["data"], list):
-            items = result["data"]
+        elif (
+            "posts" in result
+            and isinstance(result["posts"], list)
+            or "data" in result
+            and isinstance(result["data"], list)
+        ):
+            items = result.get("posts", result.get("data", []))
             if not items:
                 return "空列表"
 
             lines = ["【信息列表】"]
-            for item in items[:5]:
+            for item in items:
                 if isinstance(item, dict):
                     lines.append("- 帖子")
                     lines.extend(_format_post_fields(item, indent="  "))

@@ -210,7 +210,7 @@ function CommentItem({
                 <span>转发</span>
               </button>
             )}
-            {comment.owner?.is_ai_agent && <span>AI生成</span>}
+            {comment.created_by_agent && <span>AI生成</span>}
             {isTopLevel && hasReplies && (
               <button
                 onClick={() => setShowReplies(!showReplies)}

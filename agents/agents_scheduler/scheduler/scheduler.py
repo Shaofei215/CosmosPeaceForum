@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 def login_user(username: str, password: str) -> Optional[Dict]:
     """
-    通过 app_platform API 登录用户
+    通过 social_platform API 登录用户
 
     Args:
         username: 用户名
@@ -50,33 +50,27 @@ def login_user(username: str, password: str) -> Optional[Dict]:
         Optional[Dict]: 用户信息，失败返回 None
     """
     try:
-        import requests
         config = get_scheduler_config()
-        url = f"{config.api_base_url}/auth/ai-login"
-        response = requests.post(
-            url,
-            json={"username": username, "password": password},
-            headers={"Content-Type": "application/json"},
-            timeout=10,
+        from agents.platform_access import PlatformAccessError, PlatformClient
+
+        client = PlatformClient(
+            base_url=config.api_base_url,
+            admin_key=config.admin_key,
+            timeout_seconds=10,
         )
-        if response.status_code == 200:
-            result = response.json()
-            token = result.get('access_token')
-            if token:
-                me_url = f"{config.api_base_url}/auth/me"
-                me_response = requests.get(
-                    me_url,
-                    headers={"Authorization": f"Bearer {token}"},
-                    timeout=10,
-                )
-                if me_response.status_code == 200:
-                    user_info = me_response.json()
-                    result['id'] = user_info.get('id')
-            return result
-        logger.error(f"用户 {username} 登录失败: HTTP {response.status_code}")
-        return None
-    except requests.exceptions.RequestException as e:
-        logger.error(f"用户 {username} 登录失败: {e}")
+        result = client.request(
+            "POST",
+            "/auth/internal-agent-login",
+            access_token=None,
+            json_data={"username": username, "password": password},
+        )
+        token = result.get("access_token")
+        if token:
+            user_info = client.request("GET", "/auth/me", access_token=token)
+            result["id"] = user_info.get("id")
+        return result
+    except PlatformAccessError as exc:
+        logger.error("用户 %s 登录失败: %s", username, exc)
         return None
 
 
@@ -95,7 +89,7 @@ class AIUserScheduler(threading.Thread):
         user_id: int,
         username: str,
         name: str,
-        ai_config_id: int,
+        agent_id: int,
         monthly_logins: int,
         password: str,
         personality_prompt: str,
@@ -109,7 +103,7 @@ class AIUserScheduler(threading.Thread):
         self.user_id = user_id
         self.username = username
         self.name = name
-        self.ai_config_id = ai_config_id
+        self.agent_id = agent_id
         self.monthly_logins = monthly_logins
         self.password = password
         self.personality_prompt = personality_prompt
@@ -226,7 +220,7 @@ class AIUserScheduler(threading.Thread):
         else:
             logger.info(f"[{self.username}] 登录成功")
         login_stats = get_db_client().record_agent_login(
-            self.ai_config_id,
+            self.agent_id,
             scaled_timestamp=self.time_system.get_scaled_timestamp(),
         )
 
@@ -235,13 +229,13 @@ class AIUserScheduler(threading.Thread):
             agent_ctx = AgentContext(
                 user_id=user_id,
                 token=token,
-                ai_config_id=self.ai_config_id,
+                agent_id=self.agent_id,
                 user_config=login_stats,
                 stop_event=self._stop_event,
             )
             set_current_context(agent_ctx)
 
-            session_prompt_injection = consume_prompt_injection_text(self.ai_config_id)
+            session_prompt_injection = consume_prompt_injection_text(self.agent_id)
             if session_prompt_injection:
                 logger.info(
                     "[%s] 已消费下一次会话提示词注入: %d 字符",
@@ -253,7 +247,7 @@ class AIUserScheduler(threading.Thread):
                 user_id=user_id,
                 username=self.username,
                 name=self.name,
-                ai_config_id=self.ai_config_id,
+                agent_id=self.agent_id,
                 personality_prompt=self.personality_prompt,
                 personal_signature=self.personal_signature,
                 token=token,
@@ -580,21 +574,21 @@ class AgentSchedulerManager:
         password = config.ai_user_password
         personality_prompt = agent_data.get('personality_prompt', '')
         personal_signature = agent_data.get('personal_signature', '')
-        app_platform_user_id = agent_data.get('app_platform_user_id')
+        social_platform_user_id = agent_data.get('social_platform_user_id')
         model_config_id = agent_data.get('model_config_id')
 
         scheduler = AIUserScheduler(
             user_id=agent_id,
             username=username,
             name=name,
-            ai_config_id=agent_id,
+            agent_id=agent_id,
             monthly_logins=monthly_logins,
             password=password,
             personality_prompt=personality_prompt,
             personal_signature=personal_signature,
             time_system=self.time_system,
             relation_map=self._relation_map,
-            pre_registered_user_id=app_platform_user_id,
+            pre_registered_user_id=social_platform_user_id,
             model_config_id=model_config_id,
         )
         scheduler.start()

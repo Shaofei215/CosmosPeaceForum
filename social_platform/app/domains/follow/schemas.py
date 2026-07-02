@@ -26,6 +26,7 @@ class FollowToggleResponse(BaseModel):
     is_following: bool = Field(..., description="操作后的关注状态")
     followers_count: int = Field(..., description="被操作用户的被关注数")
     following_count: int = Field(..., description="当前用户的关注数")
+    created_by_agent: bool = Field(False, description="当前关注关系是否由 Agent 通道创建")
 
 
 class FollowStatusResponse(BaseModel):
@@ -48,6 +49,11 @@ class FollowStatusResponse(BaseModel):
     is_following: bool = Field(..., description="当前用户是否关注了目标用户")
     is_followed_by: bool = Field(..., description="目标用户是否关注了当前用户")
     is_mutual: bool = Field(..., description="是否互相关注（双向关注）")
+    created_by_agent: bool = Field(False, description="当前用户发起的关注是否由 Agent 通道创建")
+    followed_by_created_by_agent: bool = Field(
+        False,
+        description="目标用户发起的反向关注是否由 Agent 通道创建",
+    )
 
 
 class FollowUserItem(BaseModel):
@@ -75,6 +81,7 @@ class FollowUserItem(BaseModel):
     is_following: bool = Field(False, description="当前用户是否关注了此用户")
     is_followed_by: bool = Field(False, description="此用户是否关注了当前用户")
     created_at: datetime = Field(..., description="关注时间")
+    created_by_agent: bool = Field(False, description="关注关系是否由 Agent 通道创建")
 
     class Config:
         """关注领域 API schema的Pydantic ORM 映射配置，供 API adapter 做参数校验和响应序列化。"""

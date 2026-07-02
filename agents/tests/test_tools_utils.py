@@ -56,12 +56,21 @@ class TestMakeRequest:
         mock_response.json.return_value = {"status": "ok"}
         mock_request.return_value = mock_response
 
-        result = _make_request("GET", "/users/1")
+        with patch(
+            "agents.agents_scheduler.scheduler.config.get_scheduler_config"
+        ) as mock_config:
+            mock_config.return_value.admin_key = "test-admin-key"
+            result = _make_request("GET", "/users/1")
         assert result == {"status": "ok"}
         mock_request.assert_called_once_with(
             method="GET",
             url="http://localhost:8000/users/1",
-            headers={"Content-Type": "application/json", "Authorization": "Bearer test_token"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer test_token",
+                "X-Cosmos-Agent-Source": "agent",
+                "X-Cosmos-Agent-Token": "test-admin-key",
+            },
             json=None,
             params=None,
             timeout=30

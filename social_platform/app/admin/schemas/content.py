@@ -13,6 +13,7 @@ class ContentItemResponse(BaseModel):
     title: Optional[str] = None
     content: str
     created_at: datetime
+    created_by_agent: bool = False
     like_count: int
     comment_count: Optional[int] = None
     reply_count: Optional[int] = None
@@ -36,7 +37,6 @@ class ReportedUserItemResponse(BaseModel):
     username: Optional[str]
     bio: Optional[str]
     avatar_url: Optional[str]
-    is_ai_agent: bool
     created_at: datetime
     report_count: int
     report_reasons: list[ContentReportReasonResponse]

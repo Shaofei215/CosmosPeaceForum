@@ -1,13 +1,20 @@
 # 认证路由控制器
 # 处理用户注册、登录、获取当前用户信息等认证相关 API 请求
 
+import logging
 from typing import NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from social_platform.app.api.deps import get_access_payload, get_db, get_current_user, security
+from social_platform.app.api.deps import (
+    get_access_payload,
+    get_db,
+    get_current_user,
+    require_agent_service,
+    security,
+)
 from social_platform.app.core.security import (
     get_password_hash,
     verify_password,
@@ -17,6 +24,9 @@ from social_platform.app.domains.identity import application as identity_service
 from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.identity import verification as verification_service
 from social_platform.app.domains.identity.models import UserSession
+from social_platform.app.domains.hot_topic import application as hot_topic_service
+from social_platform.app.domains.notification import application as notification_service
+from social_platform.app.domains.topic import application as topic_service
 from social_platform.app.domains.invitation import application as invitation_service
 from social_platform.app.domains.invitation.schemas import InvitationRegistrationConfigResponse
 from social_platform.app.domains.identity.schemas import (
@@ -30,10 +40,11 @@ from social_platform.app.domains.user.models import User
 from social_platform.app.schemas.auth import (
     UserRegister,
     UserLogin,
+    AgentLoginContext,
     TokenResponse,
     UserResponse,
     RegisterResponse,
-    AILoginRequest,
+    InternalAgentLoginRequest,
     RefreshTokenRequest,
     SessionResponse,
 )
@@ -41,6 +52,7 @@ from social_platform.app.domains.search import application as search_service
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _request_session_context(request: Request, client_type: str | None = None) -> tuple[str, str | None, str | None]:
@@ -72,6 +84,97 @@ def _session_response(session: UserSession, current_session_id: str | None = Non
 def _current_user_payload(credentials: HTTPAuthorizationCredentials, db: Session) -> dict:
     """复用统一鉴权逻辑，取得当前 user scope access token 的 payload。"""
     return get_access_payload(credentials.credentials, db, "user")
+
+
+def _build_agent_login_context(db: Session, user: User) -> AgentLoginContext:
+    """构造外部 Agent 登录后展示的可信平台上下文。
+
+    热榜和话题属于辅助环境信息，读取失败时回退为空列表，不能让已经完成的
+    认证流程失败。关注与未读计数直接来自当前账号的公开平台状态。
+
+    Args:
+        db: 当前数据库会话。
+        user: 已通过认证的普通平台账号。
+
+    Returns:
+        AgentLoginContext: 可随登录响应返回的账号状态与平台热点。
+    """
+
+    summary = {"following_count": 0, "followers_count": 0, "unread_count": 0}
+    hot_topic_titles: list[str] = []
+    topic_titles: list[str] = []
+    try:
+        summary = notification_service.get_summary(db, user.id)
+    except Exception:
+        logger.exception("构造 Agent 登录上下文时读取账号摘要失败 | user_id=%s", user.id)
+    try:
+        hot_topic_titles = [
+            str(item.title).strip()
+            for item in hot_topic_service.list_public_hot_topics(db, limit=8)
+            if str(item.title).strip()
+        ]
+    except Exception:
+        logger.exception("构造 Agent 登录上下文时读取热榜失败 | user_id=%s", user.id)
+    try:
+        topic_titles = [
+            str(item.name).strip()
+            for item in topic_service.list_trending_topics(db, limit=8)
+            if str(item.name).strip()
+        ]
+    except Exception:
+        logger.exception("构造 Agent 登录上下文时读取话题失败 | user_id=%s", user.id)
+
+    unread_count = int(summary.get("unread_count", 0) or 0)
+    return AgentLoginContext(
+        platform_user_id=user.id,
+        following_count=int(summary.get("following_count", 0) or 0),
+        followers_count=int(summary.get("followers_count", 0) or 0),
+        unread_count=unread_count if unread_count > 0 else None,
+        hot_topic_titles=hot_topic_titles,
+        topic_titles=topic_titles,
+    )
+
+
+def _authenticate_username_password_account(
+    db: Session,
+    username: str,
+    password: str,
+) -> User:
+    """校验管理员创建的无邮箱用户名密码账号。
+
+    该账号既可被内建 Agent 调度器使用，也可被管理后台以管理员授权方式生成
+    浏览器会话；校验逻辑集中在这里，避免两个登录入口出现行为分叉。
+
+    Args:
+        db: 当前数据库会话。
+        username: 管理员创建的用户名。
+        password: 对应明文密码。
+
+    Returns:
+        User: 校验通过的公开平台用户。
+
+    Raises:
+        HTTPException: 用户不存在或密码错误时返回统一的 401。
+    """
+
+    user = db.query(User).filter(
+        User.username == username,
+        User.email.is_(None),
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误"
+        )
+
+    if user.password_hash is None or not verify_password(password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误"
+        )
+
+    return user
 
 
 def _raise_send_code_http_error(exc: Exception) -> NoReturn:
@@ -202,7 +305,7 @@ def send_login_verification_code(
         _raise_send_code_http_error(exc)
 
 
-# ========== 用户注册（AI 用户直接注册） ==========
+# ========== 管理员创建用户名密码账号 ==========
 
 
 @router.post(
@@ -216,9 +319,7 @@ def register(
     db: Session = Depends(get_db)
 ) -> UserResponse:
     """
-    用户注册（AI 用户专用）
-
-    AI 用户使用此接口直接注册，无需邮箱验证
+    管理员创建无邮箱的用户名密码账号。
 
     Args:
         user_data: 用户注册信息
@@ -232,63 +333,30 @@ def register(
         HTTPException 400: 用户名已存在
         HTTPException 400: AI 注册但未提供管理员密钥
         HTTPException 401: 管理员密钥无效
-        HTTPException 400: AI 注册但未提供 ai_config_id
+        HTTPException 400: 未提供用户名或用户名已存在
     """
-    # AI 用户注册
-    if user_data.is_ai_agent:
-        if x_admin_key is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="AI 注册需要提供管理员密钥"
-            )
-        if not verify_admin_key(x_admin_key):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="管理员密钥无效"
-            )
-        if user_data.ai_config_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="AI 注册需要提供 ai_config_id"
-            )
-        if not user_data.username:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="AI 注册需要提供用户名"
-            )
+    if x_admin_key is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="需要管理员密钥")
+    if not verify_admin_key(x_admin_key):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员密钥无效")
+    if not user_data.username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="需要提供用户名")
 
-        # 检查用户名是否已存在
-        existing_user = db.query(User).filter(
-            User.username == user_data.username
-        ).first()
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="用户名已存在"
-            )
+    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    if existing_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
 
-        password_hash = get_password_hash(user_data.password)
-
-        db_user = User(
-            username=user_data.username,
-            password_hash=password_hash,
-            is_ai_agent=True,
-            ai_config_id=user_data.ai_config_id,
-            email=None,
-            email_verified=False,
-        )
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        search_service.index_user(db_user)
-
-        return UserResponse.model_validate(db_user)
-
-    # 真人用户应使用 /register/verify 接口
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="真人用户注册请使用 /auth/register/verify 接口"
+    db_user = User(
+        username=user_data.username,
+        password_hash=get_password_hash(user_data.password),
+        email=None,
+        email_verified=False,
     )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    search_service.index_user(db_user)
+    return UserResponse.model_validate(db_user)
 
 
 # ========== 用户注册并验证邮箱（真人用户两步注册第二步） ==========
@@ -327,14 +395,7 @@ def verify_and_register(
         HTTPException 400: 验证码无效、已过期或尝试次数过多
         HTTPException 400: 验证码错误
     """
-    # 不允许 AI 用户使用此接口
-    if user_data.is_ai_agent:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="AI 用户请使用 POST /auth/register"
-        )
-
-    # 真人用户必须提供邮箱
+    # 邮箱注册必须提供邮箱
     if not user_data.email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -359,7 +420,7 @@ def verify_and_register(
     ) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    client_type, user_agent, ip_address = _request_session_context(request)
+    client_type, user_agent, ip_address = _request_session_context(request, user_data.client_type)
     token_pair = session_service.create_session_token_pair(
         db=db,
         account_id=db_user.id,
@@ -382,7 +443,7 @@ def verify_and_register(
 # ========== 用户登录 ==========
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, response_model_exclude_none=True)
 def login(
     user_data: UserLogin,
     request: Request,
@@ -398,6 +459,7 @@ def login(
 
     Args:
         user_data: 用户登录信息（email + password 或 email + code）
+        request: 当前 HTTP 请求，用于记录 session 端类型、User-Agent 和 IP。
         db: 数据库会话
 
     Returns:
@@ -430,7 +492,6 @@ def login(
     user = db.query(User).filter(
         User.email == email,
         User.email_verified.is_(True),
-        User.is_ai_agent.is_(False),
     ).first()
 
     if not user:
@@ -463,7 +524,7 @@ def login(
                 detail=str(exc),
             ) from exc
 
-    client_type, user_agent, ip_address = _request_session_context(request)
+    client_type, user_agent, ip_address = _request_session_context(request, user_data.client_type)
     token_pair = session_service.create_session_token_pair(
         db=db,
         account_id=user.id,
@@ -475,70 +536,87 @@ def login(
         revoke_same_client=True,
     )
 
-    return TokenResponse(**token_pair)
+    agent_context = (
+        _build_agent_login_context(db, user)
+        if user_data.client_type == "agent"
+        else None
+    )
+    return TokenResponse(**token_pair, agent_context=agent_context)
 
 
-# ========== AI 用户登录 ==========
+# ========== 内建 Agent 登录 ==========
 
 
-@router.post("/ai-login", response_model=TokenResponse)
-def ai_login(
-    login_data: AILoginRequest,
+@router.post("/internal-agent-login", response_model=TokenResponse)
+def internal_agent_login(
+    login_data: InternalAgentLoginRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(require_agent_service),
 ) -> TokenResponse:
-    """
-    AI 用户登录
-
-    AI 用户通过用户名或 ai_config_id + 密码登录，返回 JWT Token
+    """供内建 Agent 使用用户名和密码登录管理员创建的无邮箱账号。
 
     Args:
-        login_data: AI 用户登录信息（username 或 ai_config_id + password）
+        login_data: 内建 Agent 的用户名和密码。
         db: 数据库会话
 
     Returns:
         TokenResponse: 包含 access_token 的响应
 
     Raises:
-        HTTPException 400: 参数错误（未提供 username 或 ai_config_id）
         HTTPException 401: 用户名或密码错误
     """
-    if login_data.username is None and login_data.ai_config_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="必须提供 username 或 ai_config_id"
-        )
-
-    if login_data.username is not None and login_data.ai_config_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="只需提供 username 或 ai_config_id 其中一个"
-        )
-
-    query = db.query(User).filter(User.is_ai_agent == True)
-
-    if login_data.username is not None:
-        query = query.filter(User.username == login_data.username)
-    else:
-        query = query.filter(User.ai_config_id == login_data.ai_config_id)
-
-    user = query.first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误"
-        )
-
-    if user.password_hash is None or not verify_password(
-        login_data.password, user.password_hash
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误"
-        )
+    user = _authenticate_username_password_account(db, login_data.username, login_data.password)
 
     client_type, user_agent, ip_address = _request_session_context(request, client_type="agent")
+    token_pair = session_service.create_session_token_pair(
+        db=db,
+        account_id=user.id,
+        scope="user",
+        client_type=client_type,
+        remember_me=False,
+        user_agent=user_agent,
+        ip_address=ip_address,
+        revoke_same_client=False,
+    )
+
+    return TokenResponse(**token_pair)
+
+
+@router.post("/admin-agent-login", response_model=TokenResponse)
+def admin_agent_login(
+    login_data: InternalAgentLoginRequest,
+    request: Request,
+    x_admin_key: str | None = Header(None, alias="X-Admin-Key", description="管理员密钥"),
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    """供管理后台以管理员授权方式生成角色账号浏览器会话。
+
+    这个入口解决的是“管理员进入角色账号”的管理动作，不代表 Agent 调度器
+    自动执行，因此不要求 agents 服务身份，也不会让后续浏览器请求带有
+    ``created_by_agent`` 来源。真正的 Agent 自动登录仍使用
+    ``/internal-agent-login`` 并由服务身份保护。
+
+    Args:
+        login_data: 角色账号用户名与密码。
+        request: 当前 HTTP 请求，用于记录会话端信息。
+        x_admin_key: 管理后台持有的公开平台管理员密钥。
+        db: 当前数据库会话。
+
+    Returns:
+        TokenResponse: 可写入公开平台前端 tokenStorage 的 token 对。
+
+    Raises:
+        HTTPException: 管理员密钥缺失/无效，或用户名密码错误。
+    """
+
+    if x_admin_key is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="需要管理员密钥")
+    if not verify_admin_key(x_admin_key):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员密钥无效")
+
+    user = _authenticate_username_password_account(db, login_data.username, login_data.password)
+    client_type, user_agent, ip_address = _request_session_context(request)
     token_pair = session_service.create_session_token_pair(
         db=db,
         account_id=user.id,

@@ -29,6 +29,7 @@ class ContentReportResponse(BaseModel):
     id: int
     status: str
     message: str
+    created_by_agent: bool = False
 
 
 class ModerationAppealCreate(BaseModel):

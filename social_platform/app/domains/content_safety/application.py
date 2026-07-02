@@ -32,6 +32,7 @@ def create_content_report(
     target_type: ReportTargetType,
     target_id: int,
     reason: str,
+    created_by_agent: bool = False,
 ) -> ContentReport:
     """创建或更新当前用户对同一目标的待审举报。
 
@@ -81,6 +82,7 @@ def create_content_report(
         comment_id=comment_id,
         user_id=user_id,
         reason=reason,
+        created_by_agent=created_by_agent,
     )
     db.add(report)
     db.commit()
@@ -153,6 +155,7 @@ def _trigger_content_payload(report: ContentReport) -> dict[str, object]:
             "id": report.post.id,
             "title": report.post.title,
             "content": report.post.content,
+            "created_by_agent": report.post.created_by_agent,
             "reason": report.reason,
             "reported_at": report.created_at.isoformat() if report.created_at else None,
         }
@@ -162,6 +165,7 @@ def _trigger_content_payload(report: ContentReport) -> dict[str, object]:
             "id": report.comment.id,
             "post_id": report.comment.post_id,
             "content": report.comment.content,
+            "created_by_agent": report.comment.created_by_agent,
             "reason": report.reason,
             "reported_at": report.created_at.isoformat() if report.created_at else None,
         }

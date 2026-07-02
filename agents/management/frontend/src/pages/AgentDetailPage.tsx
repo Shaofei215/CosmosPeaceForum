@@ -143,7 +143,7 @@ export default function AgentDetailPage() {
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Activity size={14} />
-                  <span>平台 ID: <span className="text-foreground">{agent.app_platform_user_id ?? '未注册'}</span></span>
+                  <span>平台 ID: <span className="text-foreground">{agent.social_platform_user_id ?? '未注册'}</span></span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Calendar size={14} />

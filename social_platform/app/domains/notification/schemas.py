@@ -20,6 +20,7 @@ class NotificationResponse(BaseModel):
     appeal_status: Optional[str] = None
     is_read: bool = False
     created_at: datetime
+    created_by_agent: bool = False
     sender: Optional[UserResponse] = None
 
     class Config:

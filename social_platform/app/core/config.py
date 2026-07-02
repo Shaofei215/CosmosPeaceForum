@@ -37,12 +37,17 @@ class Settings(BaseSettings):
     PROJECT_NAME: str
     # 平台对外展示名，用于网页标题、邮件模板和系统提示词等可品牌化位置。
     PLATFORM_DISPLAY_NAME: str = "宇宙和平论坛"
+    # 平台外文名，用于生成只允许 ASCII 字符的 Skill 机器标识与下载文件名。
+    PLATFORM_ENGLISH_NAME: str = "Cosmos Peace Forum"
     VERSION: str
     API_V1_PREFIX: str
     DEBUG: bool = False
     # 浏览器可访问的公开平台前端 origin。当前主要供 agents/.env 同名配置对齐，
-    # 公开平台自身暂不依赖该值，但需要声明以允许 social_platform/.env 含有此项。
+    # 同时用于生成公共 Skill 中的公开平台 API 地址。
     SOCIAL_PALTFORM_FRONTEND_URL: str = "http://localhost:8000"
+    # 外部 Agent 从其宿主环境访问的公开工具网关根地址。个人模式与生产模式
+    # 网络拓扑不同，因此必须作为独立配置，不能从公开平台 origin 推断。
+    EXTERNAL_AGENT_API_BASE_URL: str = "http://localhost:8001/external/v1"
 
     DATABASE_URL: str
 

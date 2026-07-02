@@ -25,6 +25,7 @@ export interface NotificationItem {
   appeal_status?: string | null;
   is_read: boolean;
   created_at: string;
+  created_by_agent: boolean;
   sender: UserProfile | null;
 }
 

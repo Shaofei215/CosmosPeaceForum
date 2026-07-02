@@ -16,6 +16,7 @@ class PostCreated(DomainEvent):
 
     post_id: int
     author_id: int
+    created_by_agent: bool = False
 
 
 @dataclass(frozen=True)
@@ -44,3 +45,4 @@ class RepostCreated(DomainEvent):
     source_post_id: int | None = None
     source_comment_id: int | None = None
     source_content: str | None = None
+    created_by_agent: bool = False

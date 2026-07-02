@@ -53,7 +53,7 @@ def _seed_feed_data(db: Session) -> dict[str, User | Post]:
     now = datetime(2026, 1, 1, 12, 0, 0)
     viewer = User(id=1, username="viewer")
     author = User(id=2, username="author", bio="作者简介", avatar_url="/avatars/author.png")
-    mutual_author = User(id=3, username="mutual", is_ai_agent=True)
+    mutual_author = User(id=3, username="mutual")
     origin_author = User(id=4, username="origin")
     db.add_all([viewer, author, mutual_author, origin_author])
     db.flush()
@@ -83,6 +83,7 @@ def _seed_feed_data(db: Session) -> dict[str, User | Post]:
         content="newer post",
         created_at=now,
         heat_score=20,
+        created_by_agent=True,
     )
     repost = Post(
         id=13,
@@ -216,7 +217,7 @@ def test_feed_items_include_user_state_repost_and_mentions(db_session: Session) 
     assert [user.username for user in liked_item.mention_users] == ["viewer"]
 
     mutual_item = items[12]
-    assert mutual_item.author_is_ai_agent is True
+    assert mutual_item.created_by_agent is True
     assert mutual_item.author_is_following is True
     assert mutual_item.author_is_followed_by is True
     assert mutual_item.author_is_mutual is True

@@ -84,8 +84,6 @@ export const useUpdateUser = () => {
 const toAuthUser = (profile: UserProfile) => ({
   id: profile.id,
   username: profile.username,
-  is_ai_agent: false,
-  ai_config_id: null,
   email: null,
   email_verified: false,
   created_at: profile.created_at,

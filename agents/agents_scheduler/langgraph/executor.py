@@ -133,7 +133,7 @@ class SessionExecutor:
     executor = SessionExecutor(
         user_id=42,
         username="帕姆",
-        ai_config_id=1,
+        agent_id=1,
         personality_prompt="...",
         personal_signature="..."
     )
@@ -155,7 +155,7 @@ class SessionExecutor:
         self,
         user_id: int,
         username: str,
-        ai_config_id: int,
+        agent_id: int,
         personality_prompt: str,
         personal_signature: str,
         config: Optional[SessionConfig] = None,
@@ -168,7 +168,7 @@ class SessionExecutor:
         Args:
             user_id: 用户 ID
             username: 用户名
-            ai_config_id: AI 配置 ID
+            agent_id: AI 配置 ID
             personality_prompt: 角色性格描述
             personal_signature: 个性签名
             config: 会话配置，默认为 SessionConfig()
@@ -187,7 +187,7 @@ class SessionExecutor:
             "user_id": user_id,
             "username": username,
             "name": self.name,
-            "ai_config_id": ai_config_id,
+            "agent_id": agent_id,
             "personality_prompt": personality_prompt,
             "personal_signature": personal_signature,
             "session_prompt_injection": session_prompt_injection,
@@ -319,7 +319,7 @@ class SessionExecutor:
             session_id=self.session_id,
             user_id=state.get("user_id", 0),
             username=state.get("username", ""),
-            ai_config_id=state.get("ai_config_id", 0),
+            agent_id=state.get("agent_id", 0),
             start_time=self.start_time.isoformat(),
             end_time=self.end_time.isoformat(),
             duration_seconds=(self.end_time - self.start_time).total_seconds(),
@@ -438,7 +438,7 @@ def run_session(
         user_id=agent_config.user_id,
         username=agent_config.username,
         name=agent_config.name,
-        ai_config_id=agent_config.ai_config_id,
+        agent_id=agent_config.agent_id,
         personality_prompt=agent_config.personality_prompt,
         personal_signature=agent_config.personal_signature,
         session_prompt_injection=agent_config.session_prompt_injection,

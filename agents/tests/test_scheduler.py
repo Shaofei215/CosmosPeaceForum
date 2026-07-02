@@ -20,10 +20,10 @@ class TestLoginUser:
         mock_me_response.status_code = 200
         mock_me_response.json.return_value = {"id": 1}
 
-        with patch("requests.post", return_value=mock_response), \
-             patch("requests.get", return_value=mock_me_response):
+        with patch("requests.request", side_effect=[mock_response, mock_me_response]):
             with patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config") as mock_config:
                 mock_config.return_value.api_base_url = "http://localhost:8000/api/v1"
+                mock_config.return_value.admin_key = "admin-secret"
                 result = login_user("test_user", "password")
                 assert result is not None
                 assert "access_token" in result
@@ -32,17 +32,19 @@ class TestLoginUser:
         mock_response = MagicMock()
         mock_response.status_code = 401
 
-        with patch("requests.post", return_value=mock_response):
+        with patch("requests.request", return_value=mock_response):
             with patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config") as mock_config:
                 mock_config.return_value.api_base_url = "http://localhost:8000/api/v1"
+                mock_config.return_value.admin_key = "admin-secret"
                 result = login_user("test_user", "wrong_password")
                 assert result is None
 
     def test_login_network_error(self):
         import requests as req
-        with patch("requests.post", side_effect=req.exceptions.RequestException("Network error")):
+        with patch("requests.request", side_effect=req.exceptions.RequestException("Network error")):
             with patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config") as mock_config:
                 mock_config.return_value.api_base_url = "http://localhost:8000/api/v1"
+                mock_config.return_value.admin_key = "admin-secret"
                 result = login_user("test_user", "password")
                 assert result is None
 
@@ -53,7 +55,7 @@ class TestAIUserScheduler:
             user_id=1,
             username="test_user",
             name="Test",
-            ai_config_id=1,
+            agent_id=1,
             monthly_logins=30,
             password="password",
             personality_prompt="friendly",
@@ -76,7 +78,7 @@ class TestAIUserScheduler:
             user_id=1,
             username="test_user",
             name="Test",
-            ai_config_id=1,
+            agent_id=1,
             monthly_logins=30,
             password="password",
             personality_prompt="friendly",
@@ -91,7 +93,7 @@ class TestAIUserScheduler:
             user_id=1,
             username="test_user",
             name="Test",
-            ai_config_id=1,
+            agent_id=1,
             monthly_logins=30,
             password="password",
             personality_prompt="friendly",
@@ -112,7 +114,7 @@ class TestAIUserScheduler:
             user_id=1,
             username="test_user",
             name="Test",
-            ai_config_id=1,
+            agent_id=1,
             monthly_logins=0,
             password="password",
             personality_prompt="friendly",
@@ -131,7 +133,7 @@ class TestAIUserScheduler:
             user_id=1,
             username="test_user",
             name="Test",
-            ai_config_id=1,
+            agent_id=1,
             monthly_logins=30,
             password="password",
             personality_prompt="friendly",

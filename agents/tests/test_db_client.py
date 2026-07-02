@@ -31,7 +31,7 @@ def temp_db():
             knows_ids TEXT DEFAULT '[]',
             personality_prompt TEXT,
             personal_signature TEXT,
-            app_platform_user_id TEXT,
+            social_platform_user_id TEXT,
             monthly_logins INTEGER DEFAULT 30,
             last_login_at DATETIME,
             last_login_timestamp REAL,

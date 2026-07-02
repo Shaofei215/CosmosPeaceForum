@@ -113,6 +113,18 @@ export interface AuthResponse {
   refresh_expires_in: number;
   /** 服务端会话ID */
   session_id: string;
+  /** 仅 client_type=agent 登录时返回的平台上下文 */
+  agent_context?: AgentLoginContext;
+}
+
+/** 外部 Agent 登录后立即可见的平台账号状态。 */
+export interface AgentLoginContext {
+  platform_user_id: number;
+  following_count: number;
+  followers_count: number;
+  unread_count?: number;
+  hot_topic_titles: string[];
+  topic_titles: string[];
 }
 
 /**
@@ -123,10 +135,6 @@ export interface User {
   id: number;
   /** 用户名 */
   username: string;
-  /** 是否为AI代理 */
-  is_ai_agent: boolean;
-  /** AI配置ID */
-  ai_config_id: number | null;
   /** 邮箱地址 */
   email: string | null;
   /** 邮箱是否已验证 */

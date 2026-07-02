@@ -78,7 +78,7 @@ export interface AgentConfig {
   knows_ids: number[];
   is_active: boolean;
   model_config_id: number | null;
-  app_platform_user_id: number | null;
+  social_platform_user_id: number | null;
   last_login_at: string | null;
   last_login_timestamp: number | null;
   total_login_count: number;
@@ -123,7 +123,7 @@ export interface AgentAppLoginResponse {
   expires_in: number;
   refresh_expires_in: number;
   session_id: string;
-  app_platform_user_id: number;
+  social_platform_user_id: number;
   social_platform_frontend_url: string;
   username: string;
 }

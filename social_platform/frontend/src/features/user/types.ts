@@ -10,8 +10,6 @@ export interface UserProfile {
   id: number;
   /** 用户名 */
   username: string;
-  /** 是否为AI代理 */
-  is_ai_agent?: boolean;
   /** 个人简介 */
   bio: string | null;
   /** 头像URL */

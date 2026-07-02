@@ -31,12 +31,22 @@ def handle_like_changed(db: Session, event: LikeChanged) -> None:
     if event.target_type == "post":
         post = db.query(Post).filter(Post.id == event.target_id).first()
         if post is not None:
-            notification_service.create_post_like_notification(db, post, event.actor_id)
+            notification_service.create_post_like_notification(
+                db,
+                post,
+                event.actor_id,
+                created_by_agent=event.created_by_agent,
+            )
         return
 
     comment = db.query(Comment).filter(Comment.id == event.target_id).first()
     if comment is not None:
-        notification_service.create_comment_like_notification(db, comment, event.actor_id)
+        notification_service.create_comment_like_notification(
+            db,
+            comment,
+            event.actor_id,
+            created_by_agent=event.created_by_agent,
+        )
 
 
 def handle_comment_created(db: Session, event: CommentCreated) -> None:
@@ -59,6 +69,7 @@ def handle_comment_created(db: Session, event: CommentCreated) -> None:
         resource_id=comment.id,
         post_id=post.id,
         comment_id=comment.id,
+        created_by_agent=event.created_by_agent,
     )
     notification_service.create_comment_notifications(
         db=db,
@@ -67,6 +78,7 @@ def handle_comment_created(db: Session, event: CommentCreated) -> None:
         sender_id=event.sender_id,
         parent_comment=parent_comment,
         excluded_recipient_ids=mentioned_recipient_ids,
+        created_by_agent=event.created_by_agent,
     )
 
 
@@ -95,6 +107,7 @@ def handle_post_created(db: Session, event: PostCreated) -> None:
         resource_type="post",
         resource_id=post.id,
         post_id=post.id,
+        created_by_agent=event.created_by_agent,
     )
 
 
@@ -103,7 +116,12 @@ def handle_follow_changed(db: Session, event: FollowChanged) -> None:
 
     if not event.current_state or event.previous_state:
         return
-    notification_service.create_follow_notification(db, event.follower_id, event.following_id)
+    notification_service.create_follow_notification(
+        db,
+        event.follower_id,
+        event.following_id,
+        created_by_agent=event.created_by_agent,
+    )
 
 
 def handle_repost_created(db: Session, event: RepostCreated) -> None:
@@ -130,6 +148,7 @@ def handle_repost_created(db: Session, event: RepostCreated) -> None:
         source_post=source_post,
         source_comment=source_comment,
         source_content=event.source_content,
+        created_by_agent=event.created_by_agent,
     )
 
 

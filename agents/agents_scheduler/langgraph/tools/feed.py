@@ -1,78 +1,13 @@
-# Feed 工具函数
-# 包含与信息流、帖子、评论浏览相关的工具
+"""Feed 工具函数。
 
-from typing import Dict, Any
+本模块只保留内部 LangChain `@tool` 适配层。工具说明面向 LLM 保持完整，
+平台调用、滚动状态语义和内容构建由共享平台工具核心维护。
+"""
 
 from langchain_core.tools import tool
 
-from agents.agents_scheduler.scheduler.context import get_current_user_id
-from agents.agents_scheduler.langgraph.tools.types import ToolResult, ToolExecutionError
-from agents.agents_scheduler.langgraph.tools.support.platform import (
-    _get_post, _get_comment, _get_post_comments, _get_comment_replies,
-    _get_global_feed, _get_user_posts, _search_platform,
-    _standardize_post, _standardize_posts_list, _standardize_comment,
-    _standardize_comments_list, _truncate,
-    _get_scroll_cursor, _set_scroll_cursor, _clear_scroll_cursor
-)
-
-
-def _normalize_feed_type(feed_type: str) -> str:
-    value = (feed_type or "recommended").lower()
-    aliases = {
-        "hot": "recommended",
-        "recommend": "recommended",
-        "recommended": "recommended",
-        "latest": "latest",
-        "following": "following",
-    }
-    return aliases.get(value, "recommended")
-
-
-def _feed_type_label(feed_type: str) -> str:
-    return {
-        "recommended": "推荐",
-        "latest": "最新",
-        "following": "关注",
-    }.get(feed_type, "推荐")
-
-
-def _normalize_count(count: int) -> int:
-    try:
-        value = int(count)
-    except (TypeError, ValueError):
-        value = 5
-    return max(1, min(value, 20))
-
-
-def _build_offset_pagination(
-    response: Dict[str, Any],
-    offset: int,
-    limit: int,
-    returned: int,
-) -> Dict[str, Any]:
-    pagination = response.get("pagination") or {}
-    total = pagination.get("total", offset + returned)
-    response["pagination"] = {
-        **pagination,
-        "offset": offset,
-        "limit": limit,
-        "returned": returned,
-        "has_next": offset + returned < total,
-    }
-    return response
-
-
-def _fetch_paged_posts_after_offset(fetcher, offset: int, count: int) -> Dict[str, Any]:
-    request_size = offset + count
-    if request_size <= 100:
-        response = fetcher(page=1, page_size=request_size)
-        all_items = response.get("data", [])
-        response["data"] = all_items[offset:offset + count]
-        return _build_offset_pagination(response, offset, count, len(response["data"]))
-
-    page = (offset // count) + 1
-    response = fetcher(page=page, page_size=count)
-    return _build_offset_pagination(response, offset, count, len(response.get("data", [])))
+from agents.agents_scheduler.langgraph.tools.support.shared_platform import run_shared_tool
+from agents.agents_scheduler.langgraph.tools.types import ToolResult
 
 
 @tool
@@ -80,7 +15,7 @@ def get_global_feed(
     feed_type: str = "recommended",
     seed: str = "default",
     reason: str = "",
-    summary: str = ""
+    summary: str = "",
 ) -> ToolResult:
     """
     社交平台主页信息流获取，用于回到主页，不可连续调用，如要查看更多内容请调用 scroll
@@ -102,33 +37,21 @@ def get_global_feed(
     Returns:
         ToolResult: 包含以下字段:
             - action: "浏览了主页信息流"
-            - data: 包含 data 和 pagination 的字典
+            - data: 包含 posts 的字典
 
     Raises:
         ToolExecutionError: 服务器内部错误
     """
-    current_user_id = get_current_user_id()
-    normalized_feed_type = _normalize_feed_type(feed_type)
-    feed_data = _get_global_feed(page=1, page_size=5, feed_type=normalized_feed_type, seed=seed)
-    feed_data["data"] = _standardize_posts_list(
-        feed_data.get("data", []),
-        current_user_id
-    )
-    _set_scroll_cursor({
-        "kind": "global_feed",
-        "feed_type": normalized_feed_type,
-        "seed": seed,
-        "offset": len(feed_data.get("data", [])),
-    })
 
-    return ToolResult(action=f"浏览了主页{_feed_type_label(normalized_feed_type)}信息流", data=feed_data)
+    result = run_shared_tool("get_global_feed", {"feed_type": feed_type, "seed": seed})
+    return ToolResult(action=result.action, data=result.data)
 
 
 @tool
 def expand_post(
     post_id: int,
     reason: str = "",
-    summary: str = ""
+    summary: str = "",
 ) -> ToolResult:
     """
     展开查看帖子的完整内容
@@ -154,25 +77,9 @@ def expand_post(
         NotFoundError: 帖子不存在
         ToolExecutionError: 服务器内部错误
     """
-    current_user_id = get_current_user_id()
-    post_data = _get_post(post_id)
-    standardized_post = _standardize_post(post_data, current_user_id, include_article_full=True)
-    _clear_scroll_cursor()
 
-    post_author = standardized_post.get("author_username", "")
-    post_content = _truncate(standardized_post.get("content", ""), 120)
-
-    if post_author and post_content:
-        action = f"展开了 @{post_author} 的帖子：{post_content}"
-    elif post_author:
-        action = f"展开了 @{post_author} 的帖子详情"
-    else:
-        action = f"展开了帖子 {post_id} 的详情"
-
-    return ToolResult(
-        action=action,
-        data={"post": standardized_post}
-    )
+    result = run_shared_tool("expand_post", {"post_id": post_id})
+    return ToolResult(action=result.action, data=result.data)
 
 
 @tool
@@ -182,7 +89,7 @@ def view_post_comments(
     summary: str = "",
     comment_count: int = 5,
     sort: str = "default",
-    seed: str = "default"
+    seed: str = "default",
 ) -> ToolResult:
     """
     查看指定帖子下的一级评论
@@ -204,46 +111,18 @@ def view_post_comments(
     Returns:
         ToolResult: 包含以下字段:
             - action: "查看了 @{author} 的帖子评论"
-            - data: 包含 post, comments, total 的字典
+            - data: 包含 post 和 comments 的字典
 
     Raises:
         NotFoundError: 帖子不存在
         ToolExecutionError: 服务器内部错误
     """
-    current_user_id = get_current_user_id()
-    post_data = _get_post(post_id)
-    standardized_post = _standardize_post(post_data, current_user_id)
-    count = _normalize_count(comment_count)
-    comments_data = _get_post_comments(post_id, skip=0, limit=count, sort=sort, seed=seed)
-    comments = _standardize_comments_list(comments_data.get("items", []), current_user_id)
-    _set_scroll_cursor({
-        "kind": "post_comments",
-        "post_id": post_id,
-        "sort": sort,
-        "seed": seed,
-        "offset": len(comments),
-    })
 
-    post_author = standardized_post.get("author_username", "")
-    post_content = _truncate(standardized_post.get("content", ""), 120)
-
-    if post_author and post_content:
-        action = f"查看了 @{post_author} 的帖子评论：{post_content}"
-    elif post_author:
-        action = f"查看了 @{post_author} 的帖子评论"
-    else:
-        action = f"查看了帖子 {post_id} 的评论"
-
-    return ToolResult(
-        action=action,
-        data={
-            "post": standardized_post,
-            "comments": comments,
-            "total": comments_data.get("total", 0),
-            "skip": 0,
-            "limit": count,
-        }
+    result = run_shared_tool(
+        "view_post_comments",
+        {"post_id": post_id, "comment_count": comment_count, "sort": sort, "seed": seed},
     )
+    return ToolResult(action=result.action, data=result.data)
 
 
 @tool
@@ -252,7 +131,7 @@ def expand_comment(
     comment_id: int,
     reason: str = "",
     summary: str = "",
-    reply_count: int = 5
+    reply_count: int = 5,
 ) -> ToolResult:
     """
     展开查看评论及其回复
@@ -274,57 +153,25 @@ def expand_comment(
     Returns:
         ToolResult: 包含以下字段:
             - action: "展开了 @{comment_author} 的评论：{comment_content}（来自 @{post_author} 的帖子：{post_content}）"
-            - data: 包含 post, comment, replies, total 的字典
+            - data: 包含 post、comment 和 replies 的字典
 
     Raises:
         NotFoundError: 评论不存在
         ToolExecutionError: 服务器内部错误
     """
-    current_user_id = get_current_user_id()
-    comment_data = _get_comment(post_id, comment_id)
-    post_data = _get_post(post_id)
-    standardized_post = _standardize_post(post_data, current_user_id)
-    standardized_comment = _standardize_comment(comment_data, current_user_id)
-    count = _normalize_count(reply_count)
-    replies_data = _get_comment_replies(post_id, comment_id, skip=0, limit=count)
-    replies = _standardize_comments_list(replies_data.get("items", []), current_user_id)
-    _set_scroll_cursor({
-        "kind": "comment_replies",
-        "post_id": post_id,
-        "comment_id": comment_id,
-        "offset": len(replies),
-    })
 
-    post_author = standardized_post.get("author_username", "")
-    post_content = _truncate(standardized_post.get("content", ""), 120)
-    comment_author = standardized_comment.get("author_username", "") or standardized_comment.get("owner_username", "")
-    comment_content = _truncate(standardized_comment.get("content", ""), 120)
-
-    if post_author and post_content and comment_author and comment_content:
-        action = f"展开了 @{comment_author} 的评论：{comment_content}（来自 @{post_author} 的帖子：{post_content}）"
-    elif comment_author and comment_content:
-        action = f"展开了 @{comment_author} 的评论：{comment_content}"
-    else:
-        action = f"展开了评论 {comment_id} 的详情"
-
-    return ToolResult(
-        action=action,
-        data={
-            "post": standardized_post,
-            "comment": standardized_comment,
-            "replies": replies,
-            "total": replies_data.get("total", 0),
-            "skip": 0,
-            "limit": count,
-        }
+    result = run_shared_tool(
+        "expand_comment",
+        {"post_id": post_id, "comment_id": comment_id, "reply_count": reply_count},
     )
+    return ToolResult(action=result.action, data=result.data)
 
 
 @tool
 def scroll(
     count: int = 5,
     reason: str = "",
-    summary: str = ""
+    summary: str = "",
 ) -> ToolResult:
     """
     向下滑动当前页面，自动查看后续内容
@@ -332,7 +179,7 @@ def scroll(
     该工具不需要知道当前位置，会自动延续最近一次打开的可滚动页面：
     get_global_feed 之后继续加载主页信息流；search_platform 之后继续加载搜索结果；
     view_post_comments 之后继续加载一级评论；expand_comment 之后继续加载该评论下的回复；
-    get_user_profile 之后继续加载用户主页帖子。
+    get_user_profile 之后继续加载用户主页帖子；view_notifications 之后继续加载通知。
 
     注意：此工具会自动从当前执行上下文获取认证信息（如有）。
 
@@ -346,143 +193,11 @@ def scroll(
     Returns:
         ToolResult: 包含以下字段:
             - action: "向下滑动浏览了更多内容"
-            - data: 后续帖子、评论或回复
+            - data: 后续帖子、评论、回复或通知
 
     Raises:
         ToolExecutionError: 服务器内部错误
     """
-    current_user_id = get_current_user_id()
-    cursor = _get_scroll_cursor()
-    count = _normalize_count(count)
-    kind = cursor.get("kind")
 
-    if kind == "global_feed":
-        normalized_feed_type = _normalize_feed_type(cursor.get("feed_type", "recommended"))
-        offset = int(cursor.get("offset", 0))
-        seed = cursor.get("seed", "default")
-        feed_data = _fetch_paged_posts_after_offset(
-            lambda page, page_size: _get_global_feed(
-                page=page,
-                page_size=page_size,
-                feed_type=normalized_feed_type,
-                seed=seed,
-            ),
-            offset,
-            count,
-        )
-        feed_data["data"] = _standardize_posts_list(feed_data.get("data", []), current_user_id)
-        _set_scroll_cursor({**cursor, "offset": offset + len(feed_data.get("data", []))})
-        return ToolResult(
-            action=f"向下滑动浏览了更多{_feed_type_label(normalized_feed_type)}信息流帖子",
-            data=feed_data,
-        )
-
-    if kind == "user_posts":
-        user_id = cursor.get("user_id")
-        offset = int(cursor.get("offset", 0))
-        posts_data = _fetch_paged_posts_after_offset(
-            lambda page, page_size: _get_user_posts(user_id, page=page, page_size=page_size),
-            offset,
-            count,
-        )
-        posts_data["data"] = _standardize_posts_list(posts_data.get("data", []), current_user_id)
-        _set_scroll_cursor({**cursor, "offset": offset + len(posts_data.get("data", []))})
-
-        target_username = cursor.get("username", "")
-        if not target_username and posts_data.get("data"):
-            target_username = posts_data["data"][0].get("author_username", "")
-        action = f"向下滑动浏览了 @{target_username} 的更多帖子" if target_username else f"向下滑动浏览了用户 {user_id} 的更多帖子"
-        return ToolResult(action=action, data=posts_data)
-
-    if kind == "search_results":
-        search_type = cursor.get("search_type", "content")
-        query = cursor.get("query", "")
-        offset = int(cursor.get("offset", 0))
-        search_data = _fetch_paged_posts_after_offset(
-            lambda page, page_size: _search_platform(
-                search_type=search_type,
-                query=query,
-                page=page,
-                page_size=page_size,
-            ),
-            offset,
-            count,
-        )
-        _set_scroll_cursor({**cursor, "offset": offset + len(search_data.get("data", []))})
-
-        if search_type == "content":
-            posts = _standardize_posts_list(search_data.get("data", []), current_user_id)
-            return ToolResult(
-                action=f"向下滑动浏览了更多「{_truncate(query, 30)}」的帖子搜索结果",
-                data={
-                    "type": "content",
-                    "query": query,
-                    "posts": posts,
-                    "pagination": search_data.get("pagination", {}),
-                },
-            )
-
-        users = search_data.get("data", [])
-        return ToolResult(
-            action=f"向下滑动浏览了更多「{_truncate(query, 30)}」的用户搜索结果",
-            data={
-                "type": "user",
-                "query": query,
-                "users": users,
-                "pagination": search_data.get("pagination", {}),
-            },
-        )
-
-    if kind == "post_comments":
-        post_id = cursor.get("post_id")
-        offset = int(cursor.get("offset", 0))
-        post_data = _get_post(post_id)
-        standardized_post = _standardize_post(post_data, current_user_id)
-        comments_data = _get_post_comments(
-            post_id,
-            skip=offset,
-            limit=count,
-            sort=cursor.get("sort", "default"),
-            seed=cursor.get("seed", "default"),
-        )
-        comments = _standardize_comments_list(comments_data.get("items", []), current_user_id)
-        _set_scroll_cursor({**cursor, "offset": offset + len(comments)})
-        post_author = standardized_post.get("author_username", "")
-        action = f"向下滑动浏览了 @{post_author} 的更多评论" if post_author else f"向下滑动浏览了帖子 {post_id} 的更多评论"
-        return ToolResult(
-            action=action,
-            data={
-                "post": standardized_post,
-                "comments": comments,
-                "total": comments_data.get("total", 0),
-                "skip": offset,
-                "limit": count,
-            },
-        )
-
-    if kind == "comment_replies":
-        post_id = cursor.get("post_id")
-        comment_id = cursor.get("comment_id")
-        offset = int(cursor.get("offset", 0))
-        post_data = _get_post(post_id)
-        comment_data = _get_comment(post_id, comment_id)
-        standardized_post = _standardize_post(post_data, current_user_id)
-        standardized_comment = _standardize_comment(comment_data, current_user_id)
-        replies_data = _get_comment_replies(post_id, comment_id, skip=offset, limit=count)
-        replies = _standardize_comments_list(replies_data.get("items", []), current_user_id)
-        _set_scroll_cursor({**cursor, "offset": offset + len(replies)})
-        comment_author = standardized_comment.get("author_username", "") or standardized_comment.get("owner_username", "")
-        action = f"向下滑动浏览了 @{comment_author} 的更多回复" if comment_author else f"向下滑动浏览了评论 {comment_id} 的更多回复"
-        return ToolResult(
-            action=action,
-            data={
-                "post": standardized_post,
-                "comment": standardized_comment,
-                "replies": replies,
-                "total": replies_data.get("total", 0),
-                "skip": offset,
-                "limit": count,
-            },
-        )
-
-    raise ToolExecutionError("当前页面没有可继续滚动的内容，请先调用 get_global_feed、search_platform、view_post_comments、expand_comment 或 get_user_profile。")
+    result = run_shared_tool("scroll", {"count": count})
+    return ToolResult(action=result.action, data=result.data)

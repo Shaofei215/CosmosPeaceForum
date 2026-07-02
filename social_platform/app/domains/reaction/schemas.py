@@ -28,6 +28,9 @@ class LikeToggleResponse(BaseModel):
     # 当前用户是否已点赞该帖子
     is_liked: bool
 
+    # 当前存在的点赞关系是否由 Agent 通道创建。
+    created_by_agent: bool = False
+
 
 class LikeStatusMixin(BaseModel):
     """

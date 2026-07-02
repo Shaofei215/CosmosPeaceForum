@@ -52,7 +52,8 @@ class DuplicateLikeError(Exception):
 def toggle_like(
     post_id: int,
     user_id: int,
-    db: Session
+    db: Session,
+    created_by_agent: bool = False,
 ) -> Tuple[bool, int]:
     """
     切换点赞状态（点赞/取消点赞）
@@ -105,6 +106,7 @@ def toggle_like(
                     previous_state=True,
                     current_state=False,
                     post_id=post_id,
+                    created_by_agent=existing_like.created_by_agent,
                 ),
             )
             # 3. 提交事务
@@ -114,7 +116,11 @@ def toggle_like(
         else:
             # 未点赞，执行点赞操作
             # 1. 创建点赞记录
-            new_like = Like(user_id=user_id, post_id=post_id)
+            new_like = Like(
+                user_id=user_id,
+                post_id=post_id,
+                created_by_agent=created_by_agent,
+            )
             db.add(new_like)
             # 2. 增加帖子点赞计数
             post.like_count = post.like_count + 1
@@ -128,6 +134,7 @@ def toggle_like(
                     previous_state=False,
                     current_state=True,
                     post_id=post_id,
+                    created_by_agent=created_by_agent,
                 ),
             )
             # 3. 提交事务

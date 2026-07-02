@@ -15,7 +15,7 @@ class SchedulerConfig:
     """
     调度器配置类
 
-    app_platform 地址、ADMIN_KEY、AI 默认密码和日志级别从 agents/.env 加载。
+    social_platform 地址、ADMIN_KEY、AI 默认密码和日志级别从 agents/.env 加载。
     """
     admin_key: str = ""
     ai_user_password: str = "ChangeMe123!"
@@ -33,7 +33,7 @@ class SchedulerConfig:
             admin_key=config.admin_key,
             ai_user_password=config.ai_user_password,
             log_level=config.log_level,
-            api_base_url=config.app_platform_api_base_url.rstrip('/'),
+            api_base_url=config.social_platform_api_base_url.rstrip('/'),
             internal_host=config.scheduler_internal_host,
             internal_port=config.scheduler_internal_port,
             internal_base_url=config.scheduler_internal_base_url,

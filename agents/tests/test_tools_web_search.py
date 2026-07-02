@@ -22,7 +22,7 @@ class TestWebSearch:
         result = web_search.invoke({"query": "Tavily LangChain"})
 
         assert result["action"] == "Tavily API Key 未配置，无法联网搜索"
-        assert result["data"]["total"] == 0
+        assert set(result["data"]) == {"source", "query", "search_depth", "results"}
 
     @patch("agents.agents_scheduler.langgraph.tools.web_search.get_session_config")
     def test_web_search_success_with_fake_tavily(self, mock_config, monkeypatch):
@@ -59,9 +59,11 @@ class TestWebSearch:
             "search_depth": "depth",
         })
 
-        assert result["action"] == "联网搜索了「LangChain Tavily」，获得1条结果"
+        assert result["action"] == "联网搜索了「LangChain Tavily」"
         assert result["data"]["search_depth"] == "advanced"
-        assert result["data"]["max_results"] == 3
+        assert "total" not in result["data"]
+        assert "response_time" not in result["data"]
+        assert "max_results" not in result["data"]
         assert result["data"]["results"][0]["title"] == "Tavily search integration"
 
     def test_web_search_tool_name(self):

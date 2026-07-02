@@ -24,6 +24,37 @@ from agents.agents_scheduler.scheduler.time_system import get_time_system
 logger = logging.getLogger(__name__)
 
 
+def _attach_current_unread_count(data: Any) -> Any:
+    """在工具结果中按需加入当前账号未读消息数量。
+
+    未读查询属于辅助提醒，失败时必须保留原工具结果。数量为零时不返回字段，
+    避免让每一步上下文都携带无意义的零值。
+
+    Args:
+        data: 当前工具准备写入 ``last_tool_result`` 的数据。
+
+    Returns:
+        Any: 注入正数未读提醒后的工具数据。
+    """
+
+    try:
+        from agents.agents_scheduler.langgraph.tools.support.platform import _get_notification_summary
+
+        unread_count = int(_get_notification_summary().get("unread_count", 0) or 0)
+    except Exception:
+        logger.exception("tool_execution_node | 读取未读消息数量失败")
+        return data
+
+    if not isinstance(data, dict):
+        return {"result": data, "unread_count": unread_count} if unread_count > 0 else data
+
+    updated = dict(data)
+    updated.pop("unread_count", None)
+    if unread_count > 0:
+        updated["unread_count"] = unread_count
+    return updated
+
+
 # ============================================================
 # 工具 → 页面位置映射
 # ============================================================
@@ -573,6 +604,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
             state.get("last_tool_result"),
             last_tool_result,
         )
+    last_tool_result = _attach_current_unread_count(last_tool_result)
 
     new_location = _get_location_after_tool(tool_name)
     current_location = new_location if new_location is not None else state.get("current_location", "主页（信息流）")

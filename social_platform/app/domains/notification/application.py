@@ -46,6 +46,7 @@ def create_notification(
     comment_id: Optional[int] = None,
     source_content: Optional[str] = None,
     truncate_source_content: bool = True,
+    created_by_agent: bool = False,
 ) -> Optional[Notification]:
     """创建通知记录并登记提交后的实时推送更新。"""
     if not recipient_id or recipient_id == sender_id:
@@ -61,6 +62,7 @@ def create_notification(
         comment_id=comment_id,
         source_content=_truncate(source_content) if truncate_source_content else source_content,
         is_read=0,
+        created_by_agent=created_by_agent,
     )
     db.add(notification)
     pending = db.info.setdefault(_PENDING_NOTIFICATION_RECIPIENTS_KEY, set())
@@ -68,7 +70,12 @@ def create_notification(
     return notification
 
 
-def create_post_like_notification(db: Session, post: Post, sender_id: int) -> None:
+def create_post_like_notification(
+    db: Session,
+    post: Post,
+    sender_id: int,
+    created_by_agent: bool = False,
+) -> None:
     """为帖子点赞事件创建通知，由 notification 订阅 reaction 事件后调用。"""
     create_notification(
         db=db,
@@ -79,10 +86,16 @@ def create_post_like_notification(db: Session, post: Post, sender_id: int) -> No
         resource_id=post.id,
         post_id=post.id,
         source_content=format_post_source_content(post),
+        created_by_agent=created_by_agent,
     )
 
 
-def create_comment_like_notification(db: Session, comment: Comment, sender_id: int) -> None:
+def create_comment_like_notification(
+    db: Session,
+    comment: Comment,
+    sender_id: int,
+    created_by_agent: bool = False,
+) -> None:
     """为评论点赞事件创建通知，由 notification 订阅 reaction 事件后调用。"""
     create_notification(
         db=db,
@@ -94,6 +107,7 @@ def create_comment_like_notification(db: Session, comment: Comment, sender_id: i
         post_id=comment.post_id,
         comment_id=comment.id,
         source_content=comment.content,
+        created_by_agent=created_by_agent,
     )
 
 
@@ -104,6 +118,7 @@ def create_comment_notifications(
     sender_id: int,
     parent_comment: Optional[Comment] = None,
     excluded_recipient_ids: Optional[set[int]] = None,
+    created_by_agent: bool = False,
 ) -> None:
     """为评论或回复事件创建对应通知，保持通知生成逻辑归属通知领域。
 
@@ -132,6 +147,7 @@ def create_comment_notifications(
             post_id=post.id,
             comment_id=comment.id,
             source_content=comment.content,
+            created_by_agent=created_by_agent,
         )
         return
 
@@ -147,6 +163,7 @@ def create_comment_notifications(
         post_id=post.id,
         comment_id=comment.id,
         source_content=comment.content,
+        created_by_agent=created_by_agent,
     )
 
 
@@ -159,6 +176,7 @@ def create_mention_notifications(
     resource_id: int,
     post_id: int,
     comment_id: Optional[int] = None,
+    created_by_agent: bool = False,
 ) -> set[int]:
     """为正文中实际存在的被提及用户创建通知。
 
@@ -190,13 +208,19 @@ def create_mention_notifications(
             post_id=post_id,
             comment_id=comment_id,
             source_content=content,
+            created_by_agent=created_by_agent,
         )
         if notification is not None:
             recipient_ids.add(recipient_id)
     return recipient_ids
 
 
-def create_follow_notification(db: Session, follower_id: int, following_id: int) -> None:
+def create_follow_notification(
+    db: Session,
+    follower_id: int,
+    following_id: int,
+    created_by_agent: bool = False,
+) -> None:
     """为关注状态开启事件创建通知，由 notification 订阅 follow 事件后调用。"""
     create_notification(
         db=db,
@@ -205,6 +229,7 @@ def create_follow_notification(db: Session, follower_id: int, following_id: int)
         notification_type="follow",
         resource_type="user",
         resource_id=follower_id,
+        created_by_agent=created_by_agent,
     )
 
 
@@ -216,6 +241,7 @@ def create_repost_notifications(
     source_post: Optional[Post] = None,
     source_comment: Optional[Comment] = None,
     source_content: Optional[str] = None,
+    created_by_agent: bool = False,
 ) -> None:
     """为转发事件创建通知，并去重原作者、源作者等可能重复的接收者。"""
     recipients = []
@@ -244,6 +270,7 @@ def create_repost_notifications(
             resource_id=repost.id,
             post_id=repost.id,
             source_content=display_content,
+            created_by_agent=created_by_agent,
         )
         notified.add(recipient_id)
 

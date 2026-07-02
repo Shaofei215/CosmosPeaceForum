@@ -106,8 +106,6 @@ def register_human_user_with_code(
     db_user = User(
         username=f"用户_{verification_code.id}",
         password_hash=get_password_hash(password),
-        is_ai_agent=False,
-        ai_config_id=None,
         email=normalized_email,
         email_verified=True,
         email_verified_at=local_now(),

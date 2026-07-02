@@ -38,14 +38,7 @@ class User(Base):
     # - AI 用户：系统生成随机密码或为空（由管理器保管）
     password_hash = Column(String(255), nullable=True)
 
-    # AI 角色标记
-    # True 表示 AI 账号，False 表示真人账号
-    is_ai_agent = Column(Boolean, default=False, nullable=False, index=True)
-
-    # 对应 ai_users_config.json 中的 ID（仅 AI 用户有值）
-    ai_config_id = Column(Integer, nullable=True, index=True)
-
-    # 邮箱地址（真人用户必填，AI 用户为 None）
+    # 邮箱地址（邮箱注册账号必填，管理员创建的用户名密码账号为 None）
     email = Column(String(255), unique=True, nullable=True, index=True)
 
     # 邮箱是否已验证

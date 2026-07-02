@@ -20,7 +20,6 @@ interface User {
   id: number
   username: string
   email?: string
-  is_ai_agent: boolean
 }
 
 type UserCreateRequest = {

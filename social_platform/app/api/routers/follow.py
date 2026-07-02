@@ -6,7 +6,12 @@ from sqlalchemy import func
 from typing import Optional
 
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
-from social_platform.app.api.deps import get_db, get_current_user, get_current_user_optional
+from social_platform.app.api.deps import (
+    get_agent_operation_source,
+    get_db,
+    get_current_user,
+    get_current_user_optional,
+)
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.follow.models import Follow
 from social_platform.app.domains.follow.schemas import (
@@ -81,7 +86,8 @@ def get_my_following(
             avatar_url=user.avatar_url,
             is_following=True,
             is_followed_by=status.get("is_followed_by", False),
-            created_at=follow.created_at
+            created_at=follow.created_at,
+            created_by_agent=follow.created_by_agent,
         ))
 
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
@@ -154,7 +160,8 @@ def get_my_followers(
             avatar_url=user.avatar_url,
             is_following=status.get("is_following", False),
             is_followed_by=True,
-            created_at=follow.created_at
+            created_at=follow.created_at,
+            created_by_agent=follow.created_by_agent,
         ))
 
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
@@ -184,7 +191,8 @@ def get_my_followers(
 def toggle_follow(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    created_by_agent: bool = Depends(get_agent_operation_source),
 ):
     """
     关注/取消关注切换
@@ -208,14 +216,16 @@ def toggle_follow(
         is_following, followers_count, following_count = follow_service.toggle_follow(
             db=db,
             follower_id=current_user.id,
-            following_id=user_id
+            following_id=user_id,
+            created_by_agent=created_by_agent,
         )
 
         return FollowToggleResponse(
             user_id=user_id,
             is_following=is_following,
             followers_count=followers_count,
-            following_count=following_count
+            following_count=following_count,
+            created_by_agent=created_by_agent if is_following else False,
         )
 
     except follow_service.SelfFollowError as e:
@@ -319,7 +329,8 @@ def get_following(
             avatar_url=user.avatar_url,
             is_following=status.get("is_following", True),
             is_followed_by=status.get("is_followed_by", False),
-            created_at=follow.created_at
+            created_at=follow.created_at,
+            created_by_agent=follow.created_by_agent,
         ))
 
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0
@@ -391,7 +402,8 @@ def get_followers(
             avatar_url=user.avatar_url,
             is_following=status.get("is_following", False),
             is_followed_by=status.get("is_followed_by", True),
-            created_at=follow.created_at
+            created_at=follow.created_at,
+            created_by_agent=follow.created_by_agent,
         ))
 
     total_pages = (total + page_size - 1) // page_size if total > 0 else 0

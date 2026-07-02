@@ -301,7 +301,7 @@ def list_memories(
     # 获取 agent 用户名映射
     agent_stmt = select(AgentConfig)
     agents = db.exec(agent_stmt).all()
-    agent_map = {a.app_platform_user_id: a.name for a in agents if a.app_platform_user_id}
+    agent_map = {a.social_platform_user_id: a.name for a in agents if a.social_platform_user_id}
 
     total = len(all_memories)
     sliced = all_memories[skip:skip + limit]
@@ -333,7 +333,7 @@ def list_memory_owners(
 
     agent_stmt = select(AgentConfig)
     agents = db.exec(agent_stmt).all()
-    agent_map = {a.app_platform_user_id: a for a in agents if a.app_platform_user_id}
+    agent_map = {a.social_platform_user_id: a for a in agents if a.social_platform_user_id}
 
     grouped = {}
     for chunk in all_memories:

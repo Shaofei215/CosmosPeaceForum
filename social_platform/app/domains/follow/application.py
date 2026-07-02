@@ -59,7 +59,8 @@ class AlreadyFollowingError(Exception):
 def toggle_follow(
     db: Session,
     follower_id: int,
-    following_id: int
+    following_id: int,
+    created_by_agent: bool = False,
 ) -> Tuple[bool, int, int]:
     """
     切换关注状态（关注/取消关注）
@@ -115,7 +116,8 @@ def toggle_follow(
             # 1. 创建新的关注记录
             new_follow = Follow(
                 follower_id=follower_id,
-                following_id=following_id
+                following_id=following_id,
+                created_by_agent=created_by_agent,
             )
             db.add(new_follow)
             is_following = True
@@ -136,6 +138,7 @@ def toggle_follow(
                     following_id=following_id,
                     previous_state=False,
                     current_state=True,
+                    created_by_agent=created_by_agent,
                 ),
             )
         else:
@@ -150,6 +153,7 @@ def toggle_follow(
                     following_id=following_id,
                     previous_state=True,
                     current_state=False,
+                    created_by_agent=existing.created_by_agent,
                 ),
             )
 
@@ -194,21 +198,27 @@ def get_follow_status(
         ...     print("你们互相关注了！")
     """
     # 查询当前用户是否关注了目标用户
-    is_following = db.query(Follow).filter(
+    following_relation = db.query(Follow).filter(
         Follow.follower_id == current_user_id,
         Follow.following_id == target_user_id
-    ).first() is not None
+    ).first()
+    is_following = following_relation is not None
 
     # 查询目标用户是否关注了当前用户
-    is_followed_by = db.query(Follow).filter(
+    followed_by_relation = db.query(Follow).filter(
         Follow.follower_id == target_user_id,
         Follow.following_id == current_user_id
-    ).first() is not None
+    ).first()
+    is_followed_by = followed_by_relation is not None
 
     return {
         "is_following": is_following,
         "is_followed_by": is_followed_by,
-        "is_mutual": is_following and is_followed_by
+        "is_mutual": is_following and is_followed_by,
+        "created_by_agent": bool(following_relation and following_relation.created_by_agent),
+        "followed_by_created_by_agent": bool(
+            followed_by_relation and followed_by_relation.created_by_agent
+        ),
     }
 
 
