@@ -188,7 +188,7 @@ textarea:focus {
   isolation: isolate;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(min(100%, 22rem), 1fr);
+  grid-template-columns: minmax(0, max-content) minmax(22rem, 1fr);
   grid-template-rows: auto auto 1fr;
   align-items: start;
   overflow-x: hidden;
@@ -240,12 +240,12 @@ textarea:focus {
   width: min(100%, 36rem);
 }
 
-/* 分栏是认证页的唯一布局；窄视口仅收缩右栏并裁切插画。 */
+/* 桌面分栏是默认布局，仅由明确的移动端规则覆盖。 */
 .auth-page > .auth-big-logo {
   grid-column: 2;
   grid-row: 1;
   justify-self: center;
-  width: min(calc(100% - 2rem), 18.5rem);
+  width: 18.5rem;
   margin: clamp(0.75rem, 2.6vh, 1.75rem) 1rem clamp(0.5rem, 1.8vh, 1.1rem);
 }
 
@@ -253,7 +253,7 @@ textarea:focus {
   grid-column: 2;
   grid-row: 2;
   justify-self: center;
-  width: min(calc(100% - 1rem), 21rem);
+  width: 21rem;
   margin: clamp(0.25rem, 1vh, 0.75rem) 0.5rem 1rem;
   border-color: transparent !important;
   background: transparent !important;
@@ -793,13 +793,37 @@ img {
   display: inline;
 }
 
+.mobile-device .auth-page {
+  min-height: calc(100svh - 1rem);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow-y: auto;
+  background: hsl(var(--card));
+  padding: 1.5rem 1rem calc(2rem + env(safe-area-inset-bottom));
+}
+
+.mobile-device .auth-illustration {
+  display: none;
+}
+
+.mobile-device .auth-big-logo {
+  width: min(68vw, 17rem);
+  max-height: 5.5rem;
+  margin: 0 0 0.35rem;
+  align-self: center;
+}
+
 .mobile-device .auth-card {
+  width: 100%;
   max-width: none;
   flex: none;
+  margin: 0;
   border: 0;
   border-radius: 0;
-  background-color: transparent;
-  box-shadow: none;
+  background-color: transparent !important;
+  box-shadow: none !important;
   backdrop-filter: none;
 }
 
@@ -808,7 +832,7 @@ img {
   padding: 0 0 1.25rem;
 }
 
-.mobile-device .auth-card-content {
+.mobile-device .auth-page > .auth-card > .auth-card-content {
   padding: 0;
 }
 
@@ -825,7 +849,12 @@ img {
 }
 
 .mobile-device .auth-form {
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
+}
+
+.mobile-device .auth-form > * {
+  grid-column: 1 / -1;
 }
 
 .mobile-device .auth-form > * + * {
@@ -870,11 +899,22 @@ img {
 }
 
 .mobile-device .auth-code-button {
+  width: auto;
+  height: 2.75rem;
+  flex: 0 0 auto;
   min-width: 6rem;
   border-radius: 0.625rem;
   padding-left: 0.625rem;
   padding-right: 0.625rem;
   font-size: 0.75rem;
+}
+
+.mobile-device .auth-code-button-label {
+  display: inline;
+}
+
+.mobile-device .auth-code-button-compact {
+  display: none;
 }
 
 .mobile-device .auth-submit {
