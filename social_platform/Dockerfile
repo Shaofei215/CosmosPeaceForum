@@ -14,6 +14,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY frontend/ ./
 COPY footer.yml ../footer.yml
+COPY license/ ../license/
 RUN pnpm build
 
 
