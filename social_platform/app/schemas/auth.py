@@ -16,6 +16,10 @@ class UserRegister(BaseModel):
     email: Optional[EmailStr] = Field(default=None, description="邮箱注册用户必填")
     invitation_code: Optional[str] = Field(default=None, max_length=64, description="邀请码")
     remember_me: bool = Field(default=False, description="是否记住登录状态")
+    client_type: Optional[Literal["desktop", "mobile", "agent"]] = Field(
+        default=None,
+        description="客户端类型；未提供时根据 User-Agent 自动识别",
+    )
 
 
 class UserLogin(BaseModel):
