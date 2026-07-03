@@ -62,6 +62,8 @@ export default function AdminSetupPage() {
               value={newPassword}
               onChange={event => setNewPassword(event.target.value)}
               disabled={updateProfile.isPending}
+              minLength={8}
+              maxLength={32}
             />
             <Button type="submit" className="w-full rounded-md" disabled={updateProfile.isPending}>
               保存并进入后台

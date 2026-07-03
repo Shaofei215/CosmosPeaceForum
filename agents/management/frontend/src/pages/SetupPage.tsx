@@ -94,6 +94,8 @@ export default function SetupPage() {
                 onChange={(event) => setNewPassword(event.target.value)}
                 disabled={updateProfile.isPending}
                 autoComplete="new-password"
+                minLength={8}
+                maxLength={32}
               />
             </div>
 

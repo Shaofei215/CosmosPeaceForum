@@ -78,13 +78,13 @@ class AdminSessionResponse(BaseModel):
 class AdminProfileUpdateRequest(BaseModel):
     current_password: str = Field(min_length=1)
     username: Optional[str] = Field(default=None, min_length=3, max_length=50)
-    new_password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    new_password: Optional[str] = Field(default=None, min_length=8, max_length=32)
 
 
 class AdminCreateRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     email: Optional[EmailStr] = None
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=8, max_length=32)
     permissions: List[str] = Field(default_factory=list)
     is_active: bool = True
     is_super_admin: bool = False
