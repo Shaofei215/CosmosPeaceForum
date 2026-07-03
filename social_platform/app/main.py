@@ -141,11 +141,12 @@ app = FastAPI(
 )
 
 # 配置跨域中间件（CORS）
-# 允许所有来源访问，开发阶段使用，生产环境需要限制
+# 允许所有来源访问，开发阶段使用，生产环境需要限制。
+# 当前认证使用 Authorization Bearer Token，不需要跨域 Cookie 凭证。
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 允许所有来源
-    allow_credentials=True,  # 允许携带凭证
+    allow_credentials=False,  # 通配来源不能与凭证模式同时启用
     allow_methods=["*"],  # 允许所有 HTTP 方法
     allow_headers=["*"],  # 允许所有 HTTP 头
 )

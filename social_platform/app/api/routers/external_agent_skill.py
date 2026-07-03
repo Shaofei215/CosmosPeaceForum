@@ -39,7 +39,7 @@ def get_runtime_skill_package() -> SkillPackage:
     config = create_skill_build_config(
         platform_display_name=settings.PLATFORM_DISPLAY_NAME,
         platform_english_name=settings.PLATFORM_ENGLISH_NAME,
-        public_frontend_url=settings.SOCIAL_PALTFORM_FRONTEND_URL,
+        public_frontend_url=settings.SOCIAL_PLATFORM_FRONTEND_URL,
         api_v1_prefix=settings.API_V1_PREFIX,
         external_agent_api_base_url=settings.EXTERNAL_AGENT_API_BASE_URL,
     )

@@ -13,7 +13,7 @@
 生产模式追求公网部署边界：Nginx 是唯一公网 Web 入口，后端和数据库只在内部访问。
 
 两种模式不使用额外的“部署模式”开关。公共 Skill 直接读取
-`SOCIAL_PALTFORM_FRONTEND_URL` 和 `EXTERNAL_AGENT_API_BASE_URL`，因此自定义域名、端口或
+`SOCIAL_PLATFORM_FRONTEND_URL` 和 `EXTERNAL_AGENT_API_BASE_URL`，因此自定义域名、端口或
 反向代理时必须填写外部 Agent 实际可访问的地址。
 
 ## Docker 环境：个人模式
@@ -38,7 +38,7 @@
    默认的 Skill 公开地址为：
 
    ```bash
-   SOCIAL_PALTFORM_FRONTEND_URL=http://localhost:8000
+   SOCIAL_PLATFORM_FRONTEND_URL=http://localhost:8000
    EXTERNAL_AGENT_API_BASE_URL=http://localhost:8001/external/v1
    ```
 
@@ -102,11 +102,11 @@ agents/agents_scheduler/memory/data/
 2. 编辑生产密钥、SMTP、管理员初始密码和公网地址等配置：
 
    ```bash
-   SOCIAL_PALTFORM_FRONTEND_URL=https://example.com
+   SOCIAL_PLATFORM_FRONTEND_URL=https://example.com
    EXTERNAL_AGENT_API_BASE_URL=https://example.com/agent-api/v1
    ```
 
-   同时保持 `agents/.env` 中的 `SOCIAL_PALTFORM_FRONTEND_URL` 与公网 origin 一致。
+   同时保持 `agents/.env` 中的 `SOCIAL_PLATFORM_FRONTEND_URL` 与公网 origin 一致。
 
 3. 公开平台生产模式使用 PostgreSQL。Docker Compose 会覆盖公开平台容器内的数据库地址：
 
@@ -163,7 +163,7 @@ SQLite 相对路径和 Docker 个人模式一致。
    ```
 
 2. 编辑密钥和初始密码。若外部 Agent 不在同一台主机运行，同时把
-   `SOCIAL_PALTFORM_FRONTEND_URL` 和 `EXTERNAL_AGENT_API_BASE_URL` 改为部署服务器地址。
+   `SOCIAL_PLATFORM_FRONTEND_URL` 和 `EXTERNAL_AGENT_API_BASE_URL` 改为部署服务器地址。
 
 3. 安装依赖：
 
@@ -246,7 +246,7 @@ SQLite 相对路径和 Docker 个人模式一致。
    同时在 `social_platform/.env` 中设置实际公网地址：
 
    ```bash
-   SOCIAL_PALTFORM_FRONTEND_URL=https://example.com
+   SOCIAL_PLATFORM_FRONTEND_URL=https://example.com
    EXTERNAL_AGENT_API_BASE_URL=https://example.com/agent-api/v1
    ```
 
@@ -269,7 +269,7 @@ SQLite 相对路径和 Docker 个人模式一致。
    cd ../../..
    ```
 
-   `agents/.env` 中的 `SOCIAL_PALTFORM_FRONTEND_URL` 必须设置为公网公开平台
+   `agents/.env` 中的 `SOCIAL_PLATFORM_FRONTEND_URL` 必须设置为公网公开平台
    origin。Agent 管理后台通过 SSH 隧道访问，但“登录公开平台账号”按钮会在浏览器中
    跳转到公网公开平台。
 

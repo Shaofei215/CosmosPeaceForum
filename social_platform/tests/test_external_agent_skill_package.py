@@ -150,7 +150,7 @@ def test_download_routes_return_cached_runtime_package(monkeypatch: pytest.Monke
     settings = SimpleNamespace(
         PLATFORM_DISPLAY_NAME="星海社区",
         PLATFORM_ENGLISH_NAME="Stellar Community",
-        SOCIAL_PALTFORM_FRONTEND_URL="http://localhost:8000",
+        SOCIAL_PLATFORM_FRONTEND_URL="http://localhost:8000",
         API_V1_PREFIX="/api/v1",
         EXTERNAL_AGENT_API_BASE_URL="http://localhost:8001/external/v1",
     )
