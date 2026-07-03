@@ -1,5 +1,3 @@
-import importlib
-
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from agents.management.backend.models.system_config import SystemConfig
@@ -30,6 +28,17 @@ def test_default_system_configs_include_scheduler_time_scale():
     default_keys = {key for key, _, _ in DEFAULT_SYSTEM_CONFIGS}
 
     assert "SCHEDULER_TIME_SCALE" in default_keys
+
+
+def test_default_system_configs_include_current_memory_defaults():
+    """新数据库写入的记忆默认值应等于旧数据迁移后的最终配置。"""
+
+    defaults = {key: value for key, value, _ in DEFAULT_SYSTEM_CONFIGS}
+
+    assert defaults["MEMORY_RECALL_VECTOR_RESULTS"] == "20"
+    assert defaults["MEMORY_RECALL_BM25_RESULTS"] == "20"
+    assert defaults["MEMORY_THRESHOLD"] == "0.1"
+    assert defaults["MEMORY_BOOST_FACTOR"] == "0.1"
 
 
 def test_init_default_configs_purges_env_managed_values_from_sqlite():
@@ -139,93 +148,3 @@ def test_list_system_configs_uses_default_order_and_descriptions():
         assert [config.key for config in configs] == ["WEB_SEARCH_ENABLED", "TAVILY_API_KEY"]
         assert configs[0].description == "启用联网搜索工具"
         assert configs[1].description == "Tavily API Key"
-
-
-def test_candidate_migration_updates_only_legacy_defaults(monkeypatch):
-    """候选数迁移只应将旧默认 5 升级为 20。"""
-    migration = importlib.import_module(
-        "agents.management.alembic.versions.0006_expand_memory_candidates"
-    )
-    engine = create_engine("sqlite:///:memory:")
-    SQLModel.metadata.create_all(engine)
-
-    with Session(engine) as db:
-        db.add(SystemConfig(
-            key="MEMORY_RECALL_VECTOR_RESULTS",
-            value="5",
-            description="vector",
-        ))
-        db.add(SystemConfig(
-            key="MEMORY_RECALL_BM25_RESULTS",
-            value="7",
-            description="bm25",
-        ))
-        db.commit()
-
-    with engine.begin() as connection:
-        monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
-        migration.upgrade()
-
-    with Session(engine) as db:
-        vector_config = db.exec(select(SystemConfig).where(
-            SystemConfig.key == "MEMORY_RECALL_VECTOR_RESULTS"
-        )).one()
-        bm25_config = db.exec(select(SystemConfig).where(
-            SystemConfig.key == "MEMORY_RECALL_BM25_RESULTS"
-        )).one()
-        assert vector_config.value == "20"
-        assert bm25_config.value == "7"
-
-
-def test_boost_migration_updates_only_legacy_default(monkeypatch):
-    """唤醒系数迁移只应将旧默认 0.3 降低为 0.1。"""
-    migration = importlib.import_module(
-        "agents.management.alembic.versions.0007_reduce_memory_boost"
-    )
-    engine = create_engine("sqlite:///:memory:")
-    SQLModel.metadata.create_all(engine)
-
-    with Session(engine) as db:
-        db.add(SystemConfig(
-            key="MEMORY_BOOST_FACTOR",
-            value="0.3",
-            description="boost",
-        ))
-        db.commit()
-
-    with engine.begin() as connection:
-        monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
-        migration.upgrade()
-
-    with Session(engine) as db:
-        boost_config = db.exec(select(SystemConfig).where(
-            SystemConfig.key == "MEMORY_BOOST_FACTOR"
-        )).one()
-        assert boost_config.value == "0.1"
-
-
-def test_threshold_migration_updates_only_legacy_default(monkeypatch):
-    """记忆阈值迁移只应将旧默认 0.3 降低为 0.1。"""
-    migration = importlib.import_module(
-        "agents.management.alembic.versions.0008_reduce_memory_threshold"
-    )
-    engine = create_engine("sqlite:///:memory:")
-    SQLModel.metadata.create_all(engine)
-
-    with Session(engine) as db:
-        db.add(SystemConfig(
-            key="MEMORY_THRESHOLD",
-            value="0.3",
-            description="threshold",
-        ))
-        db.commit()
-
-    with engine.begin() as connection:
-        monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
-        migration.upgrade()
-
-    with Session(engine) as db:
-        threshold_config = db.exec(select(SystemConfig).where(
-            SystemConfig.key == "MEMORY_THRESHOLD"
-        )).one()
-        assert threshold_config.value == "0.1"
