@@ -14,6 +14,7 @@ import {
 } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
+import { cn } from '@/shared/lib/utils';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -145,21 +146,32 @@ export default function RegisterPage() {
     <div className="auth-page" data-auth-word="Register">
       <AuthIllustration />
       <BigLogo />
-      <Card className="auth-card auth-register-card rounded-lg bg-white shadow-sm border">
+      <Card
+        className={cn(
+          'auth-card rounded-lg border bg-white shadow-sm',
+          invitationRequired && 'auth-register-card'
+        )}
+      >
         <CardHeader className="auth-card-header space-y-1 pb-4">
           <CardTitle className="auth-title text-2xl font-bold text-center">注册</CardTitle>
         </CardHeader>
         <CardContent className="auth-card-content">
-          <form onSubmit={handleSubmit} className="auth-form grid grid-cols-2 gap-3.5">
+          <form
+            onSubmit={handleSubmit}
+            className={cn(
+              'auth-form grid gap-3.5',
+              invitationRequired ? 'grid-cols-2' : 'grid-cols-1'
+            )}
+          >
             {error && (
-              <div className="auth-alert col-span-2 text-sm">
+              <div className={cn('auth-alert text-sm', invitationRequired && 'col-span-2')}>
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
             {/* 邮箱 */}
-            <div className="auth-field col-span-2 space-y-2">
+            <div className={cn('auth-field space-y-2', invitationRequired && 'col-span-2')}>
               <label htmlFor="email" className="text-sm font-medium">
                 邮箱
               </label>
@@ -316,7 +328,7 @@ export default function RegisterPage() {
 
             <Button
               type="submit"
-              className="auth-submit col-span-2 w-full rounded-lg"
+              className={cn('auth-submit w-full rounded-lg', invitationRequired && 'col-span-2')}
               disabled={isPending}
             >
               {isRegistering ? '注册中...' : '注册'}

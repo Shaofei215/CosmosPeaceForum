@@ -140,7 +140,7 @@ textarea:focus {
   isolation: isolate;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(min(100%, 22rem), 1fr);
+  grid-template-columns: minmax(0, max-content) minmax(22rem, 1fr);
   grid-template-rows: auto auto 1fr;
   align-items: start;
   overflow-x: hidden;
@@ -188,12 +188,12 @@ textarea:focus {
   margin-top: clamp(0.25rem, 1vh, 0.75rem);
 }
 
-/* 分栏是认证页的唯一布局；窄视口仅收缩右栏并裁切插画。 */
+/* 桌面分栏是默认布局，仅由明确的移动端规则覆盖。 */
 .auth-page > .auth-big-logo {
   grid-column: 2;
   grid-row: 1;
   justify-self: center;
-  width: min(calc(100% - 2rem), 18.5rem);
+  width: 18.5rem;
   margin: clamp(0.75rem, 2.6vh, 1.75rem) 1rem clamp(0.5rem, 1.8vh, 1.1rem);
 }
 
@@ -201,7 +201,7 @@ textarea:focus {
   grid-column: 2;
   grid-row: 2;
   justify-self: center;
-  width: min(calc(100% - 1rem), 21rem);
+  width: 21rem;
   margin: clamp(0.25rem, 1vh, 0.75rem) 0.5rem 1rem;
   border-color: transparent !important;
   background: transparent !important;
