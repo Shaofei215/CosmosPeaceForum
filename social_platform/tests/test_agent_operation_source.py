@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 from social_platform.app.api import deps
 from social_platform.app.api.routers import auth
-from social_platform.app.schemas.auth import InternalAgentLoginRequest, UserLogin
+from social_platform.app.schemas.auth import InternalAgentLoginRequest, UserLogin, UserRegister
 from social_platform.app.schemas.auth import AgentLoginContext
 
 
@@ -113,6 +113,52 @@ def test_human_login_honors_agent_client_type(monkeypatch) -> None:
         client_type="agent",
         remember_me=False,
         user_agent=None,
+        ip_address="127.0.0.1",
+        revoke_same_client=True,
+    )
+
+
+def test_human_registration_detects_client_type_when_omitted(monkeypatch) -> None:
+    """真人注册未声明 client_type 时应按请求信息创建 Session，不能在注册后抛异常。"""
+
+    db = MagicMock()
+    user = SimpleNamespace(id=9, username="用户_9")
+    request = SimpleNamespace(
+        headers={"user-agent": "Mozilla/5.0"},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    token_pair = {
+        "access_token": "access",
+        "refresh_token": "refresh",
+        "token_type": "bearer",
+        "expires_in": 900,
+        "refresh_expires_in": 43200,
+        "session_id": "sid",
+    }
+    create_session = MagicMock(return_value=token_pair)
+
+    monkeypatch.setattr(
+        auth.identity_service,
+        "register_human_user_with_code",
+        lambda *_args, **_kwargs: user,
+    )
+    monkeypatch.setattr(auth.session_service, "create_session_token_pair", create_session)
+
+    response = auth.verify_and_register(
+        UserRegister(email="user@example.com", password="secret123"),
+        request,
+        code="123456",
+        db=db,
+    )
+
+    assert response.access_token == "access"
+    create_session.assert_called_once_with(
+        db=db,
+        account_id=9,
+        scope="user",
+        client_type="desktop",
+        remember_me=False,
+        user_agent="Mozilla/5.0",
         ip_address="127.0.0.1",
         revoke_same_client=True,
     )
