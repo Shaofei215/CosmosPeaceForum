@@ -68,7 +68,8 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        # 管理端通过 Authorization Bearer Token 认证，不依赖跨域 Cookie。
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

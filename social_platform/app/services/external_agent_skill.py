@@ -140,7 +140,7 @@ def join_public_url(origin: str, path_prefix: str) -> str:
         ValueError: origin 或最终地址不是安全的公开 HTTP(S) URL。
     """
 
-    normalized_origin = normalize_public_url(origin, "SOCIAL_PALTFORM_FRONTEND_URL")
+    normalized_origin = normalize_public_url(origin, "SOCIAL_PLATFORM_FRONTEND_URL")
     return normalize_public_url(
         f"{normalized_origin}/{path_prefix.strip('/')}",
         "platform_api_base",

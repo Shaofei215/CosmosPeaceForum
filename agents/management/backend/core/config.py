@@ -121,8 +121,8 @@ SOCIAL_PLATFORM_API_BASE_URL = _get_env(
     "SOCIAL_PLATFORM_API_BASE_URL",
     "http://localhost:8000/api/v1",
 ).rstrip("/")
-SOCIAL_PALTFORM_FRONTEND_URL = _get_env(
-    "SOCIAL_PALTFORM_FRONTEND_URL",
+SOCIAL_PLATFORM_FRONTEND_URL = _get_env(
+    "SOCIAL_PLATFORM_FRONTEND_URL",
     "http://localhost:8000",
 ).rstrip("/")
 ADMIN_KEY = _get_env("ADMIN_KEY", "")
@@ -164,7 +164,7 @@ class Settings:
 
     # social_platform 连接与 AI 用户基础配置
     social_platform_api_base_url: str = SOCIAL_PLATFORM_API_BASE_URL
-    social_platform_frontend_url: str = SOCIAL_PALTFORM_FRONTEND_URL
+    social_platform_frontend_url: str = SOCIAL_PLATFORM_FRONTEND_URL
     admin_key: str = ADMIN_KEY
     ai_user_password: str = AI_USER_PASSWORD
     log_level: str = LOG_LEVEL

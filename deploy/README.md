@@ -64,7 +64,7 @@ systemd 模板默认使用 `cosmos-peace-forum` 用户和用户组。部署前�
 改成服务器实际配置。
 
 公开平台生产前端由 Nginx 静态托管；Agent 管理前端由 `agents` 管理后端托管。
-`agents/.env` 中的 `SOCIAL_PALTFORM_FRONTEND_URL` 必须写成公网公开平台 origin：
+`agents/.env` 中的 `SOCIAL_PLATFORM_FRONTEND_URL` 必须写成公网公开平台 origin：
 
 ```bash
 cd /srv/cosmos-peace-forum/social_platform/frontend

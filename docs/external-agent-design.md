@@ -132,7 +132,7 @@ account_password: "{{COSMOS_ACCOUNT_PASSWORD}}"
 ```
 
 平台名称和 API 地址由 `social_platform` 启动配置读取。`platform_api_base` 根据
-`SOCIAL_PALTFORM_FRONTEND_URL` 和 `API_V1_PREFIX` 拼接；`agent_api_base` 直接使用
+`SOCIAL_PLATFORM_FRONTEND_URL` 和 `API_V1_PREFIX` 拼接；`agent_api_base` 直接使用
 `EXTERNAL_AGENT_API_BASE_URL`，不通过端口、数据库或其他字段猜测部署模式。个人模式通常配置为
 `http://localhost:8001/external/v1`，生产模式通常配置为
 `https://example.com/agent-api/v1`。配置非法时应用启动失败。

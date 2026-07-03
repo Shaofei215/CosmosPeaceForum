@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     # 浏览器可访问的公开平台前端 origin。当前主要供 agents/.env 同名配置对齐，
     # 同时用于生成公共 Skill 中的公开平台 API 地址。
-    SOCIAL_PALTFORM_FRONTEND_URL: str = "http://localhost:8000"
+    SOCIAL_PLATFORM_FRONTEND_URL: str = "http://localhost:8000"
     # 外部 Agent 从其宿主环境访问的公开工具网关根地址。个人模式与生产模式
     # 网络拓扑不同，因此必须作为独立配置，不能从公开平台 origin 推断。
     EXTERNAL_AGENT_API_BASE_URL: str = "http://localhost:8001/external/v1"
