@@ -294,7 +294,8 @@ SQLite 相对路径和 Docker 个人模式一致。
 
    然后按实际域名、证书路径和前端 `dist` 路径调整配置。Nginx 负责托管
    `social_platform/frontend/dist`，并把 `/api/` 和 `/uploads/` 代理到
-   `127.0.0.1:8000`。
+   `127.0.0.1:8000`。模板已对公开 API、写操作、认证尝试、邮件验证码、搜索和
+   外部 Agent 网关分层限流；超限响应为 `429` 并携带 `Retry-After`。
 
 8. 可选：安装 systemd 服务：
 
