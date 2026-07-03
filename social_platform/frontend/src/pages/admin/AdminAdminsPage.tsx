@@ -166,6 +166,8 @@ function CreateAdminDialog({
             onChange={event => setPassword(event.target.value)}
             placeholder="初始密码，至少 8 位"
             type="password"
+            minLength={8}
+            maxLength={32}
           />
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -195,7 +197,7 @@ function CreateAdminDialog({
             </Button>
             <Button
               className="rounded-md"
-              disabled={saving}
+              disabled={saving || password.length < 8}
               onClick={() =>
                 onSubmit({
                   username,

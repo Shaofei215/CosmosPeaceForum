@@ -12,7 +12,7 @@ class UserRegister(BaseModel):
     """邮箱注册和管理员创建用户名密码账号共享的请求模型。"""
 
     username: Optional[str] = Field(None, min_length=1, max_length=30, description="用户名")
-    password: str = Field(..., min_length=6, max_length=100)
+    password: str = Field(..., min_length=8, max_length=32)
     email: Optional[EmailStr] = Field(default=None, description="邮箱注册用户必填")
     invitation_code: Optional[str] = Field(default=None, max_length=64, description="邀请码")
     remember_me: bool = Field(default=False, description="是否记住登录状态")
