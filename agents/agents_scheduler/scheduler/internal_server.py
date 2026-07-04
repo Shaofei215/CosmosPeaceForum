@@ -96,7 +96,6 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
     def _handle_reload_system(self):
         """重载系统配置"""
         try:
-            from agents.agents_scheduler.scheduler.config import reload_scheduler_config
             from agents.agents_scheduler.langgraph.config import reload_session_config
             from agents.agents_scheduler.memory.config import reload_memory_config
             from agents.agents_scheduler.memory.embedding import reload_embedding_model
@@ -104,7 +103,6 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             from agents.agents_scheduler.langgraph.executor import reload_llm_registry
             from agents.agents_scheduler.scheduler.time_system import reload_time_scale
 
-            reload_scheduler_config()
             reload_session_config()
             memory_config = reload_memory_config()
             reload_embedding_model(memory_config)
@@ -216,7 +214,6 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
     def _handle_reload_all(self):
         """重载全部配置"""
         try:
-            from agents.agents_scheduler.scheduler.config import reload_scheduler_config
             from agents.agents_scheduler.langgraph.config import reload_session_config
             from agents.agents_scheduler.memory.config import reload_memory_config
             from agents.agents_scheduler.memory.embedding import reload_embedding_model
@@ -225,7 +222,6 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             from agents.agents_scheduler.langgraph.executor import reload_llm_registry
             from agents.agents_scheduler.scheduler.time_system import reload_time_scale
 
-            reload_scheduler_config()
             reload_session_config()
             memory_config = reload_memory_config()
             reload_embedding_model(memory_config)
