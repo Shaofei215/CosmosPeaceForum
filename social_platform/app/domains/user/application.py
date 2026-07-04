@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 import uuid
 from typing import Any, Protocol
 from urllib.parse import unquote
@@ -19,6 +20,9 @@ from social_platform.app.domains.user.models import User
 from social_platform.app.domains.user.schemas import CompleteProfileRequest, UserUpdate
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.shared.unit_of_work import commit_session, rollback_session
+
+# ZWNJ、ZWJ 用于正常文字塑形和组合 emoji，签名校验时予以保留。
+_ALLOWED_BIO_FORMAT_CHARACTERS = frozenset({"\u200c", "\u200d"})
 
 
 class AvatarUploadFile(Protocol):
@@ -57,6 +61,19 @@ class UsernameValidationError(Exception):
 
     def __init__(self, message: str) -> None:
         """初始化用户领域应用服务中的异常或服务对象，保存后续处理需要的上下文。"""
+        super().__init__(message)
+
+
+class BioValidationError(Exception):
+    """个人签名校验异常。"""
+
+    def __init__(self, message: str) -> None:
+        """初始化个人签名校验异常。
+
+        Args:
+            message: 对外展示的签名校验失败原因。
+        """
+
         super().__init__(message)
 
 
@@ -113,6 +130,44 @@ def _validate_username(username: str | None) -> str:
     normalized = username.strip()
     if not re.fullmatch(r"[a-zA-Z0-9_一-龥]+", normalized):
         raise UsernameValidationError("用户名只能包含字母、数字、下划线和中文")
+    return normalized
+
+
+def _validate_bio(bio: str | None) -> str | None:
+    """校验并规范化个人签名。
+
+    签名允许多语言、标点和 emoji。ZWNJ、ZWJ 可用于正常文字塑形和组合 emoji，
+    其余控制字符与 Unicode 格式字符可能隐藏内容或改变显示顺序，因此拒绝。
+
+    Args:
+        bio: 待校验的可选个人签名。
+
+    Returns:
+        str | None: 去除首尾空白后的签名；未提供时返回 None。
+
+    Raises:
+        BioValidationError: 当签名仅含不可见内容或包含危险控制字符时抛出。
+    """
+
+    if bio is None:
+        return None
+
+    normalized = bio.strip()
+    if not normalized:
+        return ""
+
+    has_visible_character = False
+    for character in normalized:
+        category = unicodedata.category(character)
+        if category == "Cc" or (
+            category == "Cf" and character not in _ALLOWED_BIO_FORMAT_CHARACTERS
+        ):
+            raise BioValidationError("个人签名不能包含控制字符或不可见字符")
+        if not character.isspace() and category not in {"Cc", "Cf"}:
+            has_visible_character = True
+
+    if not has_visible_character:
+        raise BioValidationError("个人签名不能只包含空白或不可见字符")
     return normalized
 
 
@@ -586,6 +641,8 @@ def update_user(db: Session, current_user: User, user_id: int, user_update: User
         username = _validate_username(update_data["username"])
         _ensure_username_unique(db, username, user_id)
         update_data["username"] = username
+    if "bio" in update_data:
+        update_data["bio"] = _validate_bio(update_data["bio"])
 
     for field, value in update_data.items():
         setattr(user, field, value)
@@ -628,7 +685,7 @@ def complete_profile(
     _ensure_username_unique(db, username, user_id)
     user.username = username
     if profile_data.bio is not None:
-        user.bio = profile_data.bio
+        user.bio = _validate_bio(profile_data.bio)
     if profile_data.avatar_url is not None:
         user.avatar_url = profile_data.avatar_url
 

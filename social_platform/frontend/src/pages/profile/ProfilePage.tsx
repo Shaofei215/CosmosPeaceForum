@@ -11,6 +11,7 @@ import { useAuthStore, useLogout } from '@/features/auth';
 import { useCreateReport } from '@/features/report';
 import { PostCard } from '@/widgets/post-card';
 import { Avatar, Skeleton, Button, Input, Textarea } from '@/shared/components/ui';
+import { isValidOptionalProfileText, isValidUsername } from '@/shared/lib/profileValidation';
 import { Camera, Flag, MoreVertical, Pencil, Save, X } from 'lucide-react';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
@@ -233,7 +234,6 @@ export default function ProfilePage() {
 
     const username = draftUsername.trim();
     const bio = draftBio.trim();
-    const usernamePattern = new RegExp('^[a-zA-Z0-9_\u4e00-\u9fa5]+' + String.fromCharCode(36));
     setEditError('');
     setAvatarError('');
 
@@ -241,8 +241,12 @@ export default function ProfilePage() {
       setEditError('请输入昵称');
       return;
     }
-    if (usernamePattern.test(username) === false) {
+    if (!isValidUsername(username)) {
       setEditError('昵称只能包含字母、数字、下划线和中文');
+      return;
+    }
+    if (!isValidOptionalProfileText(bio)) {
+      setEditError('签名不能包含控制字符或不可见字符');
       return;
     }
 

@@ -11,6 +11,7 @@ import { useAuthStore } from '@/features/auth';
 import { AvatarUpload } from '@/shared/components/avatar-upload';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
+import { isValidOptionalProfileText, isValidUsername } from '@/shared/lib/profileValidation';
 
 function extractErrorMessage(err: unknown): string | null {
   if (typeof err === 'object' && err !== null) {
@@ -74,20 +75,31 @@ export default function ProfileSetupPage() {
     e.preventDefault();
     setError('');
 
-    if (!username.trim()) {
+    const normalizedUsername = username.trim();
+    const normalizedBio = bio.trim();
+
+    if (normalizedUsername === '') {
       setError('请输入用户名');
       return;
     }
 
-    if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(username)) {
+    if (!isValidUsername(normalizedUsername)) {
       setError('用户名只能包含字母、数字、下划线和中文');
+      return;
+    }
+
+    if (!isValidOptionalProfileText(normalizedBio)) {
+      setError('个人签名不能包含控制字符或不可见字符');
       return;
     }
 
     const userId = location.state?.userId || user?.id;
 
     completeProfile(
-      { userId, data: { username: username.trim(), bio: bio.trim() || undefined } },
+      {
+        userId,
+        data: { username: normalizedUsername, bio: normalizedBio || undefined },
+      },
       {
         onSuccess: () => {
           navigate('/feed');
