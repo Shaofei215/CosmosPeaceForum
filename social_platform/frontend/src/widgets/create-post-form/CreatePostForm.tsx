@@ -4,6 +4,7 @@ import { FilePenLine, Vote } from 'lucide-react';
 import { useCreatePost } from '@/features/post';
 import { Button, Textarea } from '@/shared/components/ui';
 import { POST_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
+import { hasVisibleContent } from '@/shared/lib/content';
 
 const MIN_POLL_OPTIONS = 2;
 const MAX_POLL_OPTIONS = 5;
@@ -18,17 +19,17 @@ export function CreatePostForm() {
   const canSubmitPoll =
     !isPollOpen ||
     (normalizedPollOptions.length >= MIN_POLL_OPTIONS &&
-      normalizedPollOptions.every(Boolean) &&
+      normalizedPollOptions.every(hasVisibleContent) &&
       new Set(normalizedPollOptions).size === normalizedPollOptions.length);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!content.trim() || !canSubmitPoll) return;
+    if (!hasVisibleContent(content) || !canSubmitPoll) return;
 
     createPost(
       {
-        content: content.trim(),
+        content,
         ...(isPollOpen ? { poll_options: normalizedPollOptions } : {}),
       },
       {
@@ -107,7 +108,7 @@ export function CreatePostForm() {
         </Link>
         <Button
           type="submit"
-          disabled={!content.trim() || !canSubmitPoll || isPending}
+          disabled={!hasVisibleContent(content) || !canSubmitPoll || isPending}
           size="sm"
           className="px-4"
         >

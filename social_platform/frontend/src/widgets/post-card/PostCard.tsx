@@ -43,6 +43,7 @@ import { formatDate } from '@/shared/lib/utils';
 import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer';
 import { LinkedMentions as MentionText } from '@/shared/components/mention/LinkedMentions';
 import { stripMarkdown } from '@/shared/components/markdown/markdownUtils';
+import { hasVisibleContent } from '@/shared/lib/content';
 
 const CONTENT_PREVIEW_LINES = 10;
 
@@ -300,10 +301,10 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const handleSubmitNewComment = (event: React.FormEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!newCommentContent.trim() || createComment.isPending) return;
+    if (!hasVisibleContent(newCommentContent) || createComment.isPending) return;
 
     createComment.mutate(
-      { content: newCommentContent.trim(), repost: commentShouldRepost },
+      { content: newCommentContent, repost: commentShouldRepost },
       {
         onSuccess: () => {
           setNewCommentContent('');
@@ -322,7 +323,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
       {
         source_type: 'post',
         source_id: post.id,
-        content: repostContent.trim() || undefined,
+        content: hasVisibleContent(repostContent) ? repostContent : undefined,
       },
       {
         onSuccess: () => {
@@ -730,7 +731,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                     <Button
                       type="submit"
                       size="sm"
-                      disabled={!newCommentContent.trim() || createComment.isPending}
+                      disabled={!hasVisibleContent(newCommentContent) || createComment.isPending}
                     >
                       评论
                     </Button>
@@ -1308,7 +1309,7 @@ function CommentItem({
                   {
                     source_type: 'comment',
                     source_id: comment.id,
-                    content: repostContent.trim() || undefined,
+                    content: hasVisibleContent(repostContent) ? repostContent : undefined,
                   },
                   {
                     onSuccess: () => {
@@ -1432,11 +1433,11 @@ function ReplyInput({
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!content.trim() || createComment.isPending) return;
+    if (!hasVisibleContent(content) || createComment.isPending) return;
 
     createComment.mutate(
       {
-        content: content.trim(),
+        content,
         parent_id: parentId,
         repost: shouldRepost,
       },
@@ -1485,7 +1486,11 @@ function ReplyInput({
             />
             同时转发
           </label>
-          <Button type="submit" size="sm" disabled={!content.trim() || createComment.isPending}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!hasVisibleContent(content) || createComment.isPending}
+          >
             评论
           </Button>
         </div>

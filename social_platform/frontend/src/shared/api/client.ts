@@ -7,7 +7,8 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { API_CONFIG, HTTP_STATUS } from '@/shared/config/api';
-import type { ApiError, ApiErrorException } from '@/shared/types/api';
+import { ApiErrorException, type ApiError } from '@/shared/types/api';
+import { getApiErrorMessage } from '@/shared/api/errorMessage';
 import { useAuthStore } from '@/features/auth/stores/authStore';
 import { getAccessToken, getRefreshToken, updateTokens } from '@/features/auth/tokenStorage';
 
@@ -98,19 +99,14 @@ class ApiClient {
           }
         }
 
-        const message = error.response?.data?.detail || '请求失败，请稍后重试';
+        const message = getApiErrorMessage(error.response?.data?.detail);
 
         if (status === HTTP_STATUS.UNAUTHORIZED && !window.location.pathname.includes('/login')) {
           useAuthStore.getState().logout();
           window.location.href = '/login';
         }
 
-        const apiError: ApiErrorException = {
-          name: 'ApiErrorException',
-          status: status || 0,
-          message,
-          code: status?.toString(),
-        };
+        const apiError = new ApiErrorException(status || 0, message, status?.toString());
 
         return Promise.reject(apiError);
       }

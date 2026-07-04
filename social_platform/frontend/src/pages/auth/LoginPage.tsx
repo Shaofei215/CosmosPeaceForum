@@ -120,6 +120,11 @@ export default function LoginPage() {
         return;
       }
 
+      if (password.length < 8) {
+        setError('密码至少需要8位');
+        return;
+      }
+
       login(
         { email: email.trim(), password, remember_me: rememberMe },
         {
@@ -234,6 +239,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   disabled={isPending}
+                  minLength={8}
                   className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
                 />
               </div>

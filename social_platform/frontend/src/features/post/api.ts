@@ -3,6 +3,7 @@
  */
 
 import { apiClient } from '@/shared/api/client';
+import { toOptionalVisibleContent, validateRequiredContent } from '@/shared/lib/content';
 import type {
   Poll,
   PollVoteData,
@@ -37,19 +38,32 @@ export const postApi = {
    * 创建帖子
    * POST /api/v1/posts/
    */
-  createPost: (data: CreatePostData) => apiClient.post<Post>('/posts/', data),
+  createPost: (data: CreatePostData) =>
+    apiClient.post<Post>('/posts/', {
+      ...data,
+      content: validateRequiredContent(data.content, '正文'),
+    }),
 
   votePoll: (postId: number, data: PollVoteData) =>
     apiClient.post<Poll>(`/posts/${postId}/poll/vote`, data),
 
-  repost: (data: RepostData) => apiClient.post<Post>('/posts/repost', data),
+  repost: (data: RepostData) =>
+    apiClient.post<Post>('/posts/repost', {
+      ...data,
+      content: toOptionalVisibleContent(data.content),
+    }),
 
   /**
    * 更新帖子
    * PUT /api/v1/posts/{post_id}
    */
   updatePost: (postId: number, data: UpdatePostData) =>
-    apiClient.put<Post>(`/posts/${postId}`, data),
+    apiClient.put<Post>(`/posts/${postId}`, {
+      ...data,
+      ...(data.content === undefined
+        ? {}
+        : { content: validateRequiredContent(data.content, '正文') }),
+    }),
 
   /**
    * 删除帖子

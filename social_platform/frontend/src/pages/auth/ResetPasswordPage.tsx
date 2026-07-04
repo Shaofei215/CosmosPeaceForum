@@ -49,8 +49,8 @@ export default function ResetPasswordPage() {
       setError('请输入新密码');
       return;
     }
-    if (password.length < 6) {
-      setError('密码至少需要6个字符');
+    if (password.length < 8) {
+      setError('密码至少需要8个字符');
       return;
     }
 
@@ -118,10 +118,11 @@ export default function ResetPasswordPage() {
               <Input
                 id="password"
                 type="password"
-                placeholder="请输入新密码（至少6个字符）"
+                placeholder="请输入新密码（至少8个字符）"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 disabled={isPending}
+                minLength={8}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
@@ -138,6 +139,7 @@ export default function ResetPasswordPage() {
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
                 disabled={isPending}
+                minLength={8}
                 className="auth-input bg-muted/50 border-0 shadow-none rounded-lg focus-visible:ring-1"
               />
             </div>
