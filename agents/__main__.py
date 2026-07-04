@@ -1,16 +1,8 @@
-"""
-Agents 主入口
-
-启动流程：
-1. 启动 Management Backend (FastAPI, 端口 8001)
-2. 启动 Agent Scheduler（调用 agents_scheduler.__main__.main）
-"""
-
 import sys
 import logging
-import signal
 import threading
 import time as time_module
+from io import TextIOWrapper
 
 import uvicorn
 
@@ -40,11 +32,9 @@ def setup_logging(log_level: str = "INFO"):
 
 
 def start_management_backend():
-    """在独立线程中启动 Management Backend"""
+    """在独立线程中启动管理器"""
     config = get_config()
-    logger.info("=" * 60)
-    logger.info("Management Backend 启动中...")
-    logger.info("=" * 60)
+    logger.info("管理器正在启动...")
     uvicorn.run(
         "agents.management.backend.main:app",
         host=config.server_host,
@@ -63,9 +53,7 @@ def main():
     config = get_config()
     setup_logging(config.log_level)
 
-    logger.info("=" * 60)
-    logger.info(" Agents 启动中...")
-    logger.info("=" * 60)
+    logger.info("  愿  全  宇  宙    和  平  交  流  |  正在启动 Agents ...")
 
     mgmt_thread = threading.Thread(target=start_management_backend, daemon=True)
     mgmt_thread.start()
@@ -77,5 +65,6 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.stdout.reconfigure(line_buffering=True)
+    if isinstance(sys.stdout, TextIOWrapper):
+        sys.stdout.reconfigure(line_buffering=True)
     main()
