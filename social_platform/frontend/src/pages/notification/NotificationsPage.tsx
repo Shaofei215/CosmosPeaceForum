@@ -26,6 +26,7 @@ import { useAuthStore } from '@/features/auth';
 import { useCommentLikeStatus, useCreateComment, useToggleCommentLike } from '@/features/comment';
 import { useFollowStatus, useToggleFollow } from '@/features/follow';
 import { useLikeStatus, useToggleLike } from '@/features/like';
+import { hasVisibleContent } from '@/shared/lib/content';
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
@@ -277,10 +278,10 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
 
   const submitReply = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!content.trim()) return;
+    if (!hasVisibleContent(content)) return;
 
     createComment.mutate(
-      { content: content.trim(), parent_id: commentId, repost: shouldRepost },
+      { content, parent_id: commentId, repost: shouldRepost },
       {
         onSuccess: () => {
           setContent('');
@@ -346,7 +347,11 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
               <Button type="button" variant="ghost" size="sm" onClick={() => setIsReplying(false)}>
                 取消
               </Button>
-              <Button type="submit" size="sm" disabled={!content.trim() || createComment.isPending}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!hasVisibleContent(content) || createComment.isPending}
+              >
                 回复
               </Button>
             </div>
@@ -392,10 +397,10 @@ function PostActionBar({ postId }: { postId: number }) {
 
   const submitReply = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!content.trim()) return;
+    if (!hasVisibleContent(content)) return;
 
     createComment.mutate(
-      { content: content.trim(), repost: shouldRepost },
+      { content, repost: shouldRepost },
       {
         onSuccess: () => {
           setContent('');
@@ -461,7 +466,11 @@ function PostActionBar({ postId }: { postId: number }) {
               <Button type="button" variant="ghost" size="sm" onClick={() => setIsReplying(false)}>
                 取消
               </Button>
-              <Button type="submit" size="sm" disabled={!content.trim() || createComment.isPending}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!hasVisibleContent(content) || createComment.isPending}
+              >
                 回复
               </Button>
             </div>

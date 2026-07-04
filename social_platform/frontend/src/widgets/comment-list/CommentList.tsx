@@ -17,6 +17,7 @@ import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Textarea } from '@/shared/components/ui';
 import { COMMENT_CONTENT_MAX_LENGTH, POST_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { formatDate } from '@/shared/lib/utils';
+import { hasVisibleContent } from '@/shared/lib/content';
 
 /**
  * 评论列表组件属性
@@ -116,11 +117,11 @@ function CommentItem({
    */
   const handleReplySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyContent.trim()) return;
+    if (!hasVisibleContent(replyContent)) return;
 
     createComment(
       {
-        content: replyContent.trim(),
+        content: replyContent,
         parent_id: comment.id,
       },
       {
@@ -246,7 +247,11 @@ function CommentItem({
                 >
                   取消
                 </Button>
-                <Button type="submit" size="sm" disabled={!replyContent.trim() || isPending}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!hasVisibleContent(replyContent) || isPending}
+                >
                   评论
                 </Button>
               </div>
@@ -263,7 +268,7 @@ function CommentItem({
                   {
                     source_type: 'comment',
                     source_id: comment.id,
-                    content: repostContent.trim() || undefined,
+                    content: hasVisibleContent(repostContent) ? repostContent : undefined,
                   },
                   {
                     onSuccess: () => {

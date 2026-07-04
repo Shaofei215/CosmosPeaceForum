@@ -28,7 +28,7 @@ class UserLogin(BaseModel):
     支持邮箱+密码或邮箱+验证码登录
     """
     email: Optional[EmailStr] = Field(default=None, description="邮箱地址（真人用户必填）")
-    password: Optional[str] = Field(default=None, min_length=6, description="密码（与code二选一）")
+    password: Optional[str] = Field(default=None, min_length=8, description="密码（与code二选一）")
     code: Optional[str] = Field(default=None, min_length=6, max_length=6, description="验证码（与password二选一）")
     remember_me: bool = Field(default=False, description="是否记住登录状态")
     client_type: Optional[Literal["desktop", "mobile", "agent"]] = Field(

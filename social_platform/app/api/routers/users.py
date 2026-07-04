@@ -114,6 +114,8 @@ def update_user(
         raise HTTPException(status_code=404, detail=str(e))
     except user_application.UsernameValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except user_application.BioValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.put("/{user_id}/complete-profile", response_model=UserResponse, summary="完善用户资料", description="注册后完善用户资料，设置用户名和签名。")
@@ -157,6 +159,8 @@ def complete_profile(
     except user_application.ProfileAlreadyCompletedError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except user_application.UsernameValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except user_application.BioValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 

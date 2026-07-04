@@ -754,7 +754,7 @@ img {
   min-width: 0;
   flex-wrap: nowrap;
   gap: 0.375rem;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .mobile-device .comment-action-label {

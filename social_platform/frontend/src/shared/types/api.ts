@@ -52,7 +52,7 @@ export interface PaginatedResponse<T> {
  */
 export interface ApiError {
   /** 错误详情 */
-  detail: string;
+  detail: unknown;
 }
 
 /**

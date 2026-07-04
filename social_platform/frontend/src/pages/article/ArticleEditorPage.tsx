@@ -33,6 +33,7 @@ import { useCreatePost } from '@/features/post';
 import { Button, Input, Textarea } from '@/shared/components/ui';
 import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer';
 import { ARTICLE_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
+import { hasVisibleContent } from '@/shared/lib/content';
 import { normalizeLinkHref } from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
 
@@ -206,7 +207,7 @@ export default function ArticleEditorPage() {
   }, [editor]);
 
   const currentMarkdown = mode === 'rich' && editor ? htmlToMarkdown(editor.getHTML()) : content;
-  const canPublish = title.trim().length > 0 && currentMarkdown.trim().length > 0;
+  const canPublish = hasVisibleContent(title) && hasVisibleContent(currentMarkdown);
 
   /**
    * 在文章上限内更新 Markdown 正文，供工具栏插入操作统一使用。
@@ -239,14 +240,14 @@ export default function ArticleEditorPage() {
     event.preventDefault();
 
     const nextContent = mode === 'rich' && editor ? htmlToMarkdown(editor.getHTML()) : content;
-    if (!title.trim() || !nextContent.trim() || isPending) return;
+    if (!hasVisibleContent(title) || !hasVisibleContent(nextContent) || isPending) return;
 
     if (!updateMarkdownContent(nextContent)) return;
     createPost(
       {
         title: title.trim(),
         type: 'article',
-        content: nextContent.trim(),
+        content: nextContent,
       },
       {
         onSuccess: post => {

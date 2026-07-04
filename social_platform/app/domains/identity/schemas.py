@@ -50,4 +50,4 @@ class PasswordResetConfirmRequest(BaseModel):
 
     email: EmailStr = Field(..., description="邮箱地址")
     code: str = Field(..., min_length=6, max_length=6, description="6位数字验证码")
-    new_password: str = Field(..., min_length=6, max_length=100, description="新密码")
+    new_password: str = Field(..., min_length=8, max_length=100, description="新密码")

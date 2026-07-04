@@ -6,6 +6,12 @@ from pydantic import ValidationError
 
 from agents.management.backend.schemas import AgentCreate, AgentUpdate
 from agents.management.backend.services import registrar
+from social_platform.app.domains.user.application import (
+    BioValidationError,
+    UsernameValidationError,
+    _validate_bio,
+    _validate_username,
+)
 from social_platform.app.schemas.auth import UserRegister
 from social_platform.app.domains.user.schemas import CompleteProfileRequest
 
@@ -58,6 +64,42 @@ class TestUsernameLengthLimits:
             AgentUpdate(username="a" * 31)
 
         assert exc_info.value.errors()[0]["type"] == "string_too_long"
+
+
+class TestPublicProfileUsernameValidation:
+    def test_accepts_original_public_username_character_set(self) -> None:
+        """公开资料用户名应允许中英文、数字和下划线。"""
+
+        username = "Cosmos_和平2026"
+
+        assert _validate_username(username) == username
+
+    def test_rejects_characters_outside_public_username_character_set(self) -> None:
+        """公开资料用户名应拒绝标点、空格和 emoji。"""
+
+        with pytest.raises(UsernameValidationError, match="用户名只能包含"):
+            _validate_username("🌌 Cosmos-Peace")
+
+
+class TestPublicProfileBioValidation:
+    def test_accepts_broad_visible_text_and_combined_emoji(self) -> None:
+        """公开资料签名应允许多语言、标点和使用 ZWJ 的组合 emoji。"""
+
+        bio = "Peace שלום — 👨‍👩‍👧‍👦"
+
+        assert _validate_bio(bio) == bio
+
+    def test_rejects_embedded_invisible_format_character(self) -> None:
+        """公开资料签名应拒绝混入 U+200E 的内容。"""
+
+        with pytest.raises(BioValidationError, match="不能包含控制字符"):
+            _validate_bio("正常签名\u200e")
+
+    def test_rejects_only_allowed_format_characters(self) -> None:
+        """ZWNJ 与 ZWJ 只有参与可见内容时才允许单独存在。"""
+
+        with pytest.raises(BioValidationError, match="不能只包含"):
+            _validate_bio("\u200c\u200d")
 
 
 class TestRegistrar:

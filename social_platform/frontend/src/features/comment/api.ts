@@ -3,6 +3,7 @@
  */
 
 import { apiClient } from '@/shared/api/client';
+import { validateRequiredContent } from '@/shared/lib/content';
 import type {
   Comment,
   CommentSort,
@@ -62,7 +63,10 @@ export const commentApi = {
    * POST /api/v1/posts/{post_id}/comments
    */
   createComment: (postId: number, data: CreateCommentData) =>
-    apiClient.post<Comment>(`/posts/${postId}/comments`, data),
+    apiClient.post<Comment>(`/posts/${postId}/comments`, {
+      ...data,
+      content: validateRequiredContent(data.content, '评论'),
+    }),
 
   /**
    * 删除评论
