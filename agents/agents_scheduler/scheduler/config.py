@@ -1,8 +1,7 @@
 """
 Scheduler 配置模块
 
-基础/敏感配置从 agents/.env 读取，运行期可调配置继续通过
-management 数据库抽象层加载。
+基础/敏感配置从 agents/.env 读取.
 """
 
 from dataclasses import dataclass
