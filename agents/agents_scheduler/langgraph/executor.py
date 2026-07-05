@@ -393,7 +393,7 @@ class LLMRegistry:
 
 def reload_llm_registry():
     """
-    重载 LLM 注册表（热更新）
+    重载 LLM 注册表
     """
     LLMRegistry.clear_cache()
 

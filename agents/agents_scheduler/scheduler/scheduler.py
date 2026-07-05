@@ -1,12 +1,12 @@
 """
-AI Agent 调度模块
+角色调度模块
 
 职责：
-1. 从管理数据库加载启用的 Agent 列表
-2. 为每个 Agent 创建独立调度线程（AIUserScheduler）
+1. 从管理数据库加载启用的角色列表
+2. 为每个角色创建独立调度线程（AIUserScheduler）
 3. 基于泊松过程计算登录间隔
 4. 触发 LangGraph 会话
-5. 提供 Agent 线程的启停和重启功能
+5. 提供角色线程的启停和重启功能
 
 """
 
@@ -239,7 +239,7 @@ class AIUserScheduler(threading.Thread):
 
             if self.model_config_id is None:
                 raise RuntimeError(f"{self.name} 未分配模型配置")
-            logger.info("[%s] 使用模型配置 ID=%d", self.name, self.model_config_id)
+            logger.info("%s 使用模型配置 ID=%d", self.name, self.model_config_id)
             llm_config = SessionConfig.from_db(model_config_id=int(self.model_config_id))
 
             logger.info(f"[{self.name}] 开始 LangGraph 会话")
