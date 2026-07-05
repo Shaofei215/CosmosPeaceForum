@@ -65,7 +65,7 @@ class TestAIUserScheduler:
         assert scheduler.username == "test_user"
         assert scheduler.model_config_id == 2
         assert scheduler.monthly_logins == 30
-        assert scheduler._is_active is True
+        assert scheduler._stop_event.is_set() is False
         assert scheduler.is_logged_in is False
 
     def test_scheduler_stop(self):
@@ -82,25 +82,9 @@ class TestAIUserScheduler:
             personal_signature="sig",
             time_system=mock_time,
         )
-        scheduler._is_active = False  # Mark as stopped without starting
-        assert scheduler._is_active is False
-
-    def test_scheduler_pause_resume(self):
-        scheduler = AIUserScheduler(
-            username="test_user",
-            name="Test",
-            agent_id=1,
-            monthly_logins=30,
-            password="password",
-            personality_prompt="friendly",
-            personal_signature="sig",
-            time_system=MagicMock(),
-        )
-        assert scheduler._is_active is True
-        scheduler.pause()
-        assert scheduler._is_active is False
-        scheduler.resume()
-        assert scheduler._is_active is True
+        scheduler.stop(wait=False)
+        assert scheduler._stop_event.is_set() is True
+        assert scheduler._stop_requested_at is not None
 
     def test_scheduler_zero_monthly_logins(self):
         mock_time = MagicMock()

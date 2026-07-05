@@ -140,7 +140,7 @@ export interface AgentRuntimeStatus {
   is_active: boolean;
   is_logged_in: boolean;
   is_stopping: boolean;
-  status: 'running' | 'in_session' | 'stopping' | 'paused' | 'stopped';
+  status: 'running' | 'in_session' | 'stopping' | 'stopped';
   stop_requested_at: string | null;
   next_login_time: string | null;
 }

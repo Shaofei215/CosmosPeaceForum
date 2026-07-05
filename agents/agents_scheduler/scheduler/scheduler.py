@@ -110,7 +110,6 @@ class AIUserScheduler(threading.Thread):
 
         self._stop_event = threading.Event()
         self._stop_requested_at: Optional[datetime] = None
-        self._is_active = True
 
         self.next_login_time = None
         self.is_logged_in = False
@@ -122,50 +121,36 @@ class AIUserScheduler(threading.Thread):
 
     def stop(self, timeout: float = 5.0, wait: bool = True):
         """停止调度线程"""
-        self._is_active = False
         self._stop_requested_at = datetime.now()
         self._stop_event.set()
         if wait and self.is_alive() and threading.current_thread() is not self:
             self.join(timeout=timeout)
 
-    def pause(self):
-        """暂停调度（不退出线程）"""
-        self._is_active = False
-
-    def resume(self):
-        """恢复调度"""
-        self._is_active = True
-
     def run(self):
         """线程主循环"""
-        thread_id = threading.get_ident()
-        logger.info(f"[{self.username}] 调度线程启动 (ID:{thread_id})")
+        logger.info(f"{self.name} 调度线程启动")
 
         try:
             self._scheduling_loop()
         except Exception as e:
-            logger.error(f"[{self.username}] 调度线程异常: {e}\n{traceback.format_exc()}")
+            logger.error(f"{self.name} 调度线程异常: {e}\n{traceback.format_exc()}")
         finally:
             clear_current_context()
-            logger.info(f"[{self.username}] 调度线程退出")
+            logger.info(f"{self.name} 调度线程退出")
 
     def _scheduling_loop(self):
         """调度循环"""
         if self.monthly_logins <= 0:
-            logger.warning(f"[{self.username}] monthly_logins={self.monthly_logins}，跳过调度")
+            logger.warning(f"{self.name} monthly_logins={self.monthly_logins}，跳过调度")
             return
 
-        logger.info(f"[{self.username}] 开始调度循环 (月登录次数: {self.monthly_logins})")
+        logger.info(f"{self.name} 开始调度循环 月登录次数: {self.monthly_logins}")
 
         while not self._stop_event.is_set():
-            if not self._is_active:
-                time.sleep(5)
-                continue
-
             self.next_login_time = self._calculate_next_login_time()
 
             logger.info(
-                f"[{self.username}] 下次登录: {self.next_login_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                f"{self.name} 下次登录: {self.next_login_time.strftime('%Y-%m-%d %H:%M:%S')}"
             )
 
             if not self._wait_until_login_time():
@@ -201,19 +186,19 @@ class AIUserScheduler(threading.Thread):
 
     def _execute_login_and_session(self):
         """执行登录和会话"""
-        logger.info(f"[{self.username}] 开始登录")
+        logger.info(f"{self.name} 开始登录")
 
         user_info = login_user(self.username, self.password)
         if not user_info:
-            logger.error(f"[{self.username}] 登录失败，跳过本次会话")
+            logger.error(f"{self.name} 登录失败，跳过本次会话")
             return
 
         user_id = user_info.get('id')
         token = user_info.get('token') or user_info.get('access_token')
         if user_id:
-            logger.info(f"[{self.username}] 登录成功 (用户ID: {user_id})")
+            logger.info(f"{self.name} 登录成功 (用户名: {self.username})")
         else:
-            logger.info(f"[{self.username}] 登录成功")
+            logger.info(f"{self.name} 登录成功")
         login_stats = get_db_client().record_agent_login(
             self.agent_id,
             scaled_timestamp=self.time_system.get_scaled_timestamp(),
@@ -236,8 +221,8 @@ class AIUserScheduler(threading.Thread):
             session_prompt_injection = consume_prompt_injection_text(self.agent_id)
             if session_prompt_injection:
                 logger.info(
-                    "[%s] 已消费下一次会话提示词注入: %d 字符",
-                    self.username,
+                    "%s 已消费下一次会话提示词注入: %d 字符",
+                    self.name,
                     len(session_prompt_injection),
                 )
 
@@ -253,19 +238,19 @@ class AIUserScheduler(threading.Thread):
             )
 
             if self.model_config_id is None:
-                raise RuntimeError(f"Agent {self.username} 未分配模型配置")
-            logger.info("[%s] 使用模型配置 ID=%d", self.username, self.model_config_id)
+                raise RuntimeError(f"{self.name} 未分配模型配置")
+            logger.info("[%s] 使用模型配置 ID=%d", self.name, self.model_config_id)
             llm_config = SessionConfig.from_db(model_config_id=int(self.model_config_id))
 
-            logger.info(f"[{self.username}] 开始 LangGraph 会话")
+            logger.info(f"[{self.name}] 开始 LangGraph 会话")
             result = run_session(session_cfg, self.relation_map, config=llm_config)
             logger.info(
-                f"[{self.username}] 会话完成: "
-                f"步骤={result.step_count}, "
+                f"{self.name} 会话完成！"
+                f"步数={result.step_count}, "
                 f"退出原因={result.exit_reason}"
             )
         except Exception as e:
-            logger.error(f"[{self.username}] 会话执行失败: {e}\n{traceback.format_exc()}")
+            logger.error(f"{self.name} 会话执行失败: {e}\n{traceback.format_exc()}")
         finally:
             self.is_logged_in = False
             clear_current_context()
@@ -307,7 +292,7 @@ class AIUserScheduler(threading.Thread):
             except Exception:
                 # 资料主链路已经提交成功；关系展示缓存可在后续热更新时恢复，
                 # 不能因此触发公开平台的补偿回滚并造成 management 再次失配。
-                logger.exception("[%s] 重建关系用户名映射失败", self.username)
+                logger.exception("%s 重建关系用户名映射失败", self.name)
         return True
 
 
@@ -419,7 +404,7 @@ class AgentSchedulerManager:
                 scheduler.stop(timeout=5, wait=True)
                 self.schedulers.pop(agent_id, None)
 
-        logger.info(f"[重启] 为角色 {agent_config['username']} (ID:{agent_id}) 创建新调度线程...")
+        logger.info(f"[重启] 为角色 {agent_config['name']} (ID:{agent_id}) 创建新调度线程...")
         self._create_scheduler(agent_config)
         logger.info(f"[重启] 角色 {agent_config['username']} (ID:{agent_id}) 已重启")
         return True
@@ -478,7 +463,7 @@ class AgentSchedulerManager:
                 if existing.is_stopping:
                     logger.warning(f"[启动] 角色 ID={agent_id} 正在停止中，暂不重复启动")
                     return False
-                existing.resume()
+                # 已存在且未停止的线程已经处于运行状态，启动操作保持幂等。
                 return True
 
         agent_data = get_db_client().get_agent_config(agent_id)
@@ -528,7 +513,7 @@ class AgentSchedulerManager:
             "agent_id": agent_id,
             "username": scheduler.username,
             "is_alive": scheduler.is_alive(),
-            "is_active": scheduler._is_active,
+            "is_active": not scheduler._stop_event.is_set(),
             "is_logged_in": scheduler.is_logged_in,
             "is_stopping": scheduler.is_stopping,
             "status": self._get_scheduler_status_label(scheduler),
@@ -550,7 +535,7 @@ class AgentSchedulerManager:
                 "agent_id": agent_id,
                 "username": scheduler.username,
                 "is_alive": scheduler.is_alive(),
-                "is_active": scheduler._is_active,
+                "is_active": not scheduler._stop_event.is_set(),
                 "is_logged_in": scheduler.is_logged_in,
                 "is_stopping": scheduler.is_stopping,
                 "status": self._get_scheduler_status_label(scheduler),
@@ -595,10 +580,8 @@ class AgentSchedulerManager:
             return "stopping"
         if scheduler.is_logged_in:
             return "in_session"
-        if scheduler.is_alive() and scheduler._is_active:
-            return "running"
         if scheduler.is_alive():
-            return "paused"
+            return "running"
         return "stopped"
 
     def _create_scheduler(self, agent_data: Dict) -> bool:

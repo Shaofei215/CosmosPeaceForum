@@ -71,10 +71,6 @@ function getRuntimeLabel(status?: AgentRuntimeStatus) {
   if (status.status === 'in_session') {
     return { text: '会话中', className: 'bg-blue-100 text-blue-700' };
   }
-  if (status.status === 'paused') {
-    return { text: '已暂停', className: 'bg-yellow-100 text-yellow-700' };
-  }
-
   return { text: '运行中', className: 'bg-green-100 text-green-700' };
 }
 
