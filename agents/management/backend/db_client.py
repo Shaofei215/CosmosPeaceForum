@@ -125,7 +125,7 @@ class ManagementDBClient:
 
     def get_agent_configs(self) -> list:
         """
-        获取所有启用的 Agent 配置
+        获取全部 Agent 配置。
         
         Returns:
             list[dict]: Agent 配置列表
@@ -133,9 +133,7 @@ class ManagementDBClient:
         try:
             conn = self._get_connection()
             try:
-                cursor = conn.execute(
-                    "SELECT * FROM agent_configs WHERE is_active = 1 ORDER BY id"
-                )
+                cursor = conn.execute("SELECT * FROM agent_configs ORDER BY id")
                 rows = cursor.fetchall()
                 result = []
                 for row in rows:

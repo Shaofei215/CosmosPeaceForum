@@ -351,7 +351,11 @@ class AgentSchedulerManager:
         self._is_running = True
         self._start_memory_decay_scheduler()
 
-        agents = get_db_client().get_agent_configs()
+        agents = [
+            agent
+            for agent in get_db_client().get_agent_configs()
+            if agent.get('is_active')
+        ]
         if not agents:
             logger.warning("数据库中未找到启用的角色")
             return
@@ -442,7 +446,11 @@ class AgentSchedulerManager:
             self.schedulers.clear()
 
         self._is_running = True
-        agents = get_db_client().get_agent_configs()
+        agents = [
+            agent
+            for agent in get_db_client().get_agent_configs()
+            if agent.get('is_active')
+        ]
         if not agents:
             logger.warning("[重启] 数据库中未找到启用的角色")
             return

@@ -178,10 +178,12 @@ class TestAgentSchedulerManager:
         assert manager._is_running is False
         assert len(manager.schedulers) == 0
 
-    def test_manager_start_no_agents(self):
+    def test_manager_start_no_active_agents(self):
         with patch("agents.agents_scheduler.scheduler.scheduler.get_db_client") as mock_db, \
              patch("agents.agents_scheduler.scheduler.scheduler.MemoryDecayScheduler") as mock_decay:
-            mock_db.return_value.get_agent_configs.return_value = []
+            mock_db.return_value.get_agent_configs.return_value = [
+                {"id": 1, "username": "inactive_user", "is_active": False},
+            ]
             manager = AgentSchedulerManager()
             manager.start()
             assert len(manager.schedulers) == 0

@@ -116,35 +116,21 @@ class RelationMappingService:
         self._username_map = UsernameMap()
 
         agent_configs = get_db_client().get_agent_configs()
+        agent_id_to_user_id = {
+            agent['id']: agent['social_platform_user_id']
+            for agent in agent_configs
+            if agent.get('id') is not None and agent.get('social_platform_user_id') is not None
+        }
 
         for agent in agent_configs:
-            agent_id = agent.get('id')
+            user_id = agent.get('social_platform_user_id')
             username = agent.get('username', '')
             name = agent.get('name', '')
-            knows_ids = agent.get('knows_ids', [])
-
-            if agent_id is None:
-                continue
-
-            self._relation_maps[agent_id] = RelationMap(agent_id, knows_ids)
-            if username and name:
-                self._username_map.add(agent_id, username, name)
-
-    def build_from_config(self, users_config: List[Dict]) -> None:
-        """
-        从用户配置构建关系映射表（向后兼容）
-
-        Args:
-            users_config: 用户配置列表
-        """
-        self._relation_maps.clear()
-        self._username_map = UsernameMap()
-
-        for user in users_config:
-            user_id = user.get('id')
-            username = user.get('username', '')
-            name = user.get('name', '')
-            knows_ids = user.get('knows_ids', [])
+            knows_ids = [
+                agent_id_to_user_id[agent_id]
+                for agent_id in agent.get('knows_ids', [])
+                if agent_id in agent_id_to_user_id
+            ]
 
             if user_id is None:
                 continue
@@ -222,7 +208,7 @@ def build_relation_maps_from_db() -> RelationMappingService:
 
 
 def rebuild_relation_maps():
-    """重建关系映射（热更新）"""
+    """重建关系映射"""
     service = get_relation_mapping_service()
     service.build_from_db()
     return service
