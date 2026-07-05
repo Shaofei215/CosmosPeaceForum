@@ -86,7 +86,6 @@ class AIUserScheduler(threading.Thread):
 
     def __init__(
         self,
-        user_id: int,
         username: str,
         name: str,
         agent_id: int,
@@ -100,7 +99,6 @@ class AIUserScheduler(threading.Thread):
         model_config_id: Optional[int] = None,
     ):
         super().__init__(daemon=True, name=f"AIUser-{username}")
-        self.user_id = user_id
         self.username = username
         self.name = name
         self.agent_id = agent_id
@@ -358,19 +356,19 @@ class AgentSchedulerManager:
 
         agents = get_db_client().get_agent_configs()
         if not agents:
-            logger.warning("数据库中未找到启用的 Agent")
+            logger.warning("数据库中未找到启用的角色")
             return
 
-        logger.info(f"从数据库加载了 {len(agents)} 个 Agent")
+        logger.info(f"从数据库加载了 {len(agents)} 个角色")
 
         for agent_data in agents:
             self._create_scheduler(agent_data)
 
-        logger.info(f"已启动 {len(self.schedulers)} 个 Agent 调度线程")
+        logger.info(f"已启动 {len(self.schedulers)} 个角色线程")
 
     def stop(self, wait: bool = True, timeout: float = 5.0):
-        """停止所有 Agent 调度线程"""
-        logger.info("停止所有 Agent 调度线程...")
+        """停止所有角色调度线程"""
+        logger.info("停止所有角色调度线程...")
         self._is_running = False
 
         if self._memory_decay_scheduler is not None:
@@ -392,10 +390,10 @@ class AgentSchedulerManager:
 
     def restart_agent(self, agent_id: int) -> bool:
         """
-        重启指定 Agent 的调度线程
+        重启指定角色的调度线程
 
         流程：
-        1. 从数据库重新加载 Agent 配置
+        1. 从数据库重新加载角色配置
         2. 从 schedulers 字典中找到对应 scheduler
         3. 调用 scheduler.stop()（等待最多 5 秒）
         4. 创建新的 AIUserScheduler
@@ -410,30 +408,30 @@ class AgentSchedulerManager:
         """
         agent_config = get_db_client().get_agent_config(agent_id)
         if not agent_config:
-            logger.error(f"[重启] 未找到 Agent ID={agent_id} 的配置")
+            logger.error(f"[重启] 未找到角色 ID={agent_id} 的配置")
             return False
 
         with self._thread_lock:
             scheduler = self.schedulers.get(agent_id)
             if scheduler:
-                logger.info(f"[重启] 停止 Agent {agent_id} 的旧调度线程...")
+                logger.info(f"[重启] 停止角色 {agent_id} 的调度线程...")
                 scheduler.stop(timeout=5, wait=True)
                 self.schedulers.pop(agent_id, None)
 
-        logger.info(f"[重启] 为 Agent {agent_config['username']} (ID:{agent_id}) 创建新调度线程...")
+        logger.info(f"[重启] 为角色 {agent_config['username']} (ID:{agent_id}) 创建新调度线程...")
         self._create_scheduler(agent_config)
-        logger.info(f"[重启] Agent {agent_config['username']} (ID:{agent_id}) 已重启")
+        logger.info(f"[重启] 角色 {agent_config['username']} (ID:{agent_id}) 已重启")
         return True
 
     def restart_all(self):
         """
-        重启所有 Agent 的调度线程
+        重启所有角色的调度线程
 
         流程：
         1. 停止所有现有调度线程
         2. 清空 schedulers 字典
-        3. 从数据库重新加载所有启用的 Agent
-        4. 为每个 Agent 创建新的调度线程
+        3. 从数据库重新加载所有启用的角色
+        4. 为每个角色创建新的调度线程
         """
         logger.info("[重启] 停止所有旧调度线程...")
         self._is_running = False
@@ -449,21 +447,21 @@ class AgentSchedulerManager:
         self._is_running = True
         agents = get_db_client().get_agent_configs()
         if not agents:
-            logger.warning("[重启] 数据库中未找到启用的 Agent")
+            logger.warning("[重启] 数据库中未找到启用的角色")
             return
 
-        logger.info(f"[重启] 从数据库加载了 {len(agents)} 个 Agent")
+        logger.info(f"[重启] 从数据库加载了 {len(agents)} 个角色")
         for agent_data in agents:
             self._create_scheduler(agent_data)
 
-        logger.info(f"[重启] 已重启 {len(self.schedulers)} 个 Agent 调度线程")
+        logger.info(f"[重启] 已重启 {len(self.schedulers)} 个角色调度线程")
 
     def start_agent(self, agent_id: int) -> bool:
         """
-        启动单个 Agent 线程
+        启动单个角色线程
 
         Args:
-            agent_id: Agent ID
+            agent_id: 角色 ID
 
         Returns:
             bool: 是否成功
@@ -473,7 +471,7 @@ class AgentSchedulerManager:
             if agent_id in self.schedulers:
                 existing = self.schedulers[agent_id]
                 if existing.is_stopping:
-                    logger.warning(f"[启动] Agent ID={agent_id} 正在停止中，暂不重复启动")
+                    logger.warning(f"[启动] 角色 ID={agent_id} 正在停止中，暂不重复启动")
                     return False
                 existing.resume()
                 return True
@@ -486,10 +484,10 @@ class AgentSchedulerManager:
 
     def stop_agent(self, agent_id: int) -> bool:
         """
-        停止单个 Agent 线程
+        停止单个角色线程
 
         Args:
-            agent_id: Agent ID
+            agent_id: 角色 ID
 
         Returns:
             bool: 是否成功
@@ -505,15 +503,15 @@ class AgentSchedulerManager:
         return False
 
     def start_agents(self, agent_ids: Iterable[int]) -> Dict[int, bool]:
-        """批量启动 Agent 线程。"""
+        """批量启动角色线程。"""
         return {agent_id: self.start_agent(agent_id) for agent_id in agent_ids}
 
     def stop_agents(self, agent_ids: Iterable[int]) -> Dict[int, bool]:
-        """批量停止 Agent 线程。"""
+        """批量停止角色线程。"""
         return {agent_id: self.stop_agent(agent_id) for agent_id in agent_ids}
 
     def get_agent_status(self, agent_id: int) -> Optional[Dict]:
-        """获取单个 Agent 状态"""
+        """获取单个角色状态"""
         with self._thread_lock:
             self._cleanup_finished_locked()
             scheduler = self.schedulers.get(agent_id)
@@ -536,7 +534,7 @@ class AgentSchedulerManager:
         }
 
     def get_all_statuses(self) -> List[Dict]:
-        """获取所有 Agent 状态"""
+        """获取所有角色状态"""
         statuses = []
         with self._thread_lock:
             self._cleanup_finished_locked()
@@ -603,7 +601,7 @@ class AgentSchedulerManager:
         创建 AIUserScheduler 并启动
 
         Args:
-            agent_data: Agent 配置数据
+            agent_data: 角色配置数据
 
         Returns:
             bool: 是否成功
@@ -621,7 +619,6 @@ class AgentSchedulerManager:
         model_config_id = agent_data.get('model_config_id')
 
         scheduler = AIUserScheduler(
-            user_id=agent_id,
             username=username,
             name=name,
             agent_id=agent_id,

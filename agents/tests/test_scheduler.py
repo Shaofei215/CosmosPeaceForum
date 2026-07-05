@@ -52,7 +52,6 @@ class TestLoginUser:
 class TestAIUserScheduler:
     def test_scheduler_init(self):
         scheduler = AIUserScheduler(
-            user_id=1,
             username="test_user",
             name="Test",
             agent_id=1,
@@ -63,7 +62,6 @@ class TestAIUserScheduler:
             time_system=MagicMock(),
             model_config_id=2,
         )
-        assert scheduler.user_id == 1
         assert scheduler.username == "test_user"
         assert scheduler.model_config_id == 2
         assert scheduler.monthly_logins == 30
@@ -75,7 +73,6 @@ class TestAIUserScheduler:
         mock_time.get_scaled_time.return_value = MagicMock()
         
         scheduler = AIUserScheduler(
-            user_id=1,
             username="test_user",
             name="Test",
             agent_id=1,
@@ -90,7 +87,6 @@ class TestAIUserScheduler:
 
     def test_scheduler_pause_resume(self):
         scheduler = AIUserScheduler(
-            user_id=1,
             username="test_user",
             name="Test",
             agent_id=1,
@@ -111,7 +107,6 @@ class TestAIUserScheduler:
         mock_time.get_scaled_time.return_value = MagicMock()
         
         scheduler = AIUserScheduler(
-            user_id=1,
             username="test_user",
             name="Test",
             agent_id=1,
@@ -130,7 +125,6 @@ class TestAIUserScheduler:
         mock_time.get_scaled_time.return_value = datetime.now()
         
         scheduler = AIUserScheduler(
-            user_id=1,
             username="test_user",
             name="Test",
             agent_id=1,
@@ -149,7 +143,6 @@ class TestAIUserScheduler:
 
         relation_map = MagicMock()
         scheduler = AIUserScheduler(
-            user_id=1,
             username="old_name",
             name="Test",
             agent_id=1,

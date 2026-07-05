@@ -339,7 +339,7 @@ class SchedulerInternalServer:
         )
         self._thread.start()
 
-        logger.info("[内部接口] 服务器启动在 http://%s:%d", self.host, self.port)
+        logger.info("调度器服务器启动在 http://%s:%d", self.host, self.port)
 
     def stop(self, wait: bool = True):
         """停止内部 HTTP 服务器"""
@@ -348,4 +348,4 @@ class SchedulerInternalServer:
             self._server.server_close()
             if wait and self._thread and self._thread.is_alive():
                 self._thread.join(timeout=2)
-            logger.info("[内部接口] 服务器已停止")
+            logger.info("调度器服务器已停止")
