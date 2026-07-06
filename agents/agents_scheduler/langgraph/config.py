@@ -43,7 +43,6 @@ class SessionConfig:
     tool_timeout: int = 30
     temperature: float = 1.2
     model_name: str = ""
-    enable_checkpointer: bool = True
     llm_provider: str = "openai"
     openai_api_key: str = ""
     openai_base_url: str = ""
@@ -102,10 +101,6 @@ class SessionConfig:
             tool_timeout=int(_get("LANGGRAPH_TOOL_TIMEOUT", "30")),
             temperature=temperature,
             model_name=model_name,
-            enable_checkpointer=_get(
-                "LANGGRAPH_CHECKPOINTER_ENABLED",
-                "true",
-            ).lower() in ("true", "1", "yes"),
             llm_provider=provider,
             openai_api_key=openai_api_key,
             openai_base_url=openai_base_url,

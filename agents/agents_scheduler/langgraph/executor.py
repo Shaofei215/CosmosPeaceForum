@@ -6,7 +6,6 @@ import uuid
 from typing import Optional, Dict, Any, Callable, List
 from datetime import datetime
 from dataclasses import dataclass, field
-import traceback
 
 from agents.agents_scheduler.langgraph.state import SessionState, SessionSummary, ExitReason
 from agents.agents_scheduler.langgraph.config import SessionConfig, AgentConfig, get_default_config
@@ -50,7 +49,7 @@ def create_llm_invoker(
         if not model_name:
             raise ValueError("Anthropic 模型名称未配置，请在 model_configs 中设置第一个活跃模型")
         if not config.anthropic_api_key:
-            raise ValueError("Anthropic API Key 未配置，请在 model_configs 中添加一个 is_active=1 的 Anthropic 模型")
+            raise ValueError("Anthropic API Key 未配置，请在 model_configs 中添加一个启用的 Anthropic 模型")
         temperature = config.temperature
 
         if not use_anthropic:
@@ -62,7 +61,7 @@ def create_llm_invoker(
         if not model_name:
             raise ValueError("OpenAI 模型名称未配置，请在 model_configs 中设置第一个活跃模型")
         if not config.openai_api_key:
-            raise ValueError("OpenAI API Key 未配置，请在 model_configs 中添加一个 is_active=1 的 OpenAI 模型")
+            raise ValueError("OpenAI API Key 未配置，请在 model_configs 中添加一个启用的 OpenAI 模型")
         temperature = config.temperature
         api_key = config.openai_api_key
         base_url = config.openai_base_url or None
@@ -172,7 +171,7 @@ class SessionExecutor:
             personality_prompt: 角色性格描述
             personal_signature: 个性签名
             config: 会话配置，默认为 SessionConfig()
-            name: 昵称（显示用），默认为 username
+            name: 角色名
             session_prompt_injection: 本次登录会话的一次性提示词注入
         """
         self.session_id = str(uuid.uuid4())
@@ -207,7 +206,6 @@ class SessionExecutor:
     def run(
         self,
         llm_invoker: Callable[[str, str], AIMessage],
-        thread_id: Optional[str] = None,
         summarize_llm_invoker: Optional[Callable[[str, str], AIMessage]] = None
     ) -> ExecutionResult:
         """
@@ -215,15 +213,11 @@ class SessionExecutor:
 
         Args:
             llm_invoker: LLM 调用函数，签名为 (system_prompt: str, user_prompt: str) -> AIMessage
-            thread_id: 线程 ID，用于检查点保存
             summarize_llm_invoker: 总结节点的 LLM 调用函数，只绑定 write_memory 工具
 
         Returns:
             ExecutionResult: 包含执行结果的 ExecutionResult 对象
         """
-        if thread_id is None:
-            thread_id = f"session_{self.session_id}"
-
         logger.info("开始执行会话: 用户=%s, 会话ID=%s...", self.username, self.session_id[:8])
 
         try:
@@ -246,7 +240,7 @@ class SessionExecutor:
             logger.info("图执行完成: 步数=%d, 耗时=%.2f秒", final_state.get('step_count', 0), duration)
 
             summary = self._build_summary(final_state)
-            logger.info("生成总结: 退出原因=%s", summary.get('exit_reason', 'N/A'))
+            logger.info("退出原因=%s", summary.get('exit_reason', 'N/A'))
 
             return ExecutionResult(
                 session_id=self.session_id,
@@ -262,8 +256,7 @@ class SessionExecutor:
         except Exception as e:
             self.end_time = datetime.now()
             error_msg = f"会话执行异常: {str(e)}"
-            logger.error("会话执行异常: %s", error_msg)
-            traceback.print_exc()
+            logger.exception("%s", error_msg)
 
             return ExecutionResult(
                 session_id=self.session_id,

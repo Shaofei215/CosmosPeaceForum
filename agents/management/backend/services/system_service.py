@@ -24,6 +24,10 @@ ENV_MANAGED_CONFIG_KEYS = {
     "LOG_LEVEL",
 }
 
+REMOVED_SYSTEM_CONFIG_KEYS: set[str] = {
+    "LANGGRAPH_CHECKPOINTER_ENABLED",
+}
+
 DEFAULT_SYSTEM_CONFIGS = [
     ("SCHEDULER_TIME_SCALE", "1.0", "Scheduler 时间倍率（1.0 为现实时间）"),
     ("LANGGRAPH_MAX_STEPS", "20", "LangGraph 最大决策步数"),
@@ -143,6 +147,7 @@ def init_default_configs(db: Session) -> int:
     """初始化默认系统配置，返回创建的记录数"""
     count = 0
     purged_count = purge_env_managed_configs(db)
+    purged_count += purge_removed_configs(db)
     for key, value, description in DEFAULT_SYSTEM_CONFIGS:
         existing = get_system_config(db, key)
         if not existing:
@@ -162,6 +167,25 @@ def purge_env_managed_configs(db: Session) -> int:
     """删除旧库里仍保存的环境变量托管配置，避免敏感值继续留在 SQLite。"""
     count = 0
     for key in ENV_MANAGED_CONFIG_KEYS:
+        existing = get_system_config(db, key)
+        if existing:
+            db.delete(existing)
+            count += 1
+    return count
+
+
+def purge_removed_configs(db: Session) -> int:
+    """
+    删除已经从系统中移除的历史配置。
+
+    Args:
+        db: Management 数据库会话。
+
+    Returns:
+        int: 本次删除的配置记录数量。
+    """
+    count = 0
+    for key in REMOVED_SYSTEM_CONFIG_KEYS:
         existing = get_system_config(db, key)
         if existing:
             db.delete(existing)

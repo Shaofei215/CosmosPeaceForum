@@ -2,7 +2,6 @@
 # 定义 LangGraph 图结构中的各个节点，包括LLM决策、工具执行、总结等
 import json
 import logging
-import traceback
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
@@ -577,8 +576,12 @@ def tool_execution_node(state: SessionState) -> SessionState:
         logger.error("tool_execution_node | 用户=%s | 步骤=%d | 工具执行错误: %s", username, step_count, str(e))
     except Exception as e:
         result = {"action": f"执行异常: {str(e)}", "data": {}}
-        logger.error("tool_execution_node | 用户=%s | 步骤=%d | 执行异常: %s", username, step_count, str(e))
-        traceback.print_exc()
+        logger.exception(
+            "tool_execution_node | 用户=%s | 步骤=%d | 执行异常: %s",
+            username,
+            step_count,
+            str(e),
+        )
 
     pending_tools = state.get("pending_tools")
     has_pending = pending_tools and len(pending_tools) > 0

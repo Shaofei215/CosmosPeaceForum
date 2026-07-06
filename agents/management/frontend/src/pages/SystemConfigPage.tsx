@@ -7,7 +7,7 @@ import {
 import { Settings, Edit, Eye, EyeOff } from 'lucide-react';
 
 const PASSWORD_KEYS = ['AI_USER_PASSWORD', 'TAVILY_API_KEY'];
-const BOOLEAN_KEYS = ['MEMORY_ENABLED', 'LANGGRAPH_CHECKPOINTER_ENABLED', 'WEB_SEARCH_ENABLED'];
+const BOOLEAN_KEYS = ['MEMORY_ENABLED', 'WEB_SEARCH_ENABLED'];
 
 const configGroupLabels: Record<string, string[]> = {
   '通用': ['ADMIN_KEY', 'AI_USER_PASSWORD', 'SOCIAL_PLATFORM_API_BASE_URL', 'LOG_LEVEL'],
