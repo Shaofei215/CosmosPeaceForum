@@ -1,6 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
 import threading
+import builtins
+import sys
+import types
+from typing import Any
 
 from agents.agents_scheduler.langgraph.executor import (
     ExecutionResult,
@@ -250,6 +254,40 @@ class TestSessionExecutor:
             repr_str = repr(executor)
             assert "SessionExecutor" in repr_str
             assert "test_user" in repr_str
+
+
+class TestCreateLLMInvoker:
+    def test_openai_provider_requires_openai_package(self, monkeypatch):
+        """OpenAI provider 缺少 langchain-openai 时，应抛出明确的导入错误。"""
+        fake_anthropic_module = types.ModuleType("langchain_anthropic")
+        fake_anthropic_module.ChatAnthropic = MagicMock()
+        monkeypatch.setitem(sys.modules, "langchain_anthropic", fake_anthropic_module)
+        monkeypatch.delitem(sys.modules, "langchain_openai", raising=False)
+
+        real_import = builtins.__import__
+
+        def fake_import(
+            name: str,
+            globals: dict[str, Any] | None = None,
+            locals: dict[str, Any] | None = None,
+            fromlist: tuple[str, ...] = (),
+            level: int = 0,
+        ) -> Any:
+            """模拟 langchain-openai 缺失，其余导入保持真实行为。"""
+            if name == "langchain_openai":
+                raise ImportError("No module named 'langchain_openai'")
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        config = SessionConfig(
+            llm_provider="openai",
+            openai_api_key="test_key",
+            openai_model_name="gpt-test",
+        )
+
+        with pytest.raises(ImportError, match="langchain-openai"):
+            create_llm_invoker(config)
 
 
 class TestLLMRegistry:

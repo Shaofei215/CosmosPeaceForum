@@ -29,22 +29,16 @@ def create_llm_invoker(
     Returns:
         Callable[[str, str], AIMessage]: LLM 调用函数，返回 AIMessage
     """
-    try:
-        from langchain_openai import ChatOpenAI
-    except ImportError:
+    provider = config.llm_provider.lower()
+
+    if provider == "anthropic":
         try:
             from langchain_anthropic import ChatAnthropic
-            use_anthropic = True
-            use_openai = False
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
-                "请安装 langchain-openai 或 langchain-anthropic"
-            )
-    else:
-        use_openai = True
-        use_anthropic = False
+                "请安装 langchain-anthropic 以使用 Anthropic 模型"
+            ) from exc
 
-    if config.llm_provider.lower() == "anthropic":
         model_name = config.anthropic_model_name or config.model_name
         if not model_name:
             raise ValueError("Anthropic 模型名称未配置，请在 model_configs 中设置第一个活跃模型")
@@ -52,11 +46,15 @@ def create_llm_invoker(
             raise ValueError("Anthropic API Key 未配置，请在 model_configs 中添加一个启用的 Anthropic 模型")
         temperature = config.temperature
 
-        if not use_anthropic:
-            from langchain_anthropic import ChatAnthropic
-
         llm = ChatAnthropic(model=model_name, temperature=temperature, api_key=config.anthropic_api_key)
     else:
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError as exc:
+            raise ImportError(
+                "请安装 langchain-openai 以使用 OpenAI 兼容模型"
+            ) from exc
+
         model_name = config.openai_model_name or config.model_name
         if not model_name:
             raise ValueError("OpenAI 模型名称未配置，请在 model_configs 中设置第一个活跃模型")
@@ -221,7 +219,7 @@ class SessionExecutor:
         logger.info("开始执行会话: 用户=%s, 会话ID=%s...", self.username, self.session_id[:8])
 
         try:
-            logger.info("构建LangGraph图结构")
+            logger.info("开始构建LangGraph图结构")
             graph = build_session_graph(
                 config=self.config,
                 llm_invoker=llm_invoker,
