@@ -70,6 +70,7 @@ TOOL_TO_LOCATION = {
     "get_user_profile": "用户主页",
     "update_profile": None,
     "toggle_post_like": None,
+    "vote_post_poll": None,
     "toggle_comment_like": None,
     "toggle_follow": None,
     "create_comment": None,
@@ -95,6 +96,7 @@ TOOLS_WITH_RETURN_VALUE = {
     "view_post_comments",
     "expand_comment",
     "scroll",
+    "vote_post_poll",
     "recall_memory",
     "web_search",
 }
@@ -267,6 +269,7 @@ def start_node(state: SessionState) -> SessionState:
     return {
         **state,
         "step_count": 0,
+        "consecutive_error_count": 0,
         "exit_reason": None,
         "action_history": [],
         "current_location": "主页（信息流）",
@@ -305,11 +308,17 @@ def recall_memory_node(state: SessionState) -> SessionState:
     config = get_memory_config()
 
     if not config.memory_enabled:
-        return state
+        return {
+            **state,
+            "recalled_memories": "",
+        }
 
     owner_id = state.get("user_id")
     if not owner_id:
-        return state
+        return {
+            **state,
+            "recalled_memories": "",
+        }
 
     username = state.get("username", "未知")
     logger.info("recall_memory_node | 用户=%s | 开始记忆召回", username)
@@ -320,9 +329,11 @@ def recall_memory_node(state: SessionState) -> SessionState:
 
         query_context = _build_memory_query_context(state)
         if not query_context:
-            state["recalled_memories"] = ""
             logger.info("recall_memory_node | 用户=%s | 当前没有可检索上下文，跳过召回", username)
-            return state
+            return {
+                **state,
+                "recalled_memories": "",
+            }
 
         service = get_memory_service()
         recalled = asyncio.run(service.recall_memories(
@@ -339,17 +350,20 @@ def recall_memory_node(state: SessionState) -> SessionState:
                 memory_lines.append(f"[记忆片段 - {time_desc}]")
                 memory_lines.append(chunk.content)
                 memory_lines.append("---")
-            state["recalled_memories"] = "\n".join(memory_lines)
+            recalled_memories = "\n".join(memory_lines)
             logger.info("recall_memory_node | 用户=%s | 召回%d条相关记忆", username, len(recalled))
         else:
-            state["recalled_memories"] = ""
+            recalled_memories = ""
             logger.info("recall_memory_node | 用户=%s | 无相关记忆召回", username)
 
     except Exception as e:
         logger.warning("recall_memory_node | 记忆召回异常: %s", e)
-        state["recalled_memories"] = ""
+        recalled_memories = ""
 
-    return state
+    return {
+        **state,
+        "recalled_memories": recalled_memories,
+    }
 
 
 def llm_decision_node(
@@ -400,19 +414,24 @@ def llm_decision_node(
     try:
         response = llm_invoker(system_prompt, user_prompt)
         tool_calls = parse_tool_calls(response)
+        success_state = {
+            **state,
+            "consecutive_error_count": 0,
+            "last_error": None,
+        }
 
         if not tool_calls:
             if state["step_count"] >= state["max_steps"]:
                 logger.info("llm_decision_node | 用户=%s | 步骤=%d | LLM未返回工具调用 | 达到最大步数，将执行登出", username, step_count)
                 return {
-                    **state,
+                    **success_state,
                     "pending_tool": {"tool_name": "logout", "args": {"reason": "达到最大步数限制"}},
                     "pending_tools": None,
                 }
             else:
                 logger.info("llm_decision_node | 用户=%s | 步骤=%d | LLM未返回工具调用", username, step_count)
                 return {
-                    **state,
+                    **success_state,
                     "pending_tool": None,
                     "pending_tools": None,
                 }
@@ -429,13 +448,13 @@ def llm_decision_node(
                 reason = tool_args.get("reason", "主动结束会话")
                 logger.info("llm_decision_node | 用户=%s | 步骤=%d | LLM选择登出: reason=%s", username, step_count, reason)
                 return {
-                    **state,
+                    **success_state,
                     "pending_tool": {"tool_name": "logout", "args": {"reason": reason}},
                     "pending_tools": None,
                 }
 
             return {
-                **state,
+                **success_state,
                 "pending_tool": {"tool_name": tool_name, "args": tool_args},
                 "pending_tools": None,
             }
@@ -453,26 +472,39 @@ def llm_decision_node(
                 reason = logout_call.get("args", {}).get("reason", "主动结束会话")
                 logger.info("llm_decision_node | 用户=%s | 步骤=%d | LLM批量决策中包含登出: reason=%s", username, step_count, reason)
                 return {
-                    **state,
+                    **success_state,
                     "pending_tool": {"tool_name": "logout", "args": {"reason": reason}},
                     "pending_tools": None,
                 }
 
             first_call = non_logout_calls[0]
             return {
-                **state,
+                **success_state,
                 "pending_tool": {"tool_name": first_call.get("name", "").lower(), "args": first_call.get("args", {})},
                 "pending_tools": [{"name": tc.get("name", "").lower(), "args": tc.get("args", {})} for tc in non_logout_calls[1:]],
             }
 
     except Exception as e:
-        logger.error("llm_decision_node | 用户=%s | 步骤=%d | LLM决策异常: %s", username, step_count, str(e))
-        return {
+        error_count = int(state.get("consecutive_error_count", 0) or 0) + 1
+        max_errors = int(state.get("max_consecutive_errors", 3) or 3)
+        logger.error(
+            "llm_decision_node | 用户=%s | 步骤=%d | LLM决策异常: %s | 连续错误=%d/%d",
+            username,
+            step_count,
+            str(e),
+            error_count,
+            max_errors,
+        )
+        updated_state = {
             **state,
             "pending_tool": None,
             "pending_tools": None,
+            "consecutive_error_count": error_count,
             "last_error": f"LLM 决策失败: {str(e)}",
         }
+        if error_count >= max_errors:
+            updated_state["exit_reason"] = ExitReason.ERROR
+        return updated_state
 
 
 def tool_execution_node(state: SessionState) -> SessionState:
@@ -525,16 +557,18 @@ def tool_execution_node(state: SessionState) -> SessionState:
             next_tool = pending_tools[0]
             remaining_tools = pending_tools[1:]
             logger.info("tool_execution_node | 用户=%s | 步骤=%d | 执行批量中的下一个工具: %s", username, step_count, next_tool.get('name', ''))
-            return {
+            state = {
                 **state,
                 "pending_tool": {"tool_name": next_tool.get("name", "").lower(), "args": next_tool.get("args", {})},
                 "pending_tools": remaining_tools if remaining_tools else None,
             }
-        logger.info("tool_execution_node | 用户=%s | 步骤=%d | 无待执行工具，步数+1", username, step_count)
-        return {
-            **state,
-            "step_count": state["step_count"] + 1,
-        }
+            pending = state["pending_tool"]
+        else:
+            logger.info("tool_execution_node | 用户=%s | 步骤=%d | 无待执行工具，步数+1", username, step_count)
+            return {
+                **state,
+                "step_count": state["step_count"] + 1,
+            }
 
     tool_name = pending.get("tool_name", "").lower()
     tool_args = pending.get("args", {})
@@ -629,7 +663,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
             **profile_state_updates,
             "action_history": state["action_history"] + [new_record],
             "current_location": current_location,
-            "last_tool_result": last_tool_result if last_tool_result else state.get("last_tool_result"),
+            "last_tool_result": last_tool_result if last_tool_result is not None else state.get("last_tool_result"),
             "pending_tool": None,
             "last_error": None,
         }
@@ -642,7 +676,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
         "step_count": state["step_count"] + 1,
         "action_history": state["action_history"] + [new_record],
         "current_location": current_location,
-        "last_tool_result": last_tool_result if last_tool_result else state.get("last_tool_result"),
+        "last_tool_result": last_tool_result if last_tool_result is not None else state.get("last_tool_result"),
         "pending_tool": None,
         "pending_tools": None,
         "last_error": None,
@@ -672,6 +706,11 @@ def should_continue_edge(state: SessionState) -> str:
         reason_str = exit_reason.value if isinstance(exit_reason, ExitReason) else str(exit_reason)
         logger.info("should_continue_edge | 用户=%s | 步骤=%d/%d | 退出原因=%s | 路由=summarize", username, step_count, max_steps, reason_str)
         return "summarize"
+
+    pending_tool = state.get("pending_tool")
+    if pending_tool:
+        logger.info("should_continue_edge | 用户=%s | 步骤=%d/%d | 仍有单个待执行工具 | 路由=tool_execution", username, step_count, max_steps)
+        return "tool_execution"
 
     pending_tools = state.get("pending_tools")
     if pending_tools and len(pending_tools) > 0:

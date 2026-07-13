@@ -190,6 +190,8 @@ class SessionExecutor:
             "session_prompt_injection": session_prompt_injection,
             "step_count": 0,
             "max_steps": self.config.max_steps,
+            "max_consecutive_errors": self.config.max_consecutive_errors,
+            "consecutive_error_count": 0,
             "exit_reason": None,
             "action_history": [],
             "current_location": "主页（信息流）",
@@ -280,11 +282,15 @@ class SessionExecutor:
         # 格式化操作记录
         actions = []
         for record in state.get("action_history", []):
+            action_text = record.get("action", "")
+            summary_text = record.get("summary", "")
             actions.append({
                 "step": record.get("step", 0),
-                "tool_name": record.get("tool_name", ""),
+                "tool_name": record.get("tool_name", action_text),
                 "reason": record.get("reason", ""),
-                "result_summary": record.get("result_summary", ""),
+                "result_summary": record.get("result_summary", summary_text or action_text),
+                "action": action_text,
+                "summary": summary_text,
             })
 
         # 获取退出原因

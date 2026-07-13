@@ -49,7 +49,8 @@ class TestRecallMemoryNode:
         with patch("agents.agents_scheduler.langgraph.nodes.get_memory_config") as mock_config:
             mock_config.return_value = MagicMock(memory_enabled=False)
             result = recall_memory_node(state)
-            assert result is state
+            assert result is not state
+            assert result["recalled_memories"] == ""
 
     def test_recall_memory_node_no_user_id(self):
         state = {
@@ -59,7 +60,8 @@ class TestRecallMemoryNode:
         with patch("agents.agents_scheduler.langgraph.nodes.get_memory_config") as mock_config:
             mock_config.return_value = MagicMock(memory_enabled=True)
             result = recall_memory_node(state)
-            assert result is state
+            assert result is not state
+            assert result["recalled_memories"] == ""
 
     def test_recall_memory_node_uses_current_context_as_query(self):
         """测试自动召回只使用当前视野和近期操作，不引入固定提示词。"""
@@ -199,7 +201,11 @@ class TestLlmDecisionNode:
 
         mock_llm_invoker = MagicMock(return_value=mock_response)
 
-        result = llm_decision_node(state, mock_llm_invoker)
+        with patch(
+            "agents.agents_scheduler.langgraph.nodes.build_system_prompt",
+            return_value="你是Test",
+        ):
+            result = llm_decision_node(state, mock_llm_invoker)
 
         # 验证 LLM 被调用
         mock_llm_invoker.assert_called_once()
@@ -224,10 +230,33 @@ class TestLlmDecisionNode:
         mock_llm_invoker = MagicMock(return_value=mock_response)
 
         with patch("agents.agents_scheduler.memory.service.get_memory_service") as mock_get_service:
-            llm_decision_node(state, mock_llm_invoker)
+            with patch(
+                "agents.agents_scheduler.langgraph.nodes.build_system_prompt",
+                return_value="你是Test",
+            ):
+                llm_decision_node(state, mock_llm_invoker)
 
             # 验证记忆服务没有被调用（因为查询逻辑已移到 recall_memory_node）
             mock_get_service.assert_not_called()
+
+    def test_llm_decision_node_exits_after_consecutive_errors(self):
+        """测试 LLM 连续决策异常达到阈值时结束会话。"""
+        state = {
+            **self.base_state,
+            "max_consecutive_errors": 2,
+            "consecutive_error_count": 1,
+        }
+        mock_llm_invoker = MagicMock(side_effect=RuntimeError("boom"))
+
+        with patch(
+            "agents.agents_scheduler.langgraph.nodes.build_system_prompt",
+            return_value="你是Test",
+        ):
+            result = llm_decision_node(state, mock_llm_invoker)
+
+        assert result["consecutive_error_count"] == 2
+        assert result["exit_reason"] == ExitReason.ERROR
+        assert "LLM 决策失败" in result["last_error"]
 
 
 class TestSummarizeNode:
@@ -279,7 +308,15 @@ class TestSummarizeNode:
         mock_llm_invoker = MagicMock(return_value=mock_response)
 
         with patch("agents.agents_scheduler.langgraph.nodes.get_all_tools_for_summarize", return_value=[mock_tool]):
-            result = summarize_node(state, mock_llm_invoker)
+            with patch(
+                "agents.agents_scheduler.langgraph.nodes.build_summarize_system_prompt",
+                return_value="system",
+            ):
+                with patch(
+                    "agents.agents_scheduler.langgraph.nodes.build_summarize_prompt",
+                    return_value="summary prompt",
+                ):
+                    result = summarize_node(state, mock_llm_invoker)
 
             # 验证 LLM 被调用
             mock_llm_invoker.assert_called_once()
@@ -309,7 +346,15 @@ class TestSummarizeNode:
 
         mock_llm_invoker = MagicMock(return_value=mock_response)
 
-        result = summarize_node(state, mock_llm_invoker)
+        with patch(
+            "agents.agents_scheduler.langgraph.nodes.build_summarize_system_prompt",
+            return_value="system",
+        ):
+            with patch(
+                "agents.agents_scheduler.langgraph.nodes.build_summarize_prompt",
+                return_value="summary prompt",
+            ):
+                result = summarize_node(state, mock_llm_invoker)
 
         # 验证使用了默认总结
         assert "执行了 1 个操作" in result["summary"]
@@ -336,6 +381,7 @@ class TestToolLocationMapping:
         assert "get_profile" not in TOOLS_WITH_RETURN_VALUE
         assert "get_global_feed" in TOOLS_WITH_RETURN_VALUE
         assert "scroll" in TOOLS_WITH_RETURN_VALUE
+        assert "vote_post_poll" in TOOLS_WITH_RETURN_VALUE
         assert "recall_memory" in TOOLS_WITH_RETURN_VALUE
         assert "update_profile" in TOOLS_WITH_RETURN_VALUE
         assert "logout" not in TOOLS_WITH_RETURN_VALUE
@@ -420,6 +466,7 @@ class TestStartNode:
         state = {
             "username": "test_user",
             "step_count": 5,
+            "consecutive_error_count": 2,
             "exit_reason": ExitReason.USER_CHOICE,
             "action_history": [{"step": 1, "timestamp": "2024-01-01", "summary": "s", "action": "a", "reason": "r"}],
             "current_location": "帖子详情页",
@@ -432,6 +479,7 @@ class TestStartNode:
         }
         result = start_node(state)
         assert result["step_count"] == 0
+        assert result["consecutive_error_count"] == 0
         assert result["exit_reason"] is None
         assert result["action_history"] == []
         assert result["current_location"] == "主页（信息流）"
@@ -478,7 +526,8 @@ class TestRecallMemoryNode:
         with patch("agents.agents_scheduler.langgraph.nodes.get_memory_config") as mock_config:
             mock_config.return_value = MagicMock(memory_enabled=False)
             result = recall_memory_node(state)
-            assert result is state
+            assert result is not state
+            assert result["recalled_memories"] == ""
 
     def test_recall_memory_node_no_user_id(self):
         state = {
@@ -488,7 +537,8 @@ class TestRecallMemoryNode:
         with patch("agents.agents_scheduler.langgraph.nodes.get_memory_config") as mock_config:
             mock_config.return_value = MagicMock(memory_enabled=True)
             result = recall_memory_node(state)
-            assert result is state
+            assert result is not state
+            assert result["recalled_memories"] == ""
 
 
 class TestToolExecutionNode:
@@ -518,13 +568,62 @@ class TestToolExecutionNode:
         state = {
             "username": "test_user",
             "step_count": 0,
+            "max_steps": 10,
+            "exit_reason": None,
+            "action_history": [],
+            "current_location": "主页（信息流）",
+            "last_tool_result": None,
             "pending_tool": None,
-            "pending_tools": [{"name": "get_global_feed", "args": {"reason": "test"}}],
+            "pending_tools": [{"name": "get_global_feed", "args": {"reason": "test", "summary": "queued"}}],
+            "last_error": None,
+            "summary": None,
+            "recalled_memories": "",
         }
-        result = tool_execution_node(state)
-        assert result["pending_tool"]["tool_name"] == "get_global_feed"
-        # Code sets remaining_tools to None when empty
+
+        mock_tool = MagicMock()
+        mock_tool.name = "get_global_feed"
+        mock_tool.invoke.return_value = {
+            "action": "浏览了主页信息流",
+            "data": {"posts": []},
+        }
+
+        with patch("agents.agents_scheduler.langgraph.nodes.get_social_tools", return_value=[mock_tool]):
+            with patch("agents.agents_scheduler.langgraph.nodes._attach_current_unread_count", side_effect=lambda data: data):
+                result = tool_execution_node(state)
+
+        mock_tool.invoke.assert_called_once_with({"reason": "test", "summary": "queued"})
+        assert result["step_count"] == 1
+        assert result["pending_tool"] is None
         assert result["pending_tools"] is None
+        assert result["last_tool_result"] == {"posts": []}
+
+    def test_tool_execution_node_empty_result_replaces_old_context(self):
+        state = {
+            "username": "test_user",
+            "step_count": 0,
+            "max_steps": 10,
+            "exit_reason": None,
+            "action_history": [],
+            "current_location": "主页（信息流）",
+            "last_tool_result": {"posts": [{"id": 1}]},
+            "pending_tool": {"tool_name": "report_content", "args": {"reason": "test", "summary": "test"}},
+            "pending_tools": None,
+            "last_error": None,
+            "summary": None,
+            "recalled_memories": "",
+        }
+        mock_tool = MagicMock()
+        mock_tool.name = "report_content"
+        mock_tool.invoke.return_value = {
+            "action": "举报了内容",
+            "data": {},
+        }
+
+        with patch("agents.agents_scheduler.langgraph.nodes.get_social_tools", return_value=[mock_tool]):
+            with patch("agents.agents_scheduler.langgraph.nodes._attach_current_unread_count", side_effect=lambda data: data):
+                result = tool_execution_node(state)
+
+        assert result["last_tool_result"] == {}
 
     def test_tool_execution_node_unknown_tool(self):
         state = {
@@ -632,6 +731,17 @@ class TestShouldContinueEdge:
             "max_steps": 10,
             "exit_reason": None,
             "pending_tools": [{"name": "test", "args": {}}],
+        }
+        assert should_continue_edge(state) == "tool_execution"
+
+    def test_should_continue_with_pending_tool(self):
+        state = {
+            "username": "test_user",
+            "step_count": 5,
+            "max_steps": 10,
+            "exit_reason": None,
+            "pending_tool": {"tool_name": "get_global_feed", "args": {}},
+            "pending_tools": None,
         }
         assert should_continue_edge(state) == "tool_execution"
 

@@ -225,6 +225,57 @@ class TestSessionExecutor:
 
                 assert result.success is True
 
+    def test_executor_summary_maps_action_record_fields(self):
+        """测试 executor 输出摘要时保留节点记录的真实动作与视野总结。"""
+        with patch("agents.agents_scheduler.langgraph.executor.get_default_config") as mock_config:
+            mock_config.return_value = SessionConfig()
+            executor = SessionExecutor(
+                user_id=1,
+                username="test_user",
+                agent_id=1,
+                personality_prompt="prompt",
+                personal_signature="sig",
+            )
+
+            mock_graph = MagicMock()
+            mock_graph.invoke.return_value = {
+                "user_id": 1,
+                "username": "test_user",
+                "name": "Test",
+                "agent_id": 1,
+                "personality_prompt": "prompt",
+                "personal_signature": "sig",
+                "step_count": 1,
+                "max_steps": 10,
+                "exit_reason": ExitReason.USER_CHOICE,
+                "action_history": [
+                    {
+                        "step": 1,
+                        "timestamp": "2024-01-01T00:00:00",
+                        "summary": "我看到了主页信息流",
+                        "action": "浏览了主页信息流",
+                        "reason": "先了解平台动态",
+                    }
+                ],
+                "current_location": "主页（信息流）",
+                "last_tool_result": None,
+                "pending_tool": None,
+                "pending_tools": None,
+                "last_error": None,
+                "summary": "Test summary",
+                "recalled_memories": "",
+            }
+
+            with patch("agents.agents_scheduler.langgraph.executor.build_session_graph", return_value=mock_graph):
+                result = executor.run(llm_invoker=MagicMock())
+
+            assert result.summary is not None
+            action = result.summary["actions"][0]
+            assert action["tool_name"] == "浏览了主页信息流"
+            assert action["result_summary"] == "我看到了主页信息流"
+            assert action["action"] == "浏览了主页信息流"
+            assert action["summary"] == "我看到了主页信息流"
+
     def test_executor_run_failure(self):
         with patch("agents.agents_scheduler.langgraph.executor.get_default_config") as mock_config:
             mock_config.return_value = SessionConfig()

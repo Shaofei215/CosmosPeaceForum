@@ -74,6 +74,8 @@ class SessionState(TypedDict):
 
         step_count: 当前已执行的步数，用于控制最大步数限制
         max_steps: 最大步数限制，防止无限循环
+        max_consecutive_errors: 最大连续错误次数，防止 LLM 或工具持续失败
+        consecutive_error_count: 当前连续错误次数，成功决策后清零
         exit_reason: 退出原因，None 表示会话仍在进行中
 
         action_history: 操作历史列表，作为工作记忆记录所有执行过的操作（不含返回值）
@@ -98,6 +100,8 @@ class SessionState(TypedDict):
     # === 会话控制 ===
     step_count: int                          # 当前步数
     max_steps: int                           # 最大步数限制
+    max_consecutive_errors: int              # 最大连续错误次数
+    consecutive_error_count: int             # 当前连续错误次数
     exit_reason: Optional[ExitReason]        # 退出原因
 
     # === 工作记忆（核心）===
