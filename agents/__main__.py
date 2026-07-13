@@ -11,6 +11,18 @@ from agents.management.backend.core.config import get_config
 
 logger = logging.getLogger(__name__)
 
+BANNER: str = r"""
+ ██████╗██████╗ ███████╗ ██████╗ ██████╗ ██╗   ██╗███╗   ███╗
+██╔════╝██╔══██╗██╔════╝██╔═══██╗██╔══██╗██║   ██║████╗ ████║
+██║     ██████╔╝█████╗  ██║   ██║██████╔╝██║   ██║██╔████╔██║
+██║     ██╔═══╝ ██╔══╝  ██║   ██║██╔══██╗██║   ██║██║╚██╔╝██║
+╚██████╗██║     ██║     ╚██████╔╝██║  ██║╚██████╔╝██║ ╚═╝ ██║
+ ╚═════╝╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝
+
+                      CosmosPeaceForum
+                      愿全宇宙 和平交流
+""".strip("\n")
+
 
 def setup_logging(log_level: str = "INFO"):
     """配置日志"""
@@ -53,7 +65,8 @@ def main():
     config = get_config()
     setup_logging(config.log_level)
 
-    logger.info("  愿  全  宇  宙    和  平  交  流  |  正在启动 Agents ...")
+    logger.info("\n%s", BANNER)
+    logger.info("正在启动 Agents ...")
 
     mgmt_thread = threading.Thread(target=start_management_backend, daemon=True)
     mgmt_thread.start()
