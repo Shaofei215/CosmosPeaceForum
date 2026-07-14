@@ -145,14 +145,10 @@ class AIUserScheduler(threading.Thread):
             logger.warning(f"{self.name} monthly_logins={self.monthly_logins}，跳过调度")
             return
 
-        logger.debug("%s 开始调度循环，月登录次数=%d", self.name, self.monthly_logins)
+        logger.debug("%s 开始调度循环，月预期登录次数=%d", self.name, self.monthly_logins)
 
         while not self._stop_event.is_set():
             self.next_login_time = self._calculate_next_login_time()
-
-            logger.info(
-                f"{self.name} 下次登录: {self.next_login_time.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
 
             if not self._wait_until_login_time():
                 continue
