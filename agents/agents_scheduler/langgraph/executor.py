@@ -3,9 +3,11 @@
 import logging
 import threading
 import uuid
-from typing import Optional, Dict, Any, Callable, List
+from typing import Optional, Dict, Any, Callable, List, cast
 from datetime import datetime
 from dataclasses import dataclass, field
+
+from pydantic import SecretStr
 
 from agents.agents_scheduler.langgraph.state import SessionState, SessionSummary, ExitReason
 from agents.agents_scheduler.langgraph.config import SessionConfig, AgentConfig, get_default_config
@@ -46,7 +48,13 @@ def create_llm_invoker(
             raise ValueError("Anthropic API Key 未配置，请在 model_configs 中添加一个启用的 Anthropic 模型")
         temperature = config.temperature
 
-        llm = ChatAnthropic(model=model_name, temperature=temperature, api_key=config.anthropic_api_key)
+        llm = ChatAnthropic(
+            model_name=model_name,
+            temperature=temperature,
+            api_key=SecretStr(config.anthropic_api_key),
+            timeout=None,
+            stop=None,
+        )
     else:
         try:
             from langchain_openai import ChatOpenAI
@@ -78,6 +86,10 @@ def create_llm_invoker(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ])
+        if not isinstance(response, AIMessage):
+            raise TypeError(
+                f"LLM 返回了非 AIMessage 类型: {type(response).__name__}"
+            )
         return response
 
     return invoke
@@ -225,9 +237,13 @@ class SessionExecutor:
                 summarize_llm_invoker=summarize_llm_invoker
             )
 
-            final_state = graph.invoke(
-                self.initial_state,
-                config={"recursion_limit": 100}
+            # CompiledStateGraph.invoke 的返回注解不会保留图的状态模式，需显式恢复类型。
+            final_state = cast(
+                SessionState,
+                graph.invoke(
+                    self.initial_state,
+                    config={"recursion_limit": 100}
+                )
             )
 
             self.end_time = datetime.now()
@@ -271,7 +287,7 @@ class SessionExecutor:
 
     def _build_summary(self, state: SessionState) -> SessionSummary:
         """
-        构建会话总结
+        构建会话总结，仅仅用于日志而不是记忆系统的总结
 
         Args:
             state: 最终状态

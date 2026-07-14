@@ -3,6 +3,7 @@
 import logging
 from typing import Optional, Dict, Any
 from langgraph.graph import StateGraph, END, START
+from langgraph.graph.state import CompiledStateGraph
 from langchain_core.messages import AIMessage
 
 from agents.agents_scheduler.langgraph.state import SessionState
@@ -48,7 +49,7 @@ def build_session_graph(
     config: Optional[SessionConfig] = None,
     llm_invoker: Optional[callable] = None,
     summarize_llm_invoker: Optional[callable] = None
-) -> StateGraph:
+) -> CompiledStateGraph:
     """
     构建完整的会话图
 
