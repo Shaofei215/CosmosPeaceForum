@@ -227,17 +227,22 @@ def _build_memory_query_context(state: SessionState) -> str:
     if last_tool_result is not None:
         serialized_result = _serialize_memory_query_value(last_tool_result)
         if serialized_result:
-            query_parts.append(f"当前看到的内容：\n{serialized_result}")
+            query_parts.append(serialized_result)
 
-    recent_actions = state.get("action_history", [])[-3:]
+    recent_actions = state.get("action_history", [])
     if recent_actions:
         action_lines = []
         for record in recent_actions:
             summary = str(record.get("summary", "")).strip()
             action = str(record.get("action", "")).strip()
             reason = str(record.get("reason", "")).strip()
-            action_lines.append(f"看到：{summary}；行动：{action}；原因：{reason}")
-        query_parts.append("近期操作：\n" + "\n".join(action_lines))
+            action_line = "；".join(
+                value for value in (summary, action, reason) if value
+            )
+            if action_line:
+                action_lines.append(action_line)
+        if action_lines:
+            query_parts.append("\n".join(action_lines))
 
     return "\n\n".join(query_parts)
 

@@ -107,6 +107,11 @@ class TestRecallMemoryNode:
                     assert "你是一个测试角色" not in query_context
                     assert "测试签名" not in query_context
                     assert "上一轮已经召回的内容" not in query_context
+                    assert "当前看到的内容" not in query_context
+                    assert "近期操作" not in query_context
+                    assert "看到：" not in query_context
+                    assert "行动：" not in query_context
+                    assert "原因：" not in query_context
                     assert "boost_on_recall" not in call_kwargs
 
                     # 验证召回的记忆被正确注入
