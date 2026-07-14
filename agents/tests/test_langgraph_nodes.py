@@ -1,4 +1,5 @@
 import pytest
+from langchain_core.messages import AIMessage
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
 
@@ -371,6 +372,41 @@ class TestSummarizeNode:
 
         # 验证使用了默认总结
         assert "执行了 1 个操作" in result["summary"]
+
+    def test_summarize_node_converts_structured_content_to_text(self):
+        """测试总结节点将结构化消息内容转换为 SessionState 所需的字符串。"""
+        state = {
+            "user_id": 1,
+            "username": "test_user",
+            "name": "Test",
+            "personality_prompt": "测试角色",
+            "personal_signature": "签名",
+            "action_history": [
+                {
+                    "step": 1,
+                    "timestamp": "2024-01-01",
+                    "summary": "看到帖子",
+                    "action": "浏览了帖子",
+                    "reason": "感兴趣",
+                },
+            ],
+        }
+        response = AIMessage(
+            content=[{"type": "text", "text": "这是从结构化内容中提取的总结。"}],
+        )
+        mock_llm_invoker = MagicMock(return_value=response)
+
+        with patch(
+            "agents.agents_scheduler.langgraph.nodes.build_summarize_system_prompt",
+            return_value="system",
+        ):
+            with patch(
+                "agents.agents_scheduler.langgraph.nodes.build_summarize_prompt",
+                return_value="summary prompt",
+            ):
+                result = summarize_node(state, mock_llm_invoker)
+
+        assert result["summary"] == "这是从结构化内容中提取的总结。"
 
 
 class TestToolLocationMapping:

@@ -1,5 +1,6 @@
 # Prompt 模板模块
 # 定义 LangGraph 会话中使用的各种 Prompt 模板
+from collections.abc import Mapping
 from typing import Dict, Any, List
 
 from agents.prompt_templates import (
@@ -187,7 +188,7 @@ def build_system_prompt(
     )
 
 
-def build_decision_prompt(state: Dict[str, Any]) -> str:
+def build_decision_prompt(state: Mapping[str, Any]) -> str:
     """
     构建决策 Prompt
 
@@ -630,7 +631,7 @@ def build_summarize_system_prompt(
     return build_system_prompt(username, name, personality_prompt, personal_signature)
 
 
-def build_summarize_prompt(state: Dict[str, Any]) -> str:
+def build_summarize_prompt(state: Mapping[str, Any]) -> str:
     """
     构建总结节点的用户提示词
 

@@ -403,7 +403,7 @@ def llm_decision_node(
     try:
         response = llm_invoker(system_prompt, user_prompt)
         tool_calls = parse_tool_calls(response)
-        success_state = {
+        success_state: SessionState = {
             **state,
             "consecutive_error_count": 0,
             "last_error": None,
@@ -477,7 +477,7 @@ def llm_decision_node(
             max_errors,
             str(e),
         )
-        updated_state = {
+        updated_state: SessionState = {
             **state,
             "pending_tool": None,
             "pending_tools": None,
@@ -553,6 +553,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
                 "step_count": state["step_count"] + 1,
             }
 
+    assert pending is not None
     tool_name = pending.get("tool_name", "").lower()
     tool_args = pending.get("args", {})
 
@@ -600,7 +601,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
         )
 
     pending_tools = state.get("pending_tools")
-    has_pending = pending_tools and len(pending_tools) > 0
+    has_pending = bool(pending_tools)
 
     action = result.get("action", "") if isinstance(result, dict) else str(result)
 
@@ -627,39 +628,44 @@ def tool_execution_node(state: SessionState) -> SessionState:
         )
     last_tool_result = _attach_current_unread_count(last_tool_result)
 
-    profile_state_updates: dict[str, Any] = {}
+    updated_username: Optional[str] = None
+    updated_personal_signature: Optional[str] = None
     if tool_name == "update_profile" and isinstance(last_tool_result, dict):
-        updated_username = last_tool_result.get("username")
-        if updated_username:
-            profile_state_updates["username"] = str(updated_username)
+        result_username = last_tool_result.get("username")
+        if result_username:
+            updated_username = str(result_username)
         if "bio" in last_tool_result:
-            profile_state_updates["personal_signature"] = str(last_tool_result.get("bio") or "")
+            updated_personal_signature = str(last_tool_result.get("bio") or "")
 
     new_location = _get_location_after_tool(tool_name)
     current_location = new_location if new_location is not None else state.get("current_location", "主页（信息流）")
 
     if has_pending:
-        return {
+        updated_state: SessionState = {
             **state,
-            **profile_state_updates,
             "action_history": state["action_history"] + [new_record],
             "current_location": current_location,
             "last_tool_result": last_tool_result if last_tool_result is not None else state.get("last_tool_result"),
             "pending_tool": None,
             "last_error": None,
         }
+    else:
+        updated_state = {
+            **state,
+            "step_count": state["step_count"] + 1,
+            "action_history": state["action_history"] + [new_record],
+            "current_location": current_location,
+            "last_tool_result": last_tool_result if last_tool_result is not None else state.get("last_tool_result"),
+            "pending_tool": None,
+            "pending_tools": None,
+            "last_error": None,
+        }
 
-    return {
-        **state,
-        **profile_state_updates,
-        "step_count": state["step_count"] + 1,
-        "action_history": state["action_history"] + [new_record],
-        "current_location": current_location,
-        "last_tool_result": last_tool_result if last_tool_result is not None else state.get("last_tool_result"),
-        "pending_tool": None,
-        "pending_tools": None,
-        "last_error": None,
-    }
+    if updated_username is not None:
+        updated_state["username"] = updated_username
+    if updated_personal_signature is not None:
+        updated_state["personal_signature"] = updated_personal_signature
+    return updated_state
 
 
 def should_continue_edge(state: SessionState) -> str:
@@ -752,7 +758,7 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
                     except Exception as e:
                         logger.error("%s 执行 %s 工具失败，参数=%s，错误=%s", name, tool_name, tool_args, e)
 
-        summary = response.content if hasattr(response, 'content') else str(response)
+        summary = response.content if isinstance(response.content, str) else response.text()
         if not summary:
             summary = f"用户 {state.get('username', '未知')} 执行了 {len(state.get('action_history', []))} 个操作。"
 
