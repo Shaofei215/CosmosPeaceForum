@@ -35,13 +35,14 @@ from agents.management.backend.db_client import get_db_client
 logger = logging.getLogger(__name__)
 
 
-def login_user(username: str, password: str) -> Optional[Dict]:
+def login_user(username: str, password: str, name: Optional[str] = None) -> Optional[Dict]:
     """
     通过 social_platform API 登录用户
 
     Args:
         username: 用户名
         password: 密码
+        name: 用于日志展示的角色名
 
     Returns:
         Optional[Dict]: 用户信息，失败返回 None
@@ -67,7 +68,7 @@ def login_user(username: str, password: str) -> Optional[Dict]:
             result["id"] = user_info.get("id")
         return result
     except PlatformAccessError as exc:
-        logger.error("用户 %s 登录失败: %s", username, exc)
+        logger.error("%s 登录失败: %s", name or "Agent", exc)
         return None
 
 
@@ -144,7 +145,7 @@ class AIUserScheduler(threading.Thread):
             logger.warning(f"{self.name} monthly_logins={self.monthly_logins}，跳过调度")
             return
 
-        logger.info(f"{self.name} 开始调度循环 月登录次数: {self.monthly_logins}")
+        logger.debug("%s 开始调度循环，月登录次数=%d", self.name, self.monthly_logins)
 
         while not self._stop_event.is_set():
             self.next_login_time = self._calculate_next_login_time()
@@ -186,19 +187,13 @@ class AIUserScheduler(threading.Thread):
 
     def _execute_login_and_session(self):
         """执行登录和会话"""
-        logger.info(f"{self.name} 开始登录")
-
-        user_info = login_user(self.username, self.password)
+        user_info = login_user(self.username, self.password, self.name)
         if not user_info:
-            logger.error(f"{self.name} 登录失败，跳过本次会话")
             return
 
         user_id = user_info.get('id')
         token = user_info.get('token') or user_info.get('access_token')
-        if user_id:
-            logger.info(f"{self.name} 登录成功 (用户名: {self.username})")
-        else:
-            logger.info(f"{self.name} 登录成功")
+        logger.info("%s 登录成功", self.name)
         login_stats = get_db_client().record_agent_login(
             self.agent_id,
             scaled_timestamp=self.time_system.get_scaled_timestamp(),
@@ -220,7 +215,7 @@ class AIUserScheduler(threading.Thread):
 
             session_prompt_injection = consume_prompt_injection_text(self.agent_id)
             if session_prompt_injection:
-                logger.info(
+                logger.debug(
                     "%s 已消费下一次会话提示词注入: %d 字符",
                     self.name,
                     len(session_prompt_injection),
@@ -239,16 +234,10 @@ class AIUserScheduler(threading.Thread):
 
             if self.model_config_id is None:
                 raise RuntimeError(f"{self.name} 未分配模型配置")
-            logger.info("%s 使用模型配置 ID=%d", self.name, self.model_config_id)
+            logger.debug("%s 使用模型配置 ID=%d", self.name, self.model_config_id)
             llm_config = SessionConfig.from_db(model_config_id=int(self.model_config_id))
 
-            logger.info(f"[{self.name}] 开始 LangGraph 会话")
-            result = run_session(session_cfg, self.relation_map, config=llm_config)
-            logger.info(
-                f"{self.name} 会话完成！"
-                f"步数={result.step_count}, "
-                f"退出原因={result.exit_reason}"
-            )
+            run_session(session_cfg, self.relation_map, config=llm_config)
         except Exception as e:
             logger.error(f"{self.name} 会话执行失败: {e}\n{traceback.format_exc()}")
         finally:
@@ -292,7 +281,7 @@ class AIUserScheduler(threading.Thread):
             except Exception:
                 # 资料主链路已经提交成功；关系展示缓存可在后续热更新时恢复，
                 # 不能因此触发公开平台的补偿回滚并造成 management 再次失配。
-                logger.exception("%s 重建关系用户名映射失败", self.name)
+                logger.exception("%s 重建关系名称映射失败", self.name)
         return True
 
 
@@ -406,7 +395,7 @@ class AgentSchedulerManager:
 
         logger.info(f"[重启] 为角色 {agent_config['name']} (ID:{agent_id}) 创建新调度线程...")
         self._create_scheduler(agent_config)
-        logger.info(f"[重启] 角色 {agent_config['username']} (ID:{agent_id}) 已重启")
+        logger.info(f"[重启] 角色 {agent_config['name']} (ID:{agent_id}) 已重启")
         return True
 
     def restart_all(self):

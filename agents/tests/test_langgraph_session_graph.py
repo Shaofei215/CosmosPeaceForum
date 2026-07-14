@@ -139,5 +139,11 @@ class TestPrintGraphStructure:
         with patch("agents.agents_scheduler.langgraph.session_graph.logger") as mock_logger:
             # 应该不抛出异常
             print_graph_structure()
-            # 验证 logger 被调用
-            assert mock_logger.info.called
+            # 图结构仅保留一条简短的调试日志，不再输出节点说明。
+            mock_logger.debug.assert_called_once_with(
+                "LangGraph 图包含 %d 个节点、%d 条普通边和 %d 条条件边",
+                6,
+                6,
+                1,
+            )
+            mock_logger.info.assert_not_called()

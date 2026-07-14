@@ -178,8 +178,6 @@ class SessionExecutor:
         self.username = username
         self.name = name or username
 
-        logger.info("初始化会话: 用户=%s, 会话ID=%s..., 最大步数=%d", username, self.session_id[:8], self.config.max_steps)
-
         self.initial_state: SessionState = {
             "user_id": user_id,
             "username": username,
@@ -218,17 +216,15 @@ class SessionExecutor:
         Returns:
             ExecutionResult: 包含执行结果的 ExecutionResult 对象
         """
-        logger.info("开始执行会话: 用户=%s, 会话ID=%s...", self.username, self.session_id[:8])
+        logger.info("%s 开始会话", self.name)
 
         try:
-            logger.info("开始构建LangGraph图结构")
             graph = build_session_graph(
                 config=self.config,
                 llm_invoker=llm_invoker,
                 summarize_llm_invoker=summarize_llm_invoker
             )
 
-            logger.info("开始执行图")
             final_state = graph.invoke(
                 self.initial_state,
                 config={"recursion_limit": 100}
@@ -237,10 +233,14 @@ class SessionExecutor:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
 
-            logger.info("图执行完成: 步数=%d, 耗时=%.2f秒", final_state.get('step_count', 0), duration)
-
             summary = self._build_summary(final_state)
-            logger.info("退出原因=%s", summary.get('exit_reason', 'N/A'))
+            logger.info(
+                "%s 会话结束（%d 步，%.2f 秒，%s）",
+                self.name,
+                final_state.get("step_count", 0),
+                duration,
+                summary.get("exit_reason", "N/A"),
+            )
 
             return ExecutionResult(
                 session_id=self.session_id,
@@ -256,7 +256,7 @@ class SessionExecutor:
         except Exception as e:
             self.end_time = datetime.now()
             error_msg = f"会话执行异常: {str(e)}"
-            logger.exception("%s", error_msg)
+            logger.exception("%s 会话失败: %s", self.name, e)
 
             return ExecutionResult(
                 session_id=self.session_id,

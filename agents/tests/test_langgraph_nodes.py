@@ -188,7 +188,7 @@ class TestLlmDecisionNode:
             "recalled_memories": "",
         }
 
-    def test_llm_decision_node_uses_recalled_memories(self):
+    def test_llm_decision_node_uses_recalled_memories(self, caplog):
         """测试 llm_decision_node 使用已召回的记忆，不再执行查询"""
         state = {
             **self.base_state,
@@ -201,11 +201,12 @@ class TestLlmDecisionNode:
 
         mock_llm_invoker = MagicMock(return_value=mock_response)
 
-        with patch(
-            "agents.agents_scheduler.langgraph.nodes.build_system_prompt",
-            return_value="你是Test",
-        ):
-            result = llm_decision_node(state, mock_llm_invoker)
+        with caplog.at_level("INFO", logger="agents.agents_scheduler.langgraph.nodes"):
+            with patch(
+                "agents.agents_scheduler.langgraph.nodes.build_system_prompt",
+                return_value="你是Test",
+            ):
+                result = llm_decision_node(state, mock_llm_invoker)
 
         # 验证 LLM 被调用
         mock_llm_invoker.assert_called_once()
@@ -215,6 +216,7 @@ class TestLlmDecisionNode:
         # 验证 prompt 构建正确
         assert "你是Test" in system_prompt
         assert "相关记忆" in user_prompt
+        assert caplog.messages == ["[llm_decision] Test 请求 LLM 决策"]
 
     def test_llm_decision_node_no_memory_query_logic(self):
         """测试 llm_decision_node 不再包含记忆查询逻辑"""
@@ -239,7 +241,7 @@ class TestLlmDecisionNode:
             # 验证记忆服务没有被调用（因为查询逻辑已移到 recall_memory_node）
             mock_get_service.assert_not_called()
 
-    def test_llm_decision_node_exits_after_consecutive_errors(self):
+    def test_llm_decision_node_exits_after_consecutive_errors(self, caplog):
         """测试 LLM 连续决策异常达到阈值时结束会话。"""
         state = {
             **self.base_state,
@@ -248,31 +250,37 @@ class TestLlmDecisionNode:
         }
         mock_llm_invoker = MagicMock(side_effect=RuntimeError("boom"))
 
-        with patch(
-            "agents.agents_scheduler.langgraph.nodes.build_system_prompt",
-            return_value="你是Test",
-        ):
-            result = llm_decision_node(state, mock_llm_invoker)
+        with caplog.at_level("ERROR", logger="agents.agents_scheduler.langgraph.nodes"):
+            with patch(
+                "agents.agents_scheduler.langgraph.nodes.build_system_prompt",
+                return_value="你是Test",
+            ):
+                result = llm_decision_node(state, mock_llm_invoker)
 
         assert result["consecutive_error_count"] == 2
+        assert result["step_count"] == 0
         assert result["exit_reason"] == ExitReason.ERROR
         assert "LLM 决策失败" in result["last_error"]
+        assert caplog.messages == ["Test 的 LLM 请求失败（2/2）: boom"]
 
 
 class TestSummarizeNode:
-    def test_summarize_node_no_action_history(self):
+    def test_summarize_node_no_action_history(self, caplog):
         """测试没有操作历史时的处理"""
         state = {
             "user_id": 1,
             "username": "test_user",
+            "name": "Test",
             "action_history": [],
         }
 
         mock_llm_invoker = MagicMock()
-        result = summarize_node(state, mock_llm_invoker)
+        with caplog.at_level("INFO", logger="agents.agents_scheduler.langgraph.nodes"):
+            result = summarize_node(state, mock_llm_invoker)
 
         # 验证没有调用 LLM
         mock_llm_invoker.assert_not_called()
+        assert caplog.messages == ["[summarize] Test 生成会话总结"]
         assert "未执行任何操作" in result["summary"]
 
     def test_summarize_node_with_write_memory_tool(self):
@@ -462,9 +470,10 @@ class TestNormalizeToolCallsForBatch:
 
 
 class TestStartNode:
-    def test_start_node_resets_state(self):
+    def test_start_node_resets_state(self, caplog):
         state = {
             "username": "test_user",
+            "name": "Test",
             "step_count": 5,
             "consecutive_error_count": 2,
             "exit_reason": ExitReason.USER_CHOICE,
@@ -477,7 +486,8 @@ class TestStartNode:
             "summary": "old summary",
             "recalled_memories": "old memories",
         }
-        result = start_node(state)
+        with caplog.at_level("INFO", logger="agents.agents_scheduler.langgraph.nodes"):
+            result = start_node(state)
         assert result["step_count"] == 0
         assert result["consecutive_error_count"] == 0
         assert result["exit_reason"] is None
@@ -489,6 +499,7 @@ class TestStartNode:
         assert result["last_error"] is None
         assert result["summary"] is None
         assert result["recalled_memories"] == ""
+        assert caplog.messages == ["[start] Test 初始化会话"]
 
     def test_start_node_preserves_identity(self):
         state = {
@@ -518,16 +529,19 @@ class TestStartNode:
 
 
 class TestRecallMemoryNode:
-    def test_recall_memory_node_disabled(self):
+    def test_recall_memory_node_disabled(self, caplog):
         state = {
             "user_id": 1,
             "username": "test_user",
+            "name": "Test",
         }
-        with patch("agents.agents_scheduler.langgraph.nodes.get_memory_config") as mock_config:
-            mock_config.return_value = MagicMock(memory_enabled=False)
-            result = recall_memory_node(state)
-            assert result is not state
-            assert result["recalled_memories"] == ""
+        with caplog.at_level("INFO", logger="agents.agents_scheduler.langgraph.nodes"):
+            with patch("agents.agents_scheduler.langgraph.nodes.get_memory_config") as mock_config:
+                mock_config.return_value = MagicMock(memory_enabled=False)
+                result = recall_memory_node(state)
+                assert result is not state
+                assert result["recalled_memories"] == ""
+        assert caplog.messages == ["[recall_memory] Test 召回记忆"]
 
     def test_recall_memory_node_no_user_id(self):
         state = {
@@ -552,6 +566,22 @@ class TestToolExecutionNode:
         result = tool_execution_node(state)
         assert result["step_count"] == 1
 
+    def test_tool_execution_node_llm_error_does_not_increment_step(self):
+        """LLM 请求失败后的重试不应消耗会话步骤。"""
+        state = {
+            "name": "Test",
+            "step_count": 3,
+            "pending_tool": None,
+            "pending_tools": None,
+            "consecutive_error_count": 1,
+            "last_error": "LLM 决策失败: timeout",
+        }
+
+        result = tool_execution_node(state)
+
+        assert result["step_count"] == 3
+        assert result is state
+
     def test_tool_execution_node_logout(self):
         state = {
             "username": "test_user",
@@ -564,9 +594,10 @@ class TestToolExecutionNode:
         assert result["pending_tool"] is None
         assert result["pending_tools"] is None
 
-    def test_tool_execution_node_pending_tools_next(self):
+    def test_tool_execution_node_pending_tools_next(self, caplog):
         state = {
             "username": "test_user",
+            "name": "Test",
             "step_count": 0,
             "max_steps": 10,
             "exit_reason": None,
@@ -587,15 +618,19 @@ class TestToolExecutionNode:
             "data": {"posts": []},
         }
 
-        with patch("agents.agents_scheduler.langgraph.nodes.get_social_tools", return_value=[mock_tool]):
-            with patch("agents.agents_scheduler.langgraph.nodes._attach_current_unread_count", side_effect=lambda data: data):
-                result = tool_execution_node(state)
+        with caplog.at_level("INFO", logger="agents.agents_scheduler.langgraph.nodes"):
+            with patch("agents.agents_scheduler.langgraph.nodes.get_social_tools", return_value=[mock_tool]):
+                with patch("agents.agents_scheduler.langgraph.nodes._attach_current_unread_count", side_effect=lambda data: data):
+                    result = tool_execution_node(state)
 
         mock_tool.invoke.assert_called_once_with({"reason": "test", "summary": "queued"})
         assert result["step_count"] == 1
         assert result["pending_tool"] is None
         assert result["pending_tools"] is None
         assert result["last_tool_result"] == {"posts": []}
+        assert caplog.messages == [
+            "[tool_execution] Test 执行了 get_global_feed 工具，参数={'reason': 'test', 'summary': 'queued'}"
+        ]
 
     def test_tool_execution_node_empty_result_replaces_old_context(self):
         state = {
@@ -767,11 +802,14 @@ class TestShouldContinueEdge:
 
 
 class TestEndNode:
-    def test_end_node_returns_state_unchanged(self):
+    def test_end_node_returns_state_unchanged(self, caplog):
         state = {
             "username": "test_user",
+            "name": "Test",
             "step_count": 5,
             "summary": "Test summary",
         }
-        result = end_node(state)
+        with caplog.at_level("INFO", logger="agents.agents_scheduler.langgraph.nodes"):
+            result = end_node(state)
         assert result is state
+        assert caplog.messages == ["[end] Test 会话结束"]
