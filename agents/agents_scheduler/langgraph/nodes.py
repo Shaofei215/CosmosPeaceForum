@@ -289,7 +289,7 @@ def recall_memory_node(state: SessionState) -> SessionState:
     """
     记忆召回节点
 
-    在 LLM 决策之前执行，从长期记忆库检索相关记忆并注入 Prompt。
+    在 LLM 决策之前执行，从长期记忆库检索相关记忆并注入检索文本。
     查询仅使用当前视野与近期操作，不使用系统提示词或上一轮召回结果。
 
     Args:
@@ -344,9 +344,9 @@ def recall_memory_node(state: SessionState) -> SessionState:
 
         # 构建记忆注入文本
         if recalled:
-            memory_lines = ["\n\n## 相关记忆"]
+            memory_lines = ["\n\n## relevant memorises\n"]
             for chunk, time_desc in recalled:
-                memory_lines.append(f"[记忆片段 - {time_desc}]")
+                memory_lines.append(f"[memorise chunk - {time_desc}]")
                 memory_lines.append(chunk.content)
                 memory_lines.append("---")
             recalled_memories = "\n".join(memory_lines)
