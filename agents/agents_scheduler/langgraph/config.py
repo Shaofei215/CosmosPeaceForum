@@ -39,7 +39,6 @@ class SessionConfig:
     """
     model_config_id: int | None = None
     max_steps: int = 20
-    max_consecutive_errors: int = 3
     tool_timeout: int = 30
     temperature: float = 1.2
     model_name: str = ""
@@ -97,7 +96,6 @@ class SessionConfig:
         return cls(
             model_config_id=int(model_config_id or active_model.get("id")),
             max_steps=int(_get("LANGGRAPH_MAX_STEPS", "20")),
-            max_consecutive_errors=int(_get("LANGGRAPH_MAX_CONSECUTIVE_ERRORS", "3")),
             tool_timeout=int(_get("LANGGRAPH_TOOL_TIMEOUT", "30")),
             temperature=temperature,
             model_name=model_name,
@@ -118,8 +116,6 @@ class SessionConfig:
         """配置验证"""
         if self.max_steps <= 0:
             raise ValueError("max_steps 必须大于 0")
-        if self.max_consecutive_errors <= 0:
-            raise ValueError("max_consecutive_errors 必须大于 0")
         if self.tool_timeout <= 0:
             raise ValueError("tool_timeout 必须大于 0")
         if not 0.0 <= self.temperature <= 2.0:

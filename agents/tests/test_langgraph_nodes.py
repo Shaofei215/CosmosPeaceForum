@@ -247,13 +247,9 @@ class TestLlmDecisionNode:
             # 验证记忆服务没有被调用（因为查询逻辑已移到 recall_memory_node）
             mock_get_service.assert_not_called()
 
-    def test_llm_decision_node_exits_after_consecutive_errors(self, caplog):
-        """测试 LLM 连续决策异常达到阈值时结束会话。"""
-        state = {
-            **self.base_state,
-            "max_consecutive_errors": 2,
-            "consecutive_error_count": 1,
-        }
+    def test_llm_decision_node_exits_after_error(self, caplog):
+        """测试 LLM 决策异常后立即结束会话。"""
+        state = self.base_state
         mock_llm_invoker = MagicMock(side_effect=RuntimeError("boom"))
 
         with caplog.at_level("ERROR", logger="agents.agents_scheduler.langgraph.nodes"):
@@ -263,14 +259,36 @@ class TestLlmDecisionNode:
             ):
                 result = llm_decision_node(state, mock_llm_invoker)
 
-        assert result["consecutive_error_count"] == 2
         assert result["step_count"] == 0
         assert result["exit_reason"] == ExitReason.ERROR
         assert "LLM 决策失败" in result["last_error"]
-        assert caplog.messages == ["Test 的 LLM 请求失败（2/2）: boom"]
+        assert caplog.messages == ["Test 的 LLM 请求失败: boom"]
 
 
 class TestSummarizeNode:
+    def test_summarize_node_llm_error_uses_local_summary(self):
+        """测试决策失败后使用本地总结，不再次请求 LLM。"""
+        state = {
+            "username": "test_user",
+            "name": "Test",
+            "exit_reason": ExitReason.ERROR,
+            "action_history": [
+                {
+                    "step": 1,
+                    "timestamp": "2024-01-01",
+                    "summary": "看到帖子",
+                    "action": "浏览了帖子",
+                    "reason": "感兴趣",
+                },
+            ],
+        }
+        mock_llm_invoker = MagicMock()
+
+        result = summarize_node(state, mock_llm_invoker)
+
+        mock_llm_invoker.assert_not_called()
+        assert "LLM 决策失败" in result["summary"]
+
     def test_summarize_node_no_action_history(self, caplog):
         """测试没有操作历史时的处理"""
         state = {
@@ -516,7 +534,6 @@ class TestStartNode:
             "username": "test_user",
             "name": "Test",
             "step_count": 5,
-            "consecutive_error_count": 2,
             "exit_reason": ExitReason.USER_CHOICE,
             "action_history": [{"step": 1, "timestamp": "2024-01-01", "summary": "s", "action": "a", "reason": "r"}],
             "current_location": "帖子详情页",
@@ -530,7 +547,6 @@ class TestStartNode:
         with caplog.at_level("INFO", logger="agents.agents_scheduler.langgraph.nodes"):
             result = start_node(state)
         assert result["step_count"] == 0
-        assert result["consecutive_error_count"] == 0
         assert result["exit_reason"] is None
         assert result["action_history"] == []
         assert result["current_location"] == "主页（信息流）"
@@ -607,14 +623,14 @@ class TestToolExecutionNode:
         result = tool_execution_node(state)
         assert result["step_count"] == 1
 
-    def test_tool_execution_node_llm_error_does_not_increment_step(self):
-        """LLM 请求失败后的重试不应消耗会话步骤。"""
+    def test_tool_execution_node_error_exit_does_not_increment_step(self):
+        """上游节点因错误请求结束会话时不应消耗会话步骤。"""
         state = {
             "name": "Test",
             "step_count": 3,
             "pending_tool": None,
             "pending_tools": None,
-            "consecutive_error_count": 1,
+            "exit_reason": ExitReason.ERROR,
             "last_error": "LLM 决策失败: timeout",
         }
 

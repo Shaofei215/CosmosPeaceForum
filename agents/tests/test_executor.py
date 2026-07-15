@@ -225,6 +225,33 @@ class TestSessionExecutor:
 
                 assert result.success is True
 
+    def test_executor_run_reports_error_exit_as_failure(self):
+        """测试图以错误原因结束时执行结果标记为失败。"""
+        with patch("agents.agents_scheduler.langgraph.executor.get_default_config") as mock_config:
+            mock_config.return_value = SessionConfig()
+            executor = SessionExecutor(
+                user_id=1,
+                username="test_user",
+                agent_id=1,
+                personality_prompt="prompt",
+                personal_signature="sig",
+            )
+            final_state = {
+                **executor.initial_state,
+                "exit_reason": ExitReason.ERROR,
+                "last_error": "LLM 决策失败: timeout",
+                "summary": "会话因错误结束。",
+            }
+            mock_graph = MagicMock()
+            mock_graph.invoke.return_value = final_state
+
+            with patch("agents.agents_scheduler.langgraph.executor.build_session_graph", return_value=mock_graph):
+                result = executor.run(llm_invoker=MagicMock())
+
+        assert result.success is False
+        assert result.error_message == "LLM 决策失败: timeout"
+        assert result.final_state is final_state
+
     def test_executor_summary_maps_action_record_fields(self):
         """测试 executor 输出摘要时保留节点记录的真实动作与视野总结。"""
         with patch("agents.agents_scheduler.langgraph.executor.get_default_config") as mock_config:

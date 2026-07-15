@@ -200,8 +200,6 @@ class SessionExecutor:
             "session_prompt_injection": session_prompt_injection,
             "step_count": 0,
             "max_steps": self.config.max_steps,
-            "max_consecutive_errors": self.config.max_consecutive_errors,
-            "consecutive_error_count": 0,
             "exit_reason": None,
             "action_history": [],
             "current_location": "主页（信息流）",
@@ -250,6 +248,8 @@ class SessionExecutor:
             duration = (self.end_time - self.start_time).total_seconds()
 
             summary = self._build_summary(final_state)
+            success = final_state.get("exit_reason") != ExitReason.ERROR
+            error_message = final_state.get("last_error") if not success else None
             logger.info(
                 "%s 会话结束（%d 步，%.2f 秒，%s）",
                 self.name,
@@ -260,10 +260,10 @@ class SessionExecutor:
 
             return ExecutionResult(
                 session_id=self.session_id,
-                success=True,
+                success=success,
                 final_state=final_state,
                 summary=summary,
-                error_message=None,
+                error_message=error_message,
                 start_time=self.start_time,
                 end_time=self.end_time,
                 duration_seconds=duration

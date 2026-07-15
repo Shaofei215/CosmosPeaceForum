@@ -8,6 +8,7 @@ from agents.agents_scheduler.langgraph.session_graph import (
     print_graph_structure,
 )
 from agents.agents_scheduler.langgraph.config import SessionConfig
+from agents.agents_scheduler.langgraph.state import ExitReason
 
 
 class TestBuildSessionGraph:
@@ -43,6 +44,56 @@ class TestBuildSessionGraph:
 
             # 验证图构建成功
             assert graph is not None
+
+    def test_llm_error_does_not_retry_memory_recall(self):
+        """LLM 决策失败后应直接结束，不重新执行记忆召回。"""
+        llm_invoker = MagicMock(side_effect=RuntimeError("boom"))
+        summarize_llm_invoker = MagicMock()
+        initial_state = {
+            "user_id": 1,
+            "username": "test_user",
+            "name": "Test",
+            "agent_id": 1,
+            "personality_prompt": "测试角色",
+            "personal_signature": "测试签名",
+            "session_prompt_injection": "",
+            "step_count": 0,
+            "max_steps": 10,
+            "exit_reason": None,
+            "action_history": [],
+            "current_location": "主页（信息流）",
+            "last_tool_result": None,
+            "pending_tool": None,
+            "pending_tools": None,
+            "last_error": None,
+            "summary": None,
+            "recalled_memories": "",
+        }
+
+        graph = build_session_graph(
+            config=self.mock_config,
+            llm_invoker=llm_invoker,
+            summarize_llm_invoker=summarize_llm_invoker,
+        )
+        with patch(
+            "agents.agents_scheduler.langgraph.nodes.get_memory_config",
+            return_value=MagicMock(memory_enabled=False),
+        ) as memory_config:
+            with patch(
+                "agents.agents_scheduler.langgraph.nodes.build_system_prompt",
+                return_value="system",
+            ):
+                with patch(
+                    "agents.agents_scheduler.langgraph.nodes.build_decision_prompt",
+                    return_value="user",
+                ):
+                    final_state = graph.invoke(initial_state)
+
+        assert llm_invoker.call_count == 1
+        assert memory_config.call_count == 1
+        summarize_llm_invoker.assert_not_called()
+        assert final_state["step_count"] == 0
+        assert final_state["exit_reason"] == ExitReason.ERROR
 
     def test_build_session_graph_summarize_invoker_fallback(self):
         """测试 summarize_llm_invoker 为 None 时使用 llm_invoker"""

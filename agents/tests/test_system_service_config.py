@@ -69,28 +69,32 @@ def test_init_default_configs_purges_env_managed_values_from_sqlite():
 
 
 def test_init_default_configs_purges_removed_values_from_sqlite() -> None:
-    """初始化配置时应清理旧库中的检查点开关。"""
+    """初始化配置时应清理旧库中的已移除配置。"""
     engine = create_engine("sqlite:///:memory:")
     SQLModel.metadata.create_all(engine)
 
     with Session(engine) as db:
-        db.add(
-            SystemConfig(
-                key="LANGGRAPH_CHECKPOINTER_ENABLED",
-                value="true",
-                description="legacy",
+        removed_keys = {
+            "LANGGRAPH_CHECKPOINTER_ENABLED",
+            "LANGGRAPH_MAX_CONSECUTIVE_ERRORS",
+        }
+        for key in removed_keys:
+            db.add(
+                SystemConfig(
+                    key=key,
+                    value="true",
+                    description="legacy",
+                )
             )
-        )
         db.commit()
 
         init_default_configs(db)
 
-        removed_config = db.exec(
-            select(SystemConfig).where(
-                SystemConfig.key == "LANGGRAPH_CHECKPOINTER_ENABLED"
-            )
-        ).first()
-        assert removed_config is None
+        for key in removed_keys:
+            removed_config = db.exec(
+                select(SystemConfig).where(SystemConfig.key == key)
+            ).first()
+            assert removed_config is None
 
 
 def test_get_config_value_reads_env_managed_values_from_core_config(monkeypatch):

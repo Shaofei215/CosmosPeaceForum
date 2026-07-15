@@ -26,12 +26,12 @@ ENV_MANAGED_CONFIG_KEYS = {
 
 REMOVED_SYSTEM_CONFIG_KEYS: set[str] = {
     "LANGGRAPH_CHECKPOINTER_ENABLED",
+    "LANGGRAPH_MAX_CONSECUTIVE_ERRORS",
 }
 
 DEFAULT_SYSTEM_CONFIGS = [
     ("SCHEDULER_TIME_SCALE", "1.0", "Scheduler 时间倍率（1.0 为现实时间）"),
     ("LANGGRAPH_MAX_STEPS", "20", "LangGraph 最大决策步数"),
-    ("LANGGRAPH_MAX_CONSECUTIVE_ERRORS", "3", "最大连续错误次数"),
     ("LANGGRAPH_TOOL_TIMEOUT", "30", "工具调用超时时间（秒）"),
     ("WEB_SEARCH_ENABLED", "false", "启用联网搜索工具"),
     ("TAVILY_API_KEY", "", "Tavily API Key"),
@@ -212,7 +212,6 @@ def get_config_value(db: Session, key: str, default: str = "") -> str:
     fallback_map = {
         "SCHEDULER_TIME_SCALE": "1.0",
         "LANGGRAPH_MAX_STEPS": "20",
-        "LANGGRAPH_MAX_CONSECUTIVE_ERRORS": "3",
         "LANGGRAPH_TOOL_TIMEOUT": "30",
         "WEB_SEARCH_ENABLED": "false",
         "TAVILY_API_KEY": "",

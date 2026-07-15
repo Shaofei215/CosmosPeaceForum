@@ -273,7 +273,6 @@ def start_node(state: SessionState) -> SessionState:
     return {
         **state,
         "step_count": 0,
-        "consecutive_error_count": 0,
         "exit_reason": None,
         "action_history": [],
         "current_location": "主页（信息流）",
@@ -405,7 +404,6 @@ def llm_decision_node(
         tool_calls = parse_tool_calls(response)
         success_state: SessionState = {
             **state,
-            "consecutive_error_count": 0,
             "last_error": None,
         }
 
@@ -468,25 +466,14 @@ def llm_decision_node(
             }
 
     except Exception as e:
-        error_count = int(state.get("consecutive_error_count", 0) or 0) + 1
-        max_errors = int(state.get("max_consecutive_errors", 3) or 3)
-        logger.error(
-            "%s 的 LLM 请求失败（%d/%d）: %s",
-            name,
-            error_count,
-            max_errors,
-            str(e),
-        )
-        updated_state: SessionState = {
+        logger.error("%s 的 LLM 请求失败: %s", name, e)
+        return {
             **state,
             "pending_tool": None,
             "pending_tools": None,
-            "consecutive_error_count": error_count,
+            "exit_reason": ExitReason.ERROR,
             "last_error": f"LLM 决策失败: {str(e)}",
         }
-        if error_count >= max_errors:
-            updated_state["exit_reason"] = ExitReason.ERROR
-        return updated_state
 
 
 def tool_execution_node(state: SessionState) -> SessionState:
@@ -545,8 +532,8 @@ def tool_execution_node(state: SessionState) -> SessionState:
             pending = state["pending_tool"]
         else:
             logger.info("[tool_execution] %s 未执行工具", name)
-            # LLM 请求失败后仍会经过本节点；失败重试不应消耗会话步骤。
-            if int(state.get("consecutive_error_count", 0) or 0) > 0:
+            # 上游节点请求结束会话时，不执行工具，也不消耗会话步骤。
+            if state.get("exit_reason") is not None:
                 return state
             return {
                 **state,
@@ -723,6 +710,12 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
         return {
             **state,
             "summary": f"用户 {state.get('username', '未知')} 的本次会话因调度停止请求结束。",
+        }
+
+    if state.get("exit_reason") == ExitReason.ERROR:
+        return {
+            **state,
+            "summary": f"用户 {state.get('username', '未知')} 的本次会话因 LLM 决策失败而提前结束。",
         }
 
     if not state.get("action_history"):
