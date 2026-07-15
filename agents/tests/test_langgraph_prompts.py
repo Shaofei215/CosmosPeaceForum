@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -273,137 +275,44 @@ class TestBuildSummarizePrompt:
 
 
 class TestFormatToolResult:
-    def test_format_none(self):
-        assert _format_tool_result(None) == "无"
+    def test_serializes_json_scalars(self):
+        assert json.loads(_format_tool_result(None)) is None
+        assert json.loads(_format_tool_result("hello")) == "hello"
+        assert json.loads(_format_tool_result([])) == []
 
-    def test_format_string(self):
-        assert _format_tool_result("hello") == "hello"
-
-    def test_format_positive_unread_count_as_account_reminder(self):
-        formatted = _format_tool_result({"posts": [], "unread_count": 3})
-
-        assert "当前有 3 条未读消息" in formatted
-        assert "view_notifications" in formatted
-
-    def test_format_empty_list(self):
-        assert _format_tool_result([]) == "空列表"
-
-    def test_format_post_result(self):
+    def test_preserves_complete_shared_tool_result(self):
         result = {
-            "post": {
-                "id": 1,
-                "author_username": "test_user",
-                "author_bio": "bio",
-                "content": "test content",
-                "like_count": 5,
-                "comment_count": 2,
-                "is_liked": False,
-                "created_at": "2024-01-01",
-            },
-            "comments": [],
-            "total": 0,
-        }
-        formatted = _format_tool_result(result)
-        assert "帖子详情" in formatted
-        assert "test_user" in formatted
-        assert "test content" in formatted
-
-    def test_format_user_result(self):
-        result = {
-            "user_id": 1,
-            "username": "test_user",
-            "bio": "bio",
-            "followers_count": 10,
-            "following_count": 5,
-        }
-        formatted = _format_tool_result(result)
-        assert "用户信息" in formatted
-        assert "test_user" in formatted
-
-    def test_format_list_with_items(self):
-        result = [
-            {"id": 1, "author_username": "user1", "content": "test1", "like_count": 1, "comment_count": 0, "is_liked": False, "author_id": 1},
-            {"id": 2, "author_username": "user2", "content": "test2", "like_count": 2, "comment_count": 1, "is_liked": True, "author_id": 2},
-        ]
-        formatted = _format_tool_result({"data": result})
-        assert "【信息列表】" in formatted
-        assert "user1" in formatted
-
-    def test_format_truncation(self):
-        # Strings are returned as-is, truncation only applies to dict formatting
-        long_string = "x" * 600
-        formatted = _format_tool_result(long_string)
-        assert len(formatted) == 600
-
-    def test_format_dict_truncation(self):
-        result = {"some_key": "some_value" * 100}
-        formatted = _format_tool_result(result)
-        assert len(formatted) <= 500
-
-    def test_format_last_result_with_explicit_recall(self):
-        result = {
-            "current_view": {
-                "post": {
+            "posts": [
+                {
                     "id": 1,
                     "author_username": "test_user",
-                    "content": "test content",
+                    "created_by_agent": True,
+                    "poll": {
+                        "post_id": 1,
+                        "options": [{"id": 11, "text": "选项一"}],
+                    },
+                    "repost_chain": [{"id": 2}],
                 }
-            },
+            ],
+            "unread_count": 3,
+        }
+
+        assert json.loads(_format_tool_result(result)) == result
+    def test_does_not_truncate_unknown_or_long_fields(self):
+        result = {"future_field": "值" * 1000}
+
+        assert json.loads(_format_tool_result(result)) == result
+
+    def test_preserves_merged_page_and_recall_context(self):
+        result = {
+            "current_view": {"post": {"id": 1, "content": "test content"}},
             "explicit_recalls": [
                 {
                     "query": "test content",
-                    "total": 1,
-                    "memories": [
-                        {
-                            "content": "我以前见过类似内容。",
-                            "time_description": "刚刚",
-                        }
-                    ],
+                    "memories": [{"content": "我以前见过类似内容。", "time_description": "刚刚"}],
                 }
             ],
+            "web_searches": [],
         }
 
-        formatted = _format_tool_result(result)
-
-        assert "上一步页面内容" in formatted
-        assert "主动回想" in formatted
-        assert "我以前见过类似内容" in formatted
-
-    def test_format_post_result_includes_repost_count(self):
-        result = {
-            "post": {
-                "id": 1,
-                "author_username": "test_user",
-                "author_bio": "bio",
-                "content": "test content",
-                "like_count": 5,
-                "comment_count": 2,
-                "repost_count": 3,
-                "is_liked": False,
-                "created_at": "2024-01-01",
-            },
-            "comments": [],
-            "total": 0,
-        }
-        formatted = _format_tool_result(result)
-        assert "repost_count / repost count: 3" in formatted
-
-    def test_format_hot_topics_includes_full_summary_and_search_query(self):
-        result = {
-            "hot_topics": [
-                {
-                    "rank": 1,
-                    "title": "第一条热榜",
-                    "summary": "这是一段完整摘要，不应该被压缩或丢失。",
-                    "search_query": "第一条 关键词",
-                }
-            ],
-            "total": 1,
-        }
-
-        formatted = _format_tool_result(result)
-
-        assert "【更多热榜】" in formatted
-        assert "第一条热榜" in formatted
-        assert "这是一段完整摘要，不应该被压缩或丢失。" in formatted
-        assert "搜索关键词: 第一条 关键词" in formatted
+        assert json.loads(_format_tool_result(result)) == result

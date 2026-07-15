@@ -1,7 +1,7 @@
-# 工具结果上下文合并与格式化
+# 工具结果上下文合并
 # 负责把不改变页面位置的主动查询结果追加到 last_tool_result。
 
-from typing import Any, Callable, Dict
+from typing import Any, Dict
 
 
 def _without_unread_reminder(value: Any) -> Any:
@@ -51,7 +51,6 @@ def merge_recall_memory_result(
         "web_searches": web_searches,
     }
 
-
 def merge_web_search_result(
     previous_result: Any,
     web_search_result: Dict[str, Any],
@@ -68,47 +67,3 @@ def merge_web_search_result(
         "explicit_recalls": explicit_recalls,
         "web_searches": web_searches,
     }
-
-
-def format_merged_tool_context_result(
-    result: Dict[str, Any],
-    format_current_view: Callable[[Any], str],
-) -> str:
-    """格式化“上一步页面内容 + 主动查询结果”结构，供 prompt 展示。"""
-    lines = []
-    current_view = result.get("current_view")
-    if current_view is not None:
-        lines.append("【上一步页面内容】")
-        lines.append(format_current_view(current_view))
-
-    explicit_recalls = result.get("explicit_recalls") or []
-    for recall in explicit_recalls:
-        query = recall.get("query", "")
-        memories = recall.get("memories", [])
-        lines.append(f"\n【主动回想】查询：{query}")
-        if not memories:
-            lines.append("没有回想起相关记忆")
-            continue
-        for memory in memories:
-            lines.append(f"  - 记忆片段 - {memory.get('time_description', '时间未知')}")
-            lines.append(f"    {memory.get('content', '')}")
-
-    web_searches = result.get("web_searches") or []
-    for search in web_searches:
-        query = search.get("query", "")
-        results = search.get("results", [])
-        depth = search.get("search_depth", "advanced")
-        lines.append(f"\n【联网搜索】查询：{query}，深度：{depth}")
-        answer = search.get("answer")
-        if answer:
-            lines.append(f"概览：{answer}")
-        if not results:
-            lines.append("没有找到相关网页结果")
-            continue
-        for item in results:
-            lines.append(f"  - {item.get('title', 'Untitled')}")
-            lines.append(f"    URL: {item.get('url', '')}")
-            content = item.get("content", "")
-            if content:
-                lines.append(f"    摘要: {content}")
-    return "\n".join(lines)

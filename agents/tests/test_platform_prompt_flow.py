@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -213,10 +214,10 @@ def test_tool_execution_then_decision_prompt_exposes_reply_parent_ids(monkeypatc
     next_state = tool_execution_node(state)
     prompt = prompts.build_decision_prompt(next_state)
 
-    assert "id / 评论ID: 201" in prompt
-    assert "id / 评论ID: 301" in prompt
-    assert "post_id / 所属帖子ID: 10" in prompt
-    assert "parent_id / 父评论ID: 201" in prompt
+    assert '"id":201' in prompt
+    assert '"id":301' in prompt
+    assert '"post_id":10' in prompt
+    assert '"parent_id":201' in prompt
 
 
 def test_comment_tree_from_platform_api_keeps_nested_reply_ids(monkeypatch):
@@ -241,9 +242,10 @@ def test_comment_tree_from_platform_api_keeps_nested_reply_ids(monkeypatch):
 
     assert standardized["children"][0]["id"] == 301
     assert standardized["children"][0]["children"][0]["id"] == 401
-    assert "id / 评论ID: 201" in formatted
-    assert "id / 评论ID: 301" in formatted
-    assert "id / 评论ID: 401" in formatted
+    parsed = json.loads(formatted)
+    assert parsed["comments"][0]["id"] == 201
+    assert parsed["comments"][0]["children"][0]["id"] == 301
+    assert parsed["comments"][0]["children"][0]["children"][0]["id"] == 401
 
 
 def test_create_comment_with_parent_sends_parent_id_and_returns_new_comment_id(monkeypatch):
@@ -336,11 +338,10 @@ def test_prompt_for_created_reply_includes_new_comment_id():
         }
     )
 
-    assert "【父评论】" in formatted
-    assert "id / 评论ID: 201" in formatted
-    assert "【新评论】" in formatted
-    assert "id / 评论ID: 501" in formatted
-    assert "parent_id / 父评论ID: 201" in formatted
+    parsed = json.loads(formatted)
+    assert parsed["parent_comment"]["id"] == 201
+    assert parsed["new_comment"]["id"] == 501
+    assert parsed["new_comment"]["parent_id"] == 201
 
 
 def test_scroll_continues_global_feed_without_args(monkeypatch):
@@ -376,7 +377,7 @@ def test_scroll_continues_user_profile_posts(monkeypatch):
     assert [post["id"] for post in next_posts["data"]["posts"]] == [6, 7, 8, 9, 10]
 
 
-def test_notification_prompt_marks_comment_id_as_create_comment_parent_id():
+def test_notification_prompt_preserves_post_and_comment_ids():
     formatted = prompts._format_tool_result(
         {
             "notifications": [
@@ -396,6 +397,6 @@ def test_notification_prompt_marks_comment_id_as_create_comment_parent_id():
         }
     )
 
-    assert "comment_id / 评论ID: 201" in formatted
-    assert "reply_post_id / 回复这条评论时传给 create_comment.post_id: 10" in formatted
-    assert "reply_parent_id / 回复这条评论时传给 create_comment.parent_id: 201" in formatted
+    parsed = json.loads(formatted)
+    assert parsed["notifications"][0]["comment_id"] == 201
+    assert parsed["notifications"][0]["post_id"] == 10
