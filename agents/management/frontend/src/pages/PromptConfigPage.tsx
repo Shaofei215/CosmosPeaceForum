@@ -13,15 +13,7 @@ interface PlaceholderHint {
 
 const PLACEHOLDER_LABELS: Record<string, PlaceholderHint[]> = {
   agent_system_prompt: [
-    { token: '{platform_user_id}', description: '当前登录的平台用户 ID。' },
-    { token: '{following_count}', description: '当前账号关注数。' },
-    { token: '{followers_count}', description: '当前账号被关注数。' },
-    { token: '{unread_count}', description: '当前未读消息数。' },
-    { token: '{hot_topic_titles}', description: '当前热榜前 8 个标题。' },
-    { token: '{topic_titles}', description: '当前话题前 8 个名称。' },
-    { token: '{#if login_stats}', description: '条件段：仅存在登录统计时拼入。' },
-    { token: '{total_login_count}', description: '累计登录次数。' },
-    { token: '{last_login_time}', description: '上次登录时间描述。' },
+    { token: '{agent_context_json}', description: '包含平台产品文案的当前账号状态 JSON。' },
     { token: '{name}', description: '角色名。' },
     { token: '{username}', description: '角色用户名。' },
     { token: '{personality_prompt}', description: '角色性格提示词。' },
@@ -34,7 +26,7 @@ const PLACEHOLDER_LABELS: Record<string, PlaceholderHint[]> = {
   ],
   summarize_memory_prompt: [
     { token: '{username}', description: '角色用户名。' },
-    { token: '{history_text}', description: '本次会话操作历史。' },
+    { token: '{history_text}', description: '本次会话操作历史 JSON。' },
   ],
   memory_chunk_system_prompt: [
     { token: '{personality_prompt}', description: '角色性格提示词。' },

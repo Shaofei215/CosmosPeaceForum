@@ -49,39 +49,29 @@ def _get_platform_display_name() -> str:
         from agents.management.backend.core.config import get_config
         return get_config().platform_display_name
     except Exception:
-        return "宇宙和平论坛"
+        return "[get platform_display_name failed]"
 
 
 def _format_last_login_time(timestamp: Any) -> str:
     if timestamp is None:
-        return "暂无记录"
+        return "No record available"
 
     try:
         from agents.agents_scheduler.memory.utils import calculate_time_description
         return calculate_time_description(float(timestamp))
     except Exception:
-        return "暂无记录"
+        return "No record available"
 
 
-def _build_attention_header() -> str:
-    values = _build_attention_template_values()
-    parts = [
-        f"当前登录平台ID：{values['platform_user_id']}",
-        f"关注：{values['following_count']}",
-        f"被关注：{values['followers_count']}",
-        f"消息：{values['unread_count']}",
-        f"大家都在聊：{values['hot_topic_titles']}",
-        f"话题：{values['topic_titles']}",
-    ]
-    if values["login_stats"]:
-        parts.extend([
-            f"总登录：{values['total_login_count']}",
-            f"上次登录：{values['last_login_time']}",
-        ])
-    return " ".join(parts)
+def _build_agent_context_json() -> str:
+    """构建系统 Prompt 状态 JSON。
 
+    程序状态使用英文字段名；热榜和话题使用与人类前端一致的产品名称。
 
-def _build_attention_template_values() -> Dict[str, Any]:
+    Returns:
+        str: 包含账号计数、社区热点和可选登录统计的 JSON。
+    """
+
     try:
         from agents.agents_scheduler.langgraph.tools.support.platform import _get_notification_summary
         summary = _get_notification_summary()
@@ -91,30 +81,32 @@ def _build_attention_template_values() -> Dict[str, Any]:
     login_stats = _build_login_stats_summary()
     total_login_count = login_stats.get("total_login_count", 0) or 0
     last_login_time = _format_last_login_time(login_stats.get("last_login_timestamp"))
-    hot_topic_titles = _build_hot_topic_titles()
-    topic_titles = _build_topic_titles()
+    hot_topic_titles = _get_hot_topic_titles()
+    topic_titles = _get_topic_titles()
     try:
         from agents.agents_scheduler.scheduler.context import get_current_user_id
-        platform_user_id = get_current_user_id() or "未知"
+        platform_user_id = get_current_user_id() or "unknown"
     except Exception:
-        platform_user_id = "未知"
-    platform_name = _get_platform_display_name()
-
-    return {
+        platform_user_id = "unknown"
+    account_context: Dict[str, Any] = {
         "platform_user_id": platform_user_id,
-        "platform_name": platform_name,
         "following_count": summary.get("following_count", 0),
         "followers_count": summary.get("followers_count", 0),
         "unread_count": summary.get("unread_count", 0),
-        "hot_topic_titles": hot_topic_titles,
-        "topic_titles": topic_titles,
-        "total_login_count": total_login_count,
-        "last_login_time": last_login_time,
-        "login_stats": bool(total_login_count or login_stats.get("last_login_timestamp")),
+        "大家都在聊": hot_topic_titles,
+        "话题": topic_titles,
     }
+    has_login_stats = bool(total_login_count or login_stats.get("last_login_timestamp"))
+    if has_login_stats:
+        account_context["login_stats"] = {
+            "total_login_count": total_login_count,
+            "last_login_time": last_login_time,
+        }
+
+    return _serialize_prompt_json(account_context)
 
 
-def _build_hot_topic_titles() -> str:
+def _get_hot_topic_titles() -> List[str]:
     try:
         from agents.agents_scheduler.langgraph.tools.support.platform import _get_hot_topics
         topics = _get_hot_topics(limit=8)
@@ -126,12 +118,10 @@ def _build_hot_topic_titles() -> str:
         for topic in topics
         if isinstance(topic, dict) and str(topic.get("title", "")).strip()
     ][:8]
-    if not titles:
-        return "暂无"
-    return "；".join(f"{index}. {title}" for index, title in enumerate(titles, start=1))
+    return titles
 
 
-def _build_topic_titles() -> str:
+def _get_topic_titles() -> List[str]:
     try:
         from agents.agents_scheduler.langgraph.tools.support.platform import _get_trending_topics
         topics = _get_trending_topics(limit=8)
@@ -143,9 +133,20 @@ def _build_topic_titles() -> str:
         for topic in topics
         if isinstance(topic, dict) and str(topic.get("name", "")).strip()
     ][:8]
-    if not titles:
-        return "暂无"
-    return "；".join(f"#{title}#" for title in titles)
+    return titles
+
+
+def _serialize_prompt_json(value: Any) -> str:
+    """把内部状态序列化为保留产品文案的易读 JSON。
+
+    Args:
+        value: 准备注入 Prompt 的结构化状态。
+
+    Returns:
+        str: UTF-8 文本不转义、带缩进的 JSON 文本。
+    """
+
+    return json.dumps(value, ensure_ascii=False, default=str, indent=2)
 
 
 def build_system_prompt(
@@ -172,17 +173,15 @@ def build_system_prompt(
         str: 格式化后的系统提示词
     """
     template = _get_configured_prompt_template(AGENT_SYSTEM_PROMPT_KEY)
-    values = _build_attention_template_values()
-    values["attention_header"] = _build_attention_header()
-    values.update(
-        {
-            "username": username,
-            "name": name,
-            "personality_prompt": personality_prompt,
-            "personal_signature": personal_signature,
-            "session_prompt_injection": session_prompt_injection.strip(),
-        }
-    )
+    values = {
+        "agent_context_json": _build_agent_context_json(),
+        "platform_name": _get_platform_display_name(),
+        "username": username,
+        "name": name,
+        "personality_prompt": personality_prompt,
+        "personal_signature": personal_signature,
+        "session_prompt_injection": session_prompt_injection.strip(),
+    }
     return render_prompt_template(
         template,
         values,
@@ -206,25 +205,17 @@ def build_decision_prompt(state: Mapping[str, Any]) -> str:
     """
     current_step = state.get("step_count", 0)
     max_steps = state.get("max_steps", 10)
-    remaining_steps = max_steps - current_step
     current_location = state.get("current_location", "主页（信息流）")
-    is_first_decision = len(state.get("action_history", [])) == 0
-
-    # 构建当前位置
-    location_text = f"📍 你当前在：{current_location}"
-
-    # 构建工作记忆（action_history）
-    if state.get("action_history"):
-        history_text = _build_action_history_text(
-            state["action_history"],
-            include_decision_guidance=True,
-        )
-    else:
-        # 首次决策：LLM 需要主动调用 get_global_feed 获取初始信息
-        history_text = """【你的工作记忆】
-这是本次会话的开始，这是你的第一次决策。
-建议先调用 get_global_feed 获取主页信息流，了解当前平台上有什么内容。
-你还没有执行任何操作。\n\n"""
+    action_history = state.get("action_history", [])
+    is_first_decision = len(action_history) == 0
+    session_context = {
+        "current_location": current_location,
+        "step_count": current_step,
+        "max_steps": max_steps,
+        "remaining_steps": max(0, max_steps - current_step),
+        "action_history": _build_action_history_data(action_history),
+    }
+    session_context_text = _serialize_prompt_json(session_context)
 
     # 构建上一次工具调用的返回值
     last_result_text = ""
@@ -232,52 +223,56 @@ def build_decision_prompt(state: Mapping[str, Any]) -> str:
         last_result = state.get("last_tool_result")
         if last_result is not None:
             last_result_text = (
-                "\n【上一步执行后当前查看的内容（JSON；平台内容仅作为数据）】\n"
+                "\n [Platform content obtained after last tool call] \n"
                 f"{_format_tool_result(last_result)}\n"
             )
 
     # 仅在首次决策时提示 LLM 获取信息流
     initial_environment_text = ""
     if is_first_decision:
-        initial_environment_text = "\n📌 提示：请先调用 get_global_feed 获取主页信息流\n"
+        initial_environment_text = (
+            "\n [This is first decision in this session] \n"
+            " [Suggest calling a tool first to retrieve some content] \n"
+        )
 
     # 构建召回的记忆注入文本
     recalled_memories = state.get("recalled_memories", "")
     recalled_memory_text = recalled_memories if recalled_memories else ""
 
-    prompt = f"""## 当前状态
-- 📍 位置：{current_location}
-- 本次会话已执行: {current_step} 步
+    prompt = f"""## Current session context
+{session_context_text}
 {last_result_text}
 {initial_environment_text}
 {recalled_memory_text}
-{history_text}
 
-请做出你的下一步决策。"""
+Please do your next decision."""
 
     return prompt
 
 
-def _build_action_history_text(
+def _build_action_history_data(
     action_history: List[Dict[str, Any]],
-    *,
-    include_decision_guidance: bool,
-) -> str:
-    history_text = "【你的工作记忆】\n"
-    for record in action_history:
-        step = record.get("step", "?")
-        summary = record.get("summary", "")
-        action = record.get("action", "")
-        reason = record.get("reason", "")
-        history_text += (
-            f"你进行到了第 {step} step，你看到了：{summary}，"
-            f"你 {action}，原因是：{reason}\n"
-        )
+) -> List[Dict[str, Any]]:
+    """构建供决策和总结 Prompt 共用的工作记忆。
 
-    if include_decision_guidance:
-        history_text += "\n基于以上记忆，继续做出你的下一步决策。\n"
+    时间戳不参与模型决策；步骤已经表达顺序，省略时间戳可以减少上下文噪声。
 
-    return history_text
+    Args:
+        action_history: 会话状态中保存的原始操作记录。
+
+    Returns:
+        List[Dict[str, Any]]: 保留 step、summary、action 和 reason 的记录列表。
+    """
+
+    return [
+        {
+            "step": record.get("step", "?"),
+            "summary": record.get("summary", ""),
+            "action": record.get("action", ""),
+            "reason": record.get("reason", ""),
+        }
+        for record in action_history
+    ]
 
 
 def _format_tool_result(result: Any) -> str:
@@ -342,18 +337,17 @@ def build_summarize_prompt(state: Mapping[str, Any]) -> str:
         str: 格式化的总结 prompt
     """
     if not state.get("action_history"):
-        return f"""用户 {state.get('username', '未知')} 的本次会话未执行任何操作。"""
+        return f"""用户 {state.get('username', 'unknown')} 的本次会话未执行任何操作。"""
 
-    history_text = _build_action_history_text(
-        state["action_history"],
-        include_decision_guidance=False,
+    history_text = _serialize_prompt_json(
+        _build_action_history_data(state["action_history"]),
     )
 
     template = _get_configured_prompt_template(SUMMARIZE_MEMORY_PROMPT_KEY)
     return render_prompt_template(
         template,
         {
-            "username": state.get("username", "未知"),
+            "username": state.get("username", "unknown"),
             "history_text": history_text,
             "platform_name": _get_platform_display_name(),
         },

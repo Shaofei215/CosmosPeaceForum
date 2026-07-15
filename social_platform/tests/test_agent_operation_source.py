@@ -190,15 +190,15 @@ def test_agent_login_context_uses_platform_state_without_login_stats(monkeypatch
     )
 
     context = auth._build_agent_login_context(db, user)
-    payload = context.model_dump(exclude_none=True)
+    payload = context.model_dump(exclude_none=True, by_alias=True)
 
     assert payload == {
         "platform_user_id": 8,
         "following_count": 2,
         "followers_count": 3,
         "unread_count": 4,
-        "hot_topic_titles": ["热榜一", "热榜二"],
-        "topic_titles": ["话题一"],
+        "大家都在聊": ["热榜一", "热榜二"],
+        "话题": ["话题一"],
     }
     assert "total_login_count" not in payload
     assert "last_login" not in payload

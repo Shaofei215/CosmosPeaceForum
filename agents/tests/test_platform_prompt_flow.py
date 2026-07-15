@@ -182,7 +182,6 @@ def test_expand_comment_returns_comment_and_reply_ids(monkeypatch):
 
 
 def test_tool_execution_then_decision_prompt_exposes_reply_parent_ids(monkeypatch):
-    monkeypatch.setattr(prompts, "_build_attention_header", lambda: "关注：0 被关注：0 消息：0")
     client = _FakePlatformClient(
         reply_items=[_comment_payload(301, parent_id=201, content="reply target")]
     )
