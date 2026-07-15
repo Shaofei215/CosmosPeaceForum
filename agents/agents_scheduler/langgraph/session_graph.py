@@ -1,7 +1,6 @@
 # 核心图结构模块
 # 定义 LangGraph 的图结构，包括节点、边、路由逻辑等
-import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 from langgraph.graph import StateGraph, END, START
 from langgraph.graph.state import CompiledStateGraph
 from langchain_core.messages import AIMessage
@@ -17,9 +16,6 @@ from agents.agents_scheduler.langgraph.nodes import (
     end_node,
     should_continue_edge,
 )
-
-logger = logging.getLogger(__name__)
-
 
 def _default_llm_invoker(system_prompt: str, user_prompt: str) -> AIMessage:
     """
@@ -47,8 +43,8 @@ def _default_llm_invoker(system_prompt: str, user_prompt: str) -> AIMessage:
 
 def build_session_graph(
     config: Optional[SessionConfig] = None,
-    llm_invoker: Optional[callable] = None,
-    summarize_llm_invoker: Optional[callable] = None
+    llm_invoker: Optional[Callable[[str, str], AIMessage]] = None,
+    summarize_llm_invoker: Optional[Callable[[str, str], AIMessage]] = None
 ) -> CompiledStateGraph:
     """
     构建完整的会话图
@@ -224,19 +220,3 @@ def get_graph_structure() -> Dict[str, Any]:
             }
         ]
     }
-
-
-def print_graph_structure() -> None:
-    """
-    以调试级别记录图结构规模。
-
-    仅保留节点和边的数量，避免在常规日志中输出完整节点说明。
-    """
-    structure = get_graph_structure()
-
-    logger.debug(
-        "LangGraph 图包含 %d 个节点、%d 条普通边和 %d 条条件边",
-        len(structure["nodes"]),
-        len(structure["edges"]),
-        len(structure["conditional_edges"]),
-    )

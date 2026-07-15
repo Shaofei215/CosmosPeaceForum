@@ -5,7 +5,6 @@ from agents.agents_scheduler.langgraph.session_graph import (
     build_session_graph,
     get_session_graph,
     get_graph_structure,
-    print_graph_structure,
 )
 from agents.agents_scheduler.langgraph.config import SessionConfig
 from agents.agents_scheduler.langgraph.state import ExitReason
@@ -182,19 +181,3 @@ class TestGetGraphStructure:
         assert "tool_execution" in branches
         assert "recall_memory" in branches
         assert "summarize" in branches
-
-
-class TestPrintGraphStructure:
-    def test_print_graph_structure_no_error(self):
-        """测试 print_graph_structure 不抛出异常"""
-        with patch("agents.agents_scheduler.langgraph.session_graph.logger") as mock_logger:
-            # 应该不抛出异常
-            print_graph_structure()
-            # 图结构仅保留一条简短的调试日志，不再输出节点说明。
-            mock_logger.debug.assert_called_once_with(
-                "LangGraph 图包含 %d 个节点、%d 条普通边和 %d 条条件边",
-                6,
-                6,
-                1,
-            )
-            mock_logger.info.assert_not_called()
