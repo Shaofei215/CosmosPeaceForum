@@ -95,54 +95,57 @@ class TestRelationMappingService:
         rm2 = RelationMappingService()
         assert rm1 is rm2
 
-    def test_build_from_config(self):
-        rm = RelationMappingService()
-        users_config = [
-            {"id": 1, "username": "user1", "name": "Alice", "knows_ids": [2]},
-            {"id": 2, "username": "user2", "name": "Bob", "knows_ids": [1]},
-        ]
-        rm.build_from_config(users_config)
-        assert rm.get_relation_map(1) is not None
-        assert rm.get_relation_map(2) is not None
-
-    def test_build_from_config_skips_none_id(self):
-        rm = RelationMappingService()
-        users_config = [
-            {"username": "user1", "name": "Alice", "knows_ids": []},
-        ]
-        rm.build_from_config(users_config)
-        assert len(rm._relation_maps) == 0
-
     def test_expand_author(self):
         rm = RelationMappingService()
-        users_config = [
-            {"id": 1, "username": "user1", "name": "Alice", "knows_ids": [2]},
-            {"id": 2, "username": "user2", "name": "Bob", "knows_ids": [1]},
-        ]
-        rm.build_from_config(users_config)
-        result = rm.expand_author("user2", 2, 1)
-        assert "user2" in result
+        with patch("agents.agents_scheduler.scheduler.relation_map.get_db_client") as mock_db:
+            mock_db.return_value.get_agent_configs.return_value = [
+                {
+                    "id": 1, "social_platform_user_id": 101,
+                    "username": "user1", "name": "Alice", "knows_ids": [2],
+                },
+                {
+                    "id": 2, "social_platform_user_id": 202,
+                    "username": "user2", "name": "Bob", "knows_ids": [1],
+                },
+            ]
+            rm.build_from_db()
+        assert rm.expand_author("user2", 202, 101) == "user2（Bob）"
 
     def test_expand_content_mentions(self):
         rm = RelationMappingService()
-        users_config = [
-            {"id": 1, "username": "user1", "name": "Alice", "knows_ids": [2]},
-            {"id": 2, "username": "user2", "name": "Bob", "knows_ids": []},
-        ]
-        rm.build_from_config(users_config)
-        content = "Hello @user2, how are you?"
-        result = rm.expand_content_mentions(content, 1)
-        assert "@user2" in result
+        with patch("agents.agents_scheduler.scheduler.relation_map.get_db_client") as mock_db:
+            mock_db.return_value.get_agent_configs.return_value = [
+                {
+                    "id": 1, "social_platform_user_id": 101,
+                    "username": "user1", "name": "Alice", "knows_ids": [2],
+                },
+                {
+                    "id": 2, "social_platform_user_id": 202,
+                    "username": "user2", "name": "Bob", "knows_ids": [],
+                },
+            ]
+            rm.build_from_db()
+        assert rm.expand_content_mentions("Hello @user2", 101) == "Hello @user2（Bob）"
 
     def test_get_all_known_users(self):
         rm = RelationMappingService()
-        users_config = [
-            {"id": 1, "username": "user1", "name": "Alice", "knows_ids": [2, 3]},
-        ]
-        rm.build_from_config(users_config)
-        known_users = rm.get_all_known_users(1)
-        assert 2 in known_users
-        assert 3 in known_users
+        with patch("agents.agents_scheduler.scheduler.relation_map.get_db_client") as mock_db:
+            mock_db.return_value.get_agent_configs.return_value = [
+                {
+                    "id": 1, "social_platform_user_id": 101,
+                    "username": "user1", "name": "Alice", "knows_ids": [2, 3],
+                },
+                {
+                    "id": 2, "social_platform_user_id": 202,
+                    "username": "user2", "name": "Bob", "knows_ids": [],
+                },
+                {
+                    "id": 3, "social_platform_user_id": 303,
+                    "username": "user3", "name": "Carol", "knows_ids": [],
+                },
+            ]
+            rm.build_from_db()
+        assert set(rm.get_all_known_users(101)) == {202, 303}
 
     def test_get_all_known_users_not_found(self):
         rm = RelationMappingService()
@@ -151,7 +154,9 @@ class TestRelationMappingService:
 
     def test_repr(self):
         rm = RelationMappingService()
-        rm.build_from_config([])
+        with patch("agents.agents_scheduler.scheduler.relation_map.get_db_client") as mock_db:
+            mock_db.return_value.get_agent_configs.return_value = []
+            rm.build_from_db()
         repr_str = repr(rm)
         assert "RelationMappingService" in repr_str
 
@@ -163,6 +168,24 @@ class TestRelationMapFunctions:
 
     def test_rebuild_relation_maps(self):
         with patch("agents.agents_scheduler.scheduler.relation_map.get_db_client") as mock_db:
-            mock_db.return_value.get_agent_configs.return_value = []
+            mock_db.return_value.get_agent_configs.return_value = [
+                {
+                    "id": 1,
+                    "social_platform_user_id": 101,
+                    "username": "user1",
+                    "name": "Alice",
+                    "knows_ids": [2],
+                },
+                {
+                    "id": 2,
+                    "social_platform_user_id": 202,
+                    "username": "user2",
+                    "name": "Bob",
+                    "knows_ids": [1],
+                },
+            ]
             service = rebuild_relation_maps()
             assert isinstance(service, RelationMappingService)
+            assert service.get_relation_map(101).knows(202) is True
+            assert service.expand_author("user2", 202, 101) == "user2（Bob）"
+            mock_db.return_value.get_agent_configs.assert_called_once_with()

@@ -1,8 +1,7 @@
 """
 Scheduler 配置模块
 
-基础/敏感配置从 agents/.env 读取，运行期可调配置继续通过
-management 数据库抽象层加载。
+基础/敏感配置从 agents/.env 读取.
 """
 
 from dataclasses import dataclass
@@ -26,8 +25,8 @@ class SchedulerConfig:
     internal_base_url: str = "http://127.0.0.1:8002"
 
     @classmethod
-    def from_db(cls) -> "SchedulerConfig":
-        """加载调度器配置"""
+    def from_settings(cls) -> "SchedulerConfig":
+        """从进程启动时加载的环境配置构造调度器配置。"""
         config = get_config()
         return cls(
             admin_key=config.admin_key,
@@ -47,12 +46,5 @@ def get_scheduler_config() -> SchedulerConfig:
     """获取调度器配置单例"""
     global _scheduler_config
     if _scheduler_config is None:
-        _scheduler_config = SchedulerConfig.from_db()
-    return _scheduler_config
-
-
-def reload_scheduler_config():
-    """重载调度器配置"""
-    global _scheduler_config
-    _scheduler_config = SchedulerConfig.from_db()
+        _scheduler_config = SchedulerConfig.from_settings()
     return _scheduler_config

@@ -3,10 +3,11 @@
 import logging
 import threading
 import uuid
-from typing import Optional, Dict, Any, Callable, List
+from typing import Optional, Dict, Any, Callable, List, cast
 from datetime import datetime
 from dataclasses import dataclass, field
-import traceback
+
+from pydantic import SecretStr
 
 from agents.agents_scheduler.langgraph.state import SessionState, SessionSummary, ExitReason
 from agents.agents_scheduler.langgraph.config import SessionConfig, AgentConfig, get_default_config
@@ -14,6 +15,13 @@ from agents.agents_scheduler.langgraph.session_graph import build_session_graph
 from langchain_core.messages import AIMessage
 
 logger = logging.getLogger(__name__)
+
+# 每个业务步骤为记忆召回、LLM 决策和批量工具执行预留图节点预算。
+GRAPH_NODES_PER_SESSION_STEP = 10
+# 会话开始、总结、结束及 LangGraph 停止判定所需的固定余量。
+GRAPH_FIXED_NODE_BUDGET = 10
+# 保持现有默认下限，避免较小 max_steps 意外收紧原有执行空间。
+MIN_GRAPH_RECURSION_LIMIT = 100
 
 
 def create_llm_invoker(
@@ -30,39 +38,43 @@ def create_llm_invoker(
     Returns:
         Callable[[str, str], AIMessage]: LLM 调用函数，返回 AIMessage
     """
-    try:
-        from langchain_openai import ChatOpenAI
-    except ImportError:
+    provider = config.llm_provider.lower()
+
+    if provider == "anthropic":
         try:
             from langchain_anthropic import ChatAnthropic
-            use_anthropic = True
-            use_openai = False
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
-                "请安装 langchain-openai 或 langchain-anthropic"
-            )
-    else:
-        use_openai = True
-        use_anthropic = False
+                "请安装 langchain-anthropic 以使用 Anthropic 模型"
+            ) from exc
 
-    if config.llm_provider.lower() == "anthropic":
         model_name = config.anthropic_model_name or config.model_name
         if not model_name:
             raise ValueError("Anthropic 模型名称未配置，请在 model_configs 中设置第一个活跃模型")
         if not config.anthropic_api_key:
-            raise ValueError("Anthropic API Key 未配置，请在 model_configs 中添加一个 is_active=1 的 Anthropic 模型")
+            raise ValueError("Anthropic API Key 未配置，请在 model_configs 中添加一个启用的 Anthropic 模型")
         temperature = config.temperature
 
-        if not use_anthropic:
-            from langchain_anthropic import ChatAnthropic
-
-        llm = ChatAnthropic(model=model_name, temperature=temperature, api_key=config.anthropic_api_key)
+        llm = ChatAnthropic(
+            model_name=model_name,
+            temperature=temperature,
+            api_key=SecretStr(config.anthropic_api_key),
+            timeout=None,
+            stop=None,
+        )
     else:
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError as exc:
+            raise ImportError(
+                "请安装 langchain-openai 以使用 OpenAI 兼容模型"
+            ) from exc
+
         model_name = config.openai_model_name or config.model_name
         if not model_name:
             raise ValueError("OpenAI 模型名称未配置，请在 model_configs 中设置第一个活跃模型")
         if not config.openai_api_key:
-            raise ValueError("OpenAI API Key 未配置，请在 model_configs 中添加一个 is_active=1 的 OpenAI 模型")
+            raise ValueError("OpenAI API Key 未配置，请在 model_configs 中添加一个启用的 OpenAI 模型")
         temperature = config.temperature
         api_key = config.openai_api_key
         base_url = config.openai_base_url or None
@@ -81,6 +93,10 @@ def create_llm_invoker(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ])
+        if not isinstance(response, AIMessage):
+            raise TypeError(
+                f"LLM 返回了非 AIMessage 类型: {type(response).__name__}"
+            )
         return response
 
     return invoke
@@ -172,7 +188,7 @@ class SessionExecutor:
             personality_prompt: 角色性格描述
             personal_signature: 个性签名
             config: 会话配置，默认为 SessionConfig()
-            name: 昵称（显示用），默认为 username
+            name: 角色名
             session_prompt_injection: 本次登录会话的一次性提示词注入
         """
         self.session_id = str(uuid.uuid4())
@@ -180,8 +196,6 @@ class SessionExecutor:
         self.config = config or get_default_config()
         self.username = username
         self.name = name or username
-
-        logger.info("初始化会话: 用户=%s, 会话ID=%s..., 最大步数=%d", username, self.session_id[:8], self.config.max_steps)
 
         self.initial_state: SessionState = {
             "user_id": user_id,
@@ -207,7 +221,6 @@ class SessionExecutor:
     def run(
         self,
         llm_invoker: Callable[[str, str], AIMessage],
-        thread_id: Optional[str] = None,
         summarize_llm_invoker: Optional[Callable[[str, str], AIMessage]] = None
     ) -> ExecutionResult:
         """
@@ -215,45 +228,55 @@ class SessionExecutor:
 
         Args:
             llm_invoker: LLM 调用函数，签名为 (system_prompt: str, user_prompt: str) -> AIMessage
-            thread_id: 线程 ID，用于检查点保存
             summarize_llm_invoker: 总结节点的 LLM 调用函数，只绑定 write_memory 工具
 
         Returns:
             ExecutionResult: 包含执行结果的 ExecutionResult 对象
         """
-        if thread_id is None:
-            thread_id = f"session_{self.session_id}"
-
-        logger.info("开始执行会话: 用户=%s, 会话ID=%s...", self.username, self.session_id[:8])
+        logger.info("%s 开始会话", self.name)
 
         try:
-            logger.info("构建LangGraph图结构")
             graph = build_session_graph(
                 config=self.config,
                 llm_invoker=llm_invoker,
                 summarize_llm_invoker=summarize_llm_invoker
             )
 
-            logger.info("开始执行图")
-            final_state = graph.invoke(
-                self.initial_state,
-                config={"recursion_limit": 100}
+            recursion_limit = max(
+                MIN_GRAPH_RECURSION_LIMIT,
+                self.config.max_steps * GRAPH_NODES_PER_SESSION_STEP
+                + GRAPH_FIXED_NODE_BUDGET,
+            )
+
+            # CompiledStateGraph.invoke 的返回注解不会保留图的状态模式，需显式恢复类型。
+            final_state = cast(
+                SessionState,
+                graph.invoke(
+                    self.initial_state,
+                    config={"recursion_limit": recursion_limit}
+                )
             )
 
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
 
-            logger.info("图执行完成: 步数=%d, 耗时=%.2f秒", final_state.get('step_count', 0), duration)
-
             summary = self._build_summary(final_state)
-            logger.info("生成总结: 退出原因=%s", summary.get('exit_reason', 'N/A'))
+            success = final_state.get("exit_reason") != ExitReason.ERROR
+            error_message = final_state.get("last_error") if not success else None
+            logger.info(
+                "%s 会话结束（%d 步，%.2f 秒，%s）",
+                self.name,
+                final_state.get("step_count", 0),
+                duration,
+                summary.get("exit_reason", "N/A"),
+            )
 
             return ExecutionResult(
                 session_id=self.session_id,
-                success=True,
+                success=success,
                 final_state=final_state,
                 summary=summary,
-                error_message=None,
+                error_message=error_message,
                 start_time=self.start_time,
                 end_time=self.end_time,
                 duration_seconds=duration
@@ -262,8 +285,7 @@ class SessionExecutor:
         except Exception as e:
             self.end_time = datetime.now()
             error_msg = f"会话执行异常: {str(e)}"
-            logger.error("会话执行异常: %s", error_msg)
-            traceback.print_exc()
+            logger.exception("%s 会话失败: %s", self.name, e)
 
             return ExecutionResult(
                 session_id=self.session_id,
@@ -278,7 +300,7 @@ class SessionExecutor:
 
     def _build_summary(self, state: SessionState) -> SessionSummary:
         """
-        构建会话总结
+        构建会话总结，仅仅用于日志而不是记忆系统的总结
 
         Args:
             state: 最终状态
@@ -289,11 +311,15 @@ class SessionExecutor:
         # 格式化操作记录
         actions = []
         for record in state.get("action_history", []):
+            action_text = record.get("action", "")
+            summary_text = record.get("summary", "")
             actions.append({
                 "step": record.get("step", 0),
-                "tool_name": record.get("tool_name", ""),
+                "tool_name": record.get("tool_name", action_text),
                 "reason": record.get("reason", ""),
-                "result_summary": record.get("result_summary", ""),
+                "result_summary": record.get("result_summary", summary_text or action_text),
+                "action": action_text,
+                "summary": summary_text,
             })
 
         # 获取退出原因
@@ -393,7 +419,7 @@ class LLMRegistry:
 
 def reload_llm_registry():
     """
-    重载 LLM 注册表（热更新）
+    重载 LLM 注册表
     """
     LLMRegistry.clear_cache()
 

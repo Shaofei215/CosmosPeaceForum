@@ -1,6 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
 import threading
+import builtins
+import sys
+import types
+from typing import Any
 
 from agents.agents_scheduler.langgraph.executor import (
     ExecutionResult,
@@ -170,6 +174,48 @@ class TestSessionExecutor:
                 result = executor.run(llm_invoker=MagicMock())
                 assert result.success is True
                 assert result.error_message is None
+                mock_graph.invoke.assert_called_once_with(
+                    executor.initial_state,
+                    config={"recursion_limit": 210},
+                )
+
+    @pytest.mark.parametrize(
+        ("max_steps", "expected_recursion_limit"),
+        [(5, 100), (50, 510)],
+    )
+    def test_executor_run_recursion_limit_scales_with_max_steps(
+        self,
+        max_steps: int,
+        expected_recursion_limit: int,
+    ) -> None:
+        """测试图递归预算保留原下限，并随最大业务步数增长。"""
+        config = SessionConfig(max_steps=max_steps)
+        executor = SessionExecutor(
+            user_id=1,
+            username="test_user",
+            agent_id=1,
+            personality_prompt="prompt",
+            personal_signature="sig",
+            config=config,
+        )
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {
+            **executor.initial_state,
+            "exit_reason": ExitReason.USER_CHOICE,
+            "summary": "Test summary",
+        }
+
+        with patch(
+            "agents.agents_scheduler.langgraph.executor.build_session_graph",
+            return_value=mock_graph,
+        ):
+            result = executor.run(llm_invoker=MagicMock())
+
+        assert result.success is True
+        mock_graph.invoke.assert_called_once_with(
+            executor.initial_state,
+            config={"recursion_limit": expected_recursion_limit},
+        )
 
     def test_executor_run_with_summarize_llm_invoker(self):
         """测试 executor.run 能正确传递 summarize_llm_invoker"""
@@ -221,6 +267,84 @@ class TestSessionExecutor:
 
                 assert result.success is True
 
+    def test_executor_run_reports_error_exit_as_failure(self):
+        """测试图以错误原因结束时执行结果标记为失败。"""
+        with patch("agents.agents_scheduler.langgraph.executor.get_default_config") as mock_config:
+            mock_config.return_value = SessionConfig()
+            executor = SessionExecutor(
+                user_id=1,
+                username="test_user",
+                agent_id=1,
+                personality_prompt="prompt",
+                personal_signature="sig",
+            )
+            final_state = {
+                **executor.initial_state,
+                "exit_reason": ExitReason.ERROR,
+                "last_error": "LLM 决策失败: timeout",
+                "summary": "会话因错误结束。",
+            }
+            mock_graph = MagicMock()
+            mock_graph.invoke.return_value = final_state
+
+            with patch("agents.agents_scheduler.langgraph.executor.build_session_graph", return_value=mock_graph):
+                result = executor.run(llm_invoker=MagicMock())
+
+        assert result.success is False
+        assert result.error_message == "LLM 决策失败: timeout"
+        assert result.final_state is final_state
+
+    def test_executor_summary_maps_action_record_fields(self):
+        """测试 executor 输出摘要时保留节点记录的真实动作与视野总结。"""
+        with patch("agents.agents_scheduler.langgraph.executor.get_default_config") as mock_config:
+            mock_config.return_value = SessionConfig()
+            executor = SessionExecutor(
+                user_id=1,
+                username="test_user",
+                agent_id=1,
+                personality_prompt="prompt",
+                personal_signature="sig",
+            )
+
+            mock_graph = MagicMock()
+            mock_graph.invoke.return_value = {
+                "user_id": 1,
+                "username": "test_user",
+                "name": "Test",
+                "agent_id": 1,
+                "personality_prompt": "prompt",
+                "personal_signature": "sig",
+                "step_count": 1,
+                "max_steps": 10,
+                "exit_reason": ExitReason.USER_CHOICE,
+                "action_history": [
+                    {
+                        "step": 1,
+                        "timestamp": "2024-01-01T00:00:00",
+                        "summary": "我看到了主页信息流",
+                        "action": "浏览了主页信息流",
+                        "reason": "先了解平台动态",
+                    }
+                ],
+                "current_location": "主页（信息流）",
+                "last_tool_result": None,
+                "pending_tool": None,
+                "pending_tools": None,
+                "last_error": None,
+                "summary": "Test summary",
+                "recalled_memories": "",
+            }
+
+            with patch("agents.agents_scheduler.langgraph.executor.build_session_graph", return_value=mock_graph):
+                result = executor.run(llm_invoker=MagicMock())
+
+            assert result.summary is not None
+            action = result.summary["actions"][0]
+            assert action["tool_name"] == "浏览了主页信息流"
+            assert action["result_summary"] == "我看到了主页信息流"
+            assert action["action"] == "浏览了主页信息流"
+            assert action["summary"] == "我看到了主页信息流"
+
     def test_executor_run_failure(self):
         with patch("agents.agents_scheduler.langgraph.executor.get_default_config") as mock_config:
             mock_config.return_value = SessionConfig()
@@ -250,6 +374,40 @@ class TestSessionExecutor:
             repr_str = repr(executor)
             assert "SessionExecutor" in repr_str
             assert "test_user" in repr_str
+
+
+class TestCreateLLMInvoker:
+    def test_openai_provider_requires_openai_package(self, monkeypatch):
+        """OpenAI provider 缺少 langchain-openai 时，应抛出明确的导入错误。"""
+        fake_anthropic_module = types.ModuleType("langchain_anthropic")
+        fake_anthropic_module.ChatAnthropic = MagicMock()
+        monkeypatch.setitem(sys.modules, "langchain_anthropic", fake_anthropic_module)
+        monkeypatch.delitem(sys.modules, "langchain_openai", raising=False)
+
+        real_import = builtins.__import__
+
+        def fake_import(
+            name: str,
+            globals: dict[str, Any] | None = None,
+            locals: dict[str, Any] | None = None,
+            fromlist: tuple[str, ...] = (),
+            level: int = 0,
+        ) -> Any:
+            """模拟 langchain-openai 缺失，其余导入保持真实行为。"""
+            if name == "langchain_openai":
+                raise ImportError("No module named 'langchain_openai'")
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        config = SessionConfig(
+            llm_provider="openai",
+            openai_api_key="test_key",
+            openai_model_name="gpt-test",
+        )
+
+        with pytest.raises(ImportError, match="langchain-openai"):
+            create_llm_invoker(config)
 
 
 class TestLLMRegistry:

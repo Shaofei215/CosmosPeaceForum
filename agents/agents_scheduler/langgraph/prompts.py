@@ -1,5 +1,7 @@
 # Prompt 模板模块
 # 定义 LangGraph 会话中使用的各种 Prompt 模板
+import json
+from collections.abc import Mapping
 from typing import Dict, Any, List
 
 from agents.prompt_templates import (
@@ -47,39 +49,29 @@ def _get_platform_display_name() -> str:
         from agents.management.backend.core.config import get_config
         return get_config().platform_display_name
     except Exception:
-        return "宇宙和平论坛"
+        return "[get platform_display_name failed]"
 
 
 def _format_last_login_time(timestamp: Any) -> str:
     if timestamp is None:
-        return "暂无记录"
+        return "No record available"
 
     try:
         from agents.agents_scheduler.memory.utils import calculate_time_description
         return calculate_time_description(float(timestamp))
     except Exception:
-        return "暂无记录"
+        return "No record available"
 
 
-def _build_attention_header() -> str:
-    values = _build_attention_template_values()
-    parts = [
-        f"当前登录平台ID：{values['platform_user_id']}",
-        f"关注：{values['following_count']}",
-        f"被关注：{values['followers_count']}",
-        f"消息：{values['unread_count']}",
-        f"大家都在聊：{values['hot_topic_titles']}",
-        f"话题：{values['topic_titles']}",
-    ]
-    if values["login_stats"]:
-        parts.extend([
-            f"总登录：{values['total_login_count']}",
-            f"上次登录：{values['last_login_time']}",
-        ])
-    return " ".join(parts)
+def _build_agent_context_json() -> str:
+    """构建系统 Prompt 状态 JSON。
 
+    程序状态使用英文字段名；热榜和话题使用与人类前端一致的产品名称。
 
-def _build_attention_template_values() -> Dict[str, Any]:
+    Returns:
+        str: 包含账号计数、社区热点和可选登录统计的 JSON。
+    """
+
     try:
         from agents.agents_scheduler.langgraph.tools.support.platform import _get_notification_summary
         summary = _get_notification_summary()
@@ -89,30 +81,32 @@ def _build_attention_template_values() -> Dict[str, Any]:
     login_stats = _build_login_stats_summary()
     total_login_count = login_stats.get("total_login_count", 0) or 0
     last_login_time = _format_last_login_time(login_stats.get("last_login_timestamp"))
-    hot_topic_titles = _build_hot_topic_titles()
-    topic_titles = _build_topic_titles()
+    hot_topic_titles = _get_hot_topic_titles()
+    topic_titles = _get_topic_titles()
     try:
         from agents.agents_scheduler.scheduler.context import get_current_user_id
-        platform_user_id = get_current_user_id() or "未知"
+        platform_user_id = get_current_user_id() or "unknown"
     except Exception:
-        platform_user_id = "未知"
-    platform_name = _get_platform_display_name()
-
-    return {
+        platform_user_id = "unknown"
+    account_context: Dict[str, Any] = {
         "platform_user_id": platform_user_id,
-        "platform_name": platform_name,
         "following_count": summary.get("following_count", 0),
         "followers_count": summary.get("followers_count", 0),
         "unread_count": summary.get("unread_count", 0),
-        "hot_topic_titles": hot_topic_titles,
-        "topic_titles": topic_titles,
-        "total_login_count": total_login_count,
-        "last_login_time": last_login_time,
-        "login_stats": bool(total_login_count or login_stats.get("last_login_timestamp")),
+        "大家都在聊": hot_topic_titles,
+        "话题": topic_titles,
     }
+    has_login_stats = bool(total_login_count or login_stats.get("last_login_timestamp"))
+    if has_login_stats:
+        account_context["login_stats"] = {
+            "total_login_count": total_login_count,
+            "last_login_time": last_login_time,
+        }
+
+    return _serialize_prompt_json(account_context)
 
 
-def _build_hot_topic_titles() -> str:
+def _get_hot_topic_titles() -> List[str]:
     try:
         from agents.agents_scheduler.langgraph.tools.support.platform import _get_hot_topics
         topics = _get_hot_topics(limit=8)
@@ -124,12 +118,10 @@ def _build_hot_topic_titles() -> str:
         for topic in topics
         if isinstance(topic, dict) and str(topic.get("title", "")).strip()
     ][:8]
-    if not titles:
-        return "暂无"
-    return "；".join(f"{index}. {title}" for index, title in enumerate(titles, start=1))
+    return titles
 
 
-def _build_topic_titles() -> str:
+def _get_topic_titles() -> List[str]:
     try:
         from agents.agents_scheduler.langgraph.tools.support.platform import _get_trending_topics
         topics = _get_trending_topics(limit=8)
@@ -141,9 +133,20 @@ def _build_topic_titles() -> str:
         for topic in topics
         if isinstance(topic, dict) and str(topic.get("name", "")).strip()
     ][:8]
-    if not titles:
-        return "暂无"
-    return "；".join(f"#{title}#" for title in titles)
+    return titles
+
+
+def _serialize_prompt_json(value: Any) -> str:
+    """把内部状态序列化为保留产品文案的易读 JSON。
+
+    Args:
+        value: 准备注入 Prompt 的结构化状态。
+
+    Returns:
+        str: UTF-8 文本不转义、带缩进的 JSON 文本。
+    """
+
+    return json.dumps(value, ensure_ascii=False, default=str, indent=2)
 
 
 def build_system_prompt(
@@ -170,24 +173,22 @@ def build_system_prompt(
         str: 格式化后的系统提示词
     """
     template = _get_configured_prompt_template(AGENT_SYSTEM_PROMPT_KEY)
-    values = _build_attention_template_values()
-    values["attention_header"] = _build_attention_header()
-    values.update(
-        {
-            "username": username,
-            "name": name,
-            "personality_prompt": personality_prompt,
-            "personal_signature": personal_signature,
-            "session_prompt_injection": session_prompt_injection.strip(),
-        }
-    )
+    values = {
+        "agent_context_json": _build_agent_context_json(),
+        "platform_name": _get_platform_display_name(),
+        "username": username,
+        "name": name,
+        "personality_prompt": personality_prompt,
+        "personal_signature": personal_signature,
+        "session_prompt_injection": session_prompt_injection.strip(),
+    }
     return render_prompt_template(
         template,
         values,
     )
 
 
-def build_decision_prompt(state: Dict[str, Any]) -> str:
+def build_decision_prompt(state: Mapping[str, Any]) -> str:
     """
     构建决策 Prompt
 
@@ -204,407 +205,99 @@ def build_decision_prompt(state: Dict[str, Any]) -> str:
     """
     current_step = state.get("step_count", 0)
     max_steps = state.get("max_steps", 10)
-    remaining_steps = max_steps - current_step
     current_location = state.get("current_location", "主页（信息流）")
-    is_first_decision = len(state.get("action_history", [])) == 0
-
-    # 构建当前位置
-    location_text = f"📍 你当前在：{current_location}"
-
-    # 构建工作记忆（action_history）
-    if state.get("action_history"):
-        history_text = _build_action_history_text(
-            state["action_history"],
-            include_decision_guidance=True,
-        )
-    else:
-        # 首次决策：LLM 需要主动调用 get_global_feed 获取初始信息
-        history_text = """【你的工作记忆】
-这是本次会话的开始，这是你的第一次决策。
-建议先调用 get_global_feed 获取主页信息流，了解当前平台上有什么内容。
-你还没有执行任何操作。\n\n"""
+    action_history = state.get("action_history", [])
+    is_first_decision = len(action_history) == 0
+    session_context = {
+        "current_location": current_location,
+        "step_count": current_step,
+        "max_steps": max_steps,
+        "remaining_steps": max(0, max_steps - current_step),
+        "action_history": _build_action_history_data(action_history),
+    }
+    session_context_text = _serialize_prompt_json(session_context)
 
     # 构建上一次工具调用的返回值
     last_result_text = ""
     if not is_first_decision:
         last_result = state.get("last_tool_result")
         if last_result is not None:
-            last_result_text = f"\n【上一步执行后当前查看的内容】\n{_format_tool_result(last_result)}\n"
+            last_result_text = (
+                "\n [Platform content obtained after last tool call] \n"
+                f"{_format_tool_result(last_result)}\n"
+            )
 
     # 仅在首次决策时提示 LLM 获取信息流
     initial_environment_text = ""
     if is_first_decision:
-        initial_environment_text = "\n📌 提示：请先调用 get_global_feed 获取主页信息流\n"
+        initial_environment_text = (
+            "\n [This is first decision in this session] \n"
+            " [Suggest calling a tool first to retrieve some content] \n"
+        )
 
     # 构建召回的记忆注入文本
     recalled_memories = state.get("recalled_memories", "")
     recalled_memory_text = recalled_memories if recalled_memories else ""
 
-    prompt = f"""## 当前状态
-- 📍 位置：{current_location}
-- 本次会话已执行: {current_step} 步
+    prompt = f"""## Current session context
+{session_context_text}
 {last_result_text}
 {initial_environment_text}
 {recalled_memory_text}
-{history_text}
 
-请做出你的下一步决策。"""
+Please do your next decision."""
 
     return prompt
 
 
-def _build_action_history_text(
+def _build_action_history_data(
     action_history: List[Dict[str, Any]],
-    *,
-    include_decision_guidance: bool,
-) -> str:
-    history_text = "【你的工作记忆】\n"
-    for record in action_history:
-        step = record.get("step", "?")
-        summary = record.get("summary", "")
-        action = record.get("action", "")
-        reason = record.get("reason", "")
-        history_text += (
-            f"你进行到了第 {step} step，你看到了：{summary}，"
-            f"你 {action}，原因是：{reason}\n"
-        )
+) -> List[Dict[str, Any]]:
+    """构建供决策和总结 Prompt 共用的工作记忆。
 
-    if include_decision_guidance:
-        history_text += "\n基于以上记忆，继续做出你的下一步决策。\n"
+    时间戳不参与模型决策；步骤已经表达顺序，省略时间戳可以减少上下文噪声。
 
-    return history_text
+    Args:
+        action_history: 会话状态中保存的原始操作记录。
+
+    Returns:
+        List[Dict[str, Any]]: 保留 step、summary、action 和 reason 的记录列表。
+    """
+
+    return [
+        {
+            "step": record.get("step", "?"),
+            "summary": record.get("summary", ""),
+            "action": record.get("action", ""),
+            "reason": record.get("reason", ""),
+        }
+        for record in action_history
+    ]
 
 
 def _format_tool_result(result: Any) -> str:
-    """格式化工具结果，并优先展示正数未读消息提醒。"""
+    """把共享工具结果无损序列化为供 LLM 读取的 JSON。
 
-    if not isinstance(result, dict) or not result.get("unread_count"):
-        return _format_tool_result_content(result)
-
-    content = dict(result)
-    unread_count = content.pop("unread_count")
-    formatted = _format_tool_result_content(content)
-    reminder = f"【账号提醒】当前有 {unread_count} 条未读消息，可调用 view_notifications 查看。"
-    return f"{reminder}\n{formatted}" if formatted and formatted != "无" else reminder
-
-
-def _format_tool_result_content(result: Any) -> str:
-    """
-    格式化工具返回值，用于在 prompt 中显示
+    内部与外部 Agent 共用 ``agents.platform_tools`` 构建的结构化数据。这里不再
+    按帖子、评论或通知类型二次改写，避免新字段需要同步维护 Prompt presenter，
+    也避免嵌套结构和真实资源 ID 在自然语言转换中丢失。
 
     Args:
-        result: 工具返回值
+        result: 共享工具写入会话状态的原始结果。
 
     Returns:
-        str: 格式化后的字符串
+        str: 保留中文和全部结构的紧凑 JSON 字符串。
+
+    Raises:
+        TypeError: 结果包含无法由默认字符串回退处理的对象时抛出。
     """
-    if result is None:
-        return "无"
-    elif isinstance(result, str):
-        return result
-    elif isinstance(result, dict):
-        from agents.agents_scheduler.langgraph.tools.support.result_context import (
-            format_merged_tool_context_result,
-            is_merged_tool_context_result,
-        )
-        if is_merged_tool_context_result(result):
-            return format_merged_tool_context_result(result, _format_tool_result)
 
-        if result.get("source") == "web_search":
-            query = result.get("query", "")
-            results = result.get("results", [])
-            depth = result.get("search_depth", "advanced")
-            lines = [f"【联网搜索】查询：{query}，深度：{depth}"]
-            answer = result.get("answer")
-            if answer:
-                lines.append(f"概览：{answer}")
-            if not results:
-                lines.append("暂无网页结果")
-            for item in results:
-                lines.append(f"  - {item.get('title', 'Untitled')}")
-                lines.append(f"    URL: {item.get('url', '')}")
-                if item.get("content"):
-                    lines.append(f"    摘要: {item.get('content')}")
-            return "\n".join(lines)
-
-        if "notifications" in result:
-            notifications = result.get("notifications", [])
-            lines = ["【消息列表】"]
-            if not notifications:
-                lines.append("暂无消息")
-            for item in notifications:
-                lines.append("  - 消息")
-                lines.extend(_format_notification_fields(item, indent="    "))
-            return "\n".join(lines)
-
-        if "hot_topics" in result:
-            topics = result.get("hot_topics", [])
-            lines = ["【更多热榜】"]
-            if not topics:
-                lines.append("暂无热榜")
-            for topic in topics:
-                lines.append(f"  - #{topic.get('rank', '?')} {topic.get('title', '')}")
-                lines.append(f"    完整摘要: {topic.get('summary', '')}")
-                lines.append(f"    搜索关键词: {topic.get('search_query', '')}")
-            return "\n".join(lines)
-
-        if "notification" in result:
-            notification = result.get("notification", {})
-            lines = ["【消息原内容】"]
-            lines.extend(_format_notification_fields(notification, indent=""))
-            if result.get("post"):
-                lines.append("\n【原帖子】")
-                lines.extend(_format_post_fields(result["post"], indent=""))
-            if result.get("comment"):
-                lines.append("\n【原评论】")
-                lines.extend(_format_comment_fields(result["comment"], indent=""))
-            if result.get("user"):
-                user = result["user"]
-                lines.append("\n【来源用户】")
-                lines.append(f"ID: {user.get('id', user.get('user_id', '?'))}")
-                lines.append(f"用户名: @{user.get('username', '?')}")
-                lines.append(f"签名: {user.get('bio', '')}")
-            return "\n".join(lines)
-
-        if result.get("type") in {"content", "user", "topic"} and (
-            "posts" in result or "users" in result
-        ):
-            search_type = result.get("type")
-            query = result.get("query", "")
-            if search_type in {"content", "topic"}:
-                posts = result.get("posts", [])
-                label = "话题" if search_type == "topic" else "关键词"
-                lines = [f"【帖子搜索结果】{label}：{query}"]
-                if not posts:
-                    lines.append("暂无帖子结果")
-                for post in posts:
-                    lines.append("  - 帖子")
-                    lines.extend(_format_post_fields(post, indent="    "))
-                return "\n".join(lines)
-
-            users = result.get("users", [])
-            lines = [f"【用户搜索结果】关键词：{query}"]
-            if not users:
-                lines.append("暂无用户结果")
-            for user in users:
-                lines.append("  - 用户")
-                lines.append(f"    id / 用户ID: {user.get('id', user.get('user_id', '?'))}")
-                lines.append(f"    username / 用户名: @{user.get('username', '?')}")
-                lines.append(f"    bio / 签名: {user.get('bio', '')}")
-                lines.append(f"    followers_count / 被关注数: {user.get('followers_count', 0)}")
-                lines.append(f"    following_count / 关注数: {user.get('following_count', 0)}")
-                if "is_following" in user:
-                    if user.get("is_following"):
-                        status = "互相关注" if user.get("is_mutual") else "已关注"
-                    else:
-                        status = "未关注"
-                    lines.append(f"    follow_status / 当前用户对该用户的关注状态: {status}")
-            return "\n".join(lines)
-
-        if "comment" in result and "post" in result:
-            comment = result.get("comment", {})
-            post = result.get("post", {})
-            replies = result.get("replies", [])
-
-            lines = []
-            lines.append("【评论详情】")
-            lines.extend(_format_comment_fields(comment, indent=""))
-
-            lines.append("\n【原帖子】")
-            lines.extend(_format_post_fields(post, indent=""))
-
-            if replies:
-                lines.append("\n【回复】")
-                for r in replies:
-                    lines.append("  - 回复")
-                    lines.extend(_format_comment_tree(r, indent="    "))
-            else:
-                lines.append("\n【回复】暂无回复")
-
-            return "\n".join(lines)
-
-        if "post" in result:
-            post = result.get("post", {})
-
-            lines = []
-            lines.append("【帖子详情】")
-            lines.extend(_format_post_fields(post, indent=""))
-
-            parent_comment = result.get("parent_comment")
-            if parent_comment:
-                lines.append("\n【父评论】")
-                lines.extend(_format_comment_fields(parent_comment, indent=""))
-
-            new_comment = result.get("new_comment")
-            if new_comment:
-                lines.append("\n【新评论】")
-                if isinstance(new_comment, dict) and (
-                    "author_id" in new_comment or "parent_id" in new_comment or "reply_count" in new_comment
-                ):
-                    lines.extend(_format_comment_fields(new_comment, indent=""))
-                else:
-                    lines.append(f"content / 评论内容: {new_comment.get('content', new_comment) if isinstance(new_comment, dict) else new_comment}")
-
-            if "comments" in result:
-                comments = result.get("comments", [])
-                if comments:
-                    lines.append("\n【评论】")
-                    for c in comments:
-                        lines.append("  - 评论")
-                        lines.extend(_format_comment_tree(c, indent="    "))
-                else:
-                    lines.append("\n【评论】暂无评论")
-
-            return "\n".join(lines)
-
-        elif (
-            "posts" in result
-            and isinstance(result["posts"], list)
-            or "data" in result
-            and isinstance(result["data"], list)
-        ):
-            items = result.get("posts", result.get("data", []))
-            if not items:
-                return "空列表"
-
-            lines = ["【信息列表】"]
-            for item in items:
-                if isinstance(item, dict):
-                    lines.append("- 帖子")
-                    lines.extend(_format_post_fields(item, indent="  "))
-                else:
-                    lines.append(str(item))
-            return "\n".join(lines)
-
-        elif "user_id" in result or "username" in result:
-            lines = ["【用户信息】"]
-            lines.append(f"ID: {result.get('id', result.get('user_id', '?'))}")
-            lines.append(f"用户名: @{result.get('username', '?')}")
-            lines.append(f"签名: {result.get('bio', result.get('personal_signature', ''))}")
-            lines.append(f"被关注: {result.get('followers_count', result.get('followers', 0))} | 关注: {result.get('following_count', result.get('following', 0))}")
-            if "follow_status" in result:
-                fs = result.get("follow_status", "")
-                if fs == "self":
-                    lines.append(f"身份: 这是你自己")
-                else:
-                    lines.append(f"你对作者的关注状态: {fs}")
-            if "recent_posts" in result:
-                posts = result.get("recent_posts", [])
-                if posts:
-                    lines.append("\n【最新帖子】:")
-                    for p in posts:
-                        lines.append("  - 帖子")
-                        lines.extend(_format_post_fields(p, indent="    "))
-            return "\n".join(lines)
-
-        return str(result)[:500]
-
-    elif isinstance(result, list):
-        if not result:
-            return "空列表"
-        lines = []
-        for item in result[:5]:
-            if isinstance(item, dict):
-                if "comment_count" in item or "follow_status" in item:
-                    lines.append("- 帖子")
-                    lines.extend(_format_post_fields(item, indent="  "))
-                else:
-                    lines.append("- 评论")
-                    lines.extend(_format_comment_tree(item, indent="  "))
-            else:
-                lines.append(str(item)[:50])
-        return "\n".join(lines)
-    else:
-        return str(result)[:500]
-
-
-def _format_post_fields(post: Dict[str, Any], indent: str = "") -> List[str]:
-    """格式化标准化帖子字段，确保 LLM 能读取完整结构。"""
-    lines = [
-        f"{indent}id / 帖子ID: {post.get('id', '?')}",
-        f"{indent}author_id / 作者ID: {post.get('author_id', '?')}",
-        f"{indent}author_username / 作者用户名: @{post.get('author_username') or '?'}",
-        f"{indent}author_bio / 作者签名: {post.get('author_bio', '')}",
-        f"{indent}type / 内容类型: {post.get('type', 'post')}",
-        f"{indent}title / 标题: {post.get('title', '')}",
-        f"{indent}content / 帖子内容: {post.get('content', '')}",
-        f"{indent}created_at / 创建时间: {post.get('created_at', '')}",
-        f"{indent}like_count / 点赞数: {post.get('like_count', 0)}",
-        f"{indent}comment_count / 评论数: {post.get('comment_count', 0)}",
-        f"{indent}repost_count / repost count: {post.get('repost_count', 0)}",
-        f"{indent}is_liked / 当前用户是否已点赞: {post.get('is_liked', False)}",
-        f"{indent}follow_status / 当前用户对作者的关注状态: {post.get('follow_status', '')}",
-    ]
-    topic_mentions = post.get("topic_mentions") or []
-    if topic_mentions:
-        topic_names = [
-            f"#{topic.get('name')}#"
-            for topic in topic_mentions
-            if isinstance(topic, dict) and topic.get("name")
-        ]
-        lines.append(f"{indent}topic_mentions / 帖子话题: {'；'.join(topic_names)}")
-    origin = post.get("repost_origin") or {}
-    if origin:
-        lines.extend([
-            f"{indent}repost_origin_id / 引用原帖ID: {origin.get('id', '?')}",
-            f"{indent}repost_origin_author_id / 引用原帖作者ID: {origin.get('author_id', '?')}",
-            f"{indent}repost_origin_author / 引用原帖作者: @{origin.get('author_username') or '?'}",
-            f"{indent}repost_origin_type / 引用原内容类型: {origin.get('type', 'post')}",
-            f"{indent}repost_origin_title / 引用原内容标题: {origin.get('title', '')}",
-            f"{indent}repost_origin_content / 引用原帖内容: {origin.get('content', '')}",
-        ])
-    elif post.get("repost_origin_missing"):
-        lines.append(f"{indent}repost_origin_content / 引用原帖内容: 原内容不存在")
-    return lines
-
-
-def _format_comment_fields(comment: Dict[str, Any], indent: str = "") -> List[str]:
-    """格式化标准化评论字段，确保 LLM 能读取完整结构。"""
-    return [
-        f"{indent}id / 评论ID: {comment.get('id', '?')}",
-        f"{indent}post_id / 所属帖子ID: {comment.get('post_id', '')}",
-        f"{indent}author_id / 评论者ID: {comment.get('author_id', comment.get('owner_id', '?'))}",
-        f"{indent}author_username / 评论者用户名: @{comment.get('author_username') or '?'}",
-        f"{indent}content / 评论内容: {comment.get('content', '')}",
-        f"{indent}created_at / 创建时间: {comment.get('created_at', '')}",
-        f"{indent}parent_id / 父评论ID: {comment.get('parent_id', '')}",
-        f"{indent}root_comment_id / 所属一级评论ID: {comment.get('root_comment_id', '')}",
-        f"{indent}reply_to_author / 回复对象: @{comment.get('reply_to_author_username', '')}",
-        f"{indent}like_count / 点赞数: {comment.get('like_count', 0)}",
-        f"{indent}reply_count / 回复数: {comment.get('reply_count', 0)}",
-        f"{indent}is_liked / 当前用户是否已点赞: {comment.get('is_liked', False)}",
-    ]
-
-
-def _format_comment_tree(comment: Dict[str, Any], indent: str = "") -> List[str]:
-    lines = _format_comment_fields(comment, indent=indent)
-    children = comment.get("children") or []
-    for child in children:
-        lines.append(f"{indent}  - 关联回复")
-        lines.extend(_format_comment_tree(child, indent=f"{indent}    "))
-    return lines
-
-
-def _format_notification_fields(notification: Dict[str, Any], indent: str = "") -> List[str]:
-    lines = [
-        f"{indent}notification_id / 查看原内容参数: {notification.get('id', '?')}",
-        f"{indent}type / 消息类型: {notification.get('type', '')}",
-        f"{indent}sender_id / 来源用户ID: {notification.get('sender_id', '?')}",
-        f"{indent}sender_username / 来源用户名: @{notification.get('sender_username') or '?'}",
-        f"{indent}sender_follow_status / 当前用户对来源用户的关注状态: {notification.get('sender_follow_status', '')}",
-        f"{indent}resource_type / 原内容类型: {notification.get('resource_type', '')}",
-        f"{indent}post_id / 帖子ID: {notification.get('post_id', '')}",
-        f"{indent}source_post_type / 关联帖子类型: {notification.get('source_post_type', '')}",
-        f"{indent}comment_id / 评论ID: {notification.get('comment_id', '')}",
-        f"{indent}source_content / 被互动内容: {notification.get('source_content', '')}",
-        f"{indent}created_at / 创建时间: {notification.get('created_at', '')}",
-    ]
-    if notification.get("post_id") and notification.get("comment_id"):
-        lines.extend([
-            f"{indent}reply_post_id / 回复这条评论时传给 create_comment.post_id: {notification.get('post_id')}",
-            f"{indent}reply_parent_id / 回复这条评论时传给 create_comment.parent_id: {notification.get('comment_id')}",
-        ])
-    return lines
+    return json.dumps(
+        result,
+        ensure_ascii=False,
+        default=str,
+        separators=(",", ":"),
+    )
 
 
 def build_summarize_system_prompt(
@@ -630,7 +323,7 @@ def build_summarize_system_prompt(
     return build_system_prompt(username, name, personality_prompt, personal_signature)
 
 
-def build_summarize_prompt(state: Dict[str, Any]) -> str:
+def build_summarize_prompt(state: Mapping[str, Any]) -> str:
     """
     构建总结节点的用户提示词
 
@@ -644,18 +337,17 @@ def build_summarize_prompt(state: Dict[str, Any]) -> str:
         str: 格式化的总结 prompt
     """
     if not state.get("action_history"):
-        return f"""用户 {state.get('username', '未知')} 的本次会话未执行任何操作。"""
+        return f"""用户 {state.get('username', 'unknown')} 的本次会话未执行任何操作。"""
 
-    history_text = _build_action_history_text(
-        state["action_history"],
-        include_decision_guidance=False,
+    history_text = _serialize_prompt_json(
+        _build_action_history_data(state["action_history"]),
     )
 
     template = _get_configured_prompt_template(SUMMARIZE_MEMORY_PROMPT_KEY)
     return render_prompt_template(
         template,
         {
-            "username": state.get("username", "未知"),
+            "username": state.get("username", "unknown"),
             "history_text": history_text,
             "platform_name": _get_platform_display_name(),
         },

@@ -1,8 +1,8 @@
 # 核心图结构模块
 # 定义 LangGraph 的图结构，包括节点、边、路由逻辑等
-import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 from langgraph.graph import StateGraph, END, START
+from langgraph.graph.state import CompiledStateGraph
 from langchain_core.messages import AIMessage
 
 from agents.agents_scheduler.langgraph.state import SessionState
@@ -16,9 +16,6 @@ from agents.agents_scheduler.langgraph.nodes import (
     end_node,
     should_continue_edge,
 )
-
-logger = logging.getLogger(__name__)
-
 
 def _default_llm_invoker(system_prompt: str, user_prompt: str) -> AIMessage:
     """
@@ -46,9 +43,9 @@ def _default_llm_invoker(system_prompt: str, user_prompt: str) -> AIMessage:
 
 def build_session_graph(
     config: Optional[SessionConfig] = None,
-    llm_invoker: Optional[callable] = None,
-    summarize_llm_invoker: Optional[callable] = None
-) -> StateGraph:
+    llm_invoker: Optional[Callable[[str, str], AIMessage]] = None,
+    summarize_llm_invoker: Optional[Callable[[str, str], AIMessage]] = None
+) -> CompiledStateGraph:
     """
     构建完整的会话图
 
@@ -94,23 +91,14 @@ def build_session_graph(
     Returns:
         StateGraph: 编译后的图结构
     """
-    logger.info("开始构建LangGraph图结构")
-
     if config is None:
         config = get_default_config()
-        logger.info("使用配置: max_steps=%d", config.max_steps)
 
     if llm_invoker is None:
         llm_invoker = _default_llm_invoker
-        logger.info("未配置模型，请先配置模型")
-    else:
-        logger.info("LLM调用器就绪")
 
     if summarize_llm_invoker is None:
         summarize_llm_invoker = llm_invoker
-        logger.info("总结节点使用默认 LLM 调用器")
-    else:
-        logger.info("总结节点 LLM 调用器就绪")
 
     # 创建图
     graph = StateGraph(SessionState)
@@ -122,7 +110,6 @@ def build_session_graph(
     graph.add_node("tool_execution", tool_execution_node)
     graph.add_node("summarize", lambda state: summarize_node(state, summarize_llm_invoker))
     graph.add_node("end", end_node)
-    logger.info("节点注册完成: start, recall_memory, llm_decision, tool_execution, summarize, end")
 
     # 设置入口点
     graph.set_entry_point("start")
@@ -134,7 +121,6 @@ def build_session_graph(
     graph.add_edge("recall_memory", "llm_decision")
     # 3. llm_decision -> tool_execution: 决策后执行工具
     graph.add_edge("llm_decision", "tool_execution")
-    logger.info("普通边设置完成")
 
     # 添加条件边
     # tool_execution 之后：
@@ -150,7 +136,6 @@ def build_session_graph(
             "summarize": "summarize",            # 结束会话
         }
     )
-    logger.info("条件边设置完成")
 
     # 添加结束边
     graph.add_edge("summarize", "end")
@@ -158,8 +143,6 @@ def build_session_graph(
 
     # 编译图
     compiled_graph = graph.compile()
-    logger.info("图编译完成")
-
     return compiled_graph
 
 
@@ -237,32 +220,3 @@ def get_graph_structure() -> Dict[str, Any]:
             }
         ]
     }
-
-
-def print_graph_structure() -> None:
-    """
-    打印图的机构信息
-
-    用于调试和理解图结构。
-    """
-    structure = get_graph_structure()
-
-    logger.info("=" * 60)
-    logger.info("LangGraph 会话图结构")
-    logger.info("=" * 60)
-
-    logger.info("【节点列表】")
-    for node in structure["nodes"]:
-        logger.info("  - %s: %s", node['name'], node['description'])
-
-    logger.info("【边列表】")
-    for edge in structure["edges"]:
-        logger.info("  %s -> %s", edge['from'], edge['to'])
-
-    logger.info("【条件边】")
-    for cond_edge in structure["conditional_edges"]:
-        logger.info("  %s (%s):", cond_edge['from'], cond_edge['condition'])
-        for target, desc in cond_edge["branches"].items():
-            logger.info("    - %s: %s", target, desc)
-
-    logger.info("=" * 60)

@@ -16,7 +16,7 @@ from agents.platform_tools import (
     PlatformToolError,
     execute_platform_tool,
 )
-from agents.platform_tools.presenters import _plain_markdown_excerpt
+from agents.platform_tools.presenters import _format_article_content, _plain_markdown_excerpt
 
 
 class FakePlatformClient:
@@ -156,6 +156,27 @@ def test_article_feed_excerpt_uses_ten_line_character_budget() -> None:
     content = "文" * 471
 
     assert _plain_markdown_excerpt(content) == "文" * 470 + "..."
+
+
+def test_article_feed_preview_uses_english_expand_instruction() -> None:
+    """内外部共用的文章预览应使用英文提示 Agent 展开 Markdown 全文。"""
+
+    content = _format_article_content(
+        PlatformToolContext(
+            client=FakePlatformClient(),
+            access_token="token",
+            current_user={"id": 1},
+        ),
+        post_id=1,
+        title="长文",
+        markdown_content="# 标题\n正文内容",
+        full=False,
+    )
+
+    assert content.endswith(
+        "This is an article. Call expand_post(post_id=1) to view the full Markdown content."
+    )
+    assert "可查看 Markdown 全文" not in content
 
 
 def test_feed_uses_explicit_token_and_returns_cursor() -> None:

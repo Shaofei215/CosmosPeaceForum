@@ -96,7 +96,6 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
     def _handle_reload_system(self):
         """重载系统配置"""
         try:
-            from agents.agents_scheduler.scheduler.config import reload_scheduler_config
             from agents.agents_scheduler.langgraph.config import reload_session_config
             from agents.agents_scheduler.memory.config import reload_memory_config
             from agents.agents_scheduler.memory.embedding import reload_embedding_model
@@ -104,7 +103,6 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             from agents.agents_scheduler.langgraph.executor import reload_llm_registry
             from agents.agents_scheduler.scheduler.time_system import reload_time_scale
 
-            reload_scheduler_config()
             reload_session_config()
             memory_config = reload_memory_config()
             reload_embedding_model(memory_config)
@@ -112,10 +110,10 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             reload_llm_registry()
             reload_time_scale()
 
-            logger.info("[热更新] 系统配置已重载")
+            logger.info("系统配置已重载")
             self._send_json_response(200, {"message": "system config reloaded"})
         except Exception as e:
-            logger.error(f"[热更新] 系统配置重载失败: {e}")
+            logger.error(f"系统配置重载失败: {e}")
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_model(self):
@@ -127,10 +125,10 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             reload_session_config()
             reload_llm_registry()
 
-            logger.info("[热更新] 模型配置已重载")
+            logger.info("模型配置已重载")
             self._send_json_response(200, {"message": "model config reloaded"})
         except Exception as e:
-            logger.error(f"[热更新] 模型配置重载失败: {e}")
+            logger.error(f"模型配置重载失败: {e}")
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_agent(self):
@@ -171,10 +169,10 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
                             )
                             return
 
-            logger.info("[热更新] Agent 配置已重载")
+            logger.info("Agent 配置已重载")
             self._send_json_response(200, {"message": "agent config reloaded"})
         except Exception as e:
-            logger.error(f"[热更新] Agent 配置重载失败: {e}")
+            logger.error(f"Agent 配置重载失败: {e}")
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_agents(self):
@@ -204,19 +202,18 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             else:
                 results = {agent_id: self.scheduler_manager.restart_agent(agent_id) for agent_id in ids}
 
-            logger.info("[热更新] 批量 Agent 配置已重载: action=%s count=%d", action, len(ids))
+            logger.info("批量 Agent 配置已重载: action=%s count=%d", action, len(ids))
             self._send_json_response(200, {
                 "message": "agents config reloaded",
                 "results": results,
             })
         except Exception as e:
-            logger.error(f"[热更新] 批量 Agent 配置重载失败: {e}")
+            logger.error(f"批量 Agent 配置重载失败: {e}")
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_all(self):
         """重载全部配置"""
         try:
-            from agents.agents_scheduler.scheduler.config import reload_scheduler_config
             from agents.agents_scheduler.langgraph.config import reload_session_config
             from agents.agents_scheduler.memory.config import reload_memory_config
             from agents.agents_scheduler.memory.embedding import reload_embedding_model
@@ -225,7 +222,6 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             from agents.agents_scheduler.langgraph.executor import reload_llm_registry
             from agents.agents_scheduler.scheduler.time_system import reload_time_scale
 
-            reload_scheduler_config()
             reload_session_config()
             memory_config = reload_memory_config()
             reload_embedding_model(memory_config)
@@ -244,7 +240,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             logger.info("[热更新] 全部配置已重载")
             self._send_json_response(200, {"message": "all config reloaded"})
         except Exception as e:
-            logger.error(f"[热更新] 全部配置重载失败: {e}")
+            logger.error(f"全部配置重载失败: {e}")
             self._send_json_response(500, {"error": str(e)})
 
     def _restart_all_agents_in_background(self) -> None:
@@ -298,7 +294,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             )
 
             logger.info(
-                "[会话注入] 已加入队列: type=%s count=%d source=%s",
+                "提示词注入 已加入队列: type=%s count=%d source=%s",
                 injection_type,
                 len(queued),
                 source,
@@ -310,7 +306,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
         except ValueError as e:
             self._send_json_response(400, {"error": str(e)})
         except Exception as e:
-            logger.error(f"[会话注入] 加入队列失败: {e}")
+            logger.error(f"提示词注入 加入队列失败: {e}")
             self._send_json_response(500, {"error": str(e)})
 
 
@@ -343,7 +339,7 @@ class SchedulerInternalServer:
         )
         self._thread.start()
 
-        logger.info("[内部接口] 服务器启动在 http://%s:%d", self.host, self.port)
+        logger.info("调度器服务器启动在 http://%s:%d", self.host, self.port)
 
     def stop(self, wait: bool = True):
         """停止内部 HTTP 服务器"""
@@ -352,4 +348,4 @@ class SchedulerInternalServer:
             self._server.server_close()
             if wait and self._thread and self._thread.is_alive():
                 self._thread.join(timeout=2)
-            logger.info("[内部接口] 服务器已停止")
+            logger.info("调度器服务器已停止")

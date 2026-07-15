@@ -52,7 +52,6 @@ class TestLoginUser:
 class TestAIUserScheduler:
     def test_scheduler_init(self):
         scheduler = AIUserScheduler(
-            user_id=1,
             username="test_user",
             name="Test",
             agent_id=1,
@@ -63,11 +62,10 @@ class TestAIUserScheduler:
             time_system=MagicMock(),
             model_config_id=2,
         )
-        assert scheduler.user_id == 1
         assert scheduler.username == "test_user"
         assert scheduler.model_config_id == 2
         assert scheduler.monthly_logins == 30
-        assert scheduler._is_active is True
+        assert scheduler._stop_event.is_set() is False
         assert scheduler.is_logged_in is False
 
     def test_scheduler_stop(self):
@@ -75,7 +73,6 @@ class TestAIUserScheduler:
         mock_time.get_scaled_time.return_value = MagicMock()
         
         scheduler = AIUserScheduler(
-            user_id=1,
             username="test_user",
             name="Test",
             agent_id=1,
@@ -85,33 +82,15 @@ class TestAIUserScheduler:
             personal_signature="sig",
             time_system=mock_time,
         )
-        scheduler._is_active = False  # Mark as stopped without starting
-        assert scheduler._is_active is False
-
-    def test_scheduler_pause_resume(self):
-        scheduler = AIUserScheduler(
-            user_id=1,
-            username="test_user",
-            name="Test",
-            agent_id=1,
-            monthly_logins=30,
-            password="password",
-            personality_prompt="friendly",
-            personal_signature="sig",
-            time_system=MagicMock(),
-        )
-        assert scheduler._is_active is True
-        scheduler.pause()
-        assert scheduler._is_active is False
-        scheduler.resume()
-        assert scheduler._is_active is True
+        scheduler.stop(wait=False)
+        assert scheduler._stop_event.is_set() is True
+        assert scheduler._stop_requested_at is not None
 
     def test_scheduler_zero_monthly_logins(self):
         mock_time = MagicMock()
         mock_time.get_scaled_time.return_value = MagicMock()
         
         scheduler = AIUserScheduler(
-            user_id=1,
             username="test_user",
             name="Test",
             agent_id=1,
@@ -130,7 +109,6 @@ class TestAIUserScheduler:
         mock_time.get_scaled_time.return_value = datetime.now()
         
         scheduler = AIUserScheduler(
-            user_id=1,
             username="test_user",
             name="Test",
             agent_id=1,
@@ -149,7 +127,6 @@ class TestAIUserScheduler:
 
         relation_map = MagicMock()
         scheduler = AIUserScheduler(
-            user_id=1,
             username="old_name",
             name="Test",
             agent_id=1,
@@ -178,6 +155,66 @@ class TestAIUserScheduler:
         )
         relation_map.build_from_db.assert_called_once_with()
 
+    @pytest.mark.parametrize(
+        "user_info",
+        [
+            {"access_token": "test-token"},
+            {"id": 42},
+            {"id": "42", "access_token": "test-token"},
+            {"id": 42, "access_token": ""},
+        ],
+    )
+    def test_execute_session_rejects_invalid_login_response(self, user_info: dict) -> None:
+        """登录响应缺少有效 ID 或令牌时不应记录登录或启动会话。"""
+
+        scheduler = AIUserScheduler(
+            username="test_user",
+            name="Test",
+            agent_id=1,
+            monthly_logins=30,
+            password="password",
+            personality_prompt="friendly",
+            personal_signature="sig",
+            time_system=MagicMock(),
+            model_config_id=2,
+        )
+
+        with (
+            patch(
+                "agents.agents_scheduler.scheduler.scheduler.login_user",
+                return_value=user_info,
+            ),
+            patch("agents.agents_scheduler.scheduler.scheduler.get_db_client") as mock_db,
+            patch("agents.agents_scheduler.scheduler.scheduler.run_session") as mock_run_session,
+        ):
+            scheduler._execute_login_and_session()
+
+        mock_db.return_value.record_agent_login.assert_not_called()
+        mock_run_session.assert_not_called()
+        assert scheduler.is_logged_in is False
+
+    def test_sync_profile_rejects_non_integer_user_id(self) -> None:
+        """资料同步应拒绝无法满足公开平台用户 ID 契约的数据。"""
+
+        scheduler = AIUserScheduler(
+            username="old_name",
+            name="Test",
+            agent_id=1,
+            monthly_logins=30,
+            password="password",
+            personality_prompt="friendly",
+            personal_signature="old signature",
+            time_system=MagicMock(),
+        )
+
+        with patch("agents.agents_scheduler.scheduler.scheduler.get_db_client") as mock_db:
+            synchronized = scheduler._sync_profile(
+                {"id": "42", "username": "new_name", "bio": "new signature"}
+            )
+
+        assert synchronized is False
+        mock_db.return_value.update_agent_profile.assert_not_called()
+
 
 class TestAgentSchedulerManager:
     def test_manager_init(self):
@@ -185,10 +222,12 @@ class TestAgentSchedulerManager:
         assert manager._is_running is False
         assert len(manager.schedulers) == 0
 
-    def test_manager_start_no_agents(self):
+    def test_manager_start_no_active_agents(self):
         with patch("agents.agents_scheduler.scheduler.scheduler.get_db_client") as mock_db, \
              patch("agents.agents_scheduler.scheduler.scheduler.MemoryDecayScheduler") as mock_decay:
-            mock_db.return_value.get_agent_configs.return_value = []
+            mock_db.return_value.get_agent_configs.return_value = [
+                {"id": 1, "username": "inactive_user", "is_active": False},
+            ]
             manager = AgentSchedulerManager()
             manager.start()
             assert len(manager.schedulers) == 0
@@ -230,6 +269,23 @@ class TestAgentSchedulerManager:
         manager = AgentSchedulerManager()
         result = manager.get_all_statuses()
         assert result == []
+
+    def test_create_scheduler_rejects_invalid_agent_id(self) -> None:
+        """数据库配置缺少整数 Agent ID 时不应创建或登记线程。"""
+
+        manager = AgentSchedulerManager()
+
+        with patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config"):
+            created = manager._create_scheduler(
+                {
+                    "id": None,
+                    "username": "test_user",
+                    "name": "Test",
+                }
+            )
+
+        assert created is False
+        assert manager.schedulers == {}
 
 
 class TestMemoryDecayScheduler:

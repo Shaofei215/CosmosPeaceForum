@@ -2,9 +2,9 @@
 Agent Scheduler 主入口
 
 启动流程：
-1. 初始化内部 HTTP 服务器（供 management 调用）
+1. 初始化内部 HTTP 服务器（供管理器调用）
 2. 从 agents/.env 和管理数据库加载配置
-3. 构建角色关系映射（从数据库）
+3. 构建角色关系映射
 4. 为每个 Agent 创建独立调度线程
 5. 启动所有调度线程
 """
@@ -13,6 +13,7 @@ import sys
 import logging
 import signal
 import threading
+from io import TextIOWrapper
 
 from agents.agents_scheduler.scheduler.config import get_scheduler_config
 from agents.agents_scheduler.scheduler.relation_map import build_relation_maps_from_db
@@ -49,9 +50,7 @@ def main():
     """
     setup_logging()
 
-    logger.info("=" * 60)
-    logger.info("Agents Scheduler 启动中...")
-    logger.info("=" * 60)
+    logger.info("调度器启动中...")
 
     config = get_scheduler_config()
     logger.info("API 地址: %s", config.api_base_url)
@@ -81,12 +80,9 @@ def main():
     relation_map = build_relation_maps_from_db()
     logger.info("关系映射加载完成: %s", relation_map)
 
-    logger.info("调度器正在启动...")
     scheduler_manager.start(relation_map)
 
-    logger.info("=" * 60)
-    logger.info("Agents Scheduler 启动完成!")
-    logger.info("=" * 60)
+    logger.info("调度器启动完成!")
 
     shutdown_started = threading.Event()
 
@@ -99,7 +95,7 @@ def main():
         logger.info("正在关闭...")
         scheduler_manager.stop(wait=False)
         internal_server.stop(wait=False)
-        logger.info("Scheduler 已关闭")
+        logger.info("调度器已关闭")
         raise SystemExit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -116,5 +112,6 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.stdout.reconfigure(line_buffering=True)
+    if isinstance(sys.stdout, TextIOWrapper):
+        sys.stdout.reconfigure(line_buffering=True)
     main()

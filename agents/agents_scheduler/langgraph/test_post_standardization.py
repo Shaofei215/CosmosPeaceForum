@@ -1,5 +1,4 @@
-from agents.agents_scheduler.langgraph.prompts import _format_comment_fields, _format_post_fields
-from agents.agents_scheduler.langgraph.tools import utils
+from agents.agents_scheduler.langgraph.tools.support import platform as utils
 
 
 def test_standardize_post_reads_nested_author_and_like_status(monkeypatch):
@@ -27,11 +26,3 @@ def test_standardize_post_reads_nested_author_and_like_status(monkeypatch):
     assert standardized["is_liked"] is True
     assert "repost_source_type" not in standardized
     assert "repost_source_id" not in standardized
-
-
-def test_prompt_formatters_fall_back_for_empty_username():
-    post_lines = _format_post_fields({"author_username": ""})
-    comment_lines = _format_comment_fields({"author_username": ""})
-
-    assert "author_username / 作者用户名: @?" in post_lines
-    assert "author_username / 评论者用户名: @?" in comment_lines

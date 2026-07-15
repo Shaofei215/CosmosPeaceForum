@@ -4,6 +4,7 @@ from agents.management.backend.models.system_config import SystemConfig
 from agents.management.backend.services.system_service import (
     DEFAULT_SYSTEM_CONFIGS,
     ENV_MANAGED_CONFIG_KEYS,
+    REMOVED_SYSTEM_CONFIG_KEYS,
     get_config_value,
     init_default_configs,
     list_system_configs,
@@ -15,6 +16,13 @@ def test_default_system_configs_do_not_include_env_managed_keys():
     default_keys = {key for key, _, _ in DEFAULT_SYSTEM_CONFIGS}
 
     assert default_keys.isdisjoint(ENV_MANAGED_CONFIG_KEYS)
+
+
+def test_default_system_configs_do_not_include_removed_keys() -> None:
+    """已移除的历史配置不应重新写入新数据库。"""
+    default_keys = {key for key, _, _ in DEFAULT_SYSTEM_CONFIGS}
+
+    assert default_keys.isdisjoint(REMOVED_SYSTEM_CONFIG_KEYS)
 
 
 def test_default_system_configs_include_web_search_keys():
@@ -58,6 +66,35 @@ def test_init_default_configs_purges_env_managed_values_from_sqlite():
         ).first()
         assert admin_key is None
         assert ai_password is None
+
+
+def test_init_default_configs_purges_removed_values_from_sqlite() -> None:
+    """初始化配置时应清理旧库中的已移除配置。"""
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as db:
+        removed_keys = {
+            "LANGGRAPH_CHECKPOINTER_ENABLED",
+            "LANGGRAPH_MAX_CONSECUTIVE_ERRORS",
+        }
+        for key in removed_keys:
+            db.add(
+                SystemConfig(
+                    key=key,
+                    value="true",
+                    description="legacy",
+                )
+            )
+        db.commit()
+
+        init_default_configs(db)
+
+        for key in removed_keys:
+            removed_config = db.exec(
+                select(SystemConfig).where(SystemConfig.key == key)
+            ).first()
+            assert removed_config is None
 
 
 def test_get_config_value_reads_env_managed_values_from_core_config(monkeypatch):

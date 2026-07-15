@@ -103,9 +103,17 @@ class TestManagementDBClient:
 
     def test_get_agent_configs(self, temp_db):
         client = ManagementDBClient(db_path=temp_db)
+        conn = sqlite3.connect(temp_db)
+        conn.execute(
+            "INSERT INTO agent_configs (id, username, name, is_active) VALUES (?, ?, ?, ?)",
+            (2, "inactive_user", "Inactive", 0),
+        )
+        conn.commit()
+        conn.close()
+
         result = client.get_agent_configs()
         assert isinstance(result, list)
-        assert len(result) > 0
+        assert len(result) == 2
         assert "knows_ids" in result[0]
         assert isinstance(result[0]["knows_ids"], list)
 

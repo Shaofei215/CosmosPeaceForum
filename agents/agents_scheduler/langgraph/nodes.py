@@ -2,7 +2,6 @@
 # 定义 LangGraph 图结构中的各个节点，包括LLM决策、工具执行、总结等
 import json
 import logging
-import traceback
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
@@ -42,7 +41,7 @@ def _attach_current_unread_count(data: Any) -> Any:
 
         unread_count = int(_get_notification_summary().get("unread_count", 0) or 0)
     except Exception:
-        logger.exception("tool_execution_node | 读取未读消息数量失败")
+        logger.exception("读取未读消息数量失败")
         return data
 
     if not isinstance(data, dict):
@@ -62,7 +61,7 @@ def _attach_current_unread_count(data: Any) -> Any:
 TOOL_TO_LOCATION = {
     "view_notifications": "消息页",
     "view_notification_origin": "帖子详情页",
-    "view_full_hot_topics": "热榜页",
+    "view_full_hot_topics": "大家都在聊",
     "search_platform": "搜索结果页",
     "get_global_feed": "主页（信息流）",
     "expand_post": "帖子详情页",
@@ -71,6 +70,7 @@ TOOL_TO_LOCATION = {
     "get_user_profile": "用户主页",
     "update_profile": None,
     "toggle_post_like": None,
+    "vote_post_poll": None,
     "toggle_comment_like": None,
     "toggle_follow": None,
     "create_comment": None,
@@ -96,6 +96,7 @@ TOOLS_WITH_RETURN_VALUE = {
     "view_post_comments",
     "expand_comment",
     "scroll",
+    "vote_post_poll",
     "recall_memory",
     "web_search",
 }
@@ -226,17 +227,22 @@ def _build_memory_query_context(state: SessionState) -> str:
     if last_tool_result is not None:
         serialized_result = _serialize_memory_query_value(last_tool_result)
         if serialized_result:
-            query_parts.append(f"当前看到的内容：\n{serialized_result}")
+            query_parts.append(serialized_result)
 
-    recent_actions = state.get("action_history", [])[-3:]
+    recent_actions = state.get("action_history", [])
     if recent_actions:
         action_lines = []
         for record in recent_actions:
             summary = str(record.get("summary", "")).strip()
             action = str(record.get("action", "")).strip()
             reason = str(record.get("reason", "")).strip()
-            action_lines.append(f"看到：{summary}；行动：{action}；原因：{reason}")
-        query_parts.append("近期操作：\n" + "\n".join(action_lines))
+            action_line = "；".join(
+                value for value in (summary, action, reason) if value
+            )
+            if action_line:
+                action_lines.append(action_line)
+        if action_lines:
+            query_parts.append("\n".join(action_lines))
 
     return "\n\n".join(query_parts)
 
@@ -257,8 +263,7 @@ def start_node(state: SessionState) -> SessionState:
     Returns:
         SessionState: 更新后的状态
     """
-    username = state.get("username", "未知")
-    logger.info("start_node | 用户=%s | 初始化会话状态", username)
+    logger.info("[start] %s 初始化会话", state.get("name", "未知"))
     try:
         from agents.agents_scheduler.langgraph.tools.support.platform import _clear_scroll_cursor
         _clear_scroll_cursor()
@@ -284,7 +289,7 @@ def recall_memory_node(state: SessionState) -> SessionState:
     """
     记忆召回节点
 
-    在 LLM 决策之前执行，从长期记忆库检索相关记忆并注入 Prompt。
+    在 LLM 决策之前执行，从长期记忆库检索相关记忆并注入检索文本。
     查询仅使用当前视野与近期操作，不使用系统提示词或上一轮召回结果。
 
     Args:
@@ -294,9 +299,9 @@ def recall_memory_node(state: SessionState) -> SessionState:
         SessionState: 更新后的状态，包含 recalled_memories
     """
     import asyncio
+    logger.info("[recall_memory] %s 召回记忆", state.get("name", "未知"))
 
     if is_stop_requested():
-        logger.info("recall_memory_node | 用户=%s | 收到停止请求，跳过记忆召回", state.get("username", "未知"))
         return {
             **state,
             "exit_reason": ExitReason.USER_CHOICE,
@@ -306,14 +311,17 @@ def recall_memory_node(state: SessionState) -> SessionState:
     config = get_memory_config()
 
     if not config.memory_enabled:
-        return state
+        return {
+            **state,
+            "recalled_memories": "",
+        }
 
     owner_id = state.get("user_id")
     if not owner_id:
-        return state
-
-    username = state.get("username", "未知")
-    logger.info("recall_memory_node | 用户=%s | 开始记忆召回", username)
+        return {
+            **state,
+            "recalled_memories": "",
+        }
 
     try:
         ts = get_time_system()
@@ -321,9 +329,10 @@ def recall_memory_node(state: SessionState) -> SessionState:
 
         query_context = _build_memory_query_context(state)
         if not query_context:
-            state["recalled_memories"] = ""
-            logger.info("recall_memory_node | 用户=%s | 当前没有可检索上下文，跳过召回", username)
-            return state
+            return {
+                **state,
+                "recalled_memories": "",
+            }
 
         service = get_memory_service()
         recalled = asyncio.run(service.recall_memories(
@@ -335,22 +344,23 @@ def recall_memory_node(state: SessionState) -> SessionState:
 
         # 构建记忆注入文本
         if recalled:
-            memory_lines = ["\n\n## 相关记忆"]
+            memory_lines = ["\n\n## relevant memorises\n"]
             for chunk, time_desc in recalled:
-                memory_lines.append(f"[记忆片段 - {time_desc}]")
+                memory_lines.append(f"[memorise chunk - {time_desc}]")
                 memory_lines.append(chunk.content)
                 memory_lines.append("---")
-            state["recalled_memories"] = "\n".join(memory_lines)
-            logger.info("recall_memory_node | 用户=%s | 召回%d条相关记忆", username, len(recalled))
+            recalled_memories = "\n".join(memory_lines)
         else:
-            state["recalled_memories"] = ""
-            logger.info("recall_memory_node | 用户=%s | 无相关记忆召回", username)
+            recalled_memories = ""
 
     except Exception as e:
-        logger.warning("recall_memory_node | 记忆召回异常: %s", e)
-        state["recalled_memories"] = ""
+        logger.warning("%s 记忆召回失败: %s", state.get("name", "未知"), e)
+        recalled_memories = ""
 
-    return state
+    return {
+        **state,
+        "recalled_memories": recalled_memories,
+    }
 
 
 def llm_decision_node(
@@ -369,24 +379,15 @@ def llm_decision_node(
     Returns:
         SessionState: 更新后的状态，包含 pending_tool 或 pending_tools
     """
-    username = state.get("username", "未知")
-    step_count = state.get("step_count", 0)
-    current_location = state.get("current_location", "未知")
+    name = state.get("name", "未知")
+    logger.info("[llm_decision] %s 请求 LLM 决策", name)
 
     if is_stop_requested():
-        logger.info("llm_decision_node | 用户=%s | 收到停止请求，准备结束会话", username)
         return {
             **state,
             "pending_tool": {"tool_name": "logout", "args": {"reason": "调度器停止请求"}},
             "pending_tools": None,
         }
-
-    logger.info("llm_decision_node | 用户=%s | 步骤=%d | 位置=%s | 正在请求LLM决策", username, step_count, current_location)
-
-    # recalled_memories 已由 recall_memory_node 填充，直接使用
-    recalled_memories = state.get("recalled_memories", "")
-    if recalled_memories:
-        logger.info("llm_decision_node | 使用已召回的记忆")
 
     system_prompt = build_system_prompt(
         username=state["username"],
@@ -401,26 +402,26 @@ def llm_decision_node(
     try:
         response = llm_invoker(system_prompt, user_prompt)
         tool_calls = parse_tool_calls(response)
+        success_state: SessionState = {
+            **state,
+            "last_error": None,
+        }
 
         if not tool_calls:
             if state["step_count"] >= state["max_steps"]:
-                logger.info("llm_decision_node | 用户=%s | 步骤=%d | LLM未返回工具调用 | 达到最大步数，将执行登出", username, step_count)
                 return {
-                    **state,
+                    **success_state,
                     "pending_tool": {"tool_name": "logout", "args": {"reason": "达到最大步数限制"}},
                     "pending_tools": None,
                 }
             else:
-                logger.info("llm_decision_node | 用户=%s | 步骤=%d | LLM未返回工具调用", username, step_count)
                 return {
-                    **state,
+                    **success_state,
                     "pending_tool": None,
                     "pending_tools": None,
                 }
 
         normalized_calls = _normalize_tool_calls_for_batch(tool_calls)
-        call_names = [tc.get("name", "") for tc in normalized_calls]
-        logger.info("llm_decision_node | 用户=%s | 步骤=%d | LLM决策: %s", username, step_count, call_names)
 
         if len(normalized_calls) == 1:
             tool_name = normalized_calls[0].get("name", "").lower()
@@ -428,15 +429,14 @@ def llm_decision_node(
 
             if tool_name == "logout":
                 reason = tool_args.get("reason", "主动结束会话")
-                logger.info("llm_decision_node | 用户=%s | 步骤=%d | LLM选择登出: reason=%s", username, step_count, reason)
                 return {
-                    **state,
+                    **success_state,
                     "pending_tool": {"tool_name": "logout", "args": {"reason": reason}},
                     "pending_tools": None,
                 }
 
             return {
-                **state,
+                **success_state,
                 "pending_tool": {"tool_name": tool_name, "args": tool_args},
                 "pending_tools": None,
             }
@@ -444,34 +444,34 @@ def llm_decision_node(
             logout_call = None
             non_logout_calls = []
             for tc in normalized_calls:
-                name = tc.get("name", "").lower()
-                if name == "logout":
+                call_name = tc.get("name", "").lower()
+                if call_name == "logout":
                     logout_call = tc
                 else:
                     non_logout_calls.append(tc)
 
             if logout_call:
                 reason = logout_call.get("args", {}).get("reason", "主动结束会话")
-                logger.info("llm_decision_node | 用户=%s | 步骤=%d | LLM批量决策中包含登出: reason=%s", username, step_count, reason)
                 return {
-                    **state,
+                    **success_state,
                     "pending_tool": {"tool_name": "logout", "args": {"reason": reason}},
                     "pending_tools": None,
                 }
 
             first_call = non_logout_calls[0]
             return {
-                **state,
+                **success_state,
                 "pending_tool": {"tool_name": first_call.get("name", "").lower(), "args": first_call.get("args", {})},
                 "pending_tools": [{"name": tc.get("name", "").lower(), "args": tc.get("args", {})} for tc in non_logout_calls[1:]],
             }
 
     except Exception as e:
-        logger.error("llm_decision_node | 用户=%s | 步骤=%d | LLM决策异常: %s", username, step_count, str(e))
+        logger.error("%s 的 LLM 请求失败: %s", name, e)
         return {
             **state,
             "pending_tool": None,
             "pending_tools": None,
+            "exit_reason": ExitReason.ERROR,
             "last_error": f"LLM 决策失败: {str(e)}",
         }
 
@@ -506,12 +506,11 @@ def tool_execution_node(state: SessionState) -> SessionState:
     Returns:
         SessionState: 更新后的状态
     """
-    username = state.get("username", "未知")
-    step_count = state.get("step_count", 0)
+    name = state.get("name", "未知")
     pending = state.get("pending_tool")
 
     if is_stop_requested() and (pending is None or pending.get("tool_name", "").lower() != "logout"):
-        logger.info("tool_execution_node | 用户=%s | 收到停止请求，跳过后续工具执行", username)
+        logger.info("[tool_execution] %s 跳过工具执行", name)
         return {
             **state,
             "exit_reason": ExitReason.USER_CHOICE,
@@ -525,25 +524,28 @@ def tool_execution_node(state: SessionState) -> SessionState:
         if pending_tools:
             next_tool = pending_tools[0]
             remaining_tools = pending_tools[1:]
-            logger.info("tool_execution_node | 用户=%s | 步骤=%d | 执行批量中的下一个工具: %s", username, step_count, next_tool.get('name', ''))
-            return {
+            state = {
                 **state,
                 "pending_tool": {"tool_name": next_tool.get("name", "").lower(), "args": next_tool.get("args", {})},
                 "pending_tools": remaining_tools if remaining_tools else None,
             }
-        logger.info("tool_execution_node | 用户=%s | 步骤=%d | 无待执行工具，步数+1", username, step_count)
-        return {
-            **state,
-            "step_count": state["step_count"] + 1,
-        }
+            pending = state["pending_tool"]
+        else:
+            logger.info("[tool_execution] %s 未执行工具", name)
+            # 上游节点请求结束会话时，不执行工具，也不消耗会话步骤。
+            if state.get("exit_reason") is not None:
+                return state
+            return {
+                **state,
+                "step_count": state["step_count"] + 1,
+            }
 
+    assert pending is not None
     tool_name = pending.get("tool_name", "").lower()
     tool_args = pending.get("args", {})
-    logger.info("tool_execution_node | 用户=%s | 步骤=%d | 开始执行工具: %s | 参数=%s", username, step_count, tool_name, tool_args)
 
     if tool_name == "logout":
-        logout_reason = tool_args.get("reason", "主动结束会话")
-        logger.info("tool_execution_node | 用户=%s | 步骤=%d | 执行登出: reason=%s", username, step_count, logout_reason)
+        logger.info("[tool_execution] %s 执行了 %s 工具，参数=%s", name, tool_name, tool_args)
         return {
             **state,
             "exit_reason": ExitReason.USER_CHOICE,
@@ -562,7 +564,7 @@ def tool_execution_node(state: SessionState) -> SessionState:
 
         if tool_name not in tool_map:
             result = {"action": f"执行了未知工具: {tool_name}", "data": {}}
-            logger.warning("tool_execution_node | 用户=%s | 步骤=%d | 工具不存在: %s", username, step_count, tool_name)
+            logger.warning("[tool_execution] %s 执行的工具不存在: %s，参数=%s", name, tool_name, tool_args)
         else:
             tool = tool_map[tool_name]
             raw_result = tool.invoke(tool_args)
@@ -570,18 +572,23 @@ def tool_execution_node(state: SessionState) -> SessionState:
                 result = raw_result
             else:
                 result = {"action": f"执行了 {tool_name}", "data": raw_result if raw_result else {}}
-            logger.info("tool_execution_node | 用户=%s | 步骤=%d | 工具执行成功: %s", username, step_count, tool_name)
+            logger.info("[tool_execution] %s 执行了 %s 工具，参数=%s", name, tool_name, tool_args)
 
     except ToolExecutionError as e:
         result = {"action": f"工具执行错误: {str(e)}", "data": {}}
-        logger.error("tool_execution_node | 用户=%s | 步骤=%d | 工具执行错误: %s", username, step_count, str(e))
+        logger.error("[tool_execution] %s 执行 %s 工具失败，参数=%s，错误=%s", name, tool_name, tool_args, e)
     except Exception as e:
         result = {"action": f"执行异常: {str(e)}", "data": {}}
-        logger.error("tool_execution_node | 用户=%s | 步骤=%d | 执行异常: %s", username, step_count, str(e))
-        traceback.print_exc()
+        logger.exception(
+            "[tool_execution] %s 执行 %s 工具异常，参数=%s，错误=%s",
+            name,
+            tool_name,
+            tool_args,
+            e,
+        )
 
     pending_tools = state.get("pending_tools")
-    has_pending = pending_tools and len(pending_tools) > 0
+    has_pending = bool(pending_tools)
 
     action = result.get("action", "") if isinstance(result, dict) else str(result)
 
@@ -608,42 +615,44 @@ def tool_execution_node(state: SessionState) -> SessionState:
         )
     last_tool_result = _attach_current_unread_count(last_tool_result)
 
-    profile_state_updates: dict[str, Any] = {}
+    updated_username: Optional[str] = None
+    updated_personal_signature: Optional[str] = None
     if tool_name == "update_profile" and isinstance(last_tool_result, dict):
-        updated_username = last_tool_result.get("username")
-        if updated_username:
-            profile_state_updates["username"] = str(updated_username)
+        result_username = last_tool_result.get("username")
+        if result_username:
+            updated_username = str(result_username)
         if "bio" in last_tool_result:
-            profile_state_updates["personal_signature"] = str(last_tool_result.get("bio") or "")
+            updated_personal_signature = str(last_tool_result.get("bio") or "")
 
     new_location = _get_location_after_tool(tool_name)
     current_location = new_location if new_location is not None else state.get("current_location", "主页（信息流）")
 
     if has_pending:
-        logger.info("tool_execution_node | 用户=%s | 步骤=%d | 批量工具还有 %d 个待执行", username, step_count, len(pending_tools))
-        return {
+        updated_state: SessionState = {
             **state,
-            **profile_state_updates,
             "action_history": state["action_history"] + [new_record],
             "current_location": current_location,
-            "last_tool_result": last_tool_result if last_tool_result else state.get("last_tool_result"),
+            "last_tool_result": last_tool_result if last_tool_result is not None else state.get("last_tool_result"),
             "pending_tool": None,
             "last_error": None,
         }
+    else:
+        updated_state = {
+            **state,
+            "step_count": state["step_count"] + 1,
+            "action_history": state["action_history"] + [new_record],
+            "current_location": current_location,
+            "last_tool_result": last_tool_result if last_tool_result is not None else state.get("last_tool_result"),
+            "pending_tool": None,
+            "pending_tools": None,
+            "last_error": None,
+        }
 
-    logger.info("tool_execution_node | 用户=%s | 步骤=%d | 批量执行完毕 | 操作已记录 | 当前位置=%s", username, step_count, current_location)
-
-    return {
-        **state,
-        **profile_state_updates,
-        "step_count": state["step_count"] + 1,
-        "action_history": state["action_history"] + [new_record],
-        "current_location": current_location,
-        "last_tool_result": last_tool_result if last_tool_result else state.get("last_tool_result"),
-        "pending_tool": None,
-        "pending_tools": None,
-        "last_error": None,
-    }
+    if updated_username is not None:
+        updated_state["username"] = updated_username
+    if updated_personal_signature is not None:
+        updated_state["personal_signature"] = updated_personal_signature
+    return updated_state
 
 
 def should_continue_edge(state: SessionState) -> str:
@@ -656,30 +665,27 @@ def should_continue_edge(state: SessionState) -> str:
     Returns:
         str: 下一个节点的名称
     """
-    username = state.get("username", "未知")
     step_count = state.get("step_count", 0)
     max_steps = state.get("max_steps", 10)
     exit_reason = state.get("exit_reason")
 
     if is_stop_requested():
-        logger.info("should_continue_edge | 用户=%s | 收到停止请求 | 路由=summarize", username)
         return "summarize"
 
     if exit_reason is not None:
-        reason_str = exit_reason.value if isinstance(exit_reason, ExitReason) else str(exit_reason)
-        logger.info("should_continue_edge | 用户=%s | 步骤=%d/%d | 退出原因=%s | 路由=summarize", username, step_count, max_steps, reason_str)
         return "summarize"
+
+    pending_tool = state.get("pending_tool")
+    if pending_tool:
+        return "tool_execution"
 
     pending_tools = state.get("pending_tools")
     if pending_tools and len(pending_tools) > 0:
-        logger.info("should_continue_edge | 用户=%s | 步骤=%d/%d | 批量工具还有 %d 个待执行 | 路由=tool_execution", username, step_count, max_steps, len(pending_tools))
         return "tool_execution"
 
     if step_count >= max_steps:
-        logger.info("should_continue_edge | 用户=%s | 步骤=%d/%d | 达到最大步数 | 路由=summarize", username, step_count, max_steps)
         return "summarize"
 
-    logger.info("should_continue_edge | 用户=%s | 步骤=%d/%d | 继续决策 | 路由=recall_memory", username, step_count, max_steps)
     return "recall_memory"
 
 
@@ -697,13 +703,19 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
     Returns:
         SessionState: 更新后的状态，包含 summary
     """
-    username = state.get("username", "未知")
+    name = state.get("name", "未知")
+    logger.info("[summarize] %s 生成会话总结", name)
 
     if is_stop_requested():
-        logger.info("summarize_node | 用户=%s | 收到停止请求，跳过LLM总结", username)
         return {
             **state,
             "summary": f"用户 {state.get('username', '未知')} 的本次会话因调度停止请求结束。",
+        }
+
+    if state.get("exit_reason") == ExitReason.ERROR:
+        return {
+            **state,
+            "summary": f"用户 {state.get('username', '未知')} 的本次会话因 LLM 决策失败而提前结束。",
         }
 
     if not state.get("action_history"):
@@ -735,11 +747,11 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
                     try:
                         tool_func = tools_map[tool_name]
                         result = tool_func.invoke(tool_args)
-                        logger.info("summarize_node | 用户=%s | %s", username, result.action if hasattr(result, 'action') else str(result))
+                        logger.info("%s 执行了 %s 工具，参数=%s", name, tool_name, tool_args)
                     except Exception as e:
-                        logger.error("summarize_node | 工具执行失败: %s | 错误: %s", tool_name, e)
+                        logger.error("%s 执行 %s 工具失败，参数=%s，错误=%s", name, tool_name, tool_args, e)
 
-        summary = response.content if hasattr(response, 'content') else str(response)
+        summary = response.content if isinstance(response.content, str) else response.text()
         if not summary:
             summary = f"用户 {state.get('username', '未知')} 执行了 {len(state.get('action_history', []))} 个操作。"
 
@@ -749,7 +761,7 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
         }
 
     except Exception as e:
-        logger.warning("summarize_node | 用户=%s | 异常: %s", username, e)
+        logger.warning("%s 生成会话总结失败: %s", name, e)
         return {
             **state,
             "summary": f"用户 {state.get('username', '未知')} 执行了 {len(state.get('action_history', []))} 个操作。",
@@ -766,8 +778,5 @@ def end_node(state: SessionState) -> SessionState:
     Returns:
         SessionState: 不做任何修改的状态
     """
-    username = state.get("username", "未知")
-    step_count = state.get("step_count", 0)
-    summary_preview = str(state.get("summary", ""))[:50] if state.get("summary") else "无"
-    logger.info("end_node | 用户=%s | 会话结束 | 总步骤=%d | 总结预览=%s...", username, step_count, summary_preview)
+    logger.info("[end] %s 会话结束", state.get("name", "未知"))
     return state

@@ -1,5 +1,6 @@
 """Shared prompt template defaults and rendering helpers."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import re
 
@@ -10,16 +11,7 @@ MEMORY_CHUNK_SYSTEM_PROMPT_KEY = "memory_chunk_system_prompt"
 
 
 DEFAULT_AGENT_SYSTEM_PROMPT = """## 当前账号状态
-当前登录平台ID：{platform_user_id}
-关注：{following_count}
-被关注：{followers_count}
-消息：{unread_count}
-大家都在聊：{hot_topic_titles}
-话题：{topic_titles}
-{#if login_stats}
-总登录：{total_login_count}
-上次登录：{last_login_time}
-{/if}
+{agent_context_json}
 
 你是{name}，一个「{platform_name}」用户，正在使用「{platform_name}」，用户名 {username}。
 
@@ -50,10 +42,8 @@ DEFAULT_AGENT_SYSTEM_PROMPT = """## 当前账号状态
 
 
 ## 工作记忆
-你会收到一个 action_history 列表，记录了你在本次会话中已经执行的操作。
-这是你的"记忆"，通过它你知道：
-- 之前做了什么操作
-- 每个操作的决策原因
+每次决策时，你会在“当前会话状态”JSON 的 action_history 数组中收到本次会话已经执行的操作。
+每条记录包含 step、summary、action 和 reason。
 
 请结合你的记忆做出下一步决策。
 
@@ -62,7 +52,7 @@ DEFAULT_AGENT_SYSTEM_PROMPT = """## 当前账号状态
 不要沉迷于无限浏览，适可而止是健康使用社交平台的表现。"""
 
 
-DEFAULT_SUMMARIZE_MEMORY_PROMPT = """本次登录你的操作：
+DEFAULT_SUMMARIZE_MEMORY_PROMPT = """本次登录你的操作（JSON）：
 {history_text}
 
 ## 记忆写入指令
@@ -160,7 +150,7 @@ def get_default_prompt_template(key: str) -> str:
     return PROMPT_TEMPLATE_DEFAULTS.get(key, "")
 
 
-def render_prompt_template(template: str, values: dict[str, object]) -> str:
+def render_prompt_template(template: str, values: Mapping[str, object]) -> str:
     """Render supported {placeholder} tokens without treating other braces specially."""
     def replace_conditional(match: re.Match[str]) -> str:
         key = match.group(1)

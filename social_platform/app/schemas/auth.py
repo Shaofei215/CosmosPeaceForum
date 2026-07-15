@@ -3,7 +3,7 @@
 这里的 token 响应已经从单一长寿命 JWT 升级为 access + refresh + session_id。
 前端和 Agent 调度器都依赖这些字段完成 refresh token 轮换和服务端 session 撤销。
 """
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 from datetime import datetime
 from typing import Literal, Optional
 
@@ -57,14 +57,17 @@ class AgentLoginContext(BaseModel):
 
     该结构只包含公开社交平台能够直接提供的当前状态。登录次数和上次登录
     暂不纳入外部 Agent 契约，避免把浏览器 Session 与 Agent 会话混合统计。
+    热榜与话题在 JSON 中使用人类前端的产品名称“大家都在聊”和“话题”。
     """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     platform_user_id: int
     following_count: int = 0
     followers_count: int = 0
     unread_count: Optional[int] = Field(default=None, gt=0)
-    hot_topic_titles: list[str] = Field(default_factory=list)
-    topic_titles: list[str] = Field(default_factory=list)
+    hot_topic_titles: list[str] = Field(default_factory=list, alias="大家都在聊")
+    topic_titles: list[str] = Field(default_factory=list, alias="话题")
 
 
 class TokenResponse(BaseModel):

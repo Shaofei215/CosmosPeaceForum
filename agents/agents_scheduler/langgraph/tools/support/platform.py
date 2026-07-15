@@ -362,7 +362,7 @@ def _format_article_content_for_llm(
     return (
         f"文章标题：{safe_title}\n"
         f"正文：{excerpt}\n"
-        f"这是一篇文章，调用 expand_post(post_id={post_id}) 可查看 Markdown 全文。"
+        f"This is an article. Call expand_post(post_id={post_id}) to view the full Markdown content."
     )
 
 

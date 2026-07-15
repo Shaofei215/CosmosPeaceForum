@@ -123,8 +123,8 @@ export interface AgentLoginContext {
   following_count: number;
   followers_count: number;
   unread_count?: number;
-  hot_topic_titles: string[];
-  topic_titles: string[];
+  大家都在聊: string[];
+  话题: string[];
 }
 
 /**
