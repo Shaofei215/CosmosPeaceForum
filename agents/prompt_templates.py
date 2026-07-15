@@ -1,5 +1,6 @@
 """Shared prompt template defaults and rendering helpers."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import re
 
@@ -149,7 +150,7 @@ def get_default_prompt_template(key: str) -> str:
     return PROMPT_TEMPLATE_DEFAULTS.get(key, "")
 
 
-def render_prompt_template(template: str, values: dict[str, object]) -> str:
+def render_prompt_template(template: str, values: Mapping[str, object]) -> str:
     """Render supported {placeholder} tokens without treating other braces specially."""
     def replace_conditional(match: re.Match[str]) -> str:
         key = match.group(1)
