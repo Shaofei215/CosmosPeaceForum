@@ -31,6 +31,7 @@ from agents.agents_scheduler.scheduler.session_injections import consume_prompt_
 from agents.agents_scheduler.scheduler.time_system import get_time_system
 from agents.agents_scheduler.memory.decay_scheduler import MemoryDecayScheduler
 from agents.management.backend.db_client import get_db_client
+from agents.platform_access import PlatformAccessError, PlatformClient
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,6 @@ def login_user(username: str, password: str, name: Optional[str] = None) -> Opti
     """
     try:
         config = get_scheduler_config()
-        from agents.platform_access import PlatformAccessError, PlatformClient
 
         client = PlatformClient(
             base_url=config.api_base_url,
@@ -189,6 +189,14 @@ class AIUserScheduler(threading.Thread):
 
         user_id = user_info.get('id')
         token = user_info.get('token') or user_info.get('access_token')
+        if (
+            not isinstance(user_id, int)
+            or isinstance(user_id, bool)
+            or not isinstance(token, str)
+            or not token
+        ):
+            logger.error("%s 登录响应缺少有效的用户 ID 或访问令牌", self.name)
+            return
         logger.info("%s 登录成功", self.name)
         login_stats = get_db_client().record_agent_login(
             self.agent_id,
@@ -252,13 +260,18 @@ class AIUserScheduler(threading.Thread):
 
         platform_user_id = profile.get("id")
         username = profile.get("username")
-        if platform_user_id is None or not username:
+        if (
+            not isinstance(platform_user_id, int)
+            or isinstance(platform_user_id, bool)
+            or not isinstance(username, str)
+            or not username
+        ):
             return False
         personal_signature = profile.get("bio") or ""
         synchronized = get_db_client().update_agent_profile(
             agent_id=self.agent_id,
-            social_platform_user_id=int(platform_user_id),
-            username=str(username),
+            social_platform_user_id=platform_user_id,
+            username=username,
             personal_signature=str(personal_signature),
         )
         if not synchronized:
@@ -581,7 +594,11 @@ class AgentSchedulerManager:
         """
         config = get_scheduler_config()
 
-        agent_id = agent_data.get('id')
+        raw_agent_id = agent_data.get('id')
+        if not isinstance(raw_agent_id, int) or isinstance(raw_agent_id, bool):
+            logger.error("无法创建 Agent 调度器：缺少有效的整数 ID")
+            return False
+        agent_id = raw_agent_id
         name = agent_data.get('name', '')
         username = agent_data.get('username', '')
         monthly_logins = agent_data.get('monthly_logins', 30)
