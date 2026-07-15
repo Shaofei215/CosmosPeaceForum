@@ -174,6 +174,48 @@ class TestSessionExecutor:
                 result = executor.run(llm_invoker=MagicMock())
                 assert result.success is True
                 assert result.error_message is None
+                mock_graph.invoke.assert_called_once_with(
+                    executor.initial_state,
+                    config={"recursion_limit": 210},
+                )
+
+    @pytest.mark.parametrize(
+        ("max_steps", "expected_recursion_limit"),
+        [(5, 100), (50, 510)],
+    )
+    def test_executor_run_recursion_limit_scales_with_max_steps(
+        self,
+        max_steps: int,
+        expected_recursion_limit: int,
+    ) -> None:
+        """测试图递归预算保留原下限，并随最大业务步数增长。"""
+        config = SessionConfig(max_steps=max_steps)
+        executor = SessionExecutor(
+            user_id=1,
+            username="test_user",
+            agent_id=1,
+            personality_prompt="prompt",
+            personal_signature="sig",
+            config=config,
+        )
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {
+            **executor.initial_state,
+            "exit_reason": ExitReason.USER_CHOICE,
+            "summary": "Test summary",
+        }
+
+        with patch(
+            "agents.agents_scheduler.langgraph.executor.build_session_graph",
+            return_value=mock_graph,
+        ):
+            result = executor.run(llm_invoker=MagicMock())
+
+        assert result.success is True
+        mock_graph.invoke.assert_called_once_with(
+            executor.initial_state,
+            config={"recursion_limit": expected_recursion_limit},
+        )
 
     def test_executor_run_with_summarize_llm_invoker(self):
         """测试 executor.run 能正确传递 summarize_llm_invoker"""

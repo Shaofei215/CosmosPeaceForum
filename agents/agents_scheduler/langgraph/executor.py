@@ -16,6 +16,13 @@ from langchain_core.messages import AIMessage
 
 logger = logging.getLogger(__name__)
 
+# 每个业务步骤为记忆召回、LLM 决策和批量工具执行预留图节点预算。
+GRAPH_NODES_PER_SESSION_STEP = 10
+# 会话开始、总结、结束及 LangGraph 停止判定所需的固定余量。
+GRAPH_FIXED_NODE_BUDGET = 10
+# 保持现有默认下限，避免较小 max_steps 意外收紧原有执行空间。
+MIN_GRAPH_RECURSION_LIMIT = 100
+
 
 def create_llm_invoker(
     config: SessionConfig,
@@ -235,12 +242,18 @@ class SessionExecutor:
                 summarize_llm_invoker=summarize_llm_invoker
             )
 
+            recursion_limit = max(
+                MIN_GRAPH_RECURSION_LIMIT,
+                self.config.max_steps * GRAPH_NODES_PER_SESSION_STEP
+                + GRAPH_FIXED_NODE_BUDGET,
+            )
+
             # CompiledStateGraph.invoke 的返回注解不会保留图的状态模式，需显式恢复类型。
             final_state = cast(
                 SessionState,
                 graph.invoke(
                     self.initial_state,
-                    config={"recursion_limit": 100}
+                    config={"recursion_limit": recursion_limit}
                 )
             )
 
