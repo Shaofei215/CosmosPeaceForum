@@ -52,7 +52,7 @@ def test_upgrade_head_matches_current_metadata_and_downgrades(tmp_path: Path) ->
     assert set(inspector.get_table_names()) == expected_tables
     with engine.connect() as connection:
         revision = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == "0001_initial_schema"
+    assert revision == "0002_scheduler_time_state"
     engine.dispose()
 
     command.check(config)

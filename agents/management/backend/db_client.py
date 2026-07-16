@@ -87,6 +87,109 @@ class ManagementDBClient:
         except Exception:
             return {}
 
+    def get_scheduler_time_state(self) -> Optional[dict]:
+        """
+        读取 Scheduler 缩放时间持久化锚点。
+
+        Returns:
+            Optional[dict]: 锚点字段字典；表或记录尚不存在时返回 ``None``。
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                cursor = conn.execute(
+                    """
+                    SELECT scaled_timestamp, real_timestamp, scale,
+                           offset_seconds, paused
+                    FROM scheduler_time_state
+                    WHERE id = 1
+                    """
+                )
+                row = cursor.fetchone()
+                return dict(row) if row else None
+            finally:
+                conn.close()
+        except (sqlite3.Error, ValueError, TypeError):
+            return None
+
+    def save_scheduler_time_state(
+        self,
+        scaled_timestamp: float,
+        real_timestamp: float,
+        scale: float,
+        offset_seconds: int,
+        paused: bool,
+    ) -> bool:
+        """
+        原子写入 Scheduler 缩放时间持久化锚点。
+
+        Args:
+            scaled_timestamp: 锚点对应的缩放时间戳。
+            real_timestamp: 写入锚点时的真实 Unix 时间戳。
+            scale: 锚点之后使用的时间倍率。
+            offset_seconds: 当前显式时间偏移秒数。
+            paused: 时间轴是否暂停。
+
+        Returns:
+            bool: 写入成功时返回 ``True``；数据库尚未迁移或写入失败时返回 ``False``。
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                updated_at = local_now().isoformat(sep=" ")
+                conn.execute(
+                    """
+                    INSERT INTO scheduler_time_state (
+                        id, scaled_timestamp, real_timestamp, scale,
+                        offset_seconds, paused, updated_at
+                    )
+                    VALUES (1, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        scaled_timestamp = excluded.scaled_timestamp,
+                        real_timestamp = excluded.real_timestamp,
+                        scale = excluded.scale,
+                        offset_seconds = excluded.offset_seconds,
+                        paused = excluded.paused,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        scaled_timestamp,
+                        real_timestamp,
+                        scale,
+                        offset_seconds,
+                        paused,
+                        updated_at,
+                    ),
+                )
+                conn.commit()
+                return True
+            finally:
+                conn.close()
+        except (sqlite3.Error, ValueError, TypeError):
+            return False
+
+    def get_latest_agent_login_timestamp(self) -> float:
+        """
+        获取历史 Agent 排程中最大的缩放登录时间戳。
+
+        该值仅用于首次建立 Scheduler 时间锚点时承接旧版本数据；后续启动以
+        ``scheduler_time_state`` 为准。
+
+        Returns:
+            float: 最大登录时间戳；表、记录或合法值不存在时返回 ``0.0``。
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                row = conn.execute(
+                    "SELECT MAX(last_login_timestamp) AS latest FROM agent_configs"
+                ).fetchone()
+                return float(row["latest"] or 0.0) if row else 0.0
+            finally:
+                conn.close()
+        except (sqlite3.Error, ValueError, TypeError):
+            return 0.0
+
     def get_prompt_config(self, key: str, default: str = "") -> str:
         """
         获取可编辑提示词配置。

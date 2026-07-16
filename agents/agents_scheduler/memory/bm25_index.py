@@ -2,6 +2,7 @@
 # 提供基于关键词匹配的记忆检索功能
 # 使用 jieba 搜索引擎模式进行中文分词
 
+import shutil
 import threading
 from typing import List, Dict, Optional
 from pathlib import Path
@@ -24,6 +25,9 @@ class BM25Index:
     所有操作都通过 owner_id 实现所有权隔离。
     """
 
+    INDEX_SCHEMA_VERSION = "2"
+    VERSION_FILE_NAME = ".schema_version"
+
     def __init__(self, config: MemoryConfig):
         """
         初始化 Tantivy 索引
@@ -33,7 +37,14 @@ class BM25Index:
         """
         self.config = config
         self._lock = threading.RLock()
-        index_path = config.get_tantivy_index_path()
+        self.index_path = Path(config.get_tantivy_index_path())
+        version_path = self.index_path / self.VERSION_FILE_NAME
+        stored_version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else ""
+        self.requires_rebuild = stored_version != self.INDEX_SCHEMA_VERSION
+
+        if self.requires_rebuild and self.index_path.exists():
+            shutil.rmtree(self.index_path)
+        self.index_path.mkdir(parents=True, exist_ok=True)
 
         # 定义 Schema
         # content 字段使用 'raw' 分词器，因为我们已经通过 jieba 预分词
@@ -41,15 +52,11 @@ class BM25Index:
         schema_builder = tantivy.SchemaBuilder()
         schema_builder.add_text_field("id", stored=True, tokenizer_name="raw")
         schema_builder.add_text_field("content", stored=True, tokenizer_name="raw")
-        schema_builder.add_unsigned_field("owner_id", stored=True)
-        schema = schema_builder.build()
+        schema_builder.add_integer_field("owner_id", stored=True, indexed=True)
+        self.schema = schema_builder.build()
 
         # 创建或加载索引
-        if Path(index_path).exists():
-            self.index = tantivy.Index(schema=schema, path=index_path)
-        else:
-            Path(index_path).mkdir(parents=True, exist_ok=True)
-            self.index = tantivy.Index(schema=schema, path=index_path)
+        self.index = tantivy.Index(schema=self.schema, path=str(self.index_path))
 
         self.writer = self.index.writer()
         self.writer.commit()
@@ -60,6 +67,34 @@ class BM25Index:
             self.writer.commit()
         except Exception:
             self.writer = self.index.writer()
+
+    def rebuild(self, memories: List[Dict]) -> None:
+        """
+        使用 SQLite 主数据全量重建当前版本的 BM25 索引。
+
+        Args:
+            memories: 记忆字典列表，每项包含 ``id``、``content`` 和 ``owner_id``。
+
+        Returns:
+            None: 索引提交并写入版本标记后直接返回。
+
+        Raises:
+            Exception: Tantivy 写入、提交或版本标记写入失败时抛出。
+        """
+        with self._lock:
+            self._ensure_writer()
+            for memory in memories:
+                self.writer.add_document(tantivy.Document(
+                    id=str(memory["id"]),
+                    content=tokenize_chinese(str(memory["content"])),
+                    owner_id=int(memory["owner_id"]),
+                ))
+            self._flush_writer()
+            (self.index_path / self.VERSION_FILE_NAME).write_text(
+                self.INDEX_SCHEMA_VERSION,
+                encoding="utf-8",
+            )
+            self.requires_rebuild = False
 
     def _flush_writer(self):
         """提交并等待合并线程完成，然后重建 writer"""
@@ -128,25 +163,26 @@ class BM25Index:
                 # 如果查询解析失败，返回空结果
                 return []
 
-            # owner_id 在旧索引中不可检索，增大预取窗口降低跨用户候选挤占
+            owner_query = tantivy.Query.term_query(
+                self.schema,
+                "owner_id",
+                owner_id,
+            )
+            filtered_query = tantivy.Query.boolean_query([
+                (tantivy.Occur.Must, parsed_query),
+                (tantivy.Occur.Must, owner_query),
+            ])
             results = []
-            prefetch_limit = max(limit * 10, limit)
-            top_docs = searcher.search(parsed_query, limit=prefetch_limit)
+            top_docs = searcher.search(filtered_query, limit=limit)
 
             for hit in top_docs.hits:
                 score, doc_address = hit
                 doc = searcher.doc(doc_address)
-                doc_owner_id = doc.get_first("owner_id")
-
-                if doc_owner_id == owner_id:
-                    results.append({
-                        "id": doc.get_first("id") or "",
-                        "score": score,
-                        "content": doc.get_first("content") or "",
-                    })
-
-                if len(results) >= limit:
-                    break
+                results.append({
+                    "id": doc.get_first("id") or "",
+                    "score": score,
+                    "content": doc.get_first("content") or "",
+                })
 
             return results
 
@@ -179,16 +215,7 @@ class BM25Index:
             searcher = self.index.searcher()
 
             if owner_id is not None:
-                # 遍历所有文档并过滤
-                count = 0
-                all_query, _ = self.index.parse_query_lenient("*", ["content"])
-                top_docs = searcher.search(all_query, limit=searcher.num_docs)
-                for hit in top_docs.hits:
-                    score, doc_address = hit
-                    doc = searcher.doc(doc_address)
-                    doc_owner_id = doc.get_first("owner_id")
-                    if doc_owner_id == owner_id:
-                        count += 1
-                return count
+                owner_query = tantivy.Query.term_query(self.schema, "owner_id", owner_id)
+                return searcher.search(owner_query, limit=1).count
 
             return searcher.num_docs

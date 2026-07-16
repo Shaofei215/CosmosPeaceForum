@@ -11,6 +11,7 @@ from agents.management.backend.models.model_config import ModelConfig
 from agents.management.backend.models.system_config import SystemConfig
 from agents.management.backend.models.operation_log import OperationLog
 from agents.management.backend.models.prompt_config import PromptConfig
+from agents.management.backend.models.scheduler_time_state import SchedulerTimeState
 
 __all__ = [
     "AdminUser",
@@ -22,4 +23,5 @@ __all__ = [
     "SystemConfig",
     "OperationLog",
     "PromptConfig",
+    "SchedulerTimeState",
 ]

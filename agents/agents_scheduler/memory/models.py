@@ -24,6 +24,7 @@ class MemoryChunk:
         memory_coefficient: 记忆系数 [0.0, 1.0]，越高记忆越重要越容易被想起
         memory_type: 记忆类型，"normal" 为普通记忆（参与衰减与唤醒），"static" 为静态记忆（不参与衰减与唤醒，系数恒定）
         last_decay_timestamp: 上一次完成衰减计算的系统时间戳，用于避免重复衰减
+        last_boost_timestamp: 上一次完成唤醒增强的系统时间戳，用于执行冷却限制
     """
     id: str
     owner_id: int
@@ -33,6 +34,7 @@ class MemoryChunk:
     semantic_timestamp: float = 0.0
     memory_type: Literal["normal", "static"] = "normal"
     last_decay_timestamp: float = 0.0
+    last_boost_timestamp: float = 0.0
 
     @classmethod
     def create(
@@ -71,6 +73,7 @@ class MemoryChunk:
             semantic_timestamp=semantic_timestamp,
             memory_type=memory_type,
             last_decay_timestamp=system_ts,
+            last_boost_timestamp=0.0,
         )
 
     def to_dict(self) -> dict:
@@ -89,6 +92,7 @@ class MemoryChunk:
             "memory_coefficient": self.memory_coefficient,
             "memory_type": self.memory_type,
             "last_decay_timestamp": self.last_decay_timestamp,
+            "last_boost_timestamp": self.last_boost_timestamp,
         }
 
     @classmethod
@@ -111,6 +115,7 @@ class MemoryChunk:
             semantic_timestamp=data.get("semantic_timestamp", 0.0),
             memory_type=data.get("memory_type", "normal"),
             last_decay_timestamp=data.get("last_decay_timestamp", data["timestamp"]),
+            last_boost_timestamp=data.get("last_boost_timestamp", 0.0),
         )
 
     def __repr__(self) -> str:

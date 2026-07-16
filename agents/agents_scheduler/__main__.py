@@ -63,7 +63,6 @@ def main():
     logger.info("时间流速: %dx", time_system.get_scale())
 
     from agents.agents_scheduler.scheduler.internal_server import SchedulerInternalServer
-    from agents.management.backend.db_client import get_db_client
 
     scheduler_manager = AgentSchedulerManager()
 

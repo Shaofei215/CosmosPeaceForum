@@ -10,6 +10,7 @@ from agents.agents_scheduler.memory.models import MemoryChunk
 from agents.agents_scheduler.memory.chinese_tokenizer import tokenize_chinese, tokenize_query
 from agents.agents_scheduler.memory.config import MemoryConfig
 from agents.agents_scheduler.memory.database import MemoryDB
+from agents.agents_scheduler.memory.bm25_index import BM25Index
 from agents.agents_scheduler.memory.migrations import run_memory_migrations
 from agents.agents_scheduler.memory.service import (
     MemoryService,
@@ -172,8 +173,8 @@ class TestHybridRetrievalRanking:
         }
 
     @pytest.mark.asyncio
-    async def test_relevance_precedes_memory_coefficient(self):
-        """记忆重要度只能打破同分，不能覆盖 RRF 相关性顺序。"""
+    async def test_memory_coefficient_changes_close_relevance_order(self):
+        """重要度权重应参与最终分数，并能改变相关性接近的候选顺序。"""
         relevant = MemoryChunk(
             id="relevant",
             owner_id=1,
@@ -193,11 +194,99 @@ class TestHybridRetrievalRanking:
         service.db.get_memory = AsyncMock(side_effect=[relevant, important])
 
         memories = await service._load_ranked_memories(
-            [("relevant", 0.03), ("important", 0.02)],
-            lambda _: True,
+            [("relevant", 0.03), ("important", 0.029)],
+            owner_id=1,
+            predicate=lambda _: True,
+            importance_weight=0.3,
         )
 
-        assert [chunk.id for chunk in memories] == ["relevant", "important"]
+        assert [chunk.id for chunk in memories] == ["important", "relevant"]
+
+    @pytest.mark.asyncio
+    async def test_sqlite_owner_check_rejects_foreign_index_candidate(self):
+        """即使派生索引返回了错误候选，也不得跨 owner 加载 SQLite 主数据。"""
+        foreign = MemoryChunk(
+            id="foreign",
+            owner_id=2,
+            content="其他用户的记忆",
+            timestamp=1000.0,
+            memory_coefficient=1.0,
+        )
+        service = MemoryService.__new__(MemoryService)
+        service.db = MagicMock()
+        service.db.get_memory = AsyncMock(return_value=foreign)
+
+        memories = await service._load_ranked_memories(
+            [("foreign", 0.03)],
+            owner_id=1,
+            predicate=lambda _: True,
+            importance_weight=0.3,
+        )
+
+        assert memories == []
+
+    @pytest.mark.asyncio
+    async def test_candidate_window_expands_until_enough_valid_memories(self):
+        """主数据过滤淘汰候选后，检索窗口应继续扩大直至补足结果。"""
+        valid = MemoryChunk(
+            id="valid",
+            owner_id=1,
+            content="有效记忆",
+            timestamp=1000.0,
+            memory_coefficient=0.8,
+        )
+        service = MemoryService.__new__(MemoryService)
+        service.vector_store = MagicMock()
+        service.vector_store.query.side_effect = [
+            [{"id": "stale"}],
+            [{"id": "stale"}, {"id": "valid"}],
+        ]
+        service.bm25_index = MagicMock()
+        service.bm25_index.search.return_value = []
+        service.db = MagicMock()
+        service.db.get_memory = AsyncMock(
+            side_effect=lambda memory_id: valid if memory_id == "valid" else None
+        )
+        embedding_model = MagicMock()
+        embedding_model.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+        config = MemoryConfig(
+            recall_vector_results=1,
+            recall_bm25_results=1,
+            recall_max_candidates=4,
+        )
+
+        memories = await service._retrieve_ranked_memories(
+            owner_id=1,
+            context="查询",
+            limit=1,
+            config=config,
+            embedding_model=embedding_model,
+            predicate=lambda _: True,
+        )
+
+        assert [chunk.id for chunk in memories] == ["valid"]
+        assert [
+            call.kwargs["n_results"] for call in service.vector_store.query.call_args_list
+        ] == [1, 2]
+
+
+class TestBM25OwnerFiltering:
+    """验证 owner 条件在 Tantivy 内部参与查询而不是事后截断。"""
+
+    def test_owner_filter_is_applied_before_limit(self, tmp_path):
+        """其他 owner 的高分文档不得占满当前 owner 的 top-k 窗口。"""
+        index = BM25Index(MemoryConfig(memory_dir=str(tmp_path)))
+        memories = [
+            {"id": f"foreign-{position}", "content": "苹果 苹果 苹果", "owner_id": 2}
+            for position in range(20)
+        ]
+        memories.append({"id": "owned", "content": "苹果", "owner_id": 1})
+
+        index.rebuild(memories)
+        results = index.search("苹果", owner_id=1, limit=1)
+
+        assert [result["id"] for result in results] == ["owned"]
+        assert index.get_doc_count(owner_id=1) == 1
 
 
 class TestMemoryInputValidation:
@@ -244,29 +333,75 @@ class TestMemoryInputValidation:
 class TestMemoryServiceReload:
     """验证记忆热更新同时替换业务配置和 Embedding 客户端。"""
 
-    def test_reload_config_rebuilds_embedding_model(self):
-        """新的 Embedding 端点和模型应立即应用到已存在服务。"""
+    def test_reload_config_allows_non_vector_embedding_change(self):
+        """仅 API key 变化不会改变向量空间，应允许热更新客户端。"""
         service = MemoryService.__new__(MemoryService)
         service._config_lock = threading.RLock()
         service.config = MemoryConfig(
-            embedding_base_url="https://old.example/v1",
-            embedding_model_name="old-model",
+            embedding_base_url="https://example/v1",
+            embedding_model_name="same-model",
+            embedding_api_key="old-key",
         )
         service.embedding_model = MagicMock()
+        service.vector_store = MagicMock()
+        service.db = MagicMock()
         new_config = MemoryConfig(
-            embedding_base_url="https://new.example/v1",
-            embedding_model_name="new-model",
+            embedding_base_url="https://example/v1",
+            embedding_model_name="same-model",
+            embedding_api_key="new-key",
         )
 
         service.reload_config(new_config)
 
         assert service.config is new_config
-        assert service.embedding_model.base_url == "https://new.example/v1"
-        assert service.embedding_model.model_name == "new-model"
+        assert service.embedding_model.api_key == "new-key"
+        service.vector_store.get_vector_count.assert_not_called()
+
+    def test_reload_config_rejects_vector_space_change_with_existing_vectors(self):
+        """已有向量时切换模型必须被拒绝，避免新旧向量空间静默混用。"""
+        service = MemoryService.__new__(MemoryService)
+        service._config_lock = threading.RLock()
+        service.config = MemoryConfig(embedding_model_name="old-model")
+        old_embedding_model = MagicMock()
+        service.embedding_model = old_embedding_model
+        service.vector_store = MagicMock()
+        service.vector_store.get_vector_count.return_value = 1
+        service.db = MagicMock()
+        new_config = MemoryConfig(embedding_model_name="new-model")
+
+        with pytest.raises(ValueError, match="必须重建"):
+            service.reload_config(new_config)
+
+        assert service.config.embedding_model_name == "old-model"
+        assert service.embedding_model is old_embedding_model
 
 
 class TestVectorMetadataFiltering:
     """验证 Chroma 在召回候选前应用业务元数据过滤。"""
+
+    def test_vector_metadata_snapshot_contains_all_filter_fields(self):
+        """系数更新使用的完整快照必须保留 owner、类型和时间过滤字段。"""
+        chunk = MemoryChunk(
+            id="metadata-memory",
+            owner_id=42,
+            content="元数据测试",
+            timestamp=1000.0,
+            semantic_timestamp=900.0,
+            memory_coefficient=0.8,
+            memory_type="normal",
+            last_boost_timestamp=800.0,
+        )
+
+        metadata = MemoryService._vector_metadata(chunk)
+
+        assert metadata == {
+            "owner_id": 42,
+            "memory_coefficient": 0.8,
+            "timestamp": 1000.0,
+            "semantic_timestamp": 900.0,
+            "memory_type": "normal",
+            "last_boost_timestamp": 800.0,
+        }
 
     def test_query_pushes_type_and_time_filters_to_chroma(self):
         """记忆类型和最大语义时间应进入 Chroma where 条件。"""
@@ -356,6 +491,40 @@ class TestMemoryDatabaseMigration:
 
         assert restored is not None
         assert restored.last_decay_timestamp == 2000.0
+
+    @pytest.mark.asyncio
+    async def test_boost_cooldown_is_checked_atomically(self, tmp_path):
+        """冷却窗口内重复召回不得再次增强，窗口结束后才允许下一次增强。"""
+        database = MemoryDB(MemoryConfig(memory_dir=str(tmp_path)))
+        chunk = MemoryChunk(
+            id="cooldown-memory",
+            owner_id=1,
+            content="冷却测试记忆",
+            timestamp=1000.0,
+            memory_coefficient=0.7,
+            last_decay_timestamp=1000.0,
+        )
+
+        try:
+            await database.add_memory(chunk)
+            first = await database.try_boost_memory(
+                chunk.id, 1, 0.1, current_time=1000.0, cooldown_seconds=100
+            )
+            cooling = await database.try_boost_memory(
+                chunk.id, 1, 0.1, current_time=1050.0, cooldown_seconds=100
+            )
+            after_cooldown = await database.try_boost_memory(
+                chunk.id, 1, 0.1, current_time=1101.0, cooldown_seconds=100
+            )
+        finally:
+            database.close()
+
+        assert first is not None
+        assert first.memory_coefficient == pytest.approx(0.8)
+        assert first.last_boost_timestamp == 1000.0
+        assert cooling is None
+        assert after_cooldown is not None
+        assert after_cooldown.memory_coefficient == pytest.approx(0.9)
 
     def test_legacy_memories_are_backfilled_from_creation_time(self):
         """版本 3 数据升级时应以创建时间初始化上次衰减时间。"""

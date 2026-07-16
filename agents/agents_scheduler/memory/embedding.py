@@ -1,12 +1,36 @@
 # 向量化模块
 # 提供文本向量化功能，用于 ChromaDB 向量检索
 
+import hashlib
+import json
 import threading
 from typing import List, Optional
 
 import httpx
 
 from agents.agents_scheduler.memory.config import MemoryConfig, get_memory_config
+
+
+def get_embedding_fingerprint(config: MemoryConfig) -> str:
+    """
+    计算会影响向量语义空间的 Embedding 配置指纹。
+
+    API Key 不参与指纹，轮换凭据不会触发索引模型变更；端点、模型名或维度变化时
+    指纹会改变，从而阻止旧向量与新查询向量被静默混用。
+
+    Args:
+        config: 记忆系统配置。
+
+    Returns:
+        str: 稳定的 SHA-256 十六进制指纹。
+    """
+    payload = {
+        "base_url": config.embedding_base_url.rstrip("/"),
+        "model_name": config.embedding_model_name,
+        "dimension": config.embedding_dimension,
+    }
+    serialized = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 class EmbeddingModel:

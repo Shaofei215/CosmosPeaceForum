@@ -77,9 +77,10 @@ class MemoryDB:
                 """
                 INSERT INTO memories (
                     id, owner_id, content, timestamp, semantic_timestamp,
-                    memory_coefficient, memory_type, last_decay_timestamp
+                    memory_coefficient, memory_type, last_decay_timestamp,
+                    last_boost_timestamp
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chunk.id,
@@ -90,6 +91,7 @@ class MemoryDB:
                     chunk.memory_coefficient,
                     chunk.memory_type,
                     chunk.last_decay_timestamp,
+                    chunk.last_boost_timestamp,
                 )
             )
             self._conn.commit()
@@ -143,7 +145,7 @@ class MemoryDB:
                 """
                 UPDATE memories
                 SET content = ?, timestamp = ?, semantic_timestamp = ?, memory_coefficient = ?,
-                    memory_type = ?, last_decay_timestamp = ?
+                    memory_type = ?, last_decay_timestamp = ?, last_boost_timestamp = ?
                 WHERE id = ?
                 """,
                 (
@@ -153,6 +155,7 @@ class MemoryDB:
                     chunk.memory_coefficient,
                     chunk.memory_type,
                     chunk.last_decay_timestamp,
+                    chunk.last_boost_timestamp,
                     chunk.id,
                 )
             )
@@ -198,6 +201,140 @@ class MemoryDB:
             cursor = self._conn.cursor()
             cursor.execute("SELECT * FROM memories ORDER BY timestamp DESC")
             return [MemoryChunk.from_dict(dict(row)) for row in cursor.fetchall()]
+
+    async def try_boost_memory(
+        self,
+        memory_id: str,
+        owner_id: int,
+        boost_factor: float,
+        current_time: float,
+        cooldown_seconds: int,
+    ) -> Optional[MemoryChunk]:
+        """
+        在冷却条件满足时原子增强一条普通记忆。
+
+        Args:
+            memory_id: 待增强的记忆 ID。
+            owner_id: 记忆所有者 ID，用于再次落实所有权边界。
+            boost_factor: 本次增加的记忆系数。
+            current_time: 当前缩放时间戳。
+            cooldown_seconds: 两次增强之间要求的最小缩放秒数。
+
+        Returns:
+            Optional[MemoryChunk]: 成功增强后的记忆；冷却中或记录不存在时返回 ``None``。
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self._try_boost_memory_sync,
+            memory_id,
+            owner_id,
+            boost_factor,
+            current_time,
+            cooldown_seconds,
+        )
+
+    def _try_boost_memory_sync(
+        self,
+        memory_id: str,
+        owner_id: int,
+        boost_factor: float,
+        current_time: float,
+        cooldown_seconds: int,
+    ) -> Optional[MemoryChunk]:
+        """同步执行带冷却条件的原子唤醒增强。"""
+        cooldown_cutoff = current_time - cooldown_seconds
+        # 0 是历史记录“从未增强”的哨兵值，时间轴恰好位于 0 时写入极小正数以免重复放行。
+        stored_boost_time = max(current_time, 1e-9)
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                UPDATE memories
+                SET memory_coefficient = MIN(1.0, memory_coefficient + ?),
+                    last_boost_timestamp = ?
+                WHERE id = ?
+                  AND owner_id = ?
+                  AND memory_type = 'normal'
+                  AND (
+                      last_boost_timestamp = 0
+                      OR last_boost_timestamp <= ?
+                  )
+                RETURNING *
+                """,
+                (
+                    boost_factor,
+                    stored_boost_time,
+                    memory_id,
+                    owner_id,
+                    cooldown_cutoff,
+                ),
+            )
+            row = cursor.fetchone()
+            self._conn.commit()
+            return MemoryChunk.from_dict(dict(row)) if row is not None else None
+
+    def get_latest_clock_timestamp(self) -> float:
+        """
+        获取持久化记忆中最大的缩放时间戳。
+
+        Returns:
+            float: 创建、衰减或唤醒时间中的最大值；无记忆时返回 ``0.0``。
+        """
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT MAX(
+                    timestamp,
+                    last_decay_timestamp,
+                    last_boost_timestamp
+                ) AS latest_timestamp
+                FROM memories
+                ORDER BY latest_timestamp DESC
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+            return float(row["latest_timestamp"] or 0.0) if row else 0.0
+
+    def get_index_metadata(self, key: str) -> Optional[str]:
+        """
+        读取派生索引元数据。
+
+        Args:
+            key: 元数据键。
+
+        Returns:
+            Optional[str]: 已保存的值；不存在时返回 ``None``。
+        """
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute("SELECT value FROM memory_index_metadata WHERE key = ?", (key,))
+            row = cursor.fetchone()
+            return str(row["value"]) if row else None
+
+    def set_index_metadata(self, key: str, value: str) -> None:
+        """
+        写入或覆盖派生索引元数据。
+
+        Args:
+            key: 元数据键。
+            value: 元数据值。
+
+        Returns:
+            None: 提交完成后直接返回。
+        """
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO memory_index_metadata (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (key, value),
+            )
+            self._conn.commit()
 
     async def get_user_memories(self, owner_id: int) -> List[MemoryChunk]:
         """

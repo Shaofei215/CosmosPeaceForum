@@ -68,11 +68,55 @@ def _migration_0004_last_decay_timestamp(conn: sqlite3.Connection) -> None:
         )
 
 
+def _migration_0005_last_boost_timestamp(conn: sqlite3.Connection) -> None:
+    """
+    增加唤醒增强冷却游标。
+
+    Args:
+        conn: 已开启迁移事务的 SQLite 连接。
+
+    Returns:
+        None: 字段存在或创建完成后直接返回。
+
+    Raises:
+        sqlite3.Error: 修改表结构失败时抛出。
+    """
+    if "last_boost_timestamp" not in _column_names(conn, "memories"):
+        conn.execute(
+            "ALTER TABLE memories ADD COLUMN last_boost_timestamp REAL NOT NULL DEFAULT 0"
+        )
+
+
+def _migration_0006_index_metadata(conn: sqlite3.Connection) -> None:
+    """
+    创建派生索引版本与 Embedding 指纹存储表。
+
+    Args:
+        conn: 已开启迁移事务的 SQLite 连接。
+
+    Returns:
+        None: 表创建完成后直接返回。
+
+    Raises:
+        sqlite3.Error: 创建表失败时抛出。
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_index_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
+
+
 MIGRATIONS: tuple[tuple[int, Migration], ...] = (
     (1, _migration_0001_initial_schema),
     (2, _migration_0002_semantic_timestamp),
     (3, _migration_0003_memory_type),
     (4, _migration_0004_last_decay_timestamp),
+    (5, _migration_0005_last_boost_timestamp),
+    (6, _migration_0006_index_metadata),
 )
 
 

@@ -66,6 +66,70 @@ def load_time_scale_from_db(db_client: ManagementDBClient | None = None) -> floa
         return TIME_SCALE
 
 
+def load_scheduler_time_state(
+    db_client: ManagementDBClient | None = None,
+) -> dict | None:
+    """
+    从 management 数据库读取缩放时间持久化锚点。
+
+    Args:
+        db_client: 可选的 management 数据库客户端，测试时可注入。
+
+    Returns:
+        dict | None: 持久化锚点；尚未建立锚点时返回 ``None``。
+    """
+    client = db_client or get_db_client()
+    return client.get_scheduler_time_state()
+
+
+def save_scheduler_time_state(
+    scaled_timestamp: float,
+    real_timestamp: float,
+    scale: float,
+    offset_seconds: int,
+    paused: bool,
+    db_client: ManagementDBClient | None = None,
+) -> bool:
+    """
+    将当前缩放时间锚点写入 management 数据库。
+
+    Args:
+        scaled_timestamp: 当前缩放时间戳。
+        real_timestamp: 当前真实 Unix 时间戳。
+        scale: 当前时间倍率。
+        offset_seconds: 当前显式偏移秒数。
+        paused: 时间轴是否暂停。
+        db_client: 可选的 management 数据库客户端，测试时可注入。
+
+    Returns:
+        bool: 写入成功时返回 ``True``。
+    """
+    client = db_client or get_db_client()
+    return client.save_scheduler_time_state(
+        scaled_timestamp=scaled_timestamp,
+        real_timestamp=real_timestamp,
+        scale=scale,
+        offset_seconds=offset_seconds,
+        paused=paused,
+    )
+
+
+def load_legacy_scheduler_time_baseline(
+    db_client: ManagementDBClient | None = None,
+) -> float:
+    """
+    读取首次升级时可用于承接旧排程的最大 Agent 登录时间戳。
+
+    Args:
+        db_client: 可选的 management 数据库客户端，测试时可注入。
+
+    Returns:
+        float: 历史缩放时间基线；无历史数据时返回 ``0.0``。
+    """
+    client = db_client or get_db_client()
+    return client.get_latest_agent_login_timestamp()
+
+
 class TimeSystem:
     """
     外挂时间系统类
@@ -116,13 +180,38 @@ class TimeSystem:
             return
 
         self._lock = threading.Lock()
-        self._scale: float = load_time_scale_from_db()
+        configured_scale = load_time_scale_from_db()
+        current_real_time = time.time()
+        persisted_state = load_scheduler_time_state()
+
+        self._scale: float = configured_scale
         self._offset: int = TIME_OFFSET_SECONDS
-        self._start_time: float = time.time()
+        self._start_time: float = current_real_time
         self._elapsed_scaled: float = 0.0
         self._paused: bool = False
-        self._last_update_time: float = time.time()
+        self._last_update_time: float = current_real_time
+
+        if persisted_state is not None:
+            saved_offset = int(persisted_state.get("offset_seconds", 0))
+            saved_scaled_timestamp = float(persisted_state["scaled_timestamp"])
+            saved_real_timestamp = float(persisted_state["real_timestamp"])
+            saved_scale = float(persisted_state["scale"])
+            saved_paused = bool(persisted_state.get("paused", False))
+            real_delta = max(0.0, current_real_time - saved_real_timestamp)
+            resumed_scaled_timestamp = saved_scaled_timestamp
+            if not saved_paused:
+                resumed_scaled_timestamp += real_delta * saved_scale
+
+            self._offset = saved_offset
+            self._elapsed_scaled = resumed_scaled_timestamp - saved_offset
+            self._paused = saved_paused
+        else:
+            legacy_baseline = load_legacy_scheduler_time_baseline()
+            if legacy_baseline > 0:
+                self._elapsed_scaled = legacy_baseline - self._offset
+
         self._initialized: bool = True
+        self._persist_state_locked()
 
     def set_scale(self, scale: float) -> None:
         """
@@ -141,6 +230,7 @@ class TimeSystem:
         with self._lock:
             self._update_elapsed_scaled()
             self._scale = scale
+            self._persist_state_locked()
 
     def get_scale(self) -> float:
         """
@@ -160,7 +250,9 @@ class TimeSystem:
             offset_seconds: 时间偏移量（秒），正值为快进，负值为回退
         """
         with self._lock:
+            self._update_elapsed_scaled()
             self._offset = offset_seconds
+            self._persist_state_locked()
 
     def get_offset(self) -> int:
         """
@@ -181,6 +273,7 @@ class TimeSystem:
         with self._lock:
             self._update_elapsed_scaled()
             self._paused = True
+            self._persist_state_locked()
 
     def resume(self) -> None:
         """
@@ -192,6 +285,7 @@ class TimeSystem:
             if self._paused:
                 self._last_update_time = time.time()
                 self._paused = False
+                self._persist_state_locked()
 
     def is_paused(self) -> bool:
         """
@@ -211,9 +305,49 @@ class TimeSystem:
         """
         if not self._paused:
             current_time = time.time()
-            real_elapsed = current_time - self._last_update_time
+            real_elapsed = max(0.0, current_time - self._last_update_time)
             self._elapsed_scaled += real_elapsed * self._scale
-            self._last_update_time = current_time
+            if current_time >= self._last_update_time:
+                self._last_update_time = current_time
+
+    def _persist_state_locked(self) -> None:
+        """
+        持久化当前时间锚点；调用方必须持有实例锁或处于初始化阶段。
+
+        Returns:
+            None: 写入成功或记录警告后直接返回。
+        """
+        real_timestamp = self._last_update_time
+        if not save_scheduler_time_state(
+            scaled_timestamp=self._elapsed_scaled + self._offset,
+            real_timestamp=real_timestamp,
+            scale=self._scale,
+            offset_seconds=self._offset,
+            paused=self._paused,
+        ):
+            logger.warning("Scheduler 缩放时间锚点持久化失败")
+
+    def ensure_minimum_timestamp(self, minimum_timestamp: float) -> float:
+        """
+        确保当前缩放时间不小于已有持久化业务时间。
+
+        该方法用于首次升级持久化时间锚点时承接历史记忆时间，避免旧记录在升级后的
+        第一次启动中被视为来自未来。
+
+        Args:
+            minimum_timestamp: 业务数据中已存在的最大缩放时间戳。
+
+        Returns:
+            float: 对齐后的当前缩放时间戳。
+        """
+        with self._lock:
+            self._update_elapsed_scaled()
+            current_timestamp = self._elapsed_scaled + self._offset
+            if current_timestamp < minimum_timestamp:
+                self._elapsed_scaled += minimum_timestamp - current_timestamp
+                current_timestamp = minimum_timestamp
+                self._persist_state_locked()
+            return current_timestamp
 
     def get_scaled_time(self) -> datetime:
         """
@@ -263,6 +397,7 @@ class TimeSystem:
             self._elapsed_scaled = 0.0
             self._last_update_time = time.time()
             self._paused = False
+            self._persist_state_locked()
 
     def advance_time(self, seconds: float) -> None:
         """
@@ -277,7 +412,9 @@ class TimeSystem:
             raise ValueError("推进时间量不能为负数")
 
         with self._lock:
+            self._update_elapsed_scaled()
             self._elapsed_scaled += seconds
+            self._persist_state_locked()
 
     def get_elapsed_scaled_seconds(self) -> float:
         """
@@ -329,9 +466,6 @@ def get_time_system() -> TimeSystem:
     return TimeSystem()
 
 
-global_time_system = get_time_system()
-
-
 def get_scaled_time() -> datetime:
     """
     获取缩放后的当前时间（便捷函数）
@@ -339,7 +473,7 @@ def get_scaled_time() -> datetime:
     Returns:
         datetime: 缩放后的当前时间
     """
-    return global_time_system.get_scaled_time()
+    return get_time_system().get_scaled_time()
 
 
 def get_scaled_timestamp() -> float:
@@ -349,7 +483,7 @@ def get_scaled_timestamp() -> float:
     Returns:
         float: 缩放后的 Unix 时间戳
     """
-    return global_time_system.get_scaled_timestamp()
+    return get_time_system().get_scaled_timestamp()
 
 
 def set_time_scale(scale: float) -> None:
@@ -359,7 +493,7 @@ def set_time_scale(scale: float) -> None:
     Args:
         scale: 新的时间倍率，必须大于 0
     """
-    global_time_system.set_scale(scale)
+    get_time_system().set_scale(scale)
 
 
 def get_time_scale() -> float:
@@ -369,7 +503,7 @@ def get_time_scale() -> float:
     Returns:
         float: 当前时间倍率
     """
-    return global_time_system.get_scale()
+    return get_time_system().get_scale()
 
 
 def reload_time_scale() -> float:
@@ -380,5 +514,5 @@ def reload_time_scale() -> float:
         float: 重载后生效的时间倍率。
     """
     scale = load_time_scale_from_db()
-    global_time_system.set_scale(scale)
+    get_time_system().set_scale(scale)
     return scale
