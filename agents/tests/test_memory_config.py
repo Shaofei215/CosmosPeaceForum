@@ -12,9 +12,12 @@ class TestMemoryConfig:
         assert config.recall_limit == 5
         assert config.recall_vector_results == 20
         assert config.recall_bm25_results == 20
+        assert config.recall_max_candidates == 200
         assert config.rrf_rank_constant == 60
         assert config.threshold == 0.1
+        assert config.importance_weight == 0.3
         assert config.boost_factor == 0.1
+        assert config.boost_cooldown_seconds == 86400
         assert config.decay_rate == 0.01
         assert config.decay_interval_seconds == 300
 
@@ -34,6 +37,10 @@ class TestMemoryConfig:
         with pytest.raises(ValueError, match="recall_bm25_results"):
             MemoryConfig(recall_bm25_results=0)
 
+    def test_validation_recall_max_candidates(self):
+        with pytest.raises(ValueError, match="recall_max_candidates"):
+            MemoryConfig(recall_max_candidates=0)
+
     def test_validation_rrf_rank_constant(self):
         with pytest.raises(ValueError, match="rrf_rank_constant"):
             MemoryConfig(rrf_rank_constant=0)
@@ -49,6 +56,16 @@ class TestMemoryConfig:
             MemoryConfig(boost_factor=-0.1)
         with pytest.raises(ValueError, match="boost_factor"):
             MemoryConfig(boost_factor=1.1)
+
+    def test_validation_importance_weight(self):
+        with pytest.raises(ValueError, match="importance_weight"):
+            MemoryConfig(importance_weight=-0.1)
+        with pytest.raises(ValueError, match="importance_weight"):
+            MemoryConfig(importance_weight=1.1)
+
+    def test_validation_boost_cooldown_seconds(self):
+        with pytest.raises(ValueError, match="boost_cooldown_seconds"):
+            MemoryConfig(boost_cooldown_seconds=-1)
 
     def test_validation_decay_rate(self):
         with pytest.raises(ValueError, match="decay_rate"):

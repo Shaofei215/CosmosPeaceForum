@@ -24,6 +24,18 @@ class TestTimeSystemBasic:
             "agents.agents_scheduler.scheduler.time_system.load_time_scale_from_db",
             lambda db_client=None: 1.0,
         )
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.load_scheduler_time_state",
+            lambda db_client=None: None,
+        )
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.load_legacy_scheduler_time_baseline",
+            lambda db_client=None: 0.0,
+        )
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.save_scheduler_time_state",
+            lambda **kwargs: True,
+        )
 
     def test_singleton(self):
         ts1 = get_time_system()
@@ -35,6 +47,68 @@ class TestTimeSystemBasic:
         ts._initialized = False
         ts.__init__()
         assert ts.get_scale() == 1.0
+
+    def test_first_upgrade_uses_legacy_agent_login_baseline(self, monkeypatch):
+        """尚无持久化锚点时应从旧 Agent 登录时间承接缩放时间轴。"""
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.load_legacy_scheduler_time_baseline",
+            lambda db_client=None: 1234.0,
+        )
+
+        ts = TimeSystem.__new__(TimeSystem)
+        ts._initialized = False
+        ts.__init__()
+
+        assert ts.get_scaled_timestamp() >= 1234.0
+
+    def test_restart_continues_from_persisted_scaled_time(self, monkeypatch):
+        """重启后应使用旧倍率补算停机期间时间，再切换到当前配置倍率。"""
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.load_time_scale_from_db",
+            lambda db_client=None: 2.0,
+        )
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.load_scheduler_time_state",
+            lambda db_client=None: {
+                "scaled_timestamp": 1000.0,
+                "real_timestamp": 100.0,
+                "scale": 10.0,
+                "offset_seconds": 0,
+                "paused": False,
+            },
+        )
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.time.time",
+            lambda: 110.0,
+        )
+        save_state = MagicMock(return_value=True)
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.save_scheduler_time_state",
+            save_state,
+        )
+
+        ts = TimeSystem.__new__(TimeSystem)
+        ts._initialized = False
+        ts.__init__()
+
+        assert ts.get_scaled_timestamp() == pytest.approx(1100.0)
+        assert ts.get_scale() == 2.0
+        assert save_state.call_args.kwargs["scaled_timestamp"] == pytest.approx(1100.0)
+
+    def test_scaled_time_stays_monotonic_when_system_clock_moves_backward(self, monkeypatch):
+        """真实时钟回拨时缩放时间应冻结，恢复后也不得重复累计回拨区间。"""
+        timestamps = iter([100.0, 90.0, 110.0])
+        monkeypatch.setattr(
+            "agents.agents_scheduler.scheduler.time_system.time.time",
+            lambda: next(timestamps),
+        )
+
+        ts = TimeSystem.__new__(TimeSystem)
+        ts._initialized = False
+        ts.__init__()
+
+        assert ts.get_scaled_timestamp() == pytest.approx(0.0)
+        assert ts.get_scaled_timestamp() == pytest.approx(10.0)
 
     def test_set_scale(self):
         ts = TimeSystem.__new__(TimeSystem)

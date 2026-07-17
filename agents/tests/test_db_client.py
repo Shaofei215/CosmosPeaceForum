@@ -60,6 +60,17 @@ def temp_db():
             is_active INTEGER DEFAULT 0
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS scheduler_time_state (
+            id INTEGER PRIMARY KEY,
+            scaled_timestamp REAL NOT NULL,
+            real_timestamp REAL NOT NULL,
+            scale REAL NOT NULL,
+            offset_seconds INTEGER NOT NULL,
+            paused INTEGER NOT NULL,
+            updated_at DATETIME NOT NULL
+        )
+    """)
 
     cursor.execute("INSERT INTO system_configs (key, value) VALUES (?, ?)", ("TEST_KEY", "test_value"))
     cursor.execute(
@@ -100,6 +111,37 @@ class TestManagementDBClient:
         result = client.get_all_system_configs()
         assert isinstance(result, dict)
         assert "TEST_KEY" in result
+
+    def test_scheduler_time_state_round_trip(self, temp_db):
+        """Scheduler 缩放时间锚点应能以单行 UPSERT 方式持续覆盖。"""
+        client = ManagementDBClient(db_path=temp_db)
+
+        assert client.get_scheduler_time_state() is None
+        assert client.save_scheduler_time_state(1000.0, 100.0, 10.0, 30, False)
+        assert client.save_scheduler_time_state(1200.0, 120.0, 5.0, 30, True)
+
+        state = client.get_scheduler_time_state()
+        assert state == {
+            "scaled_timestamp": 1200.0,
+            "real_timestamp": 120.0,
+            "scale": 5.0,
+            "offset_seconds": 30,
+            "paused": 1,
+        }
+
+    def test_latest_agent_login_timestamp(self, temp_db):
+        """首次时间迁移应读取已有 Agent 登录游标中的最大值。"""
+        conn = sqlite3.connect(temp_db)
+        conn.execute(
+            "UPDATE agent_configs SET last_login_timestamp = ? WHERE id = 1",
+            (1234.0,),
+        )
+        conn.commit()
+        conn.close()
+
+        client = ManagementDBClient(db_path=temp_db)
+
+        assert client.get_latest_agent_login_timestamp() == 1234.0
 
     def test_get_agent_configs(self, temp_db):
         client = ManagementDBClient(db_path=temp_db)

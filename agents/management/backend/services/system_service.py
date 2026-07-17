@@ -39,9 +39,12 @@ DEFAULT_SYSTEM_CONFIGS = [
     ("MEMORY_RECALL_LIMIT", "5", "召回记忆数量"),
     ("MEMORY_RECALL_VECTOR_RESULTS", "20", "向量检索候选数量"),
     ("MEMORY_RECALL_BM25_RESULTS", "20", "BM25 检索候选数量"),
+    ("MEMORY_RECALL_MAX_CANDIDATES", "200", "单路检索自适应补位的最大候选数量"),
     ("MEMORY_RRF_RANK_CONSTANT", "60", "RRF 排名常数"),
+    ("MEMORY_IMPORTANCE_WEIGHT", "0.3", "记忆系数对最终排名的最大乘法权重"),
     ("MEMORY_THRESHOLD", "0.1", "记忆系数最低阈值"),
     ("MEMORY_BOOST_FACTOR", "0.1", "唤醒时系数增量"),
+    ("MEMORY_BOOST_COOLDOWN_SECONDS", "86400", "同一记忆再次唤醒增强前需等待的缩放秒数"),
     ("MEMORY_DECAY_RATE", "0.01", "衰减率（每日）"),
     ("MEMORY_DECAY_INTERVAL_SECONDS", "300", "记忆衰减任务实时执行间隔（秒）"),
 ]
@@ -73,6 +76,7 @@ def validate_system_config_value(key: str, value: str) -> None:
         "MEMORY_RECALL_LIMIT",
         "MEMORY_RECALL_VECTOR_RESULTS",
         "MEMORY_RECALL_BM25_RESULTS",
+        "MEMORY_RECALL_MAX_CANDIDATES",
         "MEMORY_RRF_RANK_CONSTANT",
         "MEMORY_DECAY_INTERVAL_SECONDS",
     }
@@ -84,7 +88,11 @@ def validate_system_config_value(key: str, value: str) -> None:
         if parsed_value <= 0 or str(parsed_value) != value.strip():
             raise ValueError(f"{key} 必须是正整数")
 
-    unit_interval_keys = {"MEMORY_THRESHOLD", "MEMORY_BOOST_FACTOR"}
+    unit_interval_keys = {
+        "MEMORY_THRESHOLD",
+        "MEMORY_BOOST_FACTOR",
+        "MEMORY_IMPORTANCE_WEIGHT",
+    }
     if key in unit_interval_keys:
         try:
             parsed_value = float(value)
@@ -103,6 +111,14 @@ def validate_system_config_value(key: str, value: str) -> None:
 
     if key == "MEMORY_ENABLED" and value.lower() not in {"true", "false"}:
         raise ValueError("MEMORY_ENABLED 必须是 true 或 false")
+
+    if key == "MEMORY_BOOST_COOLDOWN_SECONDS":
+        try:
+            cooldown = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("MEMORY_BOOST_COOLDOWN_SECONDS 必须是非负整数") from exc
+        if cooldown < 0 or str(cooldown) != value.strip():
+            raise ValueError("MEMORY_BOOST_COOLDOWN_SECONDS 必须是非负整数")
 
 
 def list_system_configs(db: Session) -> List[SystemConfig]:
@@ -219,9 +235,12 @@ def get_config_value(db: Session, key: str, default: str = "") -> str:
         "MEMORY_RECALL_LIMIT": "5",
         "MEMORY_RECALL_VECTOR_RESULTS": "20",
         "MEMORY_RECALL_BM25_RESULTS": "20",
+        "MEMORY_RECALL_MAX_CANDIDATES": "200",
         "MEMORY_RRF_RANK_CONSTANT": "60",
+        "MEMORY_IMPORTANCE_WEIGHT": "0.3",
         "MEMORY_THRESHOLD": "0.1",
         "MEMORY_BOOST_FACTOR": "0.1",
+        "MEMORY_BOOST_COOLDOWN_SECONDS": "86400",
         "MEMORY_DECAY_RATE": "0.01",
         "MEMORY_DECAY_INTERVAL_SECONDS": "300",
     }

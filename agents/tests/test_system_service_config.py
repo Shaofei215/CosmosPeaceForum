@@ -45,8 +45,11 @@ def test_default_system_configs_include_current_memory_defaults():
 
     assert defaults["MEMORY_RECALL_VECTOR_RESULTS"] == "20"
     assert defaults["MEMORY_RECALL_BM25_RESULTS"] == "20"
+    assert defaults["MEMORY_RECALL_MAX_CANDIDATES"] == "200"
+    assert defaults["MEMORY_IMPORTANCE_WEIGHT"] == "0.3"
     assert defaults["MEMORY_THRESHOLD"] == "0.1"
     assert defaults["MEMORY_BOOST_FACTOR"] == "0.1"
+    assert defaults["MEMORY_BOOST_COOLDOWN_SECONDS"] == "86400"
 
 
 def test_init_default_configs_purges_env_managed_values_from_sqlite():
@@ -152,8 +155,11 @@ def test_update_system_config_rejects_invalid_memory_values():
 
     invalid_values = {
         "MEMORY_RECALL_VECTOR_RESULTS": "0",
+        "MEMORY_RECALL_MAX_CANDIDATES": "0",
         "MEMORY_DECAY_INTERVAL_SECONDS": "-1",
+        "MEMORY_IMPORTANCE_WEIGHT": "1.1",
         "MEMORY_THRESHOLD": "1.1",
+        "MEMORY_BOOST_COOLDOWN_SECONDS": "-1",
         "MEMORY_DECAY_RATE": "0",
         "MEMORY_ENABLED": "maybe",
     }

@@ -8,7 +8,6 @@ import httpx
 
 from agents.agents_scheduler.memory.config import MemoryConfig, get_memory_config
 
-
 class EmbeddingModel:
     """
     向量化模型封装
