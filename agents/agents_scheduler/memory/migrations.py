@@ -89,7 +89,10 @@ def _migration_0005_last_boost_timestamp(conn: sqlite3.Connection) -> None:
 
 def _migration_0006_index_metadata(conn: sqlite3.Connection) -> None:
     """
-    创建派生索引版本与 Embedding 指纹存储表。
+    创建派生索引元数据存储表。
+
+    当前不校验 Embedding 模型指纹；该通用表为未来的向量索引
+    版本记录与自动重建流程预留。
 
     Args:
         conn: 已开启迁移事务的 SQLite 连接。

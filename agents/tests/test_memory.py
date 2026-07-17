@@ -333,8 +333,8 @@ class TestMemoryInputValidation:
 class TestMemoryServiceReload:
     """验证记忆热更新同时替换业务配置和 Embedding 客户端。"""
 
-    def test_reload_config_allows_non_vector_embedding_change(self):
-        """仅 API key 变化不会改变向量空间，应允许热更新客户端。"""
+    def test_reload_config_applies_credential_change(self):
+        """新的 Embedding 凭据应立即应用到已存在服务。"""
         service = MemoryService.__new__(MemoryService)
         service._config_lock = threading.RLock()
         service.config = MemoryConfig(
@@ -357,23 +357,22 @@ class TestMemoryServiceReload:
         assert service.embedding_model.api_key == "new-key"
         service.vector_store.get_vector_count.assert_not_called()
 
-    def test_reload_config_rejects_vector_space_change_with_existing_vectors(self):
-        """已有向量时切换模型必须被拒绝，避免新旧向量空间静默混用。"""
+    def test_reload_config_allows_model_change_with_existing_vectors(self):
+        """暂未实现索引重建时，已有向量不应阻止 Embedding 模型切换。"""
         service = MemoryService.__new__(MemoryService)
         service._config_lock = threading.RLock()
         service.config = MemoryConfig(embedding_model_name="old-model")
-        old_embedding_model = MagicMock()
-        service.embedding_model = old_embedding_model
+        service.embedding_model = MagicMock()
         service.vector_store = MagicMock()
         service.vector_store.get_vector_count.return_value = 1
         service.db = MagicMock()
         new_config = MemoryConfig(embedding_model_name="new-model")
 
-        with pytest.raises(ValueError, match="必须重建"):
-            service.reload_config(new_config)
+        service.reload_config(new_config)
 
-        assert service.config.embedding_model_name == "old-model"
-        assert service.embedding_model is old_embedding_model
+        assert service.config is new_config
+        assert service.embedding_model.model_name == "new-model"
+        service.vector_store.get_vector_count.assert_not_called()
 
 
 class TestVectorMetadataFiltering:

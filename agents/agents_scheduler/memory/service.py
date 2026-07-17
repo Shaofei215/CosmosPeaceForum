@@ -11,7 +11,7 @@ from agents.agents_scheduler.memory.models import MemoryChunk
 from agents.agents_scheduler.memory.database import MemoryDB
 from agents.agents_scheduler.memory.vector_store import VectorStore
 from agents.agents_scheduler.memory.bm25_index import BM25Index
-from agents.agents_scheduler.memory.embedding import EmbeddingModel, get_embedding_fingerprint
+from agents.agents_scheduler.memory.embedding import EmbeddingModel
 from agents.agents_scheduler.memory.utils import (
     calculate_time_description,
     calculate_time_description_from_date,
@@ -181,7 +181,6 @@ class MemoryService:
         get_time_system().ensure_minimum_timestamp(self.db.get_latest_clock_timestamp())
         self.vector_store = VectorStore(self.config)
         self.embedding_model = EmbeddingModel(self.config)
-        self._initialize_embedding_fingerprint()
         self.bm25_index = BM25Index(self.config)
         self._rebuild_bm25_if_required()
         self._synchronize_vector_metadata()
@@ -196,39 +195,11 @@ class MemoryService:
         Returns:
             None: 配置与 Embedding 客户端替换完成后直接返回。
         """
-        new_fingerprint = get_embedding_fingerprint(config)
-        old_fingerprint = get_embedding_fingerprint(self.config)
-        if new_fingerprint != old_fingerprint and self.vector_store.get_vector_count() > 0:
-            raise ValueError(
-                "Embedding 端点、模型或维度已变化；现有 Chroma 向量必须重建后才能应用新配置"
-            )
-
         with self._config_lock:
+            # 当前允许直接切换 Embedding 配置。未来实现向量索引重建后，
+            # 可在此处触发重建流程，避免新旧向量空间混用。
             self.config = config
             self.embedding_model = EmbeddingModel(config)
-            self.db.set_index_metadata("embedding_fingerprint", new_fingerprint)
-
-    def _initialize_embedding_fingerprint(self) -> None:
-        """
-        校验并初始化当前 Chroma 集合对应的 Embedding 配置指纹。
-
-        Returns:
-            None: 指纹一致或首次登记完成后直接返回。
-
-        Raises:
-            ValueError: 已有向量的持久化指纹与当前配置不一致时抛出。
-        """
-        current_fingerprint = get_embedding_fingerprint(self.config)
-        stored_fingerprint = self.db.get_index_metadata("embedding_fingerprint")
-        vector_count = self.vector_store.get_vector_count()
-
-        if stored_fingerprint and stored_fingerprint != current_fingerprint and vector_count > 0:
-            raise ValueError(
-                "当前 Embedding 配置与已有 Chroma 向量指纹不一致，请先重建向量索引"
-            )
-        if stored_fingerprint is None and vector_count > 0:
-            logger.warning("历史 Chroma 向量缺少 Embedding 指纹，已按当前配置登记")
-        self.db.set_index_metadata("embedding_fingerprint", current_fingerprint)
 
     def _rebuild_bm25_if_required(self) -> None:
         """

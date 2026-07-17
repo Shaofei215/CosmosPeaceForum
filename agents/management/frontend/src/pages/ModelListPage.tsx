@@ -15,7 +15,7 @@ import {
   Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription, Switch, Label, Separator,
 } from '@/shared/components/ui';
-import { Plus, Edit, Trash2, Eye, EyeOff, Loader2, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, EyeOff, Loader2, Search, AlertTriangle } from 'lucide-react';
 
 const modelProviderOptions = [
   { value: 'openai', label: 'OpenAI' },
@@ -484,6 +484,12 @@ function EmbeddingConfigForm({ config, onSave, isPending }: EmbeddingConfigFormP
   return (
     <form onSubmit={handleSubmit}>
       <div className="space-y-4">
+        <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <p>
+            您应当在初次配置时就确定好使用的 Embedding 模型，开始使用后切换嵌入模型可能导致召回质量严重下降。
+          </p>
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Base URL</Label>
