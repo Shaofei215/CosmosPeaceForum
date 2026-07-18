@@ -171,12 +171,17 @@ class PlatformClient:
 
         headers = build_agent_service_headers(self._admin_key)
         headers["Authorization"] = f"Bearer {access_token}"
+        file_spec = (
+            (filename, file_object, content_type)
+            if content_type is not None
+            else (filename, file_object)
+        )
         try:
             response = requests.request(
                 method="POST",
                 url=f"{self._base_url}{endpoint}",
                 headers=headers,
-                files={field_name: (filename, file_object, content_type)},
+                files={field_name: file_spec},
                 timeout=self._timeout_seconds,
             )
         except requests.exceptions.Timeout as exc:

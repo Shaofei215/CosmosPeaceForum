@@ -53,3 +53,27 @@ def test_platform_client_uploads_file_without_overriding_multipart_content_type(
     assert "Content-Type" not in kwargs["headers"]
     assert kwargs["headers"]["Authorization"] == "Bearer user-token"
     assert kwargs["files"]["file"] == ("avatar.png", image, "image/png")
+
+
+def test_platform_client_uploads_file_without_optional_content_type() -> None:
+    """未提供 MIME 类型时应使用 requests 支持的二元文件规格。"""
+
+    response = MagicMock()
+    response.status_code = 200
+    response.content = b'{"ok": true}'
+    response.json.return_value = {"ok": True}
+    client = PlatformClient("http://platform/api/v1", "admin-secret")
+    image = BytesIO(b"image-data")
+
+    with patch("agents.platform_access.client.requests.request", return_value=response) as request:
+        result = client.upload_file(
+            "/users/avatar",
+            access_token="user-token",
+            field_name="file",
+            filename="avatar.bin",
+            file_object=image,
+            content_type=None,
+        )
+
+    assert result == {"ok": True}
+    assert request.call_args.kwargs["files"]["file"] == ("avatar.bin", image)
