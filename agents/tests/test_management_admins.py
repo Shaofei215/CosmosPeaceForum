@@ -8,12 +8,17 @@ from pydantic import ValidationError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from agents.management.backend.api.admins import delete_admin
+from agents.management.backend.api.admins import create_admin, delete_admin, update_admin
 from agents.management.backend.core.timezone import local_now
 from agents.management.backend.models.admin_session import AdminSession
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.operation_log import OperationLog
-from agents.management.backend.schemas import AdminCreateRequest, AdminProfileUpdateRequest
+from agents.management.backend.schemas import (
+    AdminCreateRequest,
+    AdminProfileUpdateRequest,
+    AdminUpdateRequest,
+)
+from agents.management.backend.services import auth_service
 
 
 def _admin(username: str, *, is_super_admin: bool = False) -> AdminUser:
@@ -131,3 +136,154 @@ def test_delete_admin_rejects_current_account(admin_db: Session) -> None:
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "不能删除当前账号"
+
+
+def test_create_admin_rejects_super_admin_from_non_super(admin_db: Session) -> None:
+    """具有管理员管理权限的普通管理员不得创建超级管理员。"""
+
+    current_admin = _admin("受限管理员")
+    admin_db.add(current_admin)
+    admin_db.commit()
+
+    request = AdminCreateRequest(
+        username="越权账号",
+        password="password",
+        permissions=["manage_admins"],
+        is_super_admin=True,
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        create_admin(request, admin_db, current_admin)
+
+    assert exc_info.value.status_code == 403
+    assert auth_service.get_admin_by_username(admin_db, "越权账号") is None
+
+
+def test_create_admin_rejects_permission_escalation(admin_db: Session) -> None:
+    """普通管理员不得借助新账号授予自己并不具备的权限。"""
+
+    current_admin = _admin("受限管理员")
+    admin_db.add(current_admin)
+    admin_db.commit()
+
+    request = AdminCreateRequest(
+        username="越权账号",
+        password="password",
+        permissions=["manage_admins", "manage_models"],
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        create_admin(request, admin_db, current_admin)
+
+    assert exc_info.value.status_code == 403
+    assert auth_service.get_admin_by_username(admin_db, "越权账号") is None
+
+
+def test_update_admin_rejects_self_promotion(admin_db: Session) -> None:
+    """普通管理员不得通过更新自己的账号提升为超级管理员。"""
+
+    current_admin = _admin("受限管理员")
+    admin_db.add(current_admin)
+    admin_db.commit()
+    admin_db.refresh(current_admin)
+    assert current_admin.id is not None
+
+    with pytest.raises(HTTPException) as exc_info:
+        update_admin(
+            current_admin.id,
+            AdminUpdateRequest(is_super_admin=True),
+            admin_db,
+            current_admin,
+        )
+
+    assert exc_info.value.status_code == 403
+    admin_db.refresh(current_admin)
+    assert current_admin.is_super_admin is False
+
+
+def test_update_admin_rejects_non_super_touching_super_admin(admin_db: Session) -> None:
+    """普通管理员不得停用、降级或修改任何超级管理员。"""
+
+    current_admin = _admin("受限管理员")
+    target_admin = _admin("超级管理员", is_super_admin=True)
+    admin_db.add(current_admin)
+    admin_db.add(target_admin)
+    admin_db.commit()
+    admin_db.refresh(target_admin)
+    assert target_admin.id is not None
+
+    with pytest.raises(HTTPException) as exc_info:
+        update_admin(
+            target_admin.id,
+            AdminUpdateRequest(is_active=False, is_super_admin=False),
+            admin_db,
+            current_admin,
+        )
+
+    assert exc_info.value.status_code == 403
+    admin_db.refresh(target_admin)
+    assert target_admin.is_active is True
+    assert target_admin.is_super_admin is True
+
+
+def test_update_admin_rejects_permission_escalation(admin_db: Session) -> None:
+    """普通管理员不得在自己的权限列表中加入未持有权限。"""
+
+    current_admin = _admin("受限管理员")
+    admin_db.add(current_admin)
+    admin_db.commit()
+    admin_db.refresh(current_admin)
+    assert current_admin.id is not None
+
+    with pytest.raises(HTTPException) as exc_info:
+        update_admin(
+            current_admin.id,
+            AdminUpdateRequest(permissions=["manage_admins", "manage_models"]),
+            admin_db,
+            current_admin,
+        )
+
+    assert exc_info.value.status_code == 403
+    admin_db.refresh(current_admin)
+    assert auth_service.parse_permissions(current_admin.permissions) == ["manage_admins"]
+
+
+def test_update_admin_allows_delegating_owned_permission(admin_db: Session) -> None:
+    """普通管理员仍可向普通账号授予自己已经拥有的权限。"""
+
+    current_admin = _admin("受限管理员")
+    target_admin = _admin("普通管理员")
+    target_admin.permissions = "[]"
+    admin_db.add(current_admin)
+    admin_db.add(target_admin)
+    admin_db.commit()
+    admin_db.refresh(target_admin)
+    assert target_admin.id is not None
+
+    response = update_admin(
+        target_admin.id,
+        AdminUpdateRequest(permissions=["manage_admins"]),
+        admin_db,
+        current_admin,
+    )
+
+    assert response.permissions == ["manage_admins"]
+
+
+def test_update_admin_allows_super_admin_to_manage_super_admin(admin_db: Session) -> None:
+    """超级管理员之间的合法管理操作不应被新增边界误拦截。"""
+
+    current_admin = _admin("当前超级管理员", is_super_admin=True)
+    target_admin = _admin("目标超级管理员", is_super_admin=True)
+    admin_db.add(current_admin)
+    admin_db.add(target_admin)
+    admin_db.commit()
+    admin_db.refresh(target_admin)
+    assert target_admin.id is not None
+
+    response = update_admin(
+        target_admin.id,
+        AdminUpdateRequest(is_active=False),
+        admin_db,
+        current_admin,
+    )
+
+    assert response.is_active is False

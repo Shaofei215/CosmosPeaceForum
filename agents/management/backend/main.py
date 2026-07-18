@@ -30,6 +30,32 @@ def get_frontend_dist_dir() -> Path:
     return Path(__file__).resolve().parents[1] / "frontend" / "dist"
 
 
+def resolve_frontend_path(frontend_dist: Path, full_path: str) -> Path:
+    """解析并校验管理前端请求对应的本地文件路径。
+
+    路由参数可能已经由 ASGI 服务器完成百分号解码，因此必须在拼接后解析
+    ``..`` 与符号链接，并确认最终路径仍位于前端构建目录中。
+
+    Args:
+        frontend_dist: 管理前端构建产物的根目录。
+        full_path: 浏览器请求的前端相对路径。
+
+    Returns:
+        Path: 已解析且确认位于构建目录内的路径。
+
+    Raises:
+        HTTPException: 请求路径逃逸出前端构建目录时抛出 404。
+    """
+
+    frontend_root = frontend_dist.resolve()
+    requested_path = (frontend_root / full_path).resolve()
+    try:
+        requested_path.relative_to(frontend_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Not Found") from exc
+    return requested_path
+
+
 def render_management_index(index_file: Path, platform_display_name: str) -> str:
     """将平台展示名称注入管理前端入口页面。
 
@@ -101,7 +127,7 @@ def create_app() -> FastAPI:
     app.include_router(api_router, prefix="/api")
     app.include_router(external_access_router, prefix="/external/v1", tags=["external-access"])
 
-    frontend_dist = get_frontend_dist_dir()
+    frontend_dist = get_frontend_dist_dir().resolve()
     assets_dir = frontend_dist / "assets"
     index_file = frontend_dist / "index.html"
     if index_file.exists():
@@ -113,7 +139,7 @@ def create_app() -> FastAPI:
             if full_path == "api" or full_path.startswith("api/"):
                 raise HTTPException(status_code=404, detail="Not Found")
 
-            requested_file = frontend_dist / full_path
+            requested_file = resolve_frontend_path(frontend_dist, full_path)
             if requested_file.is_file() and requested_file != index_file:
                 return FileResponse(requested_file)
 

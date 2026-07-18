@@ -184,6 +184,12 @@ export default function AdminListPage() {
 
       {creating && (
         <CreateAdminDialog
+          assignablePermissions={
+            currentAdmin?.is_super_admin
+              ? [...ADMIN_PERMISSIONS]
+              : (currentAdmin?.permissions ?? [])
+          }
+          canCreateSuperAdmin={Boolean(currentAdmin?.is_super_admin)}
           saving={createMutation.isPending}
           error={createError}
           onClose={() => {
@@ -221,11 +227,15 @@ export default function AdminListPage() {
 }
 
 function CreateAdminDialog({
+  assignablePermissions,
+  canCreateSuperAdmin,
   saving,
   error,
   onClose,
   onSubmit,
 }: {
+  assignablePermissions: AdminPermission[];
+  canCreateSuperAdmin: boolean;
   saving: boolean;
   error: string;
   onClose: () => void;
@@ -234,7 +244,11 @@ function CreateAdminDialog({
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [permissions, setPermissions] = useState<AdminPermission[]>(['view_dashboard']);
+  const [permissions, setPermissions] = useState<AdminPermission[]>(() =>
+    assignablePermissions.includes('view_dashboard')
+      ? ['view_dashboard']
+      : assignablePermissions.slice(0, 1),
+  );
   const [superAdmin, setSuperAdmin] = useState(false);
 
   const togglePermission = (permission: AdminPermission) => {
@@ -279,17 +293,19 @@ function CreateAdminDialog({
             minLength={8}
             maxLength={32}
           />
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={superAdmin}
-              onChange={(event) => setSuperAdmin(event.target.checked)}
-            />
-            超级管理员
-          </label>
+          {canCreateSuperAdmin && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={superAdmin}
+                onChange={(event) => setSuperAdmin(event.target.checked)}
+              />
+              超级管理员
+            </label>
+          )}
           {!superAdmin && (
             <div className="grid gap-2 sm:grid-cols-2">
-              {ADMIN_PERMISSIONS.map((permission) => (
+              {assignablePermissions.map((permission) => (
                 <label key={permission} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
