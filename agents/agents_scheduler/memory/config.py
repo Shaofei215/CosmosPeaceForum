@@ -34,7 +34,7 @@ class MemoryConfig:
     boost_factor: float = 0.1
     boost_cooldown_seconds: int = 86400
     decay_rate: float = 0.01
-    decay_interval_seconds: int = 300
+    decay_interval_seconds: int = 3600
     embedding_base_url: str = ""
     embedding_api_key: str = ""
     embedding_model_name: str = "text-embedding-3-small"
@@ -64,7 +64,7 @@ class MemoryConfig:
             boost_factor=float(_get("MEMORY_BOOST_FACTOR", "0.1")),
             boost_cooldown_seconds=int(_get("MEMORY_BOOST_COOLDOWN_SECONDS", "86400")),
             decay_rate=float(_get("MEMORY_DECAY_RATE", "0.01")),
-            decay_interval_seconds=int(_get("MEMORY_DECAY_INTERVAL_SECONDS", "300")),
+            decay_interval_seconds=int(_get("MEMORY_DECAY_INTERVAL_SECONDS", "3600")),
             embedding_base_url=embedding_config.get("base_url", "") if embedding_config else "",
             embedding_api_key=embedding_config.get("api_key", "") if embedding_config else "",
             embedding_model_name=embedding_config.get("model_name", "text-embedding-3-small") if embedding_config else "text-embedding-3-small",

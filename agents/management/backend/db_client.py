@@ -30,7 +30,7 @@ class ManagementDBClient:
     供 scheduler 各模块调用。
     """
     
-    def __init__(self, db_path: str = None):
+    def __init__(self, db_path: Optional[str] = None):
         """
         初始化数据库客户端
         

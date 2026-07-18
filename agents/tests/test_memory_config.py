@@ -19,7 +19,7 @@ class TestMemoryConfig:
         assert config.boost_factor == 0.1
         assert config.boost_cooldown_seconds == 86400
         assert config.decay_rate == 0.01
-        assert config.decay_interval_seconds == 300
+        assert config.decay_interval_seconds == 3600
 
     def test_validation_valid(self):
         config = MemoryConfig()
@@ -105,6 +105,7 @@ class TestMemoryConfig:
             assert isinstance(config, MemoryConfig)
             assert config.memory_enabled is True
             assert config.recall_limit == 5
+            assert config.decay_interval_seconds == 3600
             assert config.embedding_dimension == 1536
 
     def test_from_db_with_embedding_config(self):

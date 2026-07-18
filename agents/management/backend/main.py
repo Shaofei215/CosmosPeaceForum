@@ -34,9 +34,7 @@ async def lifespan(app: FastAPI):
     numeric_level = getattr(logging, config.log_level.upper(), logging.INFO)
     logging.getLogger().setLevel(numeric_level)
     terminal_log_capture.start()
-    logger.info("=" * 50)
-    logger.info("Management Backend 启动中...")
-    logger.info("=" * 50)
+    logger.info("管理器启动中...")
     logger.info("数据库路径: %s", config.get_db_path())
     logger.info("服务器: %s:%d", config.server_host, config.server_port)
     logger.info("Scheduler 内部接口: %s", config.scheduler_internal_base_url)
@@ -44,12 +42,12 @@ async def lifespan(app: FastAPI):
     init_db()
     initialize_database()
 
-    logger.info("Management Backend 启动完成!")
+    logger.info("管理器启动完成!")
     logger.info("=" * 50)
 
     yield
 
-    logger.info("Management Backend 关闭中...")
+    logger.info("管理器关闭中...")
     terminal_log_capture.stop()
 
 
@@ -59,7 +57,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Agent Management Backend",
-        description="AI Agent 管理系统后端 API",
+        description="管理器后端 API",
         version="1.0.0",
         lifespan=lifespan,
     )
