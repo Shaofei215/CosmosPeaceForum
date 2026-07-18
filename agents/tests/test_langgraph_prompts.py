@@ -87,12 +87,12 @@ class TestBuildSystemPrompt:
                 personal_signature="sig",
             )
 
-        context_text = prompt.split("## 当前账号状态（JSON）\n", 1)[1].split("\n\n你是", 1)[0]
+        context_text = prompt.split("## 当前账号状态\n", 1)[1].split("\n\n你是", 1)[0]
         assert json.loads(context_text) == {
-            "platform_user_id": "未知",
-            "following_count": 1,
-            "followers_count": 2,
-            "unread_count": 3,
+            "platform_user_id": "unknown",
+            "关注": 1,
+            "被关注": 2,
+            "消息": 3,
             "大家都在聊": ["第一条热榜"],
             "话题": ["示例话题"],
         }

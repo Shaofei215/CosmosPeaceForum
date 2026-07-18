@@ -66,7 +66,7 @@ def _format_last_login_time(timestamp: Any) -> str:
 def _build_agent_context_json() -> str:
     """构建系统 Prompt 状态 JSON。
 
-    程序状态使用英文字段名；热榜和话题使用与人类前端一致的产品名称。
+    程序状态使用英文字段名；关注、消息、热榜和话题使用与人类前端一致的产品名称。
 
     Returns:
         str: 包含账号计数、社区热点和可选登录统计的 JSON。
@@ -90,9 +90,9 @@ def _build_agent_context_json() -> str:
         platform_user_id = "unknown"
     account_context: Dict[str, Any] = {
         "platform_user_id": platform_user_id,
-        "following_count": summary.get("following_count", 0),
-        "followers_count": summary.get("followers_count", 0),
-        "unread_count": summary.get("unread_count", 0),
+        "关注": summary.get("following_count", 0),
+        "被关注": summary.get("followers_count", 0),
+        "消息": summary.get("unread_count", 0),
         "大家都在聊": hot_topic_titles,
         "话题": topic_titles,
     }
