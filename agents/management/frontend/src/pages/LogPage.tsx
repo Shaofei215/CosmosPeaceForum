@@ -18,6 +18,9 @@ const actionLabels: Record<string, string> = {
   batch_delete_agents: '批量删除角色',
   update_agent_relation: '更新角色关系',
   upload_avatar: '上传头像',
+  create_admin: '添加管理员',
+  update_admin: '更新管理员',
+  delete_admin: '移除管理员',
   create_model: '创建模型',
   update_model: '更新模型',
   delete_model: '删除模型',
@@ -30,6 +33,7 @@ const actionLabels: Record<string, string> = {
 
 const targetLabels: Record<string, string> = {
   agent: '角色',
+  admin: '管理员',
   model: '模型',
   system: '系统',
 };
@@ -86,7 +90,6 @@ export default function LogPage() {
                   <tr className="border-b border-border">
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">操作</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">目标类型</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">目标 ID</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">管理员</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">详情</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">时间</th>
@@ -106,11 +109,8 @@ export default function LogPage() {
                           {targetLabels[log.target_type] || log.target_type}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">
-                        {log.target_id ?? '-'}
-                      </td>
                       <td className="py-3 px-4 text-sm">
-                        {log.operator_username || (log.operator_id ? `#${log.operator_id}` : '-')}
+                        {log.operator_username || '-'}
                       </td>
                       <td className="max-w-xs py-3 px-4 text-sm text-muted-foreground">
                         <span className="line-clamp-2">{log.details || '{}'}</span>

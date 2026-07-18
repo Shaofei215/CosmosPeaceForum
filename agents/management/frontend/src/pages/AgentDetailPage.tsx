@@ -8,7 +8,7 @@ import {
 } from '@/shared/components/ui';
 import {
   ArrowLeft, RefreshCw, Upload, Loader2, Edit, Calendar,
-  User, FileText, Hash, Activity, Users,
+  User, FileText, Users,
 } from 'lucide-react';
 import { Avatar } from '@/shared/components/ui/avatar';
 
@@ -71,12 +71,11 @@ export default function AgentDetailPage() {
     return <div className="text-center py-12 text-muted-foreground">角色不存在</div>;
   }
 
-  const knownAgents = agent.knows_ids
-    .filter((kid) => kid !== agent.id)
-    .map((kid) => ({
-      id: kid,
-      name: agentNameMap.get(kid) ?? `角色 #${kid}`,
-    }));
+  const knownAgents = agent.knows_ids.flatMap((knownAgentId) => {
+    if (knownAgentId === agent.id) return [];
+    const name = agentNameMap.get(knownAgentId);
+    return name ? [{ id: knownAgentId, name }] : [];
+  });
 
   return (
     <div>
@@ -132,18 +131,10 @@ export default function AgentDetailPage() {
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <User size={14} />
                   <span>用户名: <span className="text-foreground">{agent.username}</span></span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Hash size={14} />
-                  <span>ID: <span className="text-foreground">{agent.id}</span></span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Activity size={14} />
-                  <span>平台 ID: <span className="text-foreground">{agent.social_platform_user_id ?? '未注册'}</span></span>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Calendar size={14} />

@@ -10,6 +10,7 @@ from agents.management.backend.api.deps import require_permission
 from agents.management.backend.core.database import get_db
 from agents.management.backend.core.security import get_password_hash
 from agents.management.backend.models.admin_user import AdminUser
+from agents.management.backend.models.admin_session import AdminSession
 from agents.management.backend.schemas import (
     AdminCreateRequest,
     AdminListResponse,
@@ -111,3 +112,49 @@ def update_admin(
     )
     db.refresh(admin)
     return auth_service.admin_to_response(admin)
+
+
+@router.delete("/{admin_id}", status_code=status.HTTP_200_OK)
+def delete_admin(
+    admin_id: int,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_ADMINS)),
+) -> dict[str, str]:
+    """永久删除指定管理员，并撤销其全部 Management 会话。
+
+    Args:
+        admin_id: 待删除管理员的数据库主键。
+        db: 当前数据库会话。
+        current_admin: 已通过管理员管理权限校验的操作者。
+
+    Returns:
+        dict[str, str]: 可供前端展示的删除成功消息。
+
+    Raises:
+        HTTPException: 目标不存在、尝试删除自己，或普通管理员尝试删除超级管理员。
+    """
+
+    admin = db.get(AdminUser, admin_id)
+    if admin is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="管理员不存在")
+    if admin.id == current_admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能删除当前账号")
+    if admin.is_super_admin and not current_admin.is_super_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只有超级管理员可以删除其他超级管理员")
+
+    sessions = db.exec(select(AdminSession).where(AdminSession.admin_id == admin_id)).all()
+    for session in sessions:
+        db.delete(session)
+
+    deleted_username = admin.username
+    db.delete(admin)
+    db.flush()
+    create_log(
+        db,
+        current_admin,
+        "delete_admin",
+        "admin",
+        admin_id,
+        details={"username": deleted_username},
+    )
+    return {"message": "管理员已删除"}

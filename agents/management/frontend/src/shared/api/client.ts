@@ -19,6 +19,26 @@ interface RefreshResponse {
   refresh_token: string;
 }
 
+interface ValidationErrorDetail {
+  msg?: string;
+}
+
+interface ApiErrorResponse {
+  detail?: string | ValidationErrorDetail[];
+}
+
+/** 把 FastAPI 的字符串或结构化校验错误统一转换成可安全渲染的文本。 */
+function normalizeErrorMessage(detail: ApiErrorResponse['detail']): string {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => item.msg)
+      .filter((message): message is string => Boolean(message));
+    if (messages.length > 0) return messages.join('；');
+  }
+  return '请求失败，请稍后重试';
+}
+
 /** 封装 axios 实例，集中处理认证头、refresh 轮换和错误格式化。 */
 class ApiClient {
   private client: AxiosInstance;
@@ -76,7 +96,7 @@ class ApiClient {
 
     this.client.interceptors.response.use(
       (response) => response.data,
-      async (error: AxiosError<{ detail?: string }>) => {
+      async (error: AxiosError<ApiErrorResponse>) => {
         const status = error.response?.status;
         const originalRequest = error.config as RetryRequestConfig | undefined;
 
@@ -90,7 +110,7 @@ class ApiClient {
           }
         }
 
-        const message = error.response?.data?.detail || '请求失败，请稍后重试';
+        const message = normalizeErrorMessage(error.response?.data?.detail);
 
         if (status === HTTP_STATUS.UNAUTHORIZED && !window.location.pathname.includes('/login')) {
           useAuthStore.getState().logout();

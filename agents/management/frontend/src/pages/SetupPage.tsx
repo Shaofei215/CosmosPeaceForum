@@ -79,6 +79,8 @@ export default function SetupPage() {
                 onChange={(event) => setUsername(event.target.value)}
                 disabled={updateProfile.isPending}
                 autoComplete="username"
+                minLength={1}
+                maxLength={30}
               />
             </div>
 
@@ -99,7 +101,17 @@ export default function SetupPage() {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={updateProfile.isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                updateProfile.isPending ||
+                username.trim().length === 0 ||
+                username.trim().length > 30 ||
+                newPassword.length < 8 ||
+                newPassword.length > 32
+              }
+            >
               {updateProfile.isPending ? '保存中...' : '保存并进入后台'}
             </Button>
           </form>
