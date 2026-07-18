@@ -53,6 +53,7 @@ services:
         required: true
     environment:
       TZ: ${TZ:-Asia/Shanghai}
+      MANAGEMENT_SERVER_HOST: 0.0.0.0
       SOCIAL_PLATFORM_API_BASE_URL: http://social-platform:8000/api/v1
     volumes:
       - /etc/localtime:/etc/localtime:ro

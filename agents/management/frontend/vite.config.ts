@@ -25,31 +25,48 @@ const resolvePublicBrandImage = (name: string): { path: string; mime: string } =
   return { path: `/${name}.${extension}`, mime: `image/${mimeExtension}` };
 };
 
-const escapeHtmlText = (value: string): string =>
+/**
+ * 转义将写入 HTML 文本与属性的平台名称。
+ *
+ * @param value 原始平台名称。
+ * @returns 可安全写入 HTML 的文本。
+ */
+const escapeHtml = (value: string): string =>
   value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#x27;');
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, __dirname, '');
+export default defineConfig(({ command, mode }) => {
+  const platformEnv = loadEnv(
+    mode,
+    path.resolve(__dirname, '../..'),
+    'PLATFORM_DISPLAY_NAME',
+  );
   const platformDisplayName =
-    env.PLATFORM_DISPLAY_NAME?.trim() || DEFAULT_PLATFORM_DISPLAY_NAME;
+    platformEnv.PLATFORM_DISPLAY_NAME?.trim() || DEFAULT_PLATFORM_DISPLAY_NAME;
   const platformLogo = resolvePublicBrandImage('logo');
 
   return {
-    envPrefix: ['VITE_', 'PLATFORM_'],
     plugins: [
       react(),
       {
-        name: 'management-html-title',
+        name: 'management-html-branding',
         transformIndexHtml(html) {
-          return html.replace(
-            PLATFORM_DISPLAY_NAME_PLACEHOLDER,
-            escapeHtmlText(platformDisplayName),
-          )
+          const brandedHtml = html
             .replace(PLATFORM_LOGO_PATH_PLACEHOLDER, platformLogo.path)
             .replace(PLATFORM_LOGO_MIME_PLACEHOLDER, platformLogo.mime);
+
+          if (command === 'serve') {
+            return brandedHtml.replaceAll(
+              PLATFORM_DISPLAY_NAME_PLACEHOLDER,
+              escapeHtml(platformDisplayName),
+            );
+          }
+
+          return brandedHtml;
         },
       },
     ],

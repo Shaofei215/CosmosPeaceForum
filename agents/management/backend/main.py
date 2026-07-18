@@ -5,11 +5,12 @@ Management Backend - FastAPI 应用主入口
 
 import logging
 from contextlib import asynccontextmanager
+from html import escape
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from agents.management.backend.core.config import get_config
@@ -21,10 +22,34 @@ from agents.external_access import router as external_access_router
 
 logger = logging.getLogger(__name__)
 
+PLATFORM_DISPLAY_NAME_PLACEHOLDER = "__PLATFORM_DISPLAY_NAME__"
+
 
 def get_frontend_dist_dir() -> Path:
     """Return the management frontend production build directory."""
     return Path(__file__).resolve().parents[1] / "frontend" / "dist"
+
+
+def render_management_index(index_file: Path, platform_display_name: str) -> str:
+    """将平台展示名称注入管理前端入口页面。
+
+    管理前端在构建产物中保留占位符，管理后端启动后从 ``agents/.env``
+    加载展示名称，并在返回页面时完成 HTML 转义与替换。
+
+    Args:
+        index_file: 管理前端构建产物中的 ``index.html`` 路径。
+        platform_display_name: 从管理后端配置读取的平台展示名称。
+
+    Returns:
+        str: 已注入并完成 HTML 转义的入口页面内容。
+
+    Raises:
+        OSError: 读取入口页面失败时抛出。
+        UnicodeError: 入口页面不是有效 UTF-8 文本时抛出。
+    """
+    html = index_file.read_text(encoding="utf-8")
+    escaped_display_name = escape(platform_display_name, quote=True)
+    return html.replace(PLATFORM_DISPLAY_NAME_PLACEHOLDER, escaped_display_name)
 
 
 @asynccontextmanager
@@ -89,10 +114,11 @@ def create_app() -> FastAPI:
                 raise HTTPException(status_code=404, detail="Not Found")
 
             requested_file = frontend_dist / full_path
-            if requested_file.is_file():
+            if requested_file.is_file() and requested_file != index_file:
                 return FileResponse(requested_file)
 
-            return FileResponse(index_file)
+            html = render_management_index(index_file, config.platform_display_name)
+            return HTMLResponse(html)
 
     return app
 

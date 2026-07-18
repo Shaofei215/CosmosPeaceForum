@@ -1,5 +1,5 @@
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || '/api',
+  BASE_URL: '/api',
   TIMEOUT: 10000,
 } as const;
 
