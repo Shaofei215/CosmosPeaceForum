@@ -12,11 +12,11 @@ from typing import Any
 
 from agents.platform_tools.context import PlatformToolContext
 
-AGENT_POST_PREVIEW_MAX_LENGTH = 470
+AGENT_POST_PREVIEW_MAX_LENGTH = 470  # Agent 工具结果中的帖子正文预览长度
 
 
 def truncate_text(text: str | None, max_len: int = 100) -> str:
-    """截断用于 action 文案的摘要文本。"""
+    """按最大长度截断 Agent 工具结果中的展示文本。"""
 
     if not text:
         return ""
@@ -34,7 +34,7 @@ def normalize_count(count: int, default: int = 5, maximum: int = 20) -> int:
 
 
 def normalize_feed_type(feed_type: str) -> str:
-    """归一化信息流类型。"""
+    """把工具输入别名归一化为平台支持的信息流类型。"""
 
     aliases = {
         "hot": "recommended",
@@ -43,11 +43,11 @@ def normalize_feed_type(feed_type: str) -> str:
         "latest": "latest",
         "following": "following",
     }
-    return aliases.get((feed_type or "recommended").lower(), "recommended")
+    return aliases.get((feed_type or "recommended").lower().strip(), "recommended")
 
 
 def feed_type_label(feed_type: str) -> str:
-    """返回信息流中文标签。"""
+    """返回与人类前端一致的信息流中文产品标签。"""
 
     return {"recommended": "推荐", "latest": "最新", "following": "关注"}.get(feed_type, "推荐")
 
@@ -67,7 +67,7 @@ def has_next_from_pagination(pagination: dict[str, Any] | None, returned: int) -
 
 
 def format_display_time(value: Any) -> str:
-    """把时间格式化为内部 Prompt 使用的相对时间。"""
+    """把平台时间格式化为内外部 Agent 工具结果共用的中文时间文本。"""
 
     if not value:
         return ""
@@ -102,7 +102,7 @@ def format_display_time(value: Any) -> str:
 
 
 def _expand_username(ctx: PlatformToolContext, username: str, user_id: int | None) -> str:
-    """按内部关系映射扩展用户名；外部模式保持原值。"""
+    """按可选的内部关系映射扩展用户名；未提供映射时保持原值。"""
 
     if not ctx.relation_expander:
         return username
@@ -113,7 +113,7 @@ def _expand_username(ctx: PlatformToolContext, username: str, user_id: int | Non
 
 
 def _expand_content(ctx: PlatformToolContext, content: str) -> str:
-    """按内部关系映射扩展正文；外部模式保持原值。"""
+    """按可选的内部关系映射扩展正文提及；未提供映射时保持原值。"""
 
     if not ctx.relation_expander:
         return content
@@ -128,7 +128,7 @@ def _format_content_mentions_for_llm(
     content: str,
     mention_users: list[dict[str, Any]],
 ) -> str:
-    """把正文中的提及格式化为内部 Agent 可直接引用的用户 ID 形式。"""
+    """为正文中可识别的 @提及补充用户 ID，关系名按上下文可选扩展。"""
 
     if not content:
         return content
@@ -175,7 +175,7 @@ def _format_article_content(
     *,
     full: bool,
 ) -> str:
-    """按内部 Agent 既有格式构建文章内容。"""
+    """构建内外部 Agent 工具结果共用的文章全文或预览文本。"""
     safe_title = (title or "Untitled").strip()
     if full:
         return f"文章标题：{safe_title}\n正文（Markdown）：\n{markdown_content}"
@@ -208,7 +208,7 @@ def _embedded_follow_status(
 
 
 def get_follow_status_text(ctx: PlatformToolContext, user_id: int | None) -> str:
-    """获取 Agent 使用的关注状态文本。"""
+    """从平台查询并生成 Agent 工具结果使用的关注状态文本。"""
 
     if not ctx.current_user_id or not user_id:
         return ""

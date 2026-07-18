@@ -36,7 +36,7 @@ const PLACEHOLDER_LABELS: Record<string, PlaceholderHint[]> = {
       description: '条件段：仅召回到相关记忆时拼入。',
     },
     { token: '{static_memories_context}', description: '分块时召回到的已有相关记忆。' },
-    { token: '{owner_id}', description: '记忆所有者平台用户 ID。' },
+    { token: '{owner_id}', description: '当前记忆所属角色。' },
     { token: '{semantic_timestamp}', description: '本次写入使用的语义时间戳。' },
   ],
 };

@@ -218,16 +218,14 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                     <>
                       <Check size={14} className="text-green-500 shrink-0" />
                       <span className="text-green-600 font-medium">{r.username}</span>
-                      <span className="text-muted-foreground">
-                        注册成功 (ID: {r.social_platform_user_id})
-                      </span>
+                      <span className="text-muted-foreground">注册成功</span>
                     </>
                   )}
                   {r.type === 'exists' && (
                     <>
                       <AlertTriangle size={14} className="text-yellow-500 shrink-0" />
                       <span className="text-yellow-600 font-medium">{r.username}</span>
-                      <span className="text-muted-foreground">已存在 (ID: {r.social_platform_user_id})</span>
+                      <span className="text-muted-foreground">已存在</span>
                     </>
                   )}
                   {r.type === 'error' && (
@@ -273,16 +271,14 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                         <>
                           <Check size={14} className="text-green-500 shrink-0" />
                           <span className="text-green-600 font-medium">{r.username}</span>
-                          <span className="text-muted-foreground">
-                            注册成功 (ID: {r.social_platform_user_id})
-                          </span>
+                          <span className="text-muted-foreground">注册成功</span>
                         </>
                       )}
                       {r.type === 'exists' && (
                         <>
                           <AlertTriangle size={14} className="text-yellow-500 shrink-0" />
                           <span className="text-yellow-600 font-medium">{r.username}</span>
-                          <span className="text-muted-foreground">已存在 (ID: {r.social_platform_user_id})</span>
+                          <span className="text-muted-foreground">已存在</span>
                         </>
                       )}
                       {r.type === 'error' && (

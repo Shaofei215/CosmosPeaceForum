@@ -8,6 +8,13 @@ from pydantic import ValidationError
 from agents.management.backend.core.config import Settings
 
 
+def test_settings_default_management_host_is_loopback() -> None:
+    """未配置监听地址时，管理后端应默认仅允许本机访问。"""
+    settings = Settings(_env_file=None)
+
+    assert settings.server_host == "127.0.0.1"
+
+
 def test_settings_load_dotenv_and_prefer_process_environment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

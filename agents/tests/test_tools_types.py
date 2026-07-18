@@ -7,7 +7,7 @@ from agents.agents_scheduler.langgraph.tools.types import (
     UnauthorizedError,
     ToolResult,
 )
-from agents.agents_scheduler.langgraph.tools.support.platform import _truncate
+from agents.platform_tools.presenters import truncate_text
 
 
 class TestToolErrorTypes:
@@ -77,31 +77,31 @@ class TestToolResult:
 
 class TestTruncate:
     def test_truncate_short_text(self):
-        assert _truncate("hello") == "hello"
+        assert truncate_text("hello") == "hello"
 
     def test_truncate_long_text(self):
         text = "x" * 200
-        result = _truncate(text, max_len=100)
+        result = truncate_text(text, max_len=100)
         assert len(result) == 103  # 100 chars + "..."
         assert result.endswith("...")
 
     def test_truncate_empty_text(self):
-        assert _truncate("") == ""
+        assert truncate_text("") == ""
 
     def test_truncate_none_text(self):
-        assert _truncate(None) == ""
+        assert truncate_text(None) == ""
 
     def test_truncate_exact_length(self):
         text = "x" * 100
-        result = _truncate(text, max_len=100)
+        result = truncate_text(text, max_len=100)
         assert result == text
 
     def test_truncate_one_over_length(self):
         text = "x" * 101
-        result = _truncate(text, max_len=100)
+        result = truncate_text(text, max_len=100)
         assert result == "x" * 100 + "..."
 
     def test_truncate_custom_max_len(self):
         text = "hello world"
-        result = _truncate(text, max_len=5)
+        result = truncate_text(text, max_len=5)
         assert result == "hello..."

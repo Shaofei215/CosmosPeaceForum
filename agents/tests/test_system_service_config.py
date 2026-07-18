@@ -50,6 +50,7 @@ def test_default_system_configs_include_current_memory_defaults():
     assert defaults["MEMORY_THRESHOLD"] == "0.1"
     assert defaults["MEMORY_BOOST_FACTOR"] == "0.1"
     assert defaults["MEMORY_BOOST_COOLDOWN_SECONDS"] == "86400"
+    assert defaults["MEMORY_DECAY_INTERVAL_SECONDS"] == "3600"
 
 
 def test_init_default_configs_purges_env_managed_values_from_sqlite():

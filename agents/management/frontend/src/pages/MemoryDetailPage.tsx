@@ -57,7 +57,7 @@ export default function MemoryDetailPage() {
   const totalPages = Math.ceil((memories?.total ?? 0) / limit);
 
   if (!ownerIdNum) {
-    return <div className="text-center py-12 text-muted-foreground">无效的角色ID</div>;
+    return <div className="text-center py-12 text-muted-foreground">无效的角色链接</div>;
   }
 
   return (
@@ -68,7 +68,7 @@ export default function MemoryDetailPage() {
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">
-            {agent?.name ?? `User-${ownerIdNum}`}的记忆
+            {agent?.name || agent?.username || '角色'}的记忆
           </h1>
           <p className="text-sm text-muted-foreground">
             共 {memories?.total ?? 0} 条记忆

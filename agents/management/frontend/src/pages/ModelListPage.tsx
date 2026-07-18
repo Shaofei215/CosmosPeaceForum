@@ -633,9 +633,9 @@ function ModelColorPicker({
  *
  * @param agents 可分配的角色列表。
  * @param models 当前模型配置列表，用于显示已有归属颜色。
- * @param currentModelId 当前正在创建或编辑的模型 ID，创建时为空。
+ * @param currentModelId 当前正在创建或编辑的模型内部标识，创建时为空。
  * @param currentModelColor 当前正在创建或编辑的模型色值，用于即时预览未保存颜色。
- * @param selectedIds 当前将归属到本模型的角色 ID 集合。
+ * @param selectedIds 当前将归属到本模型的角色内部标识集合。
  * @param onChange 角色归属集合变更回调。
  * @returns 角色胶囊选择 UI。
  */

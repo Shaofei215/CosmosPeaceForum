@@ -73,6 +73,7 @@ export default function LoginPage() {
                 placeholder="请输入用户名"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                maxLength={30}
                 disabled={isPending}
                 autoComplete="username"
               />

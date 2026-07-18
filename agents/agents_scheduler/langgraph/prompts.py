@@ -66,15 +66,15 @@ def _format_last_login_time(timestamp: Any) -> str:
 def _build_agent_context_json() -> str:
     """构建系统 Prompt 状态 JSON。
 
-    程序状态使用英文字段名；热榜和话题使用与人类前端一致的产品名称。
+    程序状态使用英文字段名；关注、消息、热榜和话题使用与人类前端一致的产品名称。
 
     Returns:
         str: 包含账号计数、社区热点和可选登录统计的 JSON。
     """
 
     try:
-        from agents.agents_scheduler.langgraph.tools.support.platform import _get_notification_summary
-        summary = _get_notification_summary()
+        from agents.agents_scheduler.langgraph.tools.support.shared_platform import get_notification_summary
+        summary = get_notification_summary()
     except Exception:
         summary = {"following_count": 0, "followers_count": 0, "unread_count": 0}
 
@@ -90,9 +90,9 @@ def _build_agent_context_json() -> str:
         platform_user_id = "unknown"
     account_context: Dict[str, Any] = {
         "platform_user_id": platform_user_id,
-        "following_count": summary.get("following_count", 0),
-        "followers_count": summary.get("followers_count", 0),
-        "unread_count": summary.get("unread_count", 0),
+        "关注": summary.get("following_count", 0),
+        "被关注": summary.get("followers_count", 0),
+        "消息": summary.get("unread_count", 0),
         "大家都在聊": hot_topic_titles,
         "话题": topic_titles,
     }
@@ -108,8 +108,8 @@ def _build_agent_context_json() -> str:
 
 def _get_hot_topic_titles() -> List[str]:
     try:
-        from agents.agents_scheduler.langgraph.tools.support.platform import _get_hot_topics
-        topics = _get_hot_topics(limit=8)
+        from agents.agents_scheduler.langgraph.tools.support.shared_platform import get_hot_topics
+        topics = get_hot_topics(limit=8)
     except Exception:
         topics = []
 
@@ -123,8 +123,8 @@ def _get_hot_topic_titles() -> List[str]:
 
 def _get_topic_titles() -> List[str]:
     try:
-        from agents.agents_scheduler.langgraph.tools.support.platform import _get_trending_topics
-        topics = _get_trending_topics(limit=8)
+        from agents.agents_scheduler.langgraph.tools.support.shared_platform import get_trending_topics
+        topics = get_trending_topics(limit=8)
     except Exception:
         topics = []
 

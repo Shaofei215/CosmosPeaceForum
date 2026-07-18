@@ -104,7 +104,7 @@ export default function MemoryListPage() {
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-lg truncate">{agent.name || `User-${ownerId}`}</h3>
+                  <h3 className="font-semibold text-lg truncate">{agent.name || agent.username}</h3>
                   <div className="flex items-center gap-2 mt-2">
                     <Brain size={14} className="text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">{memoryCount} 条记忆</span>
@@ -215,7 +215,7 @@ function BatchUploadDialog({
     for (let i = 0; i < selectedOwnerIds.length; i++) {
       const ownerId = selectedOwnerIds[i];
       const agent = agents.find((a) => a.social_platform_user_id === ownerId);
-      const agentName = agent?.name ?? `User-${ownerId}`;
+      const agentName = agent?.name || '未命名角色';
 
       setProgress({ current: i + 1, total: selectedOwnerIds.length, currentAgent: agentName, status: 'pending' });
 
@@ -350,7 +350,7 @@ function BatchUploadDialog({
                       disabled={uploading}
                       className="accent-primary"
                     />
-                    <span className="text-sm">{a.name || `User-${a.social_platform_user_id}`}</span>
+                    <span className="text-sm">{a.name || '未命名角色'}</span>
                   </label>
                 ))}
               </div>

@@ -1,7 +1,9 @@
 import json
-
 from unittest.mock import patch
 
+import pytest
+
+from agents.agents_scheduler.langgraph import prompts as prompt_module
 from agents.agents_scheduler.langgraph.prompts import (
     build_system_prompt,
     build_decision_prompt,
@@ -12,6 +14,18 @@ from agents.agents_scheduler.langgraph.prompts import (
 from agents.agents_scheduler.scheduler.context import (
     clear_current_context,
 )
+from agents.prompt_templates import get_default_prompt_template
+
+
+@pytest.fixture(autouse=True)
+def use_default_prompt_templates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """固定使用内置模板，避免本地管理数据库配置污染 Prompt 单测。"""
+
+    monkeypatch.setattr(
+        prompt_module,
+        "_get_configured_prompt_template",
+        get_default_prompt_template,
+    )
 
 
 class TestBuildSystemPrompt:
@@ -64,17 +78,17 @@ class TestBuildSystemPrompt:
 
     def test_build_system_prompt_uses_product_labels_without_duplicate_queries(self):
         with patch(
-            "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
+            "agents.agents_scheduler.langgraph.tools.support.shared_platform.get_notification_summary",
             return_value={
                 "following_count": 1,
                 "followers_count": 2,
                 "unread_count": 3,
             },
         ) as summary_mock, patch(
-            "agents.agents_scheduler.langgraph.tools.support.platform._get_hot_topics",
+            "agents.agents_scheduler.langgraph.tools.support.shared_platform.get_hot_topics",
             return_value=[{"title": "第一条热榜"}],
         ) as hot_topics_mock, patch(
-            "agents.agents_scheduler.langgraph.tools.support.platform._get_trending_topics",
+            "agents.agents_scheduler.langgraph.tools.support.shared_platform.get_trending_topics",
             return_value=[{"name": "示例话题"}],
         ) as topics_mock, patch(
             "agents.agents_scheduler.langgraph.prompts._build_login_stats_summary",
@@ -87,12 +101,12 @@ class TestBuildSystemPrompt:
                 personal_signature="sig",
             )
 
-        context_text = prompt.split("## 当前账号状态（JSON）\n", 1)[1].split("\n\n你是", 1)[0]
+        context_text = prompt.split("## 当前账号状态\n", 1)[1].split("\n\n你是", 1)[0]
         assert json.loads(context_text) == {
-            "platform_user_id": "未知",
-            "following_count": 1,
-            "followers_count": 2,
-            "unread_count": 3,
+            "platform_user_id": "unknown",
+            "关注": 1,
+            "被关注": 2,
+            "消息": 3,
             "大家都在聊": ["第一条热榜"],
             "话题": ["示例话题"],
         }
@@ -115,8 +129,8 @@ class TestBuildDecisionPrompt:
             "recalled_memories": "",
         }
         prompt = build_decision_prompt(state)
-        assert "第一次决策" in prompt
-        assert "get_global_feed" in prompt
+        assert "This is first decision in this session" in prompt
+        assert "Suggest calling a tool first to retrieve some content" in prompt
         assert '"step_count": 0' in prompt
         assert '"action_history": []' in prompt
 
@@ -142,7 +156,7 @@ class TestBuildDecisionPrompt:
         assert '"summary": "看到了有趣帖子"' in prompt
         assert '"action": "点赞了帖子"' in prompt
         assert '"reason": "帖子很有趣"' in prompt
-        assert "上一步执行后当前查看的内容" in prompt
+        assert "Platform content obtained after last tool call" in prompt
 
     def test_build_decision_prompt_remaining_steps(self):
         state = {

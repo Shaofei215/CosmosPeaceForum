@@ -91,7 +91,7 @@ class Settings(BaseSettings):
     )
 
     # 服务器配置
-    server_host: str = Field(default="0.0.0.0", validation_alias="MANAGEMENT_SERVER_HOST")
+    server_host: str = Field(default="127.0.0.1", validation_alias="MANAGEMENT_SERVER_HOST")
     server_port: int = Field(default=8001, validation_alias="MANAGEMENT_SERVER_PORT")
 
     # 数据库配置。MANAGEMENT_DB_PATH 的优先级高于 MANAGEMENT_DATABASE_URL。

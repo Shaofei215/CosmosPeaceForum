@@ -28,6 +28,9 @@ export const adminApi = {
 
   update: (id: number, data: AdminUpdateRequest) =>
     apiClient.put<AdminUser>(`/admins/${id}`, data),
+
+  remove: (id: number) =>
+    apiClient.delete<MessageResponse>(`/admins/${id}`),
 };
 
 export const agentApi = {

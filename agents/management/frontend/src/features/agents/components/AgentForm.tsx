@@ -411,7 +411,7 @@ export default function AgentFormPage({
                         <div className="flex-1">
                           <span className="text-sm font-medium">{other.name}</span>
                           <span className="text-xs text-muted-foreground ml-2">
-                            @{other.username} (ID: {other.id})
+                            @{other.username}
                           </span>
                         </div>
                       </label>

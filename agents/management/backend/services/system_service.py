@@ -46,7 +46,7 @@ DEFAULT_SYSTEM_CONFIGS = [
     ("MEMORY_BOOST_FACTOR", "0.1", "唤醒时系数增量"),
     ("MEMORY_BOOST_COOLDOWN_SECONDS", "86400", "同一记忆再次唤醒增强前需等待的缩放秒数"),
     ("MEMORY_DECAY_RATE", "0.01", "衰减率（每日）"),
-    ("MEMORY_DECAY_INTERVAL_SECONDS", "300", "记忆衰减任务实时执行间隔（秒）"),
+    ("MEMORY_DECAY_INTERVAL_SECONDS", "3600", "记忆衰减任务实时执行间隔（秒）"),
 ]
 
 
@@ -242,6 +242,6 @@ def get_config_value(db: Session, key: str, default: str = "") -> str:
         "MEMORY_BOOST_FACTOR": "0.1",
         "MEMORY_BOOST_COOLDOWN_SECONDS": "86400",
         "MEMORY_DECAY_RATE": "0.01",
-        "MEMORY_DECAY_INTERVAL_SECONDS": "300",
+        "MEMORY_DECAY_INTERVAL_SECONDS": "3600",
     }
     return fallback_map.get(key, default)

@@ -6,11 +6,15 @@ Management Backend - 请求/响应模型。
 """
 
 from datetime import datetime
-from typing import Generic, List, Optional, TypeVar
+from typing import Annotated, Generic, List, Optional, TypeVar
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 T = TypeVar("T")
+AdminUsername = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=30),
+]
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
@@ -25,7 +29,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 class LoginRequest(BaseModel):
     """Management 管理员登录请求，remember_me 控制 refresh/session 生命周期。"""
 
-    username: str = Field(min_length=1, max_length=50)
+    username: AdminUsername
     password: str = Field(min_length=1)
     remember_me: bool = False
 
@@ -95,12 +99,14 @@ class AdminProfileUpdateRequest(BaseModel):
     """当前管理员更新首次登录资料的请求。"""
 
     current_password: str = Field(min_length=1)
-    username: Optional[str] = Field(default=None, min_length=3, max_length=50)
+    username: Optional[AdminUsername] = None
     new_password: Optional[str] = Field(default=None, min_length=8, max_length=32)
 
 
 class AdminCreateRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
+    """创建管理员请求，用户名沿用 Management 账号的统一长度约束。"""
+
+    username: AdminUsername
     email: Optional[EmailStr] = None
     password: str = Field(min_length=8, max_length=32)
     permissions: List[str] = Field(default_factory=list)

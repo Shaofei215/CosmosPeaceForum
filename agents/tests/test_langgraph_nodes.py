@@ -26,7 +26,7 @@ def test_attach_current_unread_count_only_returns_positive_values() -> None:
     """内部工具结果只在确有未读消息时增加提醒字段。"""
 
     with patch(
-        "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
+        "agents.agents_scheduler.langgraph.tools.support.shared_platform.get_notification_summary",
         return_value={"unread_count": 3},
     ):
         assert _attach_current_unread_count({"posts": []}) == {
@@ -35,7 +35,7 @@ def test_attach_current_unread_count_only_returns_positive_values() -> None:
         }
 
     with patch(
-        "agents.agents_scheduler.langgraph.tools.support.platform._get_notification_summary",
+        "agents.agents_scheduler.langgraph.tools.support.shared_platform.get_notification_summary",
         return_value={"unread_count": 0},
     ):
         assert _attach_current_unread_count({"posts": [], "unread_count": 9}) == {"posts": []}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { useCurrentAdmin } from '@/features/auth';
 import { adminApi } from '@/shared/api/modules';
 import {
@@ -8,7 +8,20 @@ import {
   type AdminCreateRequest,
   type AdminPermission,
 } from '@/shared/types/api';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/shared/components/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+} from '@/shared/components/ui';
 
 const permissionLabels: Record<AdminPermission, string> = {
   view_dashboard: '查看仪表盘',
@@ -23,6 +36,9 @@ const permissionLabels: Record<AdminPermission, string> = {
 
 export default function AdminListPage() {
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [deleteAdminId, setDeleteAdminId] = useState<number | null>(null);
+  const [operationError, setOperationError] = useState('');
   const { data: currentAdmin } = useCurrentAdmin();
   const queryClient = useQueryClient();
   const { data } = useQuery({
@@ -34,23 +50,56 @@ export default function AdminListPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admins'] });
       setCreating(false);
+      setCreateError('');
     },
+    onError: (error: { message?: string }) =>
+      setCreateError(error.message || '创建管理员失败，请稍后重试'),
   });
   const updateMutation = useMutation({
     mutationFn: ({ adminId, isActive }: { adminId: number; isActive: boolean }) =>
       adminApi.update(adminId, { is_active: isActive }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admins'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admins'] });
+      setOperationError('');
+    },
+    onError: (error: { message?: string }) =>
+      setOperationError(error.message || '更新管理员失败，请稍后重试'),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: adminApi.remove,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admins'] });
+      setDeleteAdminId(null);
+      setOperationError('');
+    },
+    onError: (error: { message?: string }) => {
+      setDeleteAdminId(null);
+      setOperationError(error.message || '移除管理员失败，请稍后重试');
+    },
   });
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">管理员</h1>
-        <Button className="rounded-md" onClick={() => setCreating(true)}>
+        <Button
+          className="rounded-md"
+          onClick={() => {
+            setCreateError('');
+            setCreating(true);
+          }}
+        >
           <Plus size={16} className="mr-1" />
           添加管理员
         </Button>
       </div>
+
+      {operationError && (
+        <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{operationError}</span>
+        </div>
+      )}
 
       <Card className="rounded-lg">
         <CardContent className="p-0">
@@ -67,15 +116,17 @@ export default function AdminListPage() {
               </thead>
               <tbody>
                 {data?.items.map((admin) => {
-                  const canToggleAdmin = admin.id !== currentAdmin?.id && !admin.is_super_admin;
+                  const isCurrentAdmin = admin.id === currentAdmin?.id;
+                  const canManageAdmin = Boolean(
+                    currentAdmin &&
+                    !isCurrentAdmin &&
+                    (!admin.is_super_admin || currentAdmin.is_super_admin),
+                  );
 
                   return (
                     <tr key={admin.id} className="border-b last:border-0">
                       <td className="px-4 py-3">
                         <p className="font-medium">{admin.username}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {admin.is_super_admin ? '超级管理员' : `ID ${admin.id}`}
-                        </p>
                         {admin.email && (
                           <p className="text-xs text-muted-foreground">{admin.email}</p>
                         )}
@@ -90,17 +141,29 @@ export default function AdminListPage() {
                         {admin.last_login ? new Date(admin.last_login).toLocaleString() : '从未登录'}
                       </td>
                       <td className="px-4 py-3">
-                        {canToggleAdmin && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-md"
-                            onClick={() =>
-                              updateMutation.mutate({ adminId: admin.id, isActive: !admin.is_active })
-                            }
-                          >
-                            {admin.is_active ? '停用' : '启用'}
-                          </Button>
+                        {canManageAdmin && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-md"
+                              disabled={updateMutation.isPending}
+                              onClick={() =>
+                                updateMutation.mutate({ adminId: admin.id, isActive: !admin.is_active })
+                              }
+                            >
+                              {admin.is_active ? '停用' : '启用'}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              title="移除管理员"
+                              onClick={() => setDeleteAdminId(admin.id)}
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -121,28 +184,71 @@ export default function AdminListPage() {
 
       {creating && (
         <CreateAdminDialog
+          assignablePermissions={
+            currentAdmin?.is_super_admin
+              ? [...ADMIN_PERMISSIONS]
+              : (currentAdmin?.permissions ?? [])
+          }
+          canCreateSuperAdmin={Boolean(currentAdmin?.is_super_admin)}
           saving={createMutation.isPending}
-          onClose={() => setCreating(false)}
+          error={createError}
+          onClose={() => {
+            setCreating(false);
+            setCreateError('');
+          }}
           onSubmit={(payload) => createMutation.mutate(payload)}
         />
       )}
+
+      <Dialog open={deleteAdminId !== null} onOpenChange={() => setDeleteAdminId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认移除管理员</DialogTitle>
+            <DialogDescription>
+              该管理员将无法再登录，现有登录会话也会立即失效。此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteAdminId(null)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteAdminId !== null && deleteMutation.mutate(deleteAdminId)}
+            >
+              {deleteMutation.isPending ? '移除中...' : '移除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 function CreateAdminDialog({
+  assignablePermissions,
+  canCreateSuperAdmin,
   saving,
+  error,
   onClose,
   onSubmit,
 }: {
+  assignablePermissions: AdminPermission[];
+  canCreateSuperAdmin: boolean;
   saving: boolean;
+  error: string;
   onClose: () => void;
   onSubmit: (payload: AdminCreateRequest) => void;
 }) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [permissions, setPermissions] = useState<AdminPermission[]>(['view_dashboard']);
+  const [permissions, setPermissions] = useState<AdminPermission[]>(() =>
+    assignablePermissions.includes('view_dashboard')
+      ? ['view_dashboard']
+      : assignablePermissions.slice(0, 1),
+  );
   const [superAdmin, setSuperAdmin] = useState(false);
 
   const togglePermission = (permission: AdminPermission) => {
@@ -160,10 +266,18 @@ function CreateAdminDialog({
           <CardTitle>添加管理员</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
           <Input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
             placeholder="用户名"
+            minLength={1}
+            maxLength={30}
           />
           <Input
             value={email}
@@ -179,17 +293,19 @@ function CreateAdminDialog({
             minLength={8}
             maxLength={32}
           />
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={superAdmin}
-              onChange={(event) => setSuperAdmin(event.target.checked)}
-            />
-            超级管理员
-          </label>
+          {canCreateSuperAdmin && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={superAdmin}
+                onChange={(event) => setSuperAdmin(event.target.checked)}
+              />
+              超级管理员
+            </label>
+          )}
           {!superAdmin && (
             <div className="grid gap-2 sm:grid-cols-2">
-              {ADMIN_PERMISSIONS.map((permission) => (
+              {assignablePermissions.map((permission) => (
                 <label key={permission} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -207,7 +323,13 @@ function CreateAdminDialog({
             </Button>
             <Button
               className="rounded-md"
-              disabled={saving || password.length < 8}
+              disabled={
+                saving ||
+                username.trim().length === 0 ||
+                username.trim().length > 30 ||
+                password.length < 8 ||
+                password.length > 32
+              }
               onClick={() =>
                 onSubmit({
                   username: username.trim(),

@@ -8,9 +8,9 @@ import pytest
 from agents.agents_scheduler.langgraph import prompts
 from agents.agents_scheduler.langgraph.nodes import tool_execution_node
 from agents.agents_scheduler.langgraph.tools import feed, social
-from agents.agents_scheduler.langgraph.tools.support import platform as utils
 from agents.agents_scheduler.langgraph.tools.support import shared_platform
 from agents.platform_tools import PlatformToolContext
+from agents.platform_tools.presenters import normalize_comment, normalize_post
 
 
 class _FakePlatformClient:
@@ -117,25 +117,11 @@ def _install_shared_client(
             client=client,  # type: ignore[arg-type]
             access_token="test-token",
             current_user={"id": 99},
-            cursor=utils._get_scroll_cursor(),
+            cursor=shared_platform.get_scroll_cursor(),
         )
 
     monkeypatch.setattr(shared_platform, "_build_internal_context", build_context)
     return client
-
-
-def _disable_relation_expansion(monkeypatch):
-    monkeypatch.setattr(
-        utils,
-        "_expand_username_by_relation",
-        lambda username, user_id, owner_id: username,
-    )
-    monkeypatch.setattr(
-        utils,
-        "_expand_content_mentions_by_relation",
-        lambda content, owner_id: content,
-    )
-    monkeypatch.setattr(utils, "_get_follow_status_text", lambda user_id, current_user_id: "")
 
 
 def _post_payload():
@@ -220,7 +206,12 @@ def test_tool_execution_then_decision_prompt_exposes_reply_parent_ids(monkeypatc
 
 
 def test_comment_tree_from_platform_api_keeps_nested_reply_ids(monkeypatch):
-    _disable_relation_expansion(monkeypatch)
+    client = _FakePlatformClient()
+    context = PlatformToolContext(
+        client=client,  # type: ignore[arg-type]
+        access_token="test-token",
+        current_user={"id": 99},
+    )
     platform_comment_tree = _comment_payload(
         201,
         content="root with child",
@@ -234,9 +225,9 @@ def test_comment_tree_from_platform_api_keeps_nested_reply_ids(monkeypatch):
         ],
     )
 
-    standardized = utils._standardize_comment(platform_comment_tree, current_user_id=99)
+    standardized = normalize_comment(platform_comment_tree, context)
     formatted = prompts._format_tool_result(
-        {"post": utils._standardize_post(_post_payload(), 99), "comments": [standardized], "total": 3}
+        {"post": normalize_post(_post_payload(), context), "comments": [standardized], "total": 3}
     )
 
     assert standardized["children"][0]["id"] == 301
@@ -344,7 +335,7 @@ def test_prompt_for_created_reply_includes_new_comment_id():
 
 
 def test_scroll_continues_global_feed_without_args(monkeypatch):
-    utils._clear_scroll_cursor()
+    shared_platform.clear_scroll_cursor()
     _install_shared_client(monkeypatch)
 
     first = feed.get_global_feed.invoke({})
@@ -355,7 +346,7 @@ def test_scroll_continues_global_feed_without_args(monkeypatch):
 
 
 def test_scroll_continues_post_comments(monkeypatch):
-    utils._clear_scroll_cursor()
+    shared_platform.clear_scroll_cursor()
     _install_shared_client(monkeypatch)
 
     first = feed.view_post_comments.invoke({"post_id": 10})
@@ -366,7 +357,7 @@ def test_scroll_continues_post_comments(monkeypatch):
 
 
 def test_scroll_continues_user_profile_posts(monkeypatch):
-    utils._clear_scroll_cursor()
+    shared_platform.clear_scroll_cursor()
     _install_shared_client(monkeypatch)
 
     profile = social.get_user_profile.invoke({"user_id": 1})
