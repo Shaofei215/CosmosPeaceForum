@@ -18,8 +18,12 @@ class RelationExpander(Protocol):
     def expand_author(self, username: str, user_id: int | None, owner_id: int | None) -> str:
         """按当前 Agent 关系映射扩展作者名。"""
 
+        ...
+
     def expand_content_mentions(self, content: str, owner_id: int | None) -> str:
         """按当前 Agent 关系映射扩展正文中的 @mention。"""
+
+        ...
 
 
 @dataclass
