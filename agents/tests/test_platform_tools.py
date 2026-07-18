@@ -261,7 +261,7 @@ def test_internal_adapter_keeps_notification_scroll_state(monkeypatch: pytest.Mo
         stored_cursor = cursor
 
     monkeypatch.setattr(shared_platform, "_build_internal_context", build_context)
-    monkeypatch.setattr(shared_platform, "_set_scroll_cursor", save_cursor)
+    monkeypatch.setattr(shared_platform, "set_scroll_cursor", save_cursor)
 
     shared_platform.run_shared_tool("view_notifications", {"count": 1})
     second = shared_platform.run_shared_tool("scroll", {"count": 1})

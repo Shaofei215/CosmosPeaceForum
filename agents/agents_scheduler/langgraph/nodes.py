@@ -37,9 +37,9 @@ def _attach_current_unread_count(data: Any) -> Any:
     """
 
     try:
-        from agents.agents_scheduler.langgraph.tools.support.platform import _get_notification_summary
+        from agents.agents_scheduler.langgraph.tools.support.shared_platform import get_notification_summary
 
-        unread_count = int(_get_notification_summary().get("unread_count", 0) or 0)
+        unread_count = int(get_notification_summary().get("unread_count", 0) or 0)
     except Exception:
         logger.exception("读取未读消息数量失败")
         return data
@@ -265,8 +265,8 @@ def start_node(state: SessionState) -> SessionState:
     """
     logger.info("[start] %s 初始化会话", state.get("name", "未知"))
     try:
-        from agents.agents_scheduler.langgraph.tools.support.platform import _clear_scroll_cursor
-        _clear_scroll_cursor()
+        from agents.agents_scheduler.langgraph.tools.support.shared_platform import clear_scroll_cursor
+        clear_scroll_cursor()
     except Exception:
         pass
 
