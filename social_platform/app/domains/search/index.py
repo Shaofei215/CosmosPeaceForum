@@ -5,7 +5,7 @@ import shutil
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Generic, Iterable, List, Optional, TypeVar, cast
 
 from social_platform.app.core.paths import get_search_index_dir
 from social_platform.app.domains.post.models import Post
@@ -21,6 +21,8 @@ import tantivy
 
 logger = logging.getLogger(__name__)
 
+_RowT = TypeVar("_RowT")
+
 
 @dataclass
 class SearchHit:
@@ -29,15 +31,15 @@ class SearchHit:
     score: float
 
 
-class _BaseTantivyIndex:
+class _BaseTantivyIndex(Generic[_RowT]):
     """Tantivy 索引基类，封装可重建投影的打开、写入、删除和查询流程。"""
     def __init__(self, name: str):
         """初始化搜索投影索引中的异常或服务对象，保存后续处理需要的上下文。"""
         self.name = name
         self.index_path = Path(get_search_index_dir()) / name
         self._lock = threading.Lock()
-        self.index = None
-        self.writer = None
+        self.index: tantivy.Index
+        self.writer: tantivy.IndexWriter
         self._needs_reload = False
         self._needs_rebuild = not self.index_path.exists() or not any(self.index_path.iterdir())
 
@@ -64,7 +66,7 @@ class _BaseTantivyIndex:
         self.writer = self.index.writer()
         self.writer.commit()
 
-    def rebuild(self, rows: Iterable[object]) -> None:
+    def rebuild(self, rows: Iterable[_RowT]) -> None:
         """清空并重建索引，使搜索投影与数据库事实表重新对齐。"""
         with self._lock:
             if self.index_path.exists():
@@ -75,7 +77,7 @@ class _BaseTantivyIndex:
             self._flush_writer()
             self._needs_rebuild = False
 
-    def upsert(self, row: object) -> None:
+    def upsert(self, row: _RowT) -> None:
         """按主键更新或插入索引文档，供 after_commit 投影维护使用。"""
         if not self.available:
             return
@@ -115,7 +117,10 @@ class _BaseTantivyIndex:
                 self._needs_reload = False
             searcher = self.index.searcher()
             try:
-                parsed_query, _ = self.index.parse_query_lenient(query_text, self._query_fields())
+                parsed_query, _ = cast(
+                    tuple[tantivy.Query, list[str]],
+                    self.index.parse_query_lenient(query_text, self._query_fields()),
+                )
             except Exception as exc:
                 logger.warning("解析搜索查询失败: %s", exc)
                 return []
@@ -152,7 +157,7 @@ class _BaseTantivyIndex:
         self.writer = self.index.writer()
         self._needs_reload = True
 
-    def _add_document(self, row: object) -> None:
+    def _add_document(self, row: _RowT) -> None:
         """把领域模型转换为 Tantivy 文档，由具体索引子类实现。"""
         raise NotImplementedError
 
@@ -165,7 +170,7 @@ class _BaseTantivyIndex:
         raise NotImplementedError
 
 
-class ContentSearchIndex(_BaseTantivyIndex):
+class ContentSearchIndex(_BaseTantivyIndex[Post]):
     """帖子内容搜索索引，维护标题和正文的可搜索投影。"""
     def __init__(self):
         """初始化搜索投影索引中的异常或服务对象，保存后续处理需要的上下文。"""
@@ -198,7 +203,7 @@ class ContentSearchIndex(_BaseTantivyIndex):
         return tokens_to_tantivy_text(tokenize_text(query))
 
 
-class UserSearchIndex(_BaseTantivyIndex):
+class UserSearchIndex(_BaseTantivyIndex[User]):
     """用户搜索索引，维护用户名的可搜索投影。"""
     def __init__(self):
         """初始化搜索投影索引中的异常或服务对象，保存后续处理需要的上下文。"""

@@ -1,13 +1,16 @@
 import asyncio
 import json
+from collections.abc import Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, object_session
 
-from social_platform.app.api.deps import get_access_payload, get_db, get_current_user_including_banned
+from social_platform.app.api.deps import get_db, get_current_user_including_banned
 from social_platform.app.db.session import SessionLocal
-from social_platform.app.domains.comment.models import CommentLike
+from social_platform.app.domains.comment.models import Comment, CommentLike
+from social_platform.app.domains.notification.models import Notification
+from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.notification.schemas import (
@@ -51,7 +54,7 @@ def list_notifications(
     )
     _attach_appeal_statuses(db, items, current_user.id)
     return NotificationListResponse(
-        items=items,
+        items=[NotificationResponse.model_validate(item) for item in items],
         total=total,
         unread_count=unread_count,
         skip=skip,
@@ -78,20 +81,12 @@ def get_unread_count(
 
 
 @router.get("/events")
-async def stream_notification_events(token: str = Query(...), db: Session = Depends(get_db)):
-    """通知 SSE 入口，query token 同样要校验 active user session。
+async def stream_notification_events(
+    current_user: User = Depends(get_current_user_including_banned),
+):
+    """通过 Authorization Header 建立通知 SSE，避免凭据进入 URL 与访问日志。"""
 
-    EventSource 无法稳定附带 Authorization header，因此前端通过 query 传 access token；
-    这里仍复用 get_access_payload，保证 session 撤销后 SSE 也无法继续建立。
-    """
-    try:
-        payload = get_access_payload(token, db, "user")
-        user_id = int(payload["sub"])
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
+    user_id = current_user.id
 
     def build_payload(event_type: str) -> dict[str, int | str]:
         """为 SSE 事件即时读取最新通知摘要，避免长连接复用已关闭的请求会话。"""
@@ -193,7 +188,7 @@ def get_notification_origin(
     }
 
 
-def _serialize_user(user):
+def _serialize_user(user: User | None):
     if not user:
         return None
     return {
@@ -207,13 +202,14 @@ def _serialize_user(user):
     }
 
 
-def _serialize_post(db: Session, post, current_user_id: int):
+def _serialize_post(db: Session, post: Post | None, current_user_id: int):
     if not post:
         return None
     is_liked = db.query(Like).filter(
         Like.user_id == current_user_id,
         Like.post_id == post.id,
     ).first() is not None
+    post_session = object_session(post)
     return {
         "id": post.id,
         "author_id": post.author_id,
@@ -233,24 +229,24 @@ def _serialize_post(db: Session, post, current_user_id: int):
         "repost_root_post_id": getattr(post, "repost_root_post_id", None),
         "repost_chain": getattr(post, "repost_chain", None),
         "repost_chain_authors": post_queries.build_repost_chain_authors(
-            object_session(post),
+            post_session,
             post.content,
-        ) if object_session(post) else [],
+        ) if post_session else [],
         "mention_users": post_queries.build_mention_users(
-            object_session(post),
+            post_session,
             post.content,
-        ) if object_session(post) else [],
+        ) if post_session else [],
         "topic_mentions": topic_queries.build_topic_mentions(
-            object_session(post),
+            post_session,
             post.id,
-        ) if object_session(post) else [],
+        ) if post_session else [],
         "repost_origin": _serialize_post(db, post.repost_root_post, current_user_id)
         if getattr(post, "repost_root_post_id", None) and getattr(post, "repost_root_post", None)
         else None,
     }
 
 
-def _serialize_comment(db: Session, comment, current_user_id: int):
+def _serialize_comment(db: Session, comment: Comment | None, current_user_id: int):
     if not comment:
         return None
     is_liked = db.query(CommentLike).filter(
@@ -277,12 +273,20 @@ def _sse_event(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _attach_appeal_statuses(db: Session, items: list[object], user_id: int) -> None:
+def _attach_appeal_statuses(
+    db: Session,
+    items: Sequence[Notification],
+    user_id: int,
+) -> None:
     """给通知对象动态附加申诉状态，供 Pydantic from_attributes 序列化。"""
 
     notification_ids = [item.id for item in items if getattr(item, "type", None) == "moderation"]
     statuses = appeal_application.get_notification_appeal_statuses(db, notification_ids)
     for item in items:
         if getattr(item, "type", None) == "moderation":
-            item.appeal_status = statuses.get(item.id)
-            item.can_appeal = appeal_application.is_notification_appealable(db, item, user_id)
+            setattr(item, "appeal_status", statuses.get(item.id))
+            setattr(
+                item,
+                "can_appeal",
+                appeal_application.is_notification_appealable(db, item, user_id),
+            )

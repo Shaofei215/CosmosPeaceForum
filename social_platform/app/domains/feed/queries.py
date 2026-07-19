@@ -16,6 +16,7 @@ from social_platform.app.domains.feed.schemas import PostFeedItem
 from social_platform.app.domains.follow.models import Follow
 from social_platform.app.domains.post import poll_queries, queries as post_queries
 from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.post.schemas import RepostChainAuthor
 from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.topic import queries as topic_queries
 from social_platform.app.domains.user.models import User
@@ -198,7 +199,10 @@ def build_feed_items(
                 repost_source_id=post.repost_source_id,
                 repost_root_post_id=post.repost_root_post_id,
                 repost_chain=post.repost_chain,
-                repost_chain_authors=mention_users,
+                repost_chain_authors=[
+                    RepostChainAuthor(user_id=item.user_id, username=item.username)
+                    for item in mention_users
+                ],
                 mention_users=mention_users,
                 topic_mentions=topic_mentions_by_post.get(post.id, []),
                 repost_origin=post.repost_root_post if post.repost_root_post_id else None,

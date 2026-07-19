@@ -7,6 +7,20 @@ import { userApi } from './api';
 import type { UpdateUserData, CompleteProfileData, UserProfile } from './types';
 import { useAuthStore } from '@/features/auth';
 import { getAccessToken } from '@/features/auth/tokenStorage';
+import type { QueryClient } from '@tanstack/react-query';
+
+/** 同步当前用户的详情缓存、认证缓存与 Zustand 登录态。 */
+function syncCurrentUser(queryClient: QueryClient, updatedUser: UserProfile): void {
+  queryClient.setQueryData(['user', updatedUser.id], updatedUser);
+  const currentAuthUser = useAuthStore.getState().user;
+  const nextAuthUser = currentAuthUser
+    ? { ...currentAuthUser, ...updatedUser }
+    : toAuthUser(updatedUser);
+  queryClient.setQueryData(['auth', 'me'], nextAuthUser);
+  const token = getAccessToken();
+  if (token) useAuthStore.getState().setAuth(token, nextAuthUser);
+  queryClient.invalidateQueries({ queryKey: ['users'] });
+}
 
 /**
  * 获取用户列表Hook
@@ -61,19 +75,12 @@ export const useUserByUsername = (username: string) => {
  */
 export const useUpdateUser = () => {
   const queryClient = useQueryClient();
-  const { setAuth } = useAuthStore();
 
   return useMutation({
     mutationFn: ({ userId, data }: { userId: number; data: UpdateUserData }) =>
       userApi.updateUser(userId, data),
     onSuccess: updatedUser => {
-      queryClient.setQueryData(['user', updatedUser.id], updatedUser);
-      queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      const token = getAccessToken();
-      if (token) {
-        setAuth(token, toAuthUser(updatedUser));
-      }
+      syncCurrentUser(queryClient, updatedUser);
     },
   });
 };
@@ -100,19 +107,12 @@ const toAuthUser = (profile: UserProfile) => ({
  */
 export const useCompleteProfile = () => {
   const queryClient = useQueryClient();
-  const { setAuth } = useAuthStore();
 
   return useMutation({
     mutationFn: ({ userId, data }: { userId: number; data: CompleteProfileData }) =>
       userApi.completeProfile(userId, data),
     onSuccess: updatedUser => {
-      queryClient.setQueryData(['user', updatedUser.id], updatedUser);
-      queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      const token = getAccessToken();
-      if (token) {
-        setAuth(token, toAuthUser(updatedUser));
-      }
+      syncCurrentUser(queryClient, updatedUser);
     },
   });
 };
@@ -126,18 +126,11 @@ export const useCompleteProfile = () => {
  */
 export const useUploadAvatar = () => {
   const queryClient = useQueryClient();
-  const { setAuth } = useAuthStore();
 
   return useMutation({
     mutationFn: (file: File) => userApi.uploadAvatar(file),
     onSuccess: updatedUser => {
-      queryClient.setQueryData(['user', updatedUser.id], updatedUser);
-      queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      const token = getAccessToken();
-      if (token) {
-        setAuth(token, toAuthUser(updatedUser));
-      }
+      syncCurrentUser(queryClient, updatedUser);
     },
   });
 };
@@ -151,18 +144,11 @@ export const useUploadAvatar = () => {
  */
 export const useDeleteAvatar = () => {
   const queryClient = useQueryClient();
-  const { setAuth } = useAuthStore();
 
   return useMutation({
     mutationFn: () => userApi.deleteAvatar(),
     onSuccess: updatedUser => {
-      queryClient.setQueryData(['user', updatedUser.id], updatedUser);
-      queryClient.invalidateQueries({ queryKey: ['user', updatedUser.id] });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-      const token = getAccessToken();
-      if (token) {
-        setAuth(token, toAuthUser(updatedUser));
-      }
+      syncCurrentUser(queryClient, updatedUser);
     },
   });
 };

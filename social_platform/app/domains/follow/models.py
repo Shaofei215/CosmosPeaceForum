@@ -1,7 +1,7 @@
 # 关注数据库模型
 # 定义关注表结构，记录用户之间的单向关注关系
-from sqlalchemy import Boolean, Column, Integer, DateTime, ForeignKey, UniqueConstraint, Index
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Integer, DateTime, ForeignKey, UniqueConstraint, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
 
@@ -34,11 +34,11 @@ class Follow(Base):
     __tablename__ = "follows"
 
     # 主键 ID，使用自增策略
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     # 关注者用户 ID，外键关联到 users 表
     # 不能为空，因为关注必须有发起者
-    follower_id = Column(
+    follower_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False
@@ -46,15 +46,15 @@ class Follow(Base):
 
     # 被关注者用户 ID，外键关联到 users 表
     # 不能为空，因为关注必须指向被关注者
-    following_id = Column(
+    following_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False
     )
 
     # 关注创建时间，自动设置为当前系统本地时间
-    created_at = Column(DateTime, default=local_now)
-    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=True)
+    created_by_agent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
 
     # 表级约束和索引配置
     __table_args__ = (

@@ -1,12 +1,16 @@
 """可信 Agent 操作来源依赖测试。"""
 
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock
+
+from fastapi import Request
 
 from social_platform.app.api import deps
 from social_platform.app.api.routers import auth
 from social_platform.app.schemas.auth import InternalAgentLoginRequest, UserLogin, UserRegister
 from social_platform.app.schemas.auth import AgentLoginContext
+from social_platform.app.domains.user.models import User
 
 
 def test_agent_operation_source_requires_matching_source_and_token(monkeypatch) -> None:
@@ -51,7 +55,7 @@ def test_admin_agent_login_uses_admin_key_without_agent_service_identity(monkeyp
 
     response = auth.admin_agent_login(
         InternalAgentLoginRequest(username="agent-name", password="secret123"),
-        request,
+        cast(Request, request),
         x_admin_key="admin-key",
         db=db,
     )
@@ -100,7 +104,7 @@ def test_human_login_honors_agent_client_type(monkeypatch) -> None:
 
     response = auth.login(
         UserLogin(email="agent@example.com", password="secret123", client_type="agent"),
-        request,
+        cast(Request, request),
         db=db,
     )
 
@@ -146,7 +150,7 @@ def test_human_registration_detects_client_type_when_omitted(monkeypatch) -> Non
 
     response = auth.verify_and_register(
         UserRegister(email="user@example.com", password="secret123"),
-        request,
+        cast(Request, request),
         code="123456",
         db=db,
     )
@@ -189,7 +193,7 @@ def test_agent_login_context_uses_platform_state_without_login_stats(monkeypatch
         lambda _db, limit: [SimpleNamespace(name="话题一")],
     )
 
-    context = auth._build_agent_login_context(db, user)
+    context = auth._build_agent_login_context(db, cast(User, user))
     payload = context.model_dump(exclude_none=True, by_alias=True)
 
     assert payload == {

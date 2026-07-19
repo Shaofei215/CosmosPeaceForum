@@ -12,6 +12,7 @@ import unicodedata
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from typing import TypedDict
 from urllib.parse import urlsplit, urlunsplit
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -32,6 +33,29 @@ _SOURCE_PATHS: dict[str, Path] = {
     "references/COMMUNITY_GUIDELINES.md": _LICENSE_DIRECTORY / "community-guidelines.md",
 }
 SOURCE_FILES = tuple(_SOURCE_PATHS)
+
+
+class SkillVersionManifest(TypedDict):
+    """可下载 Skill 历史版本的清单项。"""
+
+    version: str
+    url: str
+
+
+class SkillManifest(TypedDict):
+    """外部 Agent Skill 下载接口返回的结构化清单。"""
+
+    name: str
+    version: str
+    schema_version: str
+    description: str
+    platform_display_name: str
+    platform_english_name: str
+    platform_api_base: str
+    agent_api_base: str
+    latest: str
+    versions: list[SkillVersionManifest]
+    files: list[str]
 
 
 @dataclass(frozen=True)
@@ -63,7 +87,7 @@ class SkillPackage:
         download_filename: HTTP 下载响应使用的安全 ASCII 文件名。
     """
 
-    manifest: dict[str, object]
+    manifest: SkillManifest
     archive: bytes
     download_filename: str
 
@@ -252,14 +276,14 @@ def _read_rendered_source(relative_path: str, config: SkillBuildConfig) -> str:
     return _render_template(source.read_text(encoding="utf-8"), config)
 
 
-def _create_manifest(config: SkillBuildConfig) -> dict[str, object]:
+def _create_manifest(config: SkillBuildConfig) -> SkillManifest:
     """生成当前部署的 Skill 下载清单。
 
     Args:
         config: 当前部署的渲染配置。
 
     Returns:
-        dict[str, object]: 可直接序列化为 JSON 的下载清单。
+        SkillManifest: 可直接序列化为 JSON 的下载清单。
     """
 
     return {

@@ -642,16 +642,20 @@ def list_users(
     users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
     user_ids = [user.id for user in users]
 
-    post_counts = dict(
-        db.query(Post.author_id, func.count(Post.id)).filter(Post.author_id.in_(user_ids))
+    post_counts = {
+        author_id: count
+        for author_id, count in db.query(Post.author_id, func.count(Post.id))
+        .filter(Post.author_id.in_(user_ids))
         .group_by(Post.author_id)
         .all()
-    ) if user_ids else {}
-    comment_counts = dict(
-        db.query(Comment.owner_id, func.count(Comment.id)).filter(Comment.owner_id.in_(user_ids))
+    } if user_ids else {}
+    comment_counts = {
+        owner_id: count
+        for owner_id, count in db.query(Comment.owner_id, func.count(Comment.id))
+        .filter(Comment.owner_id.in_(user_ids))
         .group_by(Comment.owner_id)
         .all()
-    ) if user_ids else {}
+    } if user_ids else {}
     moderations = {
         item.user_id: item
         for item in db.query(UserModeration).filter(UserModeration.user_id.in_(user_ids)).all()
@@ -708,16 +712,20 @@ def list_moderated_users(
     total = query.count()
     users = query.order_by(UserModeration.updated_at.desc(), User.id.desc()).offset(skip).limit(limit).all()
     user_ids = [user.id for user in users]
-    post_counts = dict(
-        db.query(Post.author_id, func.count(Post.id)).filter(Post.author_id.in_(user_ids))
+    post_counts = {
+        author_id: count
+        for author_id, count in db.query(Post.author_id, func.count(Post.id))
+        .filter(Post.author_id.in_(user_ids))
         .group_by(Post.author_id)
         .all()
-    ) if user_ids else {}
-    comment_counts = dict(
-        db.query(Comment.owner_id, func.count(Comment.id)).filter(Comment.owner_id.in_(user_ids))
+    } if user_ids else {}
+    comment_counts = {
+        owner_id: count
+        for owner_id, count in db.query(Comment.owner_id, func.count(Comment.id))
+        .filter(Comment.owner_id.in_(user_ids))
         .group_by(Comment.owner_id)
         .all()
-    ) if user_ids else {}
+    } if user_ids else {}
     moderations = {
         item.user_id: item
         for item in db.query(UserModeration).filter(UserModeration.user_id.in_(user_ids)).all()

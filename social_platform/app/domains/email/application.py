@@ -7,13 +7,20 @@
 from __future__ import annotations
 
 import logging
+from typing import Protocol
 
-from social_platform.app.core.config import Settings, get_settings
+from social_platform.app.core.config import get_settings
 from social_platform.app.domains.email.sender import EmailSender, smtp_email_sender
 from social_platform.app.domains.email.templates import build_verification_email
 
 
 logger = logging.getLogger(__name__)
+
+
+class VerificationEmailSettings(Protocol):
+    """验证码邮件适配器实际依赖的最小配置协议。"""
+
+    EMAIL_CODE_EXPIRE_MINUTES: int
 
 
 class VerificationEmailSenderAdapter:
@@ -26,7 +33,7 @@ class VerificationEmailSenderAdapter:
     def __init__(
         self,
         email_sender: EmailSender = smtp_email_sender,
-        settings: Settings | None = None,
+        settings: VerificationEmailSettings | None = None,
     ) -> None:
         """初始化验证码邮件发送适配器。
 
@@ -36,7 +43,7 @@ class VerificationEmailSenderAdapter:
         """
 
         self.email_sender = email_sender
-        self.settings = settings or get_settings()
+        self.settings = settings if settings is not None else get_settings()
 
     def send_verification_email(self, email: str, code: str, purpose: str) -> bool:
         """发送验证码邮件。
@@ -65,4 +72,3 @@ class VerificationEmailSenderAdapter:
 
 verification_email_sender = VerificationEmailSenderAdapter()
 """默认验证码邮件发送适配器实例，供认证路由注入 identity 验证码服务。"""
-

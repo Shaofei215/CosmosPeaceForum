@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from social_platform.app.core.config import get_settings
 from social_platform.app.core.security import get_password_hash
 from social_platform.app.domains.identity import verification
+from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.identity.models import EmailVerificationCode
 from social_platform.app.domains.invitation import application as invitation_service
 from social_platform.app.domains.user.models import User
@@ -173,4 +174,5 @@ def reset_password_with_code(db: Session, email: str, code: str, new_password: s
 
     _consume_matching_code(db, verification_code, code)
     user.password_hash = get_password_hash(new_password)
+    session_service.revoke_all_sessions(db, user.id, "user", commit=False)
     db.commit()

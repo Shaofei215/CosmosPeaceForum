@@ -12,22 +12,40 @@ from secrets import token_urlsafe
 from typing import Optional
 from uuid import uuid4
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from agents.management.backend.core.config import get_config
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """验证明文密码是否匹配 passlib 哈希。"""
-    return pwd_context.verify(plain_password, hashed_password)
+    """验证明文密码是否匹配数据库中存储的 bcrypt 哈希。
+
+    Args:
+        plain_password: 待验证的明文密码。
+        hashed_password: 数据库中存储的 bcrypt 哈希字符串。
+
+    Returns:
+        bool: 密码匹配时返回 True，否则返回 False。
+    """
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"),
+        hashed_password.encode("utf-8"),
+    )
 
 
 def get_password_hash(password: str) -> str:
-    """生成用于存储的管理员密码哈希。"""
-    return pwd_context.hash(password)
+    """生成用于存储的管理员 bcrypt 密码哈希。
+
+    Args:
+        password: 待哈希的明文密码。
+
+    Returns:
+        str: 可直接写入数据库的 bcrypt 哈希字符串。
+    """
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(password.encode("utf-8"), salt)
+    return hashed_password.decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

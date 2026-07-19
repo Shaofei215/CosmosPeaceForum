@@ -1,8 +1,8 @@
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from social_platform.app.db.session import Base
 
@@ -11,21 +11,21 @@ class Notification(Base):
     """通知领域数据库模型，记录由其他领域事件驱动生成的用户通知。"""
     __tablename__ = "notifications"
 
-    id = Column(Integer, primary_key=True, index=True)
-    recipient_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    sender_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    recipient_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
-    type = Column(String(50), nullable=False, index=True)
-    resource_type = Column(String(50), nullable=False, index=True)
-    resource_id = Column(Integer, nullable=False, index=True)
+    type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    resource_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    resource_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
-    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True, index=True)
-    comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
-    source_content = Column(Text, nullable=True)
+    post_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True, index=True)
+    comment_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
+    source_content: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    is_read = Column(Integer, default=0, nullable=False, index=True)
-    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
-    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
+    is_read: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    created_by_agent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False, index=True)
 
     recipient = relationship("User", foreign_keys=[recipient_id], back_populates="notifications")
     sender = relationship("User", foreign_keys=[sender_id])

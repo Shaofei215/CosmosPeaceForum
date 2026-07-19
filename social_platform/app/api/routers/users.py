@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from social_platform.app.admin.services.moderation_guard import (
+    ProfileField,
     ensure_account_available,
     ensure_action_allowed,
     ensure_profile_field_allowed,
@@ -15,6 +16,12 @@ from social_platform.app.domains.user.schemas import UserResponse, UserUpdate, C
 from social_platform.app.domains.user import application as user_application
 
 router = APIRouter()
+
+_PROFILE_UPDATE_FIELDS: dict[str, ProfileField] = {
+    "avatar_url": "avatar",
+    "username": "username",
+    "bio": "bio",
+}
 
 
 @router.get("/", response_model=List[UserResponse], summary="获取用户列表", description="获取所有用户列表，支持分页。无需认证。")
@@ -104,8 +111,9 @@ def update_user(
     """
     ensure_account_available(db, current_user)
     for field in user_update.model_fields_set:
-        if field in {"avatar_url", "username", "bio"}:
-            ensure_profile_field_allowed(db, current_user, "avatar" if field == "avatar_url" else field)
+        profile_field = _PROFILE_UPDATE_FIELDS.get(field)
+        if profile_field is not None:
+            ensure_profile_field_allowed(db, current_user, profile_field)
     try:
         return user_application.update_user(db, current_user, user_id, user_update)
     except user_application.UserPermissionError as e:
@@ -148,8 +156,9 @@ def complete_profile(
     """
     ensure_account_available(db, current_user)
     for field in profile_data.model_fields_set:
-        if field in {"avatar_url", "username", "bio"}:
-            ensure_profile_field_allowed(db, current_user, "avatar" if field == "avatar_url" else field)
+        profile_field = _PROFILE_UPDATE_FIELDS.get(field)
+        if profile_field is not None:
+            ensure_profile_field_allowed(db, current_user, profile_field)
     try:
         return user_application.complete_profile(db, current_user, user_id, profile_data)
     except user_application.UserPermissionError as e:

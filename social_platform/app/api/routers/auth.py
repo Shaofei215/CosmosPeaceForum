@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from social_platform.app.api.deps import (
+    AccessTokenPayload,
     get_access_payload,
     get_db,
     get_current_user,
@@ -81,7 +82,10 @@ def _session_response(session: UserSession, current_session_id: str | None = Non
     )
 
 
-def _current_user_payload(credentials: HTTPAuthorizationCredentials, db: Session) -> dict:
+def _current_user_payload(
+    credentials: HTTPAuthorizationCredentials,
+    db: Session,
+) -> AccessTokenPayload:
     """复用统一鉴权逻辑，取得当前 user scope access token 的 payload。"""
     return get_access_payload(credentials.credentials, db, "user")
 

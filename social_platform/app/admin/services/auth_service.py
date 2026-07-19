@@ -6,6 +6,7 @@ from social_platform.app.core.timezone import local_now
 from typing import Optional
 
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.schemas import AdminResponse, AdminProfileUpdateRequest
@@ -135,6 +136,10 @@ def update_profile(
         admin.must_change_credentials = False
     admin.updated_at = local_now()
     db.add(admin)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise ValueError("用户名已存在") from exc
     db.refresh(admin)
     return admin

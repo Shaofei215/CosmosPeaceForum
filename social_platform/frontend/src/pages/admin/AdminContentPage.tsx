@@ -28,8 +28,10 @@ import {
   type ReportedContentItem,
 } from '@/features/admin';
 import { Button, Card, CardContent, Input, Textarea } from '@/shared/components/ui';
+import { AdminPagination } from './AdminPagination';
 
 type ContentMode = 'all' | 'reported' | 'appeals';
+const PAGE_SIZE = 50;
 
 function getContentKey(item: ContentItem) {
   return item.type + '-' + item.id;
@@ -119,6 +121,7 @@ function ContentPreview({
 
 export default function AdminContentPage() {
   const [mode, setMode] = useState<ContentMode>('all');
+  const [page, setPage] = useState(0);
   const [keyword, setKeyword] = useState('');
   const [type, setType] = useState('');
   const [deleting, setDeleting] = useState<ContentItem | null>(null);
@@ -134,11 +137,11 @@ export default function AdminContentPage() {
   const queryClient = useQueryClient();
 
   const contentQuery = useQuery({
-    queryKey: adminKeys.content(type, keyword),
+    queryKey: [...adminKeys.content(type, keyword), page],
     queryFn: () =>
       adminApi.content({
-        skip: 0,
-        limit: 100,
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
         type: type || undefined,
         keyword: keyword.trim() || undefined,
       }),
@@ -146,11 +149,11 @@ export default function AdminContentPage() {
   });
 
   const reportedQuery = useQuery({
-    queryKey: adminKeys.reportedContent(type, keyword),
+    queryKey: [...adminKeys.reportedContent(type, keyword), page],
     queryFn: () =>
       adminApi.reportedContent({
-        skip: 0,
-        limit: 100,
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
         type: type || undefined,
         keyword: keyword.trim() || undefined,
       }),
@@ -158,22 +161,22 @@ export default function AdminContentPage() {
   });
 
   const appealsQuery = useQuery({
-    queryKey: adminKeys.contentAppeals(keyword),
+    queryKey: [...adminKeys.contentAppeals(keyword), page],
     queryFn: () =>
       adminApi.contentAppeals({
-        skip: 0,
-        limit: 100,
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
         keyword: keyword.trim() || undefined,
       }),
     enabled: mode === 'appeals',
   });
 
   const archivedQuery = useQuery({
-    queryKey: adminKeys.archivedContent(type, keyword),
+    queryKey: [...adminKeys.archivedContent(type, keyword), page],
     queryFn: () =>
       adminApi.archivedContent({
-        skip: 0,
-        limit: 100,
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
         type: type || undefined,
         keyword: keyword.trim() || undefined,
       }),
@@ -367,6 +370,7 @@ export default function AdminContentPage() {
 
   const switchMode = (nextMode: ContentMode) => {
     setMode(nextMode);
+    setPage(0);
     setSelectedKeys([]);
   };
 
@@ -420,6 +424,7 @@ export default function AdminContentPage() {
             value={type}
             onChange={event => {
               setType(event.target.value);
+              setPage(0);
               setSelectedKeys([]);
             }}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm"
@@ -437,6 +442,7 @@ export default function AdminContentPage() {
               value={keyword}
               onChange={event => {
                 setKeyword(event.target.value);
+                setPage(0);
                 setSelectedKeys([]);
               }}
               placeholder={
@@ -508,6 +514,22 @@ export default function AdminContentPage() {
           onReject={setRejectingAppeal}
         />
       )}
+
+      <AdminPagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={
+          mode === 'all'
+            ? (contentQuery.data?.total ?? 0)
+            : mode === 'appeals'
+              ? (appealsQuery.data?.total ?? 0)
+              : Math.max(reportedQuery.data?.total ?? 0, archivedQuery.data?.total ?? 0)
+        }
+        onPageChange={nextPage => {
+          setSelectedKeys([]);
+          setPage(nextPage);
+        }}
+      />
 
       {deleting && (
         <DeleteContentDialog
@@ -1044,7 +1066,6 @@ function ReportModerationLLMPanel({
                 onChange={event =>
                   onSettingsChange(current => ({ ...current, llm_api_key: event.target.value }))
                 }
-                placeholder="留空不修改，星号会保留旧值"
                 type="password"
               />
             </CompactField>
@@ -1054,7 +1075,6 @@ function ReportModerationLLMPanel({
                 onChange={event =>
                   onSettingsChange(current => ({ ...current, llm_model_name: event.target.value }))
                 }
-                placeholder="例如 gpt-4.1-mini"
               />
             </CompactField>
           </fieldset>
@@ -1153,7 +1173,8 @@ function CompactSwitch({
       role="switch"
       aria-checked={checked}
       className={
-        'relative h-6 w-11 rounded-full transition-colors ' + (checked ? 'bg-zinc-950' : 'bg-muted')
+        'relative h-6 w-11 overflow-hidden rounded-[9999px] transition-colors ' +
+        (checked ? 'bg-zinc-950' : 'bg-muted')
       }
       onClick={() => onChange(!checked)}
     >

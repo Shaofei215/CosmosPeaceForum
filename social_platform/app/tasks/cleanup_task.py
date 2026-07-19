@@ -1,16 +1,18 @@
 # 验证码清理定时任务
 # 定期清理过期的验证码记录，防止数据库膨胀
-from datetime import datetime, timedelta
-from social_platform.app.core.timezone import local_now
+import logging
+from datetime import timedelta
 
-from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
+from social_platform.app.core.timezone import local_now
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.identity.models import EmailVerificationCode
 
+logger = logging.getLogger(__name__)
 
-def cleanup_expired_verification_codes():
+
+def cleanup_expired_verification_codes() -> None:
     """
     清理过期的验证码记录
 
@@ -42,12 +44,12 @@ def cleanup_expired_verification_codes():
                 db.delete(code)
 
             db.commit()
-            print(f"[清理任务] 已删除 {count} 条过期验证码记录")
+            logger.info("已删除 %s 条过期验证码记录", count)
         else:
-            print(f"[清理任务] 无需清理的过期验证码记录")
+            logger.info("无需清理的过期验证码记录")
 
-    except Exception as e:
+    except Exception:
         db.rollback()
-        print(f"[清理任务] 清理失败: {e}")
+        logger.exception("验证码清理失败")
     finally:
         db.close()

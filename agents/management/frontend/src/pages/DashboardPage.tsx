@@ -195,7 +195,9 @@ export default function DashboardPage() {
                 <span className={`shrink-0 w-16 ${levelColors[log.level] || 'text-zinc-400'}`}>
                   [{log.level}]
                 </span>
-                <span className="text-zinc-300 break-all">{log.message}</span>
+                <span className="min-w-0 whitespace-pre-wrap break-all text-zinc-300">
+                  {log.message}
+                </span>
               </div>
             ))}
             {(!logsData?.items || logsData.items.length === 0) && (

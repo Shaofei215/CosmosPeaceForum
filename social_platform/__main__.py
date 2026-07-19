@@ -15,6 +15,18 @@ import uvicorn
 
 from social_platform.app.core.config import get_settings
 
+BANNER: str = r"""
+ ██████╗██████╗ ███████╗ ██████╗ ██████╗ ██╗   ██╗███╗   ███╗
+██╔════╝██╔══██╗██╔════╝██╔═══██╗██╔══██╗██║   ██║████╗ ████║
+██║     ██████╔╝█████╗  ██║   ██║██████╔╝██║   ██║██╔████╔██║
+██║     ██╔═══╝ ██╔══╝  ██║   ██║██╔══██╗██║   ██║██║╚██╔╝██║
+╚██████╗██║     ██║     ╚██████╔╝██║  ██║╚██████╔╝██║ ╚═╝ ██║
+ ╚═════╝╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝
+
+                      CosmosPeaceForum
+                      愿全宇宙 和平交流
+""".strip("\n")
+
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """解析公开平台的命令行启动参数。
@@ -36,7 +48,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--log-level",
         choices=("critical", "error", "warning", "info", "debug", "trace"),
-        help="Uvicorn log level. Defaults to debug when DEBUG=true, otherwise info.",
+        help="Uvicorn log level. Defaults to info.",
     )
     return parser.parse_args(argv)
 
@@ -52,13 +64,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
     settings = get_settings()
 
+    print(BANNER, flush=True)
+
     # 使用导入字符串可以让 Uvicorn 的 reload 模式在子进程中重新加载应用。
     uvicorn.run(
         "social_platform.app.main:app",
         host=args.host or settings.SERVER_HOST,
         port=args.port or settings.SERVER_PORT,
         reload=args.reload,
-        log_level=args.log_level or ("debug" if settings.DEBUG else "info"),
+        log_level=args.log_level or "info",
     )
 
 

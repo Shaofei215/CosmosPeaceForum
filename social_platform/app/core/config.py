@@ -4,7 +4,7 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Literal, Optional
 
-from pydantic import model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -41,7 +41,6 @@ class Settings(BaseSettings):
     PLATFORM_ENGLISH_NAME: str = "Cosmos Peace Forum"
     VERSION: str
     API_V1_PREFIX: str
-    DEBUG: bool = False
     # 浏览器可访问的公开平台前端 origin。当前主要供 agents/.env 同名配置对齐，
     # 同时用于生成公共 Skill 中的公开平台 API 地址。
     SOCIAL_PLATFORM_FRONTEND_URL: str = "http://localhost:8000"
@@ -102,8 +101,22 @@ class Settings(BaseSettings):
     SERVER_PORT: int = 8000
 
     # 公开平台管理器初始管理员。首次启动会创建该账号，并强制登录后修改。
-    PLATFORM_ADMIN_INITIAL_USERNAME: str = "platform_admin"
+    PLATFORM_ADMIN_INITIAL_USERNAME: str = Field(
+        default="platform_admin",
+        min_length=1,
+        max_length=30,
+    )
     PLATFORM_ADMIN_INITIAL_PASSWORD: str = "ChangeMe123!"
+
+    @field_validator("PLATFORM_ADMIN_INITIAL_USERNAME", mode="before")
+    @classmethod
+    def normalize_platform_admin_username(cls, value: str) -> str:
+        """初始管理员用户名沿用平台管理员 1–30 字和 trim 约束。"""
+
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("PLATFORM_ADMIN_INITIAL_USERNAME 不能为空")
+        return normalized
 
     @model_validator(mode="after")
     def validate_avatar_storage_settings(self):
@@ -137,4 +150,4 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    return Settings()  # pyright: ignore[reportCallIssue] -- 字段由 BaseSettings 从环境读取。

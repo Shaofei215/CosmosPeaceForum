@@ -19,12 +19,14 @@ from social_platform.app.domains.content_safety.admin_application import (
     list_reported_users,
     release_reported_content,
     release_reported_user,
+    restore_post_as_admin,
 )
 from social_platform.app.domains.content_safety.appeal_application import is_notification_appealable
 from social_platform.app.db.session import Base
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.post import application as post_application
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.content_safety.models import ContentReport
 
@@ -177,6 +179,32 @@ def test_moderation_notice_keeps_long_reason_without_original_content(db_session
     assert notification.source_content == f"你的内容因违反社区规则已被管理端处理。\n原因：{long_reason}"
     assert "原内容" not in notification.source_content
     assert "这段原内容不应该进入管理通知" not in notification.source_content
+
+
+def test_admin_archive_and_restore_repost_keeps_source_counter_consistent(db_session):
+    """管理端归档与恢复转发帖会对称调整原帖转发计数。"""
+
+    author, admin = _seed_user_and_admin(db_session)
+    reposter = User(username="admin_archive_reposter")
+    root = Post(author_id=author.id, content="root")
+    db_session.add_all([reposter, root])
+    db_session.commit()
+    repost = post_application.create_repost(
+        db=db_session,
+        user_id=reposter.id,
+        source_type="post",
+        source_id=root.id,
+    )
+    db_session.refresh(root)
+    assert root.repost_count == 1
+
+    delete_post_as_admin(db_session, repost.id, admin, notify_author=False)
+    db_session.refresh(root)
+    assert root.repost_count == 0
+
+    restore_post_as_admin(db_session, repost.id, admin)
+    db_session.refresh(root)
+    assert root.repost_count == 1
 
 
 def test_appeal_result_notice_is_not_appealable(db_session):

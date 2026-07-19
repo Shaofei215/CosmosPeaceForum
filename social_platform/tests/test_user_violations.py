@@ -1,5 +1,6 @@
 """用户违规分级处罚、资料撤下、去重与事件解除规则测试。"""
 
+from collections.abc import Iterator
 from datetime import timedelta
 
 import pytest
@@ -26,7 +27,7 @@ from social_platform.app.domains.user.models import User
 
 
 @pytest.fixture()
-def db_session() -> Session:
+def db_session() -> Iterator[Session]:
     """创建包含完整领域模型的内存数据库会话。"""
 
     engine = create_engine("sqlite:///:memory:")

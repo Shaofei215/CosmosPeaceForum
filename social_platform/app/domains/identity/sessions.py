@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from social_platform.app.core.timezone import local_now
-from typing import Mapping
+from typing import Mapping, TypedDict
 from uuid import uuid4
 
 from sqlalchemy.orm import Query, Session
@@ -19,6 +19,17 @@ from social_platform.app.domains.identity.models import UserSession
 
 
 settings = get_settings()
+
+
+class TokenPair(TypedDict):
+    """创建或轮换 session 后返回的认证令牌对。"""
+
+    access_token: str
+    refresh_token: str
+    token_type: str
+    expires_in: int
+    refresh_expires_in: int
+    session_id: str
 
 
 class RefreshTokenInvalidError(Exception):
@@ -148,7 +159,7 @@ def create_session_token_pair(
     user_agent: str | None,
     ip_address: str | None,
     revoke_same_client: bool = False,
-) -> dict[str, object]:
+) -> TokenPair:
     """创建服务端 session，并返回初始 access/refresh token 对。
 
     Args:
@@ -207,7 +218,7 @@ def refresh_token_pair(
     expected_scope: str,
     user_agent: str | None,
     ip_address: str | None,
-) -> dict[str, object]:
+) -> TokenPair:
     """校验 refresh token 并轮换为新的 refresh token。
 
     Args:
@@ -329,6 +340,34 @@ def revoke_other_sessions(db: Session, account_id: int, scope: str, current_sess
         UserSession.session_id != current_session_id,
     ).update({"revoked_at": now}, synchronize_session=False)
     db.commit()
+    return count
+
+
+def revoke_all_sessions(
+    db: Session,
+    account_id: int,
+    scope: str,
+    *,
+    commit: bool = True,
+) -> int:
+    """撤销指定账号和作用域下的全部 active session。
+
+    Args:
+        db: 当前数据库会话。
+        account_id: 账号 ID。
+        scope: 身份作用域，避免不同账号表的相同整数 ID 相互影响。
+        commit: 是否立即提交；密码重置传入 ``False`` 以加入同一事务。
+
+    Returns:
+        int: 被撤销的 active session 数量。
+    """
+
+    count = _active_query(db).filter(
+        UserSession.account_id == account_id,
+        UserSession.scope == scope,
+    ).update({"revoked_at": local_now()}, synchronize_session=False)
+    if commit:
+        db.commit()
     return count
 
 

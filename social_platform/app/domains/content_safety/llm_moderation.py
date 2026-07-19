@@ -2,9 +2,10 @@
 
 import json
 import logging
+import time
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Callable, Literal, Optional, cast
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -19,6 +20,7 @@ from social_platform.app.domains.content_safety.models import ContentModerationL
 from social_platform.app.domains.content_safety.models import ContentReport, ContentReportEscalation
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
+from social_platform.app.shared.external_errors import format_external_error
 
 logger = logging.getLogger(__name__)
 
@@ -210,12 +212,16 @@ def review_report(
 ) -> tuple[Decision, str | None]:
     """执行单条待审举报的 LLM 自动审核流程。"""
 
+    started_at = time.perf_counter()
+    logger.info("被举报内容 LLM 审查开始 report_id=%s", report_id)
     settings = get_content_moderation_llm_settings(db)
     if not settings.enabled:
+        logger.info("被举报内容 LLM 审查跳过 report_id=%s reason=disabled", report_id)
         return "drop", "LLM 审查未启用"
 
     report = _get_pending_report(db, report_id)
     if report is None:
+        logger.info("被举报内容 LLM 审查跳过 report_id=%s reason=not_found", report_id)
         return "drop", "待审举报不存在"
 
     context = build_report_context(db, report)
@@ -246,13 +252,26 @@ def review_report(
         },
     ])
     decision, reason = parse_llm_decision(str(getattr(response, "content", response)))
+    logger.info(
+        "被举报内容 LLM 审查决策 report_id=%s target_type=%s decision=%s",
+        report_id,
+        report.target_type,
+        decision,
+    )
     apply_llm_decision(db, report, decision, reason)
+    logger.info(
+        "被举报内容 LLM 审查完成 report_id=%s decision=%s duration=%.2fs",
+        report_id,
+        decision,
+        time.perf_counter() - started_at,
+    )
     return decision, reason
 
 
 def review_report_in_background(report_id: int) -> None:
     """在后台任务中使用独立数据库会话审核举报。"""
 
+    logger.info("被举报内容 LLM 审查后台任务开始 report_id=%s", report_id)
     db = SessionLocal()
     try:
         review_report(db, report_id)
@@ -287,7 +306,12 @@ def apply_llm_decision(
         if content_type == "user":
             moderation_service.release_reported_user(db, content_id, admin)
         else:
-            moderation_service.release_reported_content(db, content_type, content_id, admin)
+            moderation_service.release_reported_content(
+                db,
+                cast(moderation_service.ContentType, content_type),
+                content_id,
+                admin,
+            )
         return
     if decision == "delete":
         if content_type == "user":
@@ -572,13 +596,14 @@ def _log_llm_failure(db: Session, report_id: int, exc: BaseException) -> None:
 
     try:
         admin = get_or_create_llm_moderator_admin(db)
+        safe_error = format_external_error(exc)
         log_service.create_operation_log(
             db,
             admin,
             action="content_moderation_llm_failed",
             target_type="content_report",
             target_id=report_id,
-            details={"error": str(exc)},
+            details={"error_code": safe_error.code, "error": safe_error.message},
         )
         db.commit()
     except Exception:

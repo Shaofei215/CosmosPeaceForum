@@ -1,0 +1,13 @@
+{
+  "include": ["social_platform"],
+  "exclude": [
+    "social_platform/frontend",
+    "social_platform/**/__pycache__",
+    "social_platform/app/data",
+    "social_platform/app/uploads"
+  ],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.12",
+  "venvPath": ".",
+  "venv": ".venv"
+}

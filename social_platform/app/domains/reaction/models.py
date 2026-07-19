@@ -1,7 +1,7 @@
 # 点赞数据库模型
 # 定义点赞表结构，记录用户对帖子的点赞行为
-from sqlalchemy import Boolean, Column, Integer, DateTime, ForeignKey, PrimaryKeyConstraint, Index
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Integer, DateTime, ForeignKey, PrimaryKeyConstraint, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
 
@@ -27,15 +27,15 @@ class Like(Base):
 
     # 点赞用户 ID，外键关联到 users 表
     # 不能为空，因为点赞必须有用户
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     
     # 被点赞帖子 ID，外键关联到 posts 表
     # 不能为空，因为点赞必须针对帖子
-    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
     
     # 点赞创建时间，自动设置为当前系统本地时间
-    created_at = Column(DateTime, default=local_now)
-    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=True)
+    created_by_agent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
 
     # 复合主键：(user_id, post_id)
     # 确保同一用户对同一帖子只能有一条点赞记录

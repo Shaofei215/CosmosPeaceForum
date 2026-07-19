@@ -46,3 +46,11 @@ class RepostCreated(DomainEvent):
     source_comment_id: int | None = None
     source_content: str | None = None
     created_by_agent: bool = False
+
+
+@dataclass(frozen=True)
+class RepostCountChanged(DomainEvent):
+    """转发源帖或根帖计数发生变化。"""
+
+    post_ids: tuple[int, ...]
+    delta: int

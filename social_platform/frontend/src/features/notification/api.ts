@@ -22,6 +22,5 @@ export const notificationApi = {
   submitAppeal: (notificationId: number, request: ModerationAppealRequest) =>
     apiClient.post<ModerationAppealResponse>(`/notifications/${notificationId}/appeal`, request),
 
-  getEventsUrl: (token: string) =>
-    `${API_CONFIG.BASE_URL}/notifications/events?token=${encodeURIComponent(token)}`,
+  getEventsUrl: () => `${API_CONFIG.BASE_URL}/notifications/events`,
 };

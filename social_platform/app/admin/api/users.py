@@ -50,7 +50,7 @@ router = APIRouter(prefix="/users", tags=["platform-admin-users"])
 @router.get("/", response_model=PaginatedResponse[UserWithModerationResponse])
 async def users(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=100),
     keyword: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
@@ -130,7 +130,7 @@ async def reset_user_report_moderation_prompt(
 @router.get("/reports", response_model=PaginatedResponse[ReportedUserItemResponse])
 async def reported_users(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=100),
     keyword: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
@@ -142,7 +142,7 @@ async def reported_users(
 @router.get("/moderated", response_model=PaginatedResponse[UserWithModerationResponse])
 async def moderated_users(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=100),
     keyword: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
@@ -154,7 +154,7 @@ async def moderated_users(
 @router.get("/appeals", response_model=PaginatedResponse[ModerationAppealItemResponse])
 async def user_appeals(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=100),
     keyword: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),

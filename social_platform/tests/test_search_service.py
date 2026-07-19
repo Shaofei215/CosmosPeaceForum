@@ -78,6 +78,7 @@ def test_topic_search_returns_posts_for_topic():
 
         result = search_topic(db, "#和平论坛#", page=1, page_size=20)
 
+        assert result.pagination is not None
         assert result.pagination.total == 1
         assert result.data[0].id == post.id
         assert result.data[0].topic_mentions[0].name == "和平论坛"

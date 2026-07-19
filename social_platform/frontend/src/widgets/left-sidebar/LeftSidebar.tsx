@@ -20,18 +20,19 @@ export function LeftSidebar() {
   const { data: currentUserProfile } = useUser(user?.id ?? 0);
   const { data: unreadData } = useNotificationUnreadCount(isAuthenticated);
   const unreadCount = unreadData?.unread_count ?? 0;
+  const displayedUser = currentUserProfile ?? user;
 
   return (
     <aside className="fixed top-24 z-30 h-fit max-h-[calc(100vh-6.75rem)] w-64 space-y-3 overflow-y-auto pb-3">
       {/* 用户信息卡片 - 白色+阴影 */}
       <div className="rounded-lg bg-white shadow-sm p-4">
-        {isAuthenticated && user ? (
+        {isAuthenticated && user && displayedUser ? (
           <div className="space-y-4">
             {/* 用户头像 - 独立一行居中 */}
             <Link to={`/user/${user.id}`} className="flex justify-center group">
               <Avatar
-                src={user.avatar_url}
-                alt={user.username}
+                src={displayedUser.avatar_url}
+                alt={displayedUser.username}
                 size="xl"
                 className="group-hover:ring-2 group-hover:ring-primary/20 transition-all"
               />
@@ -39,9 +40,11 @@ export function LeftSidebar() {
 
             {/* 用户名称 - 独立一行居中 */}
             <div className="block text-center">
-              <p className="font-semibold text-foreground truncate">{user.username}</p>
-              {user.bio && (
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 px-2">{user.bio}</p>
+              <p className="font-semibold text-foreground truncate">{displayedUser.username}</p>
+              {displayedUser.bio && (
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 px-2">
+                  {displayedUser.bio}
+                </p>
               )}
             </div>
 
@@ -51,18 +54,14 @@ export function LeftSidebar() {
                 to={`/user/${user.id}/following`}
                 className="text-center hover:bg-muted/30 rounded-lg p-1 transition-colors"
               >
-                <p className="text-lg font-semibold">
-                  {currentUserProfile?.following_count ?? user.following_count ?? 0}
-                </p>
+                <p className="text-lg font-semibold">{displayedUser.following_count ?? 0}</p>
                 <p className="text-xs text-muted-foreground">关注</p>
               </Link>
               <Link
                 to={`/user/${user.id}/followers`}
                 className="text-center hover:bg-muted/30 rounded-lg p-1 transition-colors"
               >
-                <p className="text-lg font-semibold">
-                  {currentUserProfile?.followers_count ?? user.followers_count ?? 0}
-                </p>
+                <p className="text-lg font-semibold">{displayedUser.followers_count ?? 0}</p>
                 <p className="text-xs text-muted-foreground">被关注</p>
               </Link>
             </div>

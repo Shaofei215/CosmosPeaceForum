@@ -95,7 +95,7 @@ function getApiErrorMessage(detail: unknown) {
 let refreshPromise: Promise<string | null> | null = null;
 
 /** 合并并发 401，并用平台管理员 refresh token 轮换新的 access token。 */
-async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAdminAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
   const refreshToken = getAdminRefreshToken();
   if (!refreshToken) return null;
@@ -132,7 +132,7 @@ client.interceptors.response.use(
     if (status === 401 && originalRequest && !originalRequest._retry) {
       // 每个请求只自动重试一次，避免 refresh 失败后无限循环。
       originalRequest._retry = true;
-      const nextToken = await refreshAccessToken();
+      const nextToken = await refreshAdminAccessToken();
       if (nextToken) {
         originalRequest.headers.Authorization = `Bearer ${nextToken}`;
         return client(originalRequest);
@@ -257,8 +257,7 @@ export const adminApi = {
   updateHotTopicPrompt: (value: string) =>
     client.put<unknown, HotTopicPromptConfig>('/hot-topics/prompt', { value }),
   resetHotTopicPrompt: () => client.post<unknown, HotTopicPromptConfig>('/hot-topics/prompt/reset'),
-  getHotTopicGenerateEventsUrl: (token: string) =>
-    `${API_CONFIG.BASE_URL}/admin/hot-topics/generate/events?token=${encodeURIComponent(token)}`,
+  getHotTopicGenerateEventsUrl: () => `${API_CONFIG.BASE_URL}/admin/hot-topics/generate/events`,
   hotTopicGenerations: (params: { skip?: number; limit?: number }) =>
     client.get<unknown, PaginatedResponse<HotTopicGeneration>>('/hot-topics/generations', {
       params,

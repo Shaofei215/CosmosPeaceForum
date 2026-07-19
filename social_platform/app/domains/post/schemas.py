@@ -13,8 +13,8 @@ from social_platform.app.domains.topic.schemas import TopicMention
 
 class PostBase(BaseModel):
     """帖子领域 API schema的基础字段，供 API adapter 做参数校验和响应序列化。"""
-    title: Optional[str] = Field(None, max_length=200)
-    type: str = Field("post", pattern="^(post|article)$")
+    title: Optional[str] = Field(default=None, max_length=200)
+    type: str = Field(default="post", pattern="^(post|article)$")
     content: str = Field(..., min_length=1)
 
     @model_validator(mode="after")
@@ -60,7 +60,7 @@ class PollResponse(BaseModel):
 class PostCreate(PostBase):
     """帖子领域 API schema的创建请求，供 API adapter 做参数校验和响应序列化。"""
     poll_options: Optional[List[str]] = Field(
-        None,
+        default=None,
         min_length=2,
         max_length=5,
         description="可选投票选项，仅普通帖子支持，每项最多 20 个字符。",
@@ -75,7 +75,7 @@ class PollVoteCreate(BaseModel):
 
 class RepostCreate(BaseModel):
     """帖子领域 API schema的创建请求，供 API adapter 做参数校验和响应序列化。"""
-    content: Optional[str] = Field(None, max_length=POST_CONTENT_MAX_LENGTH)
+    content: Optional[str] = Field(default=None, max_length=POST_CONTENT_MAX_LENGTH)
     source_type: str = Field(..., pattern="^(post|comment)$")
     source_id: int
 
@@ -109,8 +109,12 @@ class RepostChainAuthor(MentionUser):
 
 class PostUpdate(BaseModel):
     """帖子领域 API schema的更新请求，供 API adapter 做参数校验和响应序列化。"""
-    title: Optional[str] = Field(None, max_length=200)
-    content: Optional[str] = Field(None, min_length=1, max_length=ARTICLE_CONTENT_MAX_LENGTH)
+    title: Optional[str] = Field(default=None, max_length=200)
+    content: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=ARTICLE_CONTENT_MAX_LENGTH,
+    )
 
 
 class PostResponse(PostBase):

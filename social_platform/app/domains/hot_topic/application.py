@@ -20,6 +20,7 @@ from social_platform.app.core.branding import get_platform_display_name
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.hot_topic.models import HotTopic, HotTopicGeneration, HotTopicSettings
 from social_platform.app.domains.post.models import Post
+from social_platform.app.shared.external_errors import format_external_error
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,8 @@ def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicS
         if field == "max_llm_rounds":
             value = max(1, min(int(value), 20))
         if field in string_fields:
+            if not isinstance(value, str):
+                raise ValueError(f"{field} 必须是字符串")
             value = _normalize_text(value)
             if value == SECRET_MASK:
                 continue
@@ -728,6 +731,7 @@ def _create_web_search_tool(settings: HotTopicSettings):
         if not settings.tavily_api_key:
             return json.dumps({"query": query, "results": [], "error": "missing_tavily_api_key"}, ensure_ascii=False)
         try:
+            logger.info("“大家都在聊” LLM 外部搜索开始")
             from langchain_tavily import TavilySearch
 
             os.environ["TAVILY_API_KEY"] = settings.tavily_api_key
@@ -739,9 +743,20 @@ def _create_web_search_tool(settings: HotTopicSettings):
                 search_depth="basic",
             )
             response = tavily.invoke({"query": query})
+            logger.info("“大家都在聊” LLM 外部搜索完成")
             return json.dumps(response, ensure_ascii=False)
         except Exception as exc:
-            return json.dumps({"query": query, "results": [], "error": str(exc)}, ensure_ascii=False)
+            safe_error = format_external_error(exc)
+            logger.exception("“大家都在聊” LLM 外部搜索失败")
+            return json.dumps(
+                {
+                    "query": query,
+                    "results": [],
+                    "error_code": safe_error.code,
+                    "error": safe_error.message,
+                },
+                ensure_ascii=False,
+            )
 
     return web_search
 
@@ -815,7 +830,8 @@ def _mark_generation_failed(
             raise HotTopicAgentRunError("热榜生成记录不存在，无法写入失败状态")
 
         persisted.status = "failed"
-        persisted.error_message = str(exc)
+        safe_error = format_external_error(exc)
+        persisted.error_message = f"[{safe_error.code}] {safe_error.message}"
         persisted.completed_at = _now()
         db.add(persisted)
         db.commit()
@@ -823,9 +839,9 @@ def _mark_generation_failed(
         return persisted
     except Exception as record_exc:
         db.rollback()
-        logger.exception("热榜 Agent 失败状态写入失败")
+        logger.exception("“大家都在聊” LLM 失败状态写入失败")
         raise HotTopicAgentRunError(
-            "热榜 Agent 生成失败，且失败状态无法写入数据库；请检查数据库迁移、连接和写入权限"
+            "“大家都在聊” LLM 生成失败，且失败状态无法写入数据库；请检查数据库迁移、连接和写入权限"
         ) from record_exc
 
 
@@ -844,7 +860,7 @@ def run_hot_topic_agent(
         try:
             settings = get_hot_topic_settings(db)
             if not force and not settings.agent_enabled:
-                raise ValueError("热榜 Agent 未启用")
+                raise ValueError("热榜 LLM 未启用")
 
             publish_policy = _validate_choice(
                 settings.publish_policy,
@@ -863,10 +879,10 @@ def run_hot_topic_agent(
                 bool(settings.llm_base_url),
             )
             generation = _create_generation_record(db, publish_policy)
-            logger.info("热榜 Agent 创建生成记录 generation_id=%s", generation.id)
+            logger.info("热榜 LLM 创建生成记录 generation_id=%s", generation.id)
         except Exception as exc:
             db.rollback()
-            logger.exception("热榜 Agent 初始化失败")
+            logger.exception("热榜 LLM 初始化失败")
             raise HotTopicAgentRunError(
                 "热榜 Agent 初始化失败；请检查数据库迁移、连接和写入权限"
             ) from exc
@@ -883,7 +899,7 @@ def run_hot_topic_agent(
             db.commit()
             db.refresh(generation)
             logger.info(
-                "热榜 Agent 构建上下文完成 generation_id=%s top_posts=%s current_topics=%s history=%s",
+                "构建上下文完成 generation_id=%s top_posts=%s current_topics=%s history=%s",
                 generation.id,
                 len(context.get("top_posts", [])),
                 len(context.get("current_hot_topics", [])),
@@ -901,7 +917,7 @@ def run_hot_topic_agent(
 
             if llm_factory is None:
                 if not settings.llm_model_name or not settings.llm_api_key:
-                    raise ValueError("请先配置热榜 Agent 的模型名称和 API Key")
+                    raise ValueError("请先配置热榜 LLM 的模型名称和 API Key")
                 from langchain_openai import ChatOpenAI
 
                 kwargs: dict[str, Any] = {
@@ -951,7 +967,7 @@ def run_hot_topic_agent(
                 response = _invoke_hot_topic_llm(llm, prompt, user_prompt)
                 tool_calls = _extract_tool_calls(response)
                 logger.info(
-                    "热榜 Agent LLM 返回 generation_id=%s round=%s tool_calls=%s",
+                    "热榜 LLM 返回 generation_id=%s round=%s tool_calls=%s",
                     generation.id,
                     round_index,
                     [call.get("name") for call in tool_calls],
@@ -981,7 +997,7 @@ def run_hot_topic_agent(
                     tool_name = call.get("name")
                     tool_args = call.get("args") or {}
                     logger.info(
-                        "热榜 Agent 调用工具 generation_id=%s round=%s tool=%s",
+                        "热榜 LLM 调用工具 generation_id=%s round=%s tool=%s",
                         generation.id,
                         round_index,
                         tool_name,
@@ -993,15 +1009,17 @@ def run_hot_topic_agent(
                             content = str(tool_map[tool_name].invoke(tool_args))
                         except Exception as exc:
                             logger.exception(
-                                "热榜 Agent 工具调用异常 generation_id=%s round=%s tool=%s",
+                                "工具调用异常 generation_id=%s round=%s tool=%s",
                                 generation.id,
                                 round_index,
                                 tool_name,
                             )
+                            safe_error = format_external_error(exc)
                             content = json.dumps(
                                 {
                                     "error": "tool_execution_error",
-                                    "message": str(exc),
+                                    "error_code": safe_error.code,
+                                    "message": safe_error.message,
                                     "hint": "请根据错误修正工具参数后重新调用。",
                                 },
                                 ensure_ascii=False,
@@ -1013,18 +1031,18 @@ def run_hot_topic_agent(
                     break
 
             if not submitted["topics"]:
-                raise ValueError("热榜 Agent 没有提交有效热榜")
+                raise ValueError("“大家都在聊” LLM 没有提交有效热榜")
 
             generation.output_json = json.dumps(submitted["topics"], ensure_ascii=False)
             logger.info(
-                "热榜 Agent 写入生成结果开始 generation_id=%s topic_count=%s publish_policy=%s",
+                "“大家都在聊” LLM 写入生成结果开始 generation_id=%s topic_count=%s publish_policy=%s",
                 generation.id,
                 len(submitted["topics"]),
                 publish_policy,
             )
             topics = apply_generated_hot_topics(db, generation, submitted["topics"], publish_policy)
             logger.info(
-                "热榜 Agent 生成成功 generation_id=%s topic_count=%s duration=%.2fs",
+                "“大家都在聊” LLM 生成成功 generation_id=%s topic_count=%s duration=%.2fs",
                 generation.id,
                 len(topics),
                 time.perf_counter() - run_started_at,
@@ -1033,7 +1051,7 @@ def run_hot_topic_agent(
         except Exception as exc:
             generation = _mark_generation_failed(db, generation, exc)
             logger.exception(
-                "热榜 Agent 生成失败 generation_id=%s duration=%.2fs",
+                "“大家都在聊” LLM 生成失败 generation_id=%s duration=%.2fs",
                 generation.id,
                 time.perf_counter() - run_started_at,
             )
@@ -1056,7 +1074,7 @@ def run_scheduled_hot_topic_agent() -> None:
             return
         run_hot_topic_agent(db)
     except Exception:
-        logger.exception("定时热榜 Agent 运行失败")
+        logger.exception("定时热榜运行失败")
     finally:
         db.close()
 
@@ -1089,6 +1107,6 @@ def configure_hot_topic_agent_job(scheduler=None) -> None:
             id=HOT_TOPIC_SCHEDULER_JOB_ID,
             replace_existing=True,
         )
-        logger.info("热榜 Agent 调度已启用，每 %s 分钟运行一次", settings.agent_interval_minutes)
+        logger.info("热榜 LLM 调度已启用，每 %s 分钟运行一次", settings.agent_interval_minutes)
     finally:
         db.close()

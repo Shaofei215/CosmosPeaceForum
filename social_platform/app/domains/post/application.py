@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from sqlalchemy import case
 from sqlalchemy.orm import Session, joinedload
 
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
@@ -18,6 +19,7 @@ from social_platform.app.domains.post.events import (
     PostCreated,
     PostDeleted,
     PostUpdated,
+    RepostCountChanged,
     RepostCreated,
 )
 from social_platform.app.domains.post.models import Post
@@ -92,6 +94,51 @@ class InvalidRepostSourceError(Exception):
         """初始化非法转发源类型异常。"""
         self.source_type = source_type
         super().__init__(f"Invalid repost source type: {source_type}")
+
+
+def repost_counter_target_ids(db: Session, repost: Post) -> tuple[int, ...]:
+    """解析一条转发实际增加过计数的源帖与根帖，并去重。"""
+
+    target_ids: set[int] = set()
+    if repost.repost_source_type == "post" and repost.repost_source_id is not None:
+        target_ids.add(repost.repost_source_id)
+    elif repost.repost_source_type == "comment" and repost.repost_source_id is not None:
+        source_post_id = db.query(Comment.post_id).filter(Comment.id == repost.repost_source_id).scalar()
+        if source_post_id is not None:
+            target_ids.add(source_post_id)
+    if repost.repost_root_post_id is not None:
+        target_ids.add(repost.repost_root_post_id)
+    target_ids.discard(repost.id)
+    return tuple(sorted(target_ids))
+
+
+def adjust_repost_counts(db: Session, repost: Post, delta: int) -> tuple[int, ...]:
+    """原子调整转发源帖和根帖计数，并发布派生投影刷新事件。
+
+    Args:
+        db: 当前事务数据库会话。
+        repost: 正在创建、删除、归档或恢复的转发帖子。
+        delta: ``1`` 表示增加，``-1`` 表示减少。
+
+    Returns:
+        tuple[int, ...]: 实际参与调整的去重帖子 ID。
+    """
+
+    target_ids = repost_counter_target_ids(db, repost)
+    if not target_ids:
+        return ()
+    next_count = Post.repost_count + delta
+    db.query(Post).filter(Post.id.in_(target_ids)).update(
+        {
+            Post.repost_count: case(
+                (next_count < 0, 0),
+                else_=next_count,
+            )
+        },
+        synchronize_session=False,
+    )
+    publish_domain_event(db, RepostCountChanged(post_ids=target_ids, delta=delta))
+    return target_ids
 
 
 def create_post(
@@ -234,6 +281,8 @@ def delete_post(db: Session, current_user: User, post_id: int) -> None:
         raise PostPermissionError("无权删除此帖子")
 
     author_id = post.author_id
+    if post.repost_source_type:
+        adjust_repost_counts(db, post, -1)
     db.query(Post).filter(Post.repost_root_post_id == post_id).update(
         {Post.repost_root_post_id: None},
         synchronize_session=False,
@@ -304,10 +353,7 @@ def create_repost(
     db.add(repost)
     db.flush()
 
-    if source_post is not None:
-        source_post.repost_count = (source_post.repost_count or 0) + 1
-    if root_post.id != getattr(source_post, "id", None):
-        root_post.repost_count = (root_post.repost_count or 0) + 1
+    adjust_repost_counts(db, repost, 1)
 
     publish_domain_event(
         db,

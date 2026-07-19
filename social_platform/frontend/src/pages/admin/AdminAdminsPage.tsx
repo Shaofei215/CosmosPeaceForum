@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { AlertCircle, Plus } from 'lucide-react';
 import {
   ADMIN_PERMISSIONS,
   adminApi,
@@ -10,6 +10,9 @@ import {
   type AdminPermission,
 } from '@/features/admin';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/shared/components/ui';
+import { AdminPagination } from './AdminPagination';
+
+const PAGE_SIZE = 50;
 
 const permissionLabels: Record<AdminPermission, string> = {
   view_dashboard: '查看仪表盘',
@@ -22,34 +25,58 @@ const permissionLabels: Record<AdminPermission, string> = {
 
 export default function AdminAdminsPage() {
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [operationError, setOperationError] = useState('');
+  const [page, setPage] = useState(0);
   const currentAdmin = useAdminAuthStore(state => state.admin);
   const queryClient = useQueryClient();
   const { data } = useQuery({
-    queryKey: adminKeys.admins,
-    queryFn: () => adminApi.admins({ skip: 0, limit: 100 }),
+    queryKey: [...adminKeys.admins, page],
+    queryFn: () => adminApi.admins({ skip: page * PAGE_SIZE, limit: PAGE_SIZE }),
   });
   const createMutation = useMutation({
     mutationFn: adminApi.createAdmin,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.admins });
       setCreating(false);
+      setCreateError('');
     },
+    onError: (error: { message?: string }) =>
+      setCreateError(error.message || '创建管理员失败，请稍后重试'),
   });
   const updateMutation = useMutation({
     mutationFn: ({ adminId, isActive }: { adminId: number; isActive: boolean }) =>
       adminApi.updateAdmin(adminId, { is_active: isActive }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.admins }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.admins });
+      setOperationError('');
+    },
+    onError: (error: { message?: string }) =>
+      setOperationError(error.message || '更新管理员失败，请稍后重试'),
   });
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">管理员</h1>
-        <Button className="rounded-md" onClick={() => setCreating(true)}>
+        <Button
+          className="rounded-md"
+          onClick={() => {
+            setCreateError('');
+            setCreating(true);
+          }}
+        >
           <Plus size={16} className="mr-1" />
           添加管理员
         </Button>
       </div>
+
+      {operationError && (
+        <div className="mb-4 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{operationError}</span>
+        </div>
+      )}
 
       <Card className="rounded-lg">
         <CardContent className="p-0">
@@ -65,15 +92,16 @@ export default function AdminAdminsPage() {
             </thead>
             <tbody>
               {data?.items.map(admin => {
-                const canToggleAdmin = admin.id !== currentAdmin?.id && !admin.is_super_admin;
+                const canToggleAdmin = Boolean(
+                  currentAdmin &&
+                  admin.id !== currentAdmin.id &&
+                  (!admin.is_super_admin || currentAdmin.is_super_admin)
+                );
 
                 return (
                   <tr key={admin.id} className="border-b last:border-0">
                     <td className="px-4 py-3">
                       <p className="font-medium">{admin.username}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {admin.is_super_admin ? '超级管理员' : `ID ${admin.id}`}
-                      </p>
                       {admin.email && (
                         <p className="text-xs text-muted-foreground">{admin.email}</p>
                       )}
@@ -109,10 +137,27 @@ export default function AdminAdminsPage() {
         </CardContent>
       </Card>
 
+      <AdminPagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+      />
+
       {creating && (
         <CreateAdminDialog
+          assignablePermissions={
+            currentAdmin?.is_super_admin
+              ? [...ADMIN_PERMISSIONS]
+              : (currentAdmin?.permissions ?? [])
+          }
+          canCreateSuperAdmin={Boolean(currentAdmin?.is_super_admin)}
           saving={createMutation.isPending}
-          onClose={() => setCreating(false)}
+          error={createError}
+          onClose={() => {
+            setCreating(false);
+            setCreateError('');
+          }}
           onSubmit={payload => createMutation.mutate(payload)}
         />
       )}
@@ -121,18 +166,28 @@ export default function AdminAdminsPage() {
 }
 
 function CreateAdminDialog({
+  assignablePermissions,
+  canCreateSuperAdmin,
   saving,
+  error,
   onClose,
   onSubmit,
 }: {
+  assignablePermissions: AdminPermission[];
+  canCreateSuperAdmin: boolean;
   saving: boolean;
+  error: string;
   onClose: () => void;
   onSubmit: (payload: AdminCreateRequest) => void;
 }) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [permissions, setPermissions] = useState<AdminPermission[]>(['view_dashboard']);
+  const [permissions, setPermissions] = useState<AdminPermission[]>(() =>
+    assignablePermissions.includes('view_dashboard')
+      ? ['view_dashboard']
+      : assignablePermissions.slice(0, 1)
+  );
   const [superAdmin, setSuperAdmin] = useState(false);
 
   const togglePermission = (permission: AdminPermission) => {
@@ -150,10 +205,18 @@ function CreateAdminDialog({
           <CardTitle>添加管理员</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
           <Input
             value={username}
             onChange={event => setUsername(event.target.value)}
             placeholder="用户名"
+            minLength={1}
+            maxLength={30}
           />
           <Input
             value={email}
@@ -169,17 +232,19 @@ function CreateAdminDialog({
             minLength={8}
             maxLength={32}
           />
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={superAdmin}
-              onChange={event => setSuperAdmin(event.target.checked)}
-            />
-            超级管理员
-          </label>
+          {canCreateSuperAdmin && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={superAdmin}
+                onChange={event => setSuperAdmin(event.target.checked)}
+              />
+              超级管理员
+            </label>
+          )}
           {!superAdmin && (
             <div className="grid gap-2 sm:grid-cols-2">
-              {ADMIN_PERMISSIONS.map(permission => (
+              {assignablePermissions.map(permission => (
                 <label key={permission} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -197,10 +262,10 @@ function CreateAdminDialog({
             </Button>
             <Button
               className="rounded-md"
-              disabled={saving || password.length < 8}
+              disabled={saving || username.trim().length < 1 || password.length < 8}
               onClick={() =>
                 onSubmit({
-                  username,
+                  username: username.trim(),
                   email: email.trim() || undefined,
                   password,
                   permissions: superAdmin ? [...ADMIN_PERMISSIONS] : permissions,

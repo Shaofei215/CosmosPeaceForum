@@ -21,6 +21,7 @@ from social_platform.app.domains.post.schemas import PostCreate
 from social_platform.app.domains.content_safety import application as report_service
 from social_platform.app.domains.content_safety.models import ContentReport
 from social_platform.app.domains.user.models import User
+from social_platform.app.domains.user import application as user_application
 from social_platform.app.domains.comment import application as comment_service
 from social_platform.app.domains.follow import application as follow_service
 from social_platform.app.domains.post import application as post_application
@@ -381,6 +382,84 @@ def test_repost_notification_is_event_driven(db_session):
     assert len(notifications) == 1
     assert notifications[0].recipient_id == author.id
     assert notifications[0].type == "repost"
+
+
+def test_deleting_repost_decrements_direct_and_chained_counters(db_session):
+    """删除链式转发会同时回减直接源帖和根帖，且直接转发只计数一次。"""
+
+    author, actor, root = _seed_users_and_post(db_session)
+    third = User(username="third-reposter")
+    db_session.add(third)
+    db_session.commit()
+    first = post_application.create_repost(
+        db=db_session,
+        user_id=actor.id,
+        source_type="post",
+        source_id=root.id,
+    )
+    second = post_application.create_repost(
+        db=db_session,
+        user_id=third.id,
+        source_type="post",
+        source_id=first.id,
+    )
+    db_session.refresh(root)
+    db_session.refresh(first)
+    assert root.repost_count == 2
+    assert first.repost_count == 1
+
+    post_application.delete_post(db_session, third, second.id)
+
+    db_session.refresh(root)
+    db_session.refresh(first)
+    assert root.repost_count == 1
+    assert first.repost_count == 0
+    post_application.delete_post(db_session, actor, first.id)
+    db_session.refresh(root)
+    assert root.repost_count == 0
+
+
+def test_deleting_comment_repost_decrements_source_post_counter(db_session):
+    """评论转发删除时会找到评论所属帖子并回减计数。"""
+
+    author, actor, root = _seed_users_and_post(db_session)
+    comment = Comment(post_id=root.id, owner_id=author.id, content="source comment")
+    db_session.add(comment)
+    db_session.commit()
+    repost = post_application.create_repost(
+        db=db_session,
+        user_id=actor.id,
+        source_type="comment",
+        source_id=comment.id,
+    )
+    db_session.refresh(root)
+    assert root.repost_count == 1
+
+    post_application.delete_post(db_session, actor, repost.id)
+    db_session.refresh(root)
+    assert root.repost_count == 0
+
+
+def test_user_deletion_repairs_follow_and_repost_counters(db_session):
+    """用户注销前显式回减其他用户的关注与转发冗余计数。"""
+
+    owner, deleting_user, root = _seed_users_and_post(db_session)
+    follow_service.toggle_follow(db_session, deleting_user.id, owner.id)
+    follow_service.toggle_follow(db_session, owner.id, deleting_user.id)
+    post_application.create_repost(
+        db=db_session,
+        user_id=deleting_user.id,
+        source_type="post",
+        source_id=root.id,
+    )
+
+    user_application.delete_user(db_session, deleting_user, deleting_user.id)
+
+    db_session.refresh(owner)
+    db_session.refresh(root)
+    assert owner.followers_count == 0
+    assert owner.following_count == 0
+    assert root.repost_count == 0
 
 
 def test_search_projection_subscriber_indexes_post_after_commit(monkeypatch, db_session):

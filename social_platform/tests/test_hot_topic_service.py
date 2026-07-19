@@ -1,7 +1,13 @@
+from types import SimpleNamespace
+from typing import cast
+
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from social_platform.app.admin.api import hot_topics as hot_topic_api
+from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.db.session import Base
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
@@ -324,7 +330,7 @@ def test_hot_topic_agent_records_failure_when_context_building_fails(db_session,
 
     assert topics == []
     assert generation.status == "failed"
-    assert generation.error_message == "context database failure"
+    assert generation.error_message == "[AI_UNKNOWN_ERROR] 外部 AI 服务调用失败，请检查后端日志"
     assert generation.completed_at is not None
 
 
@@ -342,5 +348,66 @@ def test_hot_topic_agent_records_failure_when_tool_setup_fails(db_session, monke
 
     assert topics == []
     assert generation.status == "failed"
-    assert generation.error_message == "tool import failure"
+    assert generation.error_message == "[AI_UNKNOWN_ERROR] 外部 AI 服务调用失败，请检查后端日志"
     assert generation.input_snapshot is not None
+
+
+def test_generate_endpoint_preserves_business_http_exception(db_session, monkeypatch) -> None:
+    """生成记录已失败时，安全错误消息不应被通用异常分支覆盖。"""
+
+    generation = SimpleNamespace(
+        id=42,
+        status="failed",
+        error_message="[AI_TIMEOUT] 外部 AI 服务响应超时，请稍后重试",
+    )
+    monkeypatch.setattr(
+        hot_topic_api.hot_topic_service,
+        "run_hot_topic_agent",
+        lambda _db, force: (generation, []),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        hot_topic_api.generate_hot_topics(
+            db=db_session,
+            _=cast(PlatformAdminUser, None),
+        )
+
+    assert error.value.status_code == 500
+    assert error.value.detail == generation.error_message
+
+
+def test_sse_wrapper_identifies_response_serialization_failure(monkeypatch) -> None:
+    """SSE 响应封装失败应记录明确的边界日志并返回安全错误。"""
+
+    class FakeSession:
+        """避免测试连接真实数据库的最小 Session 替身。"""
+
+        def close(self) -> None:
+            """模拟关闭数据库会话。"""
+
+    generation = SimpleNamespace(id=43, status="success", error_message=None)
+    messages: list[str] = []
+    monkeypatch.setattr(hot_topic_api, "SessionLocal", FakeSession)
+    monkeypatch.setattr(
+        hot_topic_api.hot_topic_service,
+        "run_hot_topic_agent",
+        lambda _db, force: (generation, []),
+    )
+
+    def fail_serialization(_generation, _topics):
+        raise RuntimeError("SECRET_SERIALIZATION_SENTINEL")
+
+    monkeypatch.setattr(hot_topic_api, "_serialize_generation_run", fail_serialization)
+    monkeypatch.setattr(
+        hot_topic_api.logger,
+        "exception",
+        lambda message: messages.append(message),
+    )
+
+    payload = hot_topic_api._run_generation_for_stream()
+
+    assert messages == ["热榜 SSE 响应生成或序列化失败"]
+    assert payload == {
+        "error_code": "AI_UNKNOWN_ERROR",
+        "error": "外部 AI 服务调用失败，请检查后端日志",
+    }

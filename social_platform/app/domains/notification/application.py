@@ -1,5 +1,5 @@
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TypedDict
 
 from sqlalchemy import func
 from sqlalchemy import event
@@ -19,6 +19,14 @@ COMMENT_TYPES = {"comment", "comment_reply"}
 FOLLOW_TYPES = {"follow"}
 REPOST_TYPES = {"repost"}
 _PENDING_NOTIFICATION_RECIPIENTS_KEY = "pending_notification_recipient_ids"
+
+
+class NotificationOrigin(TypedDict):
+    """通知跳转来源中可能存在的帖子、评论和用户对象。"""
+
+    post: Post | None
+    comment: Comment | None
+    user: User | None
 
 
 @event.listens_for(Session, "after_commit")
@@ -346,7 +354,7 @@ def get_summary(db: Session, user_id: int) -> Dict[str, int]:
     }
 
 
-def get_origin(db: Session, notification: Notification) -> Dict[str, object]:
+def get_origin(db: Session, notification: Notification) -> NotificationOrigin:
     """解析通知来源对象，供 API 层组装跳转和展示上下文。"""
     if notification.post_id:
         post = db.query(Post).options(

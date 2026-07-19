@@ -15,7 +15,7 @@ from social_platform.app.admin.schemas import (
     AdminSessionResponse,
 )
 from social_platform.app.admin.services import auth_service
-from social_platform.app.api.deps import get_access_payload, get_db
+from social_platform.app.api.deps import AccessTokenPayload, get_access_payload, get_db
 from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.identity.models import UserSession
 
@@ -48,7 +48,10 @@ def _session_response(session: UserSession, current_session_id: str | None = Non
     )
 
 
-def _current_admin_payload(credentials: HTTPAuthorizationCredentials, db: Session) -> dict:
+def _current_admin_payload(
+    credentials: HTTPAuthorizationCredentials,
+    db: Session,
+) -> AccessTokenPayload:
     """校验当前平台管理员 access token 并返回 payload。"""
     return get_access_payload(credentials.credentials, db, "platform_admin")
 
@@ -144,12 +147,22 @@ async def me(current_admin: PlatformAdminUser = Depends(get_current_admin)):
 @router.put("/profile", response_model=AdminResponse)
 async def update_profile(
     request: AdminProfileUpdateRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(admin_security),
     db: Session = Depends(get_db),
     current_admin: PlatformAdminUser = Depends(get_current_admin),
 ):
     """更新平台管理员自己的登录资料。"""
+    password_changed = bool(request.new_password)
     try:
         admin = auth_service.update_profile(db, current_admin, request)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if password_changed:
+        payload = _current_admin_payload(credentials, db)
+        session_service.revoke_other_sessions(
+            db,
+            int(payload["sub"]),
+            "platform_admin",
+            str(payload["sid"]),
+        )
     return auth_service.admin_to_response(admin)

@@ -6,8 +6,8 @@
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import relationship
+from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from social_platform.app.db.session import Base
 
@@ -20,27 +20,27 @@ class RegistrationInvitation(Base):
 
     __tablename__ = "registration_invitations"
 
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    code = Column(String(64), unique=True, nullable=False, index=True)
-    prefix = Column(String(16), default="", nullable=False)
-    code_suffix = Column(String(6), nullable=False)
-    created_at = Column(DateTime, default=local_now, nullable=False)
-    updated_at = Column(DateTime, default=local_now, nullable=False)
-    created_by_admin_id = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    prefix: Mapped[str] = mapped_column(String(16), default="", nullable=False)
+    code_suffix: Mapped[str] = mapped_column(String(6), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
+    created_by_admin_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("platform_admin_users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    used_by_user_id = Column(
+    used_by_user_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
         unique=True,
         nullable=True,
         index=True,
     )
-    used_at = Column(DateTime, nullable=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_by_admin = relationship("PlatformAdminUser", foreign_keys=[created_by_admin_id])
     used_by_user = relationship("User", foreign_keys=[used_by_user_id])

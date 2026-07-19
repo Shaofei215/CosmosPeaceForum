@@ -22,7 +22,6 @@ jobs:
       PROJECT_NAME: CosmosPeaceForum Social Platform
       VERSION: 0.1.0
       API_V1_PREFIX: /api/v1
-      DEBUG: "false"
       DATABASE_URL: sqlite:////tmp/cosmos-peace-forum-social-platform-ci.db
       JWT_SECRET_KEY: ci-jwt-secret
       JWT_ALGORITHM: HS256

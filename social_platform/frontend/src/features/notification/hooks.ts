@@ -9,6 +9,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notificationApi } from './api';
 import type { NotificationSummaryResponse, NotificationUnreadCountResponse } from './types';
 import { getAccessToken } from '@/features/auth/tokenStorage';
+import { apiClient } from '@/shared/api/client';
+import { openAuthenticatedSse } from '@/shared/api/authenticatedSse';
 
 export const useNotifications = (params: { skip?: number; limit?: number; type?: string } = {}) => {
   return useQuery({
@@ -62,16 +64,14 @@ export const useNotificationEvents = (enabled = true) => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const token = getAccessToken();
-    if (!enabled || !token) {
+    if (!enabled || !getAccessToken()) {
       return;
     }
+    const controller = new AbortController();
 
-    const eventSource = new EventSource(notificationApi.getEventsUrl(token));
-
-    const handleNotificationChange = (event: MessageEvent<string>) => {
+    const handleNotificationChange = (eventData: string) => {
       try {
-        const data = JSON.parse(event.data) as NotificationUnreadCountResponse &
+        const data = JSON.parse(eventData) as NotificationUnreadCountResponse &
           NotificationSummaryResponse;
         queryClient.setQueryData<NotificationUnreadCountResponse>(
           ['notifications', 'unread-count'],
@@ -90,11 +90,33 @@ export const useNotificationEvents = (enabled = true) => {
       queryClient.invalidateQueries({ queryKey: ['notifications'], exact: false });
     };
 
-    eventSource.addEventListener('notifications.changed', handleNotificationChange);
+    const connect = async () => {
+      let retryDelay = 1000;
+      while (!controller.signal.aborted) {
+        try {
+          await openAuthenticatedSse({
+            url: notificationApi.getEventsUrl(),
+            signal: controller.signal,
+            getAccessToken,
+            refreshAccessToken: () => apiClient.refreshAccessToken(),
+            onMessage: message => {
+              if (message.event === 'notifications.changed') {
+                handleNotificationChange(message.data);
+              }
+            },
+          });
+          retryDelay = 1000;
+        } catch {
+          if (controller.signal.aborted) return;
+        }
+        await new Promise(resolve => window.setTimeout(resolve, retryDelay));
+        retryDelay = Math.min(retryDelay * 2, 15000);
+      }
+    };
+    void connect();
 
     return () => {
-      eventSource.removeEventListener('notifications.changed', handleNotificationChange);
-      eventSource.close();
+      controller.abort();
     };
   }, [enabled, queryClient]);
 };
