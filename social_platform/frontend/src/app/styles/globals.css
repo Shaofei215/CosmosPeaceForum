@@ -595,6 +595,46 @@ img {
   color: rgb(3 105 161);
 }
 
+.article-rich-editor .ProseMirror .tableWrapper {
+  overflow-x: auto;
+}
+
+.article-rich-editor .ProseMirror table {
+  width: 100%;
+  min-width: 32rem;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.article-rich-editor .ProseMirror th,
+.article-rich-editor .ProseMirror td {
+  position: relative;
+  min-width: 6rem;
+  border: 1px solid hsl(var(--border));
+  padding: 0.375rem 0.5rem;
+  vertical-align: top;
+}
+
+.article-rich-editor .ProseMirror th {
+  background: hsl(var(--muted));
+  font-weight: 600;
+  text-align: left;
+}
+
+.article-rich-editor .ProseMirror th > *,
+.article-rich-editor .ProseMirror td > * {
+  margin: 0;
+}
+
+.article-rich-editor .ProseMirror .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  pointer-events: none;
+  background: hsl(var(--primary) / 0.12);
+}
+
 .article-editor-toolbar {
   scrollbar-width: none;
 }

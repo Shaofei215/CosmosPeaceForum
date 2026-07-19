@@ -142,6 +142,9 @@ function createMarkdownComponents(
         </pre>
       );
     },
+    img() {
+      return null;
+    },
     table({ children }) {
       return (
         <div className="overflow-x-auto">

@@ -5,14 +5,14 @@ import {
   type CSSProperties,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
 import { getMarkRange, getMarkType, type Editor } from '@tiptap/core';
 import { EditorContent, useEditor } from '@tiptap/react';
-import LinkExtension from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
+import { TableKit } from '@tiptap/extension-table';
 import StarterKit from '@tiptap/starter-kit';
-import TurndownService from 'turndown';
 import { useNavigate } from 'react-router-dom';
 import {
   Bold,
@@ -25,6 +25,7 @@ import {
   List,
   ListOrdered,
   Quote,
+  Table2,
 } from 'lucide-react';
 import { useCreatePost } from '@/features/post';
 import { Button, Input } from '@/shared/components/ui';
@@ -32,6 +33,8 @@ import { ARTICLE_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { hasVisibleContent } from '@/shared/lib/content';
 import { normalizeLinkHref } from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
+import { MarkdownLinkExtension, MarkdownTableInputExtension } from './articleInputRules';
+import { editorHtmlToMarkdown } from './articleMarkdown';
 
 type ToolbarAction =
   | 'h1'
@@ -43,7 +46,8 @@ type ToolbarAction =
   | 'ol'
   | 'quote'
   | 'code'
-  | 'link';
+  | 'link'
+  | 'table';
 
 type ToolbarState = Record<ToolbarAction, boolean>;
 
@@ -60,6 +64,23 @@ interface PendingLinkSelection {
   to: number;
 }
 
+interface TableControlsState {
+  table: HTMLTableElement;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  rows: number;
+  columns: number;
+}
+
+type TableDimension = 'row' | 'column';
+
+const MIN_TABLE_ROWS = 1;
+const MAX_TABLE_ROWS = 100;
+const MIN_TABLE_COLUMNS = 1;
+const MAX_TABLE_COLUMNS = 8;
+
 const emptyToolbarState: ToolbarState = {
   h1: false,
   h2: false,
@@ -71,6 +92,7 @@ const emptyToolbarState: ToolbarState = {
   quote: false,
   code: false,
   link: false,
+  table: false,
 };
 
 const emptyLinkDialogState: LinkDialogState = {
@@ -99,26 +121,27 @@ const text = {
   linkHrefLabel: '\u94fe\u63a5\u5730\u5740',
   linkHrefPlaceholder: 'https://example.com',
   linkAdd: '\u6dfb\u52a0',
+  tableInsert: '\u63d2\u5165\u8868\u683c',
+  tableActive: '\u5df2\u5728\u8868\u683c\u4e2d',
+  addRow: '\u589e\u52a0\u4e00\u884c',
+  removeRow: '\u51cf\u5c11\u4e00\u884c',
+  addColumn: '\u589e\u52a0\u4e00\u5217',
+  removeColumn: '\u51cf\u5c11\u4e00\u5217',
   cancel: '\u53d6\u6d88',
   publishing: '\u53d1\u5e03\u4e2d...',
   publish: '\u53d1\u5e03\u6587\u7ae0',
 };
 
-const markdownConverter = new TurndownService({
-  bulletListMarker: '-',
-  codeBlockStyle: 'fenced',
-  emDelimiter: '*',
-  headingStyle: 'atx',
-});
-
 export default function ArticleEditorPage() {
   const navigate = useNavigate();
   const editorRef = useRef<Editor | null>(null);
+  const editorSurfaceRef = useRef<HTMLDivElement | null>(null);
   const pendingLinkSelectionRef = useRef<PendingLinkSelection | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [toolbarState, setToolbarState] = useState<ToolbarState>(emptyToolbarState);
   const [linkDialog, setLinkDialog] = useState<LinkDialogState>(emptyLinkDialogState);
+  const [tableControls, setTableControls] = useState<TableControlsState | null>(null);
   const { mutate: createPost, isPending } = useCreatePost();
 
   const editor = useEditor({
@@ -127,8 +150,9 @@ export default function ArticleEditorPage() {
         heading: {
           levels: [1, 2, 3],
         },
+        link: false,
       }),
-      LinkExtension.configure({
+      MarkdownLinkExtension.configure({
         autolink: true,
         defaultProtocol: 'https',
         HTMLAttributes: {
@@ -141,6 +165,17 @@ export default function ArticleEditorPage() {
       Placeholder.configure({
         placeholder: text.editorPlaceholder,
       }),
+      TableKit.configure({
+        table: {
+          HTMLAttributes: {
+            class: 'article-editor-table',
+          },
+          cellMinWidth: 96,
+          renderWrapper: true,
+          resizable: false,
+        },
+      }),
+      MarkdownTableInputExtension,
     ],
     content: '',
     editorProps: {
@@ -154,7 +189,7 @@ export default function ArticleEditorPage() {
       },
     },
     onUpdate({ editor: currentEditor }) {
-      const nextContent = htmlToMarkdown(currentEditor.getHTML());
+      const nextContent = editorHtmlToMarkdown(currentEditor.getHTML());
       if (nextContent.length > ARTICLE_CONTENT_MAX_LENGTH) {
         currentEditor.commands.undo();
         return;
@@ -188,13 +223,13 @@ export default function ArticleEditorPage() {
     };
   }, [editor]);
 
-  const currentMarkdown = editor ? htmlToMarkdown(editor.getHTML()) : content;
+  const currentMarkdown = editor ? editorHtmlToMarkdown(editor.getHTML()) : content;
   const canPublish = hasVisibleContent(title) && hasVisibleContent(currentMarkdown);
 
   const submitArticle = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const nextContent = editor ? htmlToMarkdown(editor.getHTML()) : content;
+    const nextContent = editor ? editorHtmlToMarkdown(editor.getHTML()) : content;
     if (!hasVisibleContent(title) || !hasVisibleContent(nextContent) || isPending) return;
 
     if (nextContent.length > ARTICLE_CONTENT_MAX_LENGTH) return;
@@ -230,6 +265,10 @@ export default function ArticleEditorPage() {
     if (style === 'ol') editor.chain().focus().toggleOrderedList().run();
     if (style === 'quote') editor.chain().focus().toggleBlockquote().run();
     if (style === 'code') editor.chain().focus().toggleCodeBlock().run();
+    if (style === 'table') {
+      if (editor.isActive('table')) return;
+      editor.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run();
+    }
   };
 
   /**
@@ -402,6 +441,128 @@ export default function ArticleEditorPage() {
     left: linkDialog.left,
   };
 
+  /**
+   * 记录鼠标当前所在表格的相对位置，供边缘行列控件定位。
+   *
+   * @param table 当前悬浮的表格 DOM 节点。
+   */
+  const refreshTableControls = (table: HTMLTableElement): void => {
+    const surface = editorSurfaceRef.current;
+
+    if (!surface || !surface.contains(table)) {
+      setTableControls(null);
+      return;
+    }
+
+    const surfaceRect = surface.getBoundingClientRect();
+    const tableRect = table.getBoundingClientRect();
+    const rows = Array.from(table.rows);
+
+    const nextControls: TableControlsState = {
+      table,
+      top: tableRect.top - surfaceRect.top,
+      left: tableRect.left - surfaceRect.left,
+      width: tableRect.width,
+      height: tableRect.height,
+      rows: rows.length,
+      columns: Math.max(0, ...rows.map(row => row.cells.length)),
+    };
+
+    setTableControls(current =>
+      current &&
+      current.table === nextControls.table &&
+      current.top === nextControls.top &&
+      current.left === nextControls.left &&
+      current.width === nextControls.width &&
+      current.height === nextControls.height &&
+      current.rows === nextControls.rows &&
+      current.columns === nextControls.columns
+        ? current
+        : nextControls
+    );
+  };
+
+  /**
+   * 跟踪编辑区鼠标位置，仅在表格或其边缘控件上保留控件。
+   *
+   * @param event 编辑区鼠标移动事件。
+   */
+  const handleEditorMouseMove = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    if (!(event.target instanceof Element)) {
+      setTableControls(null);
+      return;
+    }
+
+    const table = event.target.closest<HTMLTableElement>('table');
+
+    if (table) {
+      refreshTableControls(table);
+      return;
+    }
+
+    if (!event.target.closest('[data-table-edge-controls]')) {
+      setTableControls(null);
+    }
+  };
+
+  /**
+   * 在当前表格末尾增减行或列，并执行最多 100 行、8 列的边界限制。
+   *
+   * @param dimension 要修改的维度。
+   * @param delta 1 表示增加，-1 表示减少。
+   */
+  const resizeTable = (dimension: TableDimension, delta: 1 | -1): void => {
+    if (!editor || !tableControls) return;
+
+    const { table } = tableControls;
+    const currentRows = Array.from(table.rows);
+    const rows = currentRows.length;
+    const columns = Math.max(0, ...currentRows.map(row => row.cells.length));
+    const shouldDeleteTable =
+      delta === -1 &&
+      ((dimension === 'row' && rows === MIN_TABLE_ROWS) ||
+        (dimension === 'column' && columns === MIN_TABLE_COLUMNS));
+
+    if (shouldDeleteTable) {
+      if (!focusTableEdgeCell(editor, table, dimension)) return;
+
+      editor.chain().focus().deleteTable().run();
+      setTableControls(null);
+      return;
+    }
+
+    if (
+      (dimension === 'row' &&
+        ((delta === 1 && rows >= MAX_TABLE_ROWS) || (delta === -1 && rows <= MIN_TABLE_ROWS))) ||
+      (dimension === 'column' &&
+        ((delta === 1 && columns >= MAX_TABLE_COLUMNS) ||
+          (delta === -1 && columns <= MIN_TABLE_COLUMNS)))
+    ) {
+      return;
+    }
+
+    if (!focusTableEdgeCell(editor, table, dimension)) {
+      return;
+    }
+
+    if (dimension === 'row' && delta === 1) editor.chain().focus().addRowAfter().run();
+    if (dimension === 'row' && delta === -1) editor.chain().focus().deleteRow().run();
+    if (dimension === 'column' && delta === 1) editor.chain().focus().addColumnAfter().run();
+    if (dimension === 'column' && delta === -1) editor.chain().focus().deleteColumn().run();
+
+    requestAnimationFrame(() => {
+      const nextTable = table.isConnected
+        ? table
+        : editorSurfaceRef.current?.querySelector<HTMLTableElement>('table');
+
+      if (nextTable) {
+        refreshTableControls(nextTable);
+      } else {
+        setTableControls(null);
+      }
+    });
+  };
+
   return (
     <form onSubmit={submitArticle} className="overflow-hidden rounded-lg bg-white shadow-sm">
       <div className="border-b border-border/60 px-3 py-3 sm:px-4">
@@ -477,12 +638,36 @@ export default function ArticleEditorPage() {
         >
           <LinkIcon className="h-4 w-4" />
         </ToolbarButton>
+        <ToolbarButton
+          label={toolbarState.table ? text.tableActive : text.tableInsert}
+          active={toolbarState.table}
+          disabled={toolbarState.table}
+          onClick={() => applyStyle('table')}
+        >
+          <Table2 className="h-4 w-4" />
+        </ToolbarButton>
       </div>
 
-      <EditorContent
-        editor={editor}
-        className="article-rich-editor min-h-[420px] px-4 py-4 sm:min-h-[560px] sm:px-6 sm:py-6"
-      />
+      <div
+        ref={editorSurfaceRef}
+        className="relative"
+        onMouseMove={handleEditorMouseMove}
+        onMouseLeave={() => setTableControls(null)}
+      >
+        <EditorContent
+          editor={editor}
+          className="article-rich-editor min-h-[420px] px-4 py-4 sm:min-h-[560px] sm:px-6 sm:py-6"
+        />
+        {tableControls && (
+          <TableEdgeControls
+            controls={tableControls}
+            onAddRow={() => resizeTable('row', 1)}
+            onRemoveRow={() => resizeTable('row', -1)}
+            onAddColumn={() => resizeTable('column', 1)}
+            onRemoveColumn={() => resizeTable('column', -1)}
+          />
+        )}
+      </div>
 
       <div className="flex items-center justify-end gap-2 border-t border-border/60 px-3 py-3 sm:px-4">
         <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
@@ -531,22 +716,26 @@ export default function ArticleEditorPage() {
 function ToolbarButton({
   label,
   active,
+  disabled,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onMouseDown={event => event.preventDefault()}
       onClick={onClick}
       className={cn(
         'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent text-muted-foreground',
         'transition-colors hover:bg-zinc-100/80 hover:text-zinc-950',
+        disabled && 'cursor-default opacity-60 hover:bg-transparent',
         active &&
           'border-zinc-950 bg-zinc-950 text-white shadow-sm hover:bg-zinc-950 hover:text-white hover:opacity-90'
       )}
@@ -556,6 +745,156 @@ function ToolbarButton({
       {children}
     </button>
   );
+}
+
+/**
+ * 渲染表格右边缘的列控件和下边缘的行控件。
+ *
+ * @param props.controls 表格的相对坐标与当前行列数。
+ * @param props.onAddRow 在表格末尾增加一行。
+ * @param props.onRemoveRow 删除表格末尾一行。
+ * @param props.onAddColumn 在表格右侧增加一列。
+ * @param props.onRemoveColumn 删除表格最右一列。
+ * @returns 仅在边缘悬浮时显示的黑色线条和圆形按钮。
+ */
+function TableEdgeControls({
+  controls,
+  onAddRow,
+  onRemoveRow,
+  onAddColumn,
+  onRemoveColumn,
+}: {
+  controls: TableControlsState;
+  onAddRow: () => void;
+  onRemoveRow: () => void;
+  onAddColumn: () => void;
+  onRemoveColumn: () => void;
+}): ReactNode {
+  const rightEdgeStyle: CSSProperties = {
+    top: controls.top,
+    left: controls.left + controls.width,
+    height: controls.height,
+  };
+  const bottomEdgeStyle: CSSProperties = {
+    top: controls.top + controls.height,
+    left: controls.left,
+    width: controls.width,
+  };
+
+  return (
+    <div data-table-edge-controls>
+      <div
+        data-table-edge-controls
+        className="group absolute z-20 flex w-5 -translate-x-1/2 items-center justify-center"
+        style={rightEdgeStyle}
+      >
+        <span className="pointer-events-none absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 bg-black opacity-0 transition-opacity group-hover:opacity-100" />
+        <div className="pointer-events-none relative flex flex-col gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+          <TableDimensionButton
+            label={text.addColumn}
+            onClick={onAddColumn}
+            visible={controls.columns < MAX_TABLE_COLUMNS}
+          >
+            +
+          </TableDimensionButton>
+          <TableDimensionButton label={text.removeColumn} onClick={onRemoveColumn} visible>
+            −
+          </TableDimensionButton>
+        </div>
+      </div>
+
+      <div
+        data-table-edge-controls
+        className="group absolute z-20 flex h-5 -translate-y-1/2 items-center justify-center"
+        style={bottomEdgeStyle}
+      >
+        <span className="pointer-events-none absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 bg-black opacity-0 transition-opacity group-hover:opacity-100" />
+        <div className="pointer-events-none relative flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+          <TableDimensionButton
+            label={text.addRow}
+            onClick={onAddRow}
+            visible={controls.rows < MAX_TABLE_ROWS}
+          >
+            +
+          </TableDimensionButton>
+          <TableDimensionButton label={text.removeRow} onClick={onRemoveRow} visible>
+            −
+          </TableDimensionButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 渲染表格边缘的单个圆形增减按钮。
+ *
+ * @param props.label 按钮的无障碍说明。
+ * @param props.onClick 点击后的表格修改操作。
+ * @param props.visible 当前状态下是否显示该操作。
+ * @param props.children 按钮中显示的加减符号。
+ * @returns 黑色小型圆形按钮。
+ */
+function TableDimensionButton({
+  label,
+  onClick,
+  visible,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  visible: boolean;
+  children: ReactNode;
+}): ReactNode {
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onMouseDown={event => event.preventDefault()}
+      onClick={onClick}
+      className="flex h-5 w-5 items-center justify-center rounded-full bg-black text-xs font-semibold leading-none text-white shadow-sm transition-transform hover:scale-110"
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * 将编辑器选区移到表格末行或末列，使 TipTap 增减命令作用于外边缘。
+ *
+ * @param editor TipTap 编辑器实例。
+ * @param table 要修改的表格 DOM 节点。
+ * @param dimension 行操作选择末行，列操作选择末列。
+ * @returns 成功定位到单元格时返回 true。
+ */
+function focusTableEdgeCell(
+  editor: Editor,
+  table: HTMLTableElement,
+  dimension: TableDimension
+): boolean {
+  const rows = Array.from(table.rows);
+
+  if (rows.length === 0) return false;
+
+  const targetRow = dimension === 'row' ? rows[rows.length - 1] : rows[0];
+  const cells = Array.from(targetRow.cells);
+
+  if (cells.length === 0) return false;
+
+  const targetCell = dimension === 'column' ? cells[cells.length - 1] : cells[0];
+  const textContainer = targetCell.querySelector('p') ?? targetCell;
+
+  try {
+    const position = editor.view.posAtDOM(textContainer, 0);
+    return editor.chain().focus().setTextSelection(position).run();
+  } catch {
+    return false;
+  }
 }
 
 function getToolbarState(editor: Editor): ToolbarState {
@@ -570,14 +909,8 @@ function getToolbarState(editor: Editor): ToolbarState {
     quote: editor.isActive('blockquote'),
     code: editor.isActive('codeBlock'),
     link: isSelectionInsideLinkText(editor),
+    table: editor.isActive('table'),
   };
-}
-
-function htmlToMarkdown(html: string): string {
-  return markdownConverter
-    .turndown(html)
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 }
 
 /**
