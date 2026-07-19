@@ -15,6 +15,18 @@ import uvicorn
 
 from social_platform.app.core.config import get_settings
 
+BANNER: str = r"""
+ ██████╗██████╗ ███████╗ ██████╗ ██████╗ ██╗   ██╗███╗   ███╗
+██╔════╝██╔══██╗██╔════╝██╔═══██╗██╔══██╗██║   ██║████╗ ████║
+██║     ██████╔╝█████╗  ██║   ██║██████╔╝██║   ██║██╔████╔██║
+██║     ██╔═══╝ ██╔══╝  ██║   ██║██╔══██╗██║   ██║██║╚██╔╝██║
+╚██████╗██║     ██║     ╚██████╔╝██║  ██║╚██████╔╝██║ ╚═╝ ██║
+ ╚═════╝╚═╝     ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝
+
+                      CosmosPeaceForum
+                      愿全宇宙 和平交流
+""".strip("\n")
+
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """解析公开平台的命令行启动参数。
@@ -51,6 +63,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     """
     args = parse_args(argv)
     settings = get_settings()
+
+    print(BANNER, flush=True)
 
     # 使用导入字符串可以让 Uvicorn 的 reload 模式在子进程中重新加载应用。
     uvicorn.run(
