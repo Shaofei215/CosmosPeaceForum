@@ -62,4 +62,4 @@ def test_admin_username_is_trimmed_and_limited_to_thirty_characters() -> None:
 
 def test_admin_update_rejects_password_takeover_field() -> None:
     with pytest.raises(ValidationError):
-        AdminUpdateRequest(new_password="attacker-password")
+        AdminUpdateRequest.model_validate({"new_password": "attacker-password"})

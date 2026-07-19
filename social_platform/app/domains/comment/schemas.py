@@ -64,11 +64,7 @@ class CommentResponse(CommentBase):
 
 class CommentTreeResponse(CommentResponse):
     """评论领域 API schema的响应模型，供 API adapter 做参数校验和响应序列化。"""
-    children: List["CommentTreeResponse"] = []
-
-    class Config:
-        """评论领域 API schema的Pydantic ORM 映射配置，供 API adapter 做参数校验和响应序列化。"""
-        from_attributes = True
+    children: List["CommentTreeResponse"] = Field(default_factory=list)
 
 
 CommentTreeResponse.model_rebuild()

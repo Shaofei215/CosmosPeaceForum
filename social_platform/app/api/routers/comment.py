@@ -144,7 +144,7 @@ def get_comment_tree(
         )
 
         return CommentListResponse(
-            items=comments,
+            items=[CommentTreeResponse.model_validate(comment) for comment in comments],
             total=total,
             skip=skip,
             limit=limit
@@ -304,7 +304,7 @@ def get_comment_replies(
             seed=seed,
         )
         return CommentListResponse(
-            items=replies,
+            items=[CommentTreeResponse.model_validate(reply) for reply in replies],
             total=total,
             skip=skip,
             limit=limit,

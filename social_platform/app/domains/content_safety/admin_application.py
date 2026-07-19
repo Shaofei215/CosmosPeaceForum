@@ -6,12 +6,13 @@
 
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
-from typing import Literal, Optional
+from typing import Literal, Optional, TypedDict
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session, joinedload
 
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
+from social_platform.app.admin.models.user_moderation import UserModeration
 from social_platform.app.admin.schemas import (
     ContentItemResponse,
     ContentReportReasonResponse,
@@ -37,6 +38,13 @@ from social_platform.app.domains.user.models import User
 ContentType = Literal["post", "comment"]
 CONTENT_STATUS_ACTIVE = "active"
 CONTENT_STATUS_ARCHIVED = "archived"
+
+
+class _ReportedContentGroup(TypedDict):
+    """同一帖子或评论对应的待审举报聚合。"""
+
+    target: Post | Comment
+    reports: list[ContentReport]
 
 
 def _notify_moderation_action(
@@ -516,7 +524,7 @@ def list_reported_content(
 
     reports = _pending_reports_query(db, content_type).all()
     keyword_value = keyword.strip() if keyword else None
-    grouped: dict[tuple[str, int], dict[str, object]] = {}
+    grouped: dict[tuple[str, int], _ReportedContentGroup] = {}
 
     for report in reports:
         if report.target_type == "post":
@@ -814,7 +822,7 @@ def moderate_reported_user_as_admin(
     user_id: int,
     request: UserViolationRequest,
     admin: PlatformAdminUser,
-) -> object:
+) -> UserModeration:
     """对被举报用户应用任意管控并关闭待审用户举报。
 
     Args:
@@ -824,7 +832,7 @@ def moderate_reported_user_as_admin(
         admin: 执行操作的管理员。
 
     Returns:
-        object: 更新后的用户管控模型。
+        UserModeration: 更新后的用户管控模型。
 
     Raises:
         ValueError: 用户或待审举报不存在时抛出。

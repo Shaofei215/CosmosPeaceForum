@@ -7,8 +7,8 @@
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from social_platform.app.db.session import Base
 
@@ -18,19 +18,19 @@ class UserSession(Base):
 
     __tablename__ = "user_sessions"
 
-    id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(String(64), unique=True, nullable=False, index=True)
-    account_id = Column(Integer, nullable=False, index=True)
-    scope = Column(String(32), nullable=False, index=True)
-    client_type = Column(String(32), nullable=False, index=True)
-    refresh_token_hash = Column(String(64), nullable=False, unique=True, index=True)
-    revoked_at = Column(DateTime, nullable=True, index=True)
-    expires_at = Column(DateTime, nullable=False, index=True)
-    last_seen_at = Column(DateTime, default=local_now, nullable=False)
-    user_agent = Column(Text, nullable=True)
-    ip_address = Column(String(64), nullable=True)
-    remember_me = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=local_now, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    account_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    scope: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    client_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    refresh_token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    remember_me: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
 
 
 Index(
@@ -49,21 +49,21 @@ class EmailVerificationCode(Base):
 
     __tablename__ = "email_verification_codes"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
-    email = Column(String(255), nullable=False, index=True)
-    code = Column(String(6), nullable=False, index=True)
-    purpose = Column(String(20), nullable=False)
-    created_at = Column(DateTime, default=local_now)
-    expires_at = Column(DateTime, nullable=False)
-    used = Column(Boolean, default=False, nullable=False)
-    used_at = Column(DateTime, nullable=True)
-    attempt_count = Column(Integer, default=0, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(6), nullable=False, index=True)
+    purpose: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     user = relationship("User", back_populates="email_codes")
 

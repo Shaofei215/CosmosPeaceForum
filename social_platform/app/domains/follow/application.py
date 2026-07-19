@@ -104,12 +104,14 @@ def toggle_follow(
         Follow.follower_id == follower_id,
         Follow.following_id == following_id
     ).first()
+    event_created_by_agent = created_by_agent
 
     try:
         if existing:
             # 已关注，执行取消关注操作
             # 1. 删除关注记录
             db.delete(existing)
+            event_created_by_agent = existing.created_by_agent
             is_following = False
         else:
             # 未关注，执行关注操作
@@ -126,6 +128,10 @@ def toggle_follow(
         # 先处理关系，再更新计数，保证一致性
         follower = db.query(User).filter(User.id == follower_id).first()
         following = db.query(User).filter(User.id == following_id).first()
+        if follower is None:
+            raise UserNotFoundError(follower_id)
+        if following is None:
+            raise UserNotFoundError(following_id)
 
         if is_following:
             # 关注操作：关注者的关注数 +1，被关注者的被关注数 +1
@@ -153,7 +159,7 @@ def toggle_follow(
                     following_id=following_id,
                     previous_state=True,
                     current_state=False,
-                    created_by_agent=existing.created_by_agent,
+                    created_by_agent=event_created_by_agent,
                 ),
             )
 

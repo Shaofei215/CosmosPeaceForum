@@ -155,4 +155,5 @@ def test_comment_tree_uses_stored_reply_count_without_legacy_recount(db_session)
     assert [comment.id for comment in replies] == [reply_to_reply.id, reply_to_root.id]
 
     focused_reply = comment_service.get_comment_by_id(reply_to_reply.id, user_id=None, db=db)
+    assert focused_reply is not None
     assert focused_reply.root_comment_id == root.id

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime, timedelta
 
 import pytest
@@ -18,7 +19,7 @@ from social_platform.app.domains.user.models import User
 
 
 @pytest.fixture()
-def db_session() -> Session:
+def db_session() -> Iterator[Session]:
     """创建 feed 领域测试使用的内存数据库会话。
 
     Yields:

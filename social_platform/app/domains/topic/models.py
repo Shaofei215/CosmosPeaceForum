@@ -9,8 +9,8 @@ from __future__ import annotations
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from social_platform.app.db.session import Base
 
@@ -29,13 +29,13 @@ class Topic(Base):
 
     __tablename__ = "topics"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(40), nullable=False, unique=True, index=True)
-    post_count = Column(Integer, nullable=False, default=0, server_default="0")
-    heat_score = Column(Float, nullable=False, default=0.0, server_default="0")
-    last_used_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=local_now)
-    updated_at = Column(DateTime, nullable=False, default=local_now, onupdate=local_now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(40), nullable=False, unique=True, index=True)
+    post_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    heat_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=local_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=local_now, onupdate=local_now)
 
     post_topics = relationship("PostTopic", back_populates="topic", cascade="all, delete-orphan")
 
@@ -55,10 +55,10 @@ class PostTopic(Base):
 
     __tablename__ = "post_topics"
 
-    id = Column(Integer, primary_key=True, index=True)
-    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
-    topic_id = Column(Integer, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False, index=True)
-    created_at = Column(DateTime, nullable=False, default=local_now)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    topic_id: Mapped[int] = mapped_column(Integer, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=local_now)
 
     topic = relationship("Topic", back_populates="post_topics")
 

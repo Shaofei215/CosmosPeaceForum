@@ -11,7 +11,12 @@ from typing import Literal, Optional
 class UserRegister(BaseModel):
     """邮箱注册和管理员创建用户名密码账号共享的请求模型。"""
 
-    username: Optional[str] = Field(None, min_length=1, max_length=30, description="用户名")
+    username: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=30,
+        description="用户名",
+    )
     password: str = Field(..., min_length=8, max_length=32)
     email: Optional[EmailStr] = Field(default=None, description="邮箱注册用户必填")
     invitation_code: Optional[str] = Field(default=None, max_length=64, description="邀请码")
@@ -66,8 +71,8 @@ class AgentLoginContext(BaseModel):
     following_count: int = 0
     followers_count: int = 0
     unread_count: Optional[int] = Field(default=None, gt=0)
-    hot_topic_titles: list[str] = Field(default_factory=list, alias="大家都在聊")
-    topic_titles: list[str] = Field(default_factory=list, alias="话题")
+    hot_topic_titles: list[str] = Field(default_factory=list, serialization_alias="大家都在聊")
+    topic_titles: list[str] = Field(default_factory=list, serialization_alias="话题")
 
 
 class TokenResponse(BaseModel):
@@ -110,7 +115,7 @@ class UserResponse(BaseModel):
     用户响应模型（认证模块专用）
     """
     id: int
-    username: str
+    username: Optional[str]
     email: Optional[str] = None
     email_verified: bool = False
     email_verified_at: Optional[datetime] = None
@@ -130,7 +135,7 @@ class RegisterResponse(BaseModel):
     用于引导用户继续完善资料并支持后续 refresh。
     """
     id: int
-    username: str
+    username: Optional[str]
     access_token: str
     refresh_token: str
     token_type: str = "bearer"

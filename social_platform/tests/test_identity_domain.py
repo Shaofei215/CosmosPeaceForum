@@ -36,6 +36,13 @@ class SentVerificationEmail:
 
 
 @dataclass
+class FakeVerificationEmailSettings:
+    """测试用验证码邮件模板配置。"""
+
+    EMAIL_CODE_EXPIRE_MINUTES: int
+
+
+@dataclass
 class FakeEmailSender:
     """测试用验证码邮件发送端口，记录调用但不发送真实邮件。"""
 
@@ -165,7 +172,7 @@ def test_verification_email_sender_adapter_renders_template_and_delegates() -> N
     sender = FakeGenericEmailSender()
     adapter = VerificationEmailSenderAdapter(
         email_sender=sender,
-        settings=SimpleNamespace(EMAIL_CODE_EXPIRE_MINUTES=7),
+        settings=FakeVerificationEmailSettings(EMAIL_CODE_EXPIRE_MINUTES=7),
     )
 
     assert adapter.send_verification_email("person@example.com", "123456", "login") is True
@@ -250,6 +257,8 @@ def test_password_reset_revokes_all_existing_user_sessions(db_session: Session) 
     )
     db_session.add(user)
     db_session.commit()
+    assert user.email is not None
+    assert user.password_hash is not None
     sender = FakeEmailSender()
     verification.send_password_reset_code(db_session, user.email, sender)
     first = sessions.create_session_token_pair(

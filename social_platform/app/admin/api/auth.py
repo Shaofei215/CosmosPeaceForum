@@ -15,7 +15,7 @@ from social_platform.app.admin.schemas import (
     AdminSessionResponse,
 )
 from social_platform.app.admin.services import auth_service
-from social_platform.app.api.deps import get_access_payload, get_db
+from social_platform.app.api.deps import AccessTokenPayload, get_access_payload, get_db
 from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.identity.models import UserSession
 
@@ -48,7 +48,10 @@ def _session_response(session: UserSession, current_session_id: str | None = Non
     )
 
 
-def _current_admin_payload(credentials: HTTPAuthorizationCredentials, db: Session) -> dict:
+def _current_admin_payload(
+    credentials: HTTPAuthorizationCredentials,
+    db: Session,
+) -> AccessTokenPayload:
     """校验当前平台管理员 access token 并返回 payload。"""
     return get_access_payload(credentials.credentials, db, "platform_admin")
 

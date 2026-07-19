@@ -1,7 +1,7 @@
 # 依赖注入模块
 # 提供 API 路由所需的公共依赖
 import secrets
-from typing import Generator, Optional
+from typing import Generator, Optional, TypedDict
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -15,6 +15,15 @@ from social_platform.app.domains.user.models import User
 
 
 security = HTTPBearer()
+
+
+class AccessTokenPayload(TypedDict):
+    """完成签名、作用域与服务端 session 校验后的 access token 载荷。"""
+
+    sub: str
+    typ: str
+    scope: str
+    sid: str
 
 
 def get_agent_operation_source(
@@ -82,7 +91,7 @@ def _unauthorized(detail: str = "无效的认证凭证") -> HTTPException:
     )
 
 
-def get_access_payload(token: str, db: Session, expected_scope: str) -> dict:
+def get_access_payload(token: str, db: Session, expected_scope: str) -> AccessTokenPayload:
     """解码 access token，并确认它仍绑定一个 active server-side session。
 
     只验证 JWT 签名不足以支持立即撤销；因此这里还强制检查 typ=access、
@@ -93,7 +102,7 @@ def get_access_payload(token: str, db: Session, expected_scope: str) -> dict:
         raise _unauthorized()
 
     session_id = payload.get("sid")
-    if not session_id:
+    if not isinstance(session_id, str) or not session_id:
         raise _unauthorized()
 
     session = session_service.get_active_session(db, session_id, expected_scope)
@@ -101,6 +110,8 @@ def get_access_payload(token: str, db: Session, expected_scope: str) -> dict:
         raise _unauthorized("会话已失效，请重新登录")
 
     user_id_str = payload.get("sub")
+    if not isinstance(user_id_str, str):
+        raise _unauthorized()
     try:
         account_id = int(user_id_str)
     except (ValueError, TypeError):
@@ -109,17 +120,26 @@ def get_access_payload(token: str, db: Session, expected_scope: str) -> dict:
     if session.account_id != account_id:
         raise _unauthorized()
 
-    return payload
+    return {
+        "sub": user_id_str,
+        "typ": "access",
+        "scope": expected_scope,
+        "sid": session_id,
+    }
 
 
-def _get_user_from_payload(db: Session, payload: dict, include_banned: bool = False) -> User:
+def _get_user_from_payload(
+    db: Session,
+    payload: AccessTokenPayload,
+    include_banned: bool = False,
+) -> User:
     """根据已验证 payload 加载用户。
 
     include_banned 参数保留给既有调用点兼容；账号封禁不再阻止读取类接口，
     写操作由具体业务入口调用处罚守卫拦截。
     """
     try:
-        user_id = int(payload.get("sub"))
+        user_id = int(payload["sub"])
     except (ValueError, TypeError):
         raise _unauthorized()
 

@@ -27,7 +27,7 @@ class RaceSafeFileResponse(FileResponse):
         self,
         send: Send,
         send_header_only: bool,
-        _send_pathsend: bool,
+        send_pathsend: bool,
     ) -> None:
         if send_header_only:
             if not os.path.exists(self.path):

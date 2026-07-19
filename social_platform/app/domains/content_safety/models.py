@@ -7,8 +7,8 @@
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from social_platform.app.db.session import Base
 
@@ -18,25 +18,25 @@ class ContentReport(Base):
 
     __tablename__ = "content_reports"
 
-    id = Column(Integer, primary_key=True, index=True)
-    reporter_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    target_type = Column(String(20), nullable=False, index=True)
-    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True, index=True)
-    comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
-    reason = Column(Text, nullable=False)
-    status = Column(String(30), nullable=False, default="pending", server_default="pending", index=True)
-    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
-    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
-    updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)
-    reviewed_at = Column(DateTime, nullable=True)
-    reviewed_by_admin_id = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    reporter_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    post_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True, index=True)
+    comment_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending", server_default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False, index=True)
+    created_by_agent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, onupdate=local_now, nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewed_by_admin_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("platform_admin_users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    escalation_id = Column(
+    escalation_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("content_report_escalations.id", ondelete="SET NULL"),
         nullable=True,
@@ -65,15 +65,15 @@ class ContentReportEscalation(Base):
 
     __tablename__ = "content_report_escalations"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    status = Column(String(30), nullable=False, default="pending", server_default="pending", index=True)
-    reason = Column(Text, nullable=False)
-    trigger_content_json = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
-    updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)
-    reviewed_at = Column(DateTime, nullable=True)
-    reviewed_by_admin_id = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending", server_default="pending", index=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    trigger_content_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, onupdate=local_now, nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewed_by_admin_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("platform_admin_users.id", ondelete="SET NULL"),
         nullable=True,
@@ -94,13 +94,13 @@ class ContentModerationLLMSettings(Base):
 
     __tablename__ = "content_moderation_llm_settings"
 
-    id = Column(Integer, primary_key=True, default=1)
-    enabled = Column(Boolean, nullable=False, default=False, server_default="0")
-    llm_base_url = Column(String(500), nullable=True)
-    llm_model_name = Column(String(120), nullable=True)
-    llm_api_key = Column(String(500), nullable=True)
-    prompt_template = Column(Text, nullable=True)
-    updated_at = Column(DateTime, default=local_now, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    llm_base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    llm_model_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    llm_api_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    prompt_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
 
 
 class ModerationAppeal(Base):
@@ -112,32 +112,32 @@ class ModerationAppeal(Base):
 
     __tablename__ = "moderation_appeals"
 
-    id = Column(Integer, primary_key=True, index=True)
-    notification_id = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    notification_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("notifications.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,
     )
-    violation_event_id = Column(
+    violation_event_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("user_violation_events.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    appellant_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    target_type = Column(String(20), nullable=False, index=True)
-    target_id = Column(Integer, nullable=False, index=True)
-    action_label = Column(String(100), nullable=False)
-    moderation_reason = Column(Text, nullable=True)
-    appeal_reason = Column(Text, nullable=False)
-    status = Column(String(30), nullable=False, default="pending", server_default="pending", index=True)
-    reject_reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
-    updated_at = Column(DateTime, default=local_now, onupdate=local_now, nullable=False)
-    resolved_at = Column(DateTime, nullable=True)
-    resolved_by_admin_id = Column(
+    appellant_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    target_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    action_label: Mapped[str] = mapped_column(String(100), nullable=False)
+    moderation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    appeal_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending", server_default="pending", index=True)
+    reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, onupdate=local_now, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_by_admin_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("platform_admin_users.id", ondelete="SET NULL"),
         nullable=True,
@@ -160,36 +160,36 @@ class UserViolationEvent(Base):
 
     __tablename__ = "user_violation_events"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    category = Column(String(20), nullable=False, index=True)
-    violation_count = Column(Integer, nullable=True)
-    reason = Column(Text, nullable=False)
-    source_type = Column(String(30), nullable=False, default="manual", server_default="manual")
-    source_id = Column(Integer, nullable=True)
-    dedup_key = Column(String(100), nullable=True, unique=True, index=True)
-    notification_id = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    violation_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(30), nullable=False, default="manual", server_default="manual")
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dedup_key: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True, index=True)
+    notification_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("notifications.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    created_by_admin_id = Column(
+    created_by_admin_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("platform_admin_users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    restriction_until = Column(DateTime, nullable=True)
-    is_permanent = Column(Boolean, nullable=False, default=False, server_default="0")
-    released_at = Column(DateTime, nullable=True)
-    violation_count_reversed_at = Column(DateTime, nullable=True)
-    released_by_admin_id = Column(
+    restriction_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_permanent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    violation_count_reversed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    released_by_admin_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("platform_admin_users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    created_at = Column(DateTime, default=local_now, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False, index=True)
 
     user = relationship("User")
     notification = relationship("Notification", foreign_keys=[notification_id])

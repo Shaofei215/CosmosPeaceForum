@@ -46,7 +46,7 @@ def test_post_writes_reject_content_over_limit(
     """帖子、文章和转发附言超过对应上限时应由 API schema 拒绝。"""
 
     with pytest.raises(ValidationError):
-        schema(**payload)
+        schema.model_validate(payload)
 
 
 def test_post_update_allows_article_limit_for_application_type_check() -> None:

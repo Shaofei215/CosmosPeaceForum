@@ -216,6 +216,8 @@ def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicS
         if field == "max_llm_rounds":
             value = max(1, min(int(value), 20))
         if field in string_fields:
+            if not isinstance(value, str):
+                raise ValueError(f"{field} 必须是字符串")
             value = _normalize_text(value)
             if value == SECRET_MASK:
                 continue
@@ -858,7 +860,7 @@ def run_hot_topic_agent(
         try:
             settings = get_hot_topic_settings(db)
             if not force and not settings.agent_enabled:
-                raise ValueError("热榜 Agent 未启用")
+                raise ValueError("热榜 LLM 未启用")
 
             publish_policy = _validate_choice(
                 settings.publish_policy,
@@ -877,10 +879,10 @@ def run_hot_topic_agent(
                 bool(settings.llm_base_url),
             )
             generation = _create_generation_record(db, publish_policy)
-            logger.info("热榜 Agent 创建生成记录 generation_id=%s", generation.id)
+            logger.info("热榜 LLM 创建生成记录 generation_id=%s", generation.id)
         except Exception as exc:
             db.rollback()
-            logger.exception("热榜 Agent 初始化失败")
+            logger.exception("热榜 LLM 初始化失败")
             raise HotTopicAgentRunError(
                 "热榜 Agent 初始化失败；请检查数据库迁移、连接和写入权限"
             ) from exc
@@ -897,7 +899,7 @@ def run_hot_topic_agent(
             db.commit()
             db.refresh(generation)
             logger.info(
-                "热榜 Agent 构建上下文完成 generation_id=%s top_posts=%s current_topics=%s history=%s",
+                "构建上下文完成 generation_id=%s top_posts=%s current_topics=%s history=%s",
                 generation.id,
                 len(context.get("top_posts", [])),
                 len(context.get("current_hot_topics", [])),
@@ -915,7 +917,7 @@ def run_hot_topic_agent(
 
             if llm_factory is None:
                 if not settings.llm_model_name or not settings.llm_api_key:
-                    raise ValueError("请先配置热榜 Agent 的模型名称和 API Key")
+                    raise ValueError("请先配置热榜 LLM 的模型名称和 API Key")
                 from langchain_openai import ChatOpenAI
 
                 kwargs: dict[str, Any] = {
@@ -965,7 +967,7 @@ def run_hot_topic_agent(
                 response = _invoke_hot_topic_llm(llm, prompt, user_prompt)
                 tool_calls = _extract_tool_calls(response)
                 logger.info(
-                    "热榜 Agent LLM 返回 generation_id=%s round=%s tool_calls=%s",
+                    "热榜 LLM 返回 generation_id=%s round=%s tool_calls=%s",
                     generation.id,
                     round_index,
                     [call.get("name") for call in tool_calls],
@@ -995,7 +997,7 @@ def run_hot_topic_agent(
                     tool_name = call.get("name")
                     tool_args = call.get("args") or {}
                     logger.info(
-                        "热榜 Agent 调用工具 generation_id=%s round=%s tool=%s",
+                        "热榜 LLM 调用工具 generation_id=%s round=%s tool=%s",
                         generation.id,
                         round_index,
                         tool_name,
@@ -1072,7 +1074,7 @@ def run_scheduled_hot_topic_agent() -> None:
             return
         run_hot_topic_agent(db)
     except Exception:
-        logger.exception("定时热榜 Agent 运行失败")
+        logger.exception("定时热榜运行失败")
     finally:
         db.close()
 
@@ -1105,6 +1107,6 @@ def configure_hot_topic_agent_job(scheduler=None) -> None:
             id=HOT_TOPIC_SCHEDULER_JOB_ID,
             replace_existing=True,
         )
-        logger.info("热榜 Agent 调度已启用，每 %s 分钟运行一次", settings.agent_interval_minutes)
+        logger.info("热榜 LLM 调度已启用，每 %s 分钟运行一次", settings.agent_interval_minutes)
     finally:
         db.close()

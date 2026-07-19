@@ -219,10 +219,11 @@ def _validate_avatar_file(file: AvatarUploadFile) -> str:
 
     settings = get_settings()
     allowed_types = set(settings.ALLOWED_AVATAR_TYPES)
-    if file.content_type not in allowed_types:
+    content_type = file.content_type
+    if content_type is None or content_type not in allowed_types:
         allowed_types_str = ", ".join(settings.ALLOWED_AVATAR_TYPES)
         raise AvatarValidationError(f"不支持的图片格式，请上传以下格式之一：{allowed_types_str}")
-    return file.content_type
+    return content_type
 
 
 def _get_avatar_file_extension(content_type: str) -> str:

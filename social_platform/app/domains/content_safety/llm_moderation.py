@@ -5,7 +5,7 @@ import logging
 import time
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Callable, Literal, Optional, cast
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -306,7 +306,12 @@ def apply_llm_decision(
         if content_type == "user":
             moderation_service.release_reported_user(db, content_id, admin)
         else:
-            moderation_service.release_reported_content(db, content_type, content_id, admin)
+            moderation_service.release_reported_content(
+                db,
+                cast(moderation_service.ContentType, content_type),
+                content_id,
+                admin,
+            )
         return
     if decision == "delete":
         if content_type == "user":

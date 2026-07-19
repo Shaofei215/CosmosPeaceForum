@@ -21,7 +21,7 @@ def get_current_admin(
     """获取平台内管理员；要求 access token 绑定 active platform_admin session。"""
     try:
         payload = get_access_payload(credentials.credentials, db, "platform_admin")
-        admin_id = int(payload.get("sub"))
+        admin_id = int(payload["sub"])
     except (TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的管理员认证凭证")
 
@@ -52,4 +52,3 @@ def require_permission(permission: str) -> Callable:
         return admin
 
     return _require
-

@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import HTTPException
@@ -6,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from social_platform.app.admin.api import hot_topics as hot_topic_api
+from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.db.session import Base
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
@@ -365,7 +367,10 @@ def test_generate_endpoint_preserves_business_http_exception(db_session, monkeyp
     )
 
     with pytest.raises(HTTPException) as error:
-        hot_topic_api.generate_hot_topics(db=db_session, _=None)
+        hot_topic_api.generate_hot_topics(
+            db=db_session,
+            _=cast(PlatformAdminUser, None),
+        )
 
     assert error.value.status_code == 500
     assert error.value.detail == generation.error_message

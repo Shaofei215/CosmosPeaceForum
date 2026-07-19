@@ -1,7 +1,7 @@
 # 评论数据库模型
 # 定义评论表结构，支持两级评论和评论点赞功能
-from sqlalchemy import Boolean, CheckConstraint, Column, Float, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
-from sqlalchemy.orm import relationship, remote, foreign
+from sqlalchemy import Boolean, CheckConstraint, Float, Integer, String, DateTime, ForeignKey, PrimaryKeyConstraint, Index, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship, remote, foreign
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
 from social_platform.app.core.content_limits import COMMENT_CONTENT_MAX_LENGTH
@@ -60,45 +60,45 @@ class Comment(Base):
     )
 
     # 评论唯一标识符（全局唯一，使用自增）
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     
     # 关联帖子ID，外键关联到 posts 表
-    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # 评论发布者ID，外键关联到 users 表
-    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # 父评论ID，外键关联到 comments 表自身
     # 为空表示一级评论，有值表示语义上回复哪条评论
-    parent_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
+    parent_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # 所属一级评论 ID。一级评论为空；回复不再按 parent_id 建树，而是按该字段扁平加载。
-    root_comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
+    root_comment_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
     
     # 评论内容，必填
-    content = Column(String(COMMENT_CONTENT_MAX_LENGTH), nullable=False)
+    content: Mapped[str] = mapped_column(String(COMMENT_CONTENT_MAX_LENGTH), nullable=False)
 
     # 创建操作是否经可信 Agent 服务通道发起。
-    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
+    created_by_agent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
     
     # 点赞计数，冗余存储以提高查询性能
-    like_count = Column(Integer, default=0, nullable=False)
+    like_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     
     # 回复计数，一级评论统计 thread 下全部扁平回复；回复自身保持为 0。
-    reply_count = Column(Integer, default=0, nullable=False)
+    reply_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     
     # 创建时间，自动设置为当前系统本地时间
-    created_at = Column(DateTime, default=local_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=True)
 
     # 评论推荐流热度分数，由定时任务和互动操作刷新
-    heat_score = Column(Float, default=0.0, nullable=False, server_default="0")
-    heat_score_updated_at = Column(DateTime, nullable=True)
+    heat_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False, server_default="0")
+    heat_score_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # 管理端内容安全处理状态。archived 评论在公开端不可见，但保留以便恢复。
-    moderation_status = Column(String(20), nullable=False, default="active", server_default="active")
-    archived_at = Column(DateTime, nullable=True)
-    archived_by_admin_id = Column(Integer, nullable=True)
-    archive_reason = Column(Text, nullable=True)
+    moderation_status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    archived_by_admin_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    archive_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # 关联关系：评论所属的帖子
     post = relationship("Post", back_populates="comments")
@@ -147,14 +147,14 @@ class CommentLike(Base):
     __tablename__ = "comment_likes"  # 数据库表名
 
     # 点赞用户 ID，外键关联到 users 表
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     
     # 被点赞评论 ID，外键关联到 comments 表
-    comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=False)
+    comment_id: Mapped[int] = mapped_column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=False)
     
     # 点赞创建时间，自动设置为当前系统本地时间
-    created_at = Column(DateTime, default=local_now)
-    created_by_agent = Column(Boolean, default=False, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=True)
+    created_by_agent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
 
     # 复合主键：(user_id, comment_id)
     # 确保同一用户对同一评论只能有一条点赞记录

@@ -8,15 +8,13 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from social_platform.app.domains.topic.models import PostTopic, Topic
-
-
-TopicMentionData = dict[str, object]
+from social_platform.app.domains.topic.schemas import TopicMention
 
 
 def build_topic_mentions_for_post_ids(
     db: Session,
     post_ids: list[int],
-) -> dict[int, list[TopicMentionData]]:
+) -> dict[int, list[TopicMention]]:
     """按帖子 ID 批量构建话题元数据。
 
     Args:
@@ -24,7 +22,7 @@ def build_topic_mentions_for_post_ids(
         post_ids: 帖子 ID 列表。
 
     Returns:
-        dict[int, list[TopicMentionData]]: 帖子 ID 到话题元数据列表的映射。
+        dict[int, list[TopicMention]]: 帖子 ID 到话题元数据列表的映射。
     """
 
     unique_post_ids = list(dict.fromkeys(post_ids))
@@ -40,11 +38,11 @@ def build_topic_mentions_for_post_ids(
         .all()
     )
     for post_id, topic_id, name, _ in rows:
-        mentions_by_post.setdefault(post_id, []).append({"id": topic_id, "name": name})
+        mentions_by_post.setdefault(post_id, []).append(TopicMention(id=topic_id, name=name))
     return mentions_by_post
 
 
-def build_topic_mentions(db: Session, post_id: int) -> list[TopicMentionData]:
+def build_topic_mentions(db: Session, post_id: int) -> list[TopicMention]:
     """为单个帖子构建话题元数据。
 
     Args:
@@ -52,8 +50,7 @@ def build_topic_mentions(db: Session, post_id: int) -> list[TopicMentionData]:
         post_id: 帖子 ID。
 
     Returns:
-        list[TopicMentionData]: 话题元数据列表。
+        list[TopicMention]: 话题元数据列表。
     """
 
     return build_topic_mentions_for_post_ids(db, [post_id]).get(post_id, [])
-
