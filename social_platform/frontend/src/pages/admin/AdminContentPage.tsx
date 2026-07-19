@@ -1066,7 +1066,6 @@ function ReportModerationLLMPanel({
                 onChange={event =>
                   onSettingsChange(current => ({ ...current, llm_api_key: event.target.value }))
                 }
-                placeholder="留空不修改，星号会保留旧值"
                 type="password"
               />
             </CompactField>
@@ -1076,7 +1075,6 @@ function ReportModerationLLMPanel({
                 onChange={event =>
                   onSettingsChange(current => ({ ...current, llm_model_name: event.target.value }))
                 }
-                placeholder="例如 gpt-4.1-mini"
               />
             </CompactField>
           </fieldset>
@@ -1175,7 +1173,8 @@ function CompactSwitch({
       role="switch"
       aria-checked={checked}
       className={
-        'relative h-6 w-11 rounded-full transition-colors ' + (checked ? 'bg-zinc-950' : 'bg-muted')
+        'relative h-6 w-11 overflow-hidden rounded-[9999px] transition-colors ' +
+        (checked ? 'bg-zinc-950' : 'bg-muted')
       }
       onClick={() => onChange(!checked)}
     >

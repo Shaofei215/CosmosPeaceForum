@@ -502,7 +502,7 @@ export default function AdminHotTopicsPage() {
                         }
                       />
                     </Field>
-                    <Field label="历史热榜注入次数">
+                    <Field label="历史热榜参考注入轮数">
                       <Input
                         type="number"
                         min={0}
@@ -806,7 +806,7 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (checked: b
       role="switch"
       aria-checked={checked}
       className={cn(
-        'relative h-6 w-11 rounded-full transition-colors',
+        'relative h-6 w-11 overflow-hidden rounded-[9999px] transition-colors',
         checked ? 'bg-zinc-950' : 'bg-muted'
       )}
       onClick={() => onChange(!checked)}
