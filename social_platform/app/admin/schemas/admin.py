@@ -5,12 +5,16 @@
 """
 
 from datetime import datetime
-from typing import Generic, List, Optional, TypeVar
+from typing import Annotated, Generic, List, Optional, TypeVar
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 
 T = TypeVar("T")
+AdminUsername = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=30),
+]
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
@@ -23,7 +27,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 class AdminLoginRequest(BaseModel):
     """平台管理员登录请求，remember_me 控制 refresh/session 生命周期。"""
 
-    username: str = Field(min_length=1, max_length=50)
+    username: AdminUsername
     password: str = Field(min_length=1)
     remember_me: bool = False
 
@@ -77,12 +81,12 @@ class AdminSessionResponse(BaseModel):
 
 class AdminProfileUpdateRequest(BaseModel):
     current_password: str = Field(min_length=1)
-    username: Optional[str] = Field(default=None, min_length=3, max_length=50)
+    username: Optional[AdminUsername] = None
     new_password: Optional[str] = Field(default=None, min_length=8, max_length=32)
 
 
 class AdminCreateRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
+    username: AdminUsername
     email: Optional[EmailStr] = None
     password: str = Field(min_length=8, max_length=32)
     permissions: List[str] = Field(default_factory=list)
@@ -91,11 +95,12 @@ class AdminCreateRequest(BaseModel):
 
 
 class AdminUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: Optional[EmailStr] = None
     permissions: Optional[List[str]] = None
     is_active: Optional[bool] = None
     is_super_admin: Optional[bool] = None
-    new_password: Optional[str] = Field(default=None, min_length=8, max_length=128)
 
 
 class DashboardStatsResponse(BaseModel):

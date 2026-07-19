@@ -71,6 +71,8 @@ export default function AdminLoginPage() {
                 onChange={event => setUsername(event.target.value)}
                 disabled={login.isPending}
                 autoComplete="username"
+                minLength={1}
+                maxLength={30}
               />
             </div>
             <div className="space-y-2">

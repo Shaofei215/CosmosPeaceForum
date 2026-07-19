@@ -12,14 +12,11 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import LinkExtension from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import StarterKit from '@tiptap/starter-kit';
-import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { useNavigate } from 'react-router-dom';
 import {
   Bold,
   Code2,
-  Eye,
-  FileText,
   Heading1,
   Heading2,
   Heading3,
@@ -30,14 +27,11 @@ import {
   Quote,
 } from 'lucide-react';
 import { useCreatePost } from '@/features/post';
-import { Button, Input, Textarea } from '@/shared/components/ui';
-import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer';
+import { Button, Input } from '@/shared/components/ui';
 import { ARTICLE_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { hasVisibleContent } from '@/shared/lib/content';
 import { normalizeLinkHref } from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
-
-type EditorMode = 'rich' | 'markdown';
 
 type ToolbarAction =
   | 'h1'
@@ -61,17 +55,10 @@ interface LinkDialogState {
   left: number;
 }
 
-type PendingLinkSelection =
-  | {
-      mode: 'rich';
-      from: number;
-      to: number;
-    }
-  | {
-      mode: 'markdown';
-      start: number;
-      end: number;
-    };
+interface PendingLinkSelection {
+  from: number;
+  to: number;
+}
 
 const emptyToolbarState: ToolbarState = {
   h1: false,
@@ -96,8 +83,7 @@ const emptyLinkDialogState: LinkDialogState = {
 
 const text = {
   titlePlaceholder: '\u6587\u7ae0\u6807\u9898',
-  editorPlaceholder: '\u5f00\u59cb\u5199\u4f5c...',
-  markdownPlaceholder: '\u7528 Markdown \u5199\u4e0b\u6587\u7ae0\u6b63\u6587...',
+  editorPlaceholder: '支持 Markdown 输入哦~',
   h1: '\u4e00\u7ea7\u6807\u9898',
   h2: '\u4e8c\u7ea7\u6807\u9898',
   h3: '\u4e09\u7ea7\u6807\u9898',
@@ -113,8 +99,6 @@ const text = {
   linkHrefLabel: '\u94fe\u63a5\u5730\u5740',
   linkHrefPlaceholder: 'https://example.com',
   linkAdd: '\u6dfb\u52a0',
-  richMode: '\u5bcc\u6587\u672c\u6a21\u5f0f',
-  markdownMode: 'Markdown \u6a21\u5f0f',
   cancel: '\u53d6\u6d88',
   publishing: '\u53d1\u5e03\u4e2d...',
   publish: '\u53d1\u5e03\u6587\u7ae0',
@@ -130,11 +114,9 @@ const markdownConverter = new TurndownService({
 export default function ArticleEditorPage() {
   const navigate = useNavigate();
   const editorRef = useRef<Editor | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingLinkSelectionRef = useRef<PendingLinkSelection | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [mode, setMode] = useState<EditorMode>('rich');
   const [toolbarState, setToolbarState] = useState<ToolbarState>(emptyToolbarState);
   const [linkDialog, setLinkDialog] = useState<LinkDialogState>(emptyLinkDialogState);
   const { mutate: createPost, isPending } = useCreatePost();
@@ -206,43 +188,17 @@ export default function ArticleEditorPage() {
     };
   }, [editor]);
 
-  const currentMarkdown = mode === 'rich' && editor ? htmlToMarkdown(editor.getHTML()) : content;
+  const currentMarkdown = editor ? htmlToMarkdown(editor.getHTML()) : content;
   const canPublish = hasVisibleContent(title) && hasVisibleContent(currentMarkdown);
-
-  /**
-   * 在文章上限内更新 Markdown 正文，供工具栏插入操作统一使用。
-   *
-   * @param nextContent 待写入的完整 Markdown 正文。
-   * @returns 是否成功写入。
-   */
-  const updateMarkdownContent = (nextContent: string): boolean => {
-    if (nextContent.length > ARTICLE_CONTENT_MAX_LENGTH) return false;
-    setContent(nextContent);
-    return true;
-  };
-
-  const setEditorMode = (nextMode: EditorMode) => {
-    if (nextMode === mode) return;
-
-    if (nextMode === 'markdown') {
-      const nextContent = editor ? htmlToMarkdown(editor.getHTML()) : content;
-      updateMarkdownContent(nextContent);
-      setMode('markdown');
-      return;
-    }
-
-    editor?.commands.setContent(markdownToHtml(content));
-    setMode('rich');
-    window.requestAnimationFrame(() => editor?.commands.focus('end'));
-  };
 
   const submitArticle = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const nextContent = mode === 'rich' && editor ? htmlToMarkdown(editor.getHTML()) : content;
+    const nextContent = editor ? htmlToMarkdown(editor.getHTML()) : content;
     if (!hasVisibleContent(title) || !hasVisibleContent(nextContent) || isPending) return;
 
-    if (!updateMarkdownContent(nextContent)) return;
+    if (nextContent.length > ARTICLE_CONTENT_MAX_LENGTH) return;
+    setContent(nextContent);
     createPost(
       {
         title: title.trim(),
@@ -263,11 +219,6 @@ export default function ArticleEditorPage() {
       return;
     }
 
-    if (mode === 'markdown') {
-      applyMarkdownStyle(style);
-      return;
-    }
-
     if (!editor) return;
 
     if (style === 'h1') editor.chain().focus().toggleHeading({ level: 1 }).run();
@@ -285,23 +236,6 @@ export default function ArticleEditorPage() {
    * 打开链接编辑弹窗，并记录当前选区用于确认后插入链接。
    */
   const openLinkDialog = (): void => {
-    if (mode === 'markdown') {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const position = getTextareaCaretPosition(textarea);
-      pendingLinkSelectionRef.current = { mode: 'markdown', start, end };
-      setLinkDialog({
-        open: true,
-        text: content.slice(start, end),
-        href: '',
-        ...position,
-      });
-      return;
-    }
-
     if (!editor) return;
 
     if (editor.isActive('link')) {
@@ -312,7 +246,7 @@ export default function ArticleEditorPage() {
     const previousHref = editor.getAttributes('link').href as string | undefined;
     const selectedText = editor.state.doc.textBetween(from, to, ' ');
     const position = getRichEditorCaretPosition(editor);
-    pendingLinkSelectionRef.current = { mode: 'rich', from, to };
+    pendingLinkSelectionRef.current = { from, to };
     setLinkDialog({
       open: true,
       text: selectedText,
@@ -354,7 +288,7 @@ export default function ArticleEditorPage() {
 
     const { from, to } = currentEditor.state.selection;
 
-    pendingLinkSelectionRef.current = { mode: 'rich', from, to };
+    pendingLinkSelectionRef.current = { from, to };
     setLinkDialog({
       open: true,
       text: currentEditor.state.doc.textBetween(from, to, ' '),
@@ -421,23 +355,6 @@ export default function ArticleEditorPage() {
 
     if (!selection) return;
 
-    if (selection.mode === 'markdown') {
-      const nextContent = [
-        content.slice(0, selection.start),
-        `[${linkText}](${normalizedHref})`,
-        content.slice(selection.end),
-      ].join('');
-      const nextCursor = selection.start + linkText.length + normalizedHref.length + 4;
-
-      if (!updateMarkdownContent(nextContent)) return;
-      closeLinkDialog();
-      window.requestAnimationFrame(() => {
-        textareaRef.current?.focus();
-        textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
-      });
-      return;
-    }
-
     editor
       ?.chain()
       .focus()
@@ -480,69 +397,6 @@ export default function ArticleEditorPage() {
     }
   };
 
-  const insertMarkdown = (before: string, after = '', placeholder = 'text') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.slice(start, end) || placeholder;
-    const nextContent = [content.slice(0, start), before, selected, after, content.slice(end)].join(
-      ''
-    );
-    const nextCursor = start + before.length + selected.length + after.length;
-
-    if (!updateMarkdownContent(nextContent)) return;
-    window.requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(nextCursor, nextCursor);
-    });
-  };
-
-  const insertLinePrefix = (prefix: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const lineStart = content.lastIndexOf('\n', start - 1) + 1;
-    const nextContent = `${content.slice(0, lineStart)}${prefix}${content.slice(lineStart)}`;
-    if (!updateMarkdownContent(nextContent)) return;
-    window.requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + prefix.length);
-    });
-  };
-
-  const insertCodeBlock = () => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.slice(start, end) || 'code';
-    const block = `\n\`\`\`\n${selected}\n\`\`\`\n`;
-    const nextContent = `${content.slice(0, start)}${block}${content.slice(end)}`;
-    const nextCursor = start + block.length;
-
-    if (!updateMarkdownContent(nextContent)) return;
-    window.requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(nextCursor, nextCursor);
-    });
-  };
-
-  const applyMarkdownStyle = (style: ToolbarAction) => {
-    if (style === 'h1') insertLinePrefix('# ');
-    if (style === 'h2') insertLinePrefix('## ');
-    if (style === 'h3') insertLinePrefix('### ');
-    if (style === 'bold') insertMarkdown('**', '**');
-    if (style === 'italic') insertMarkdown('*', '*');
-    if (style === 'ul') insertLinePrefix('- ');
-    if (style === 'ol') insertLinePrefix('1. ');
-    if (style === 'quote') insertLinePrefix('> ');
-    if (style === 'code') insertCodeBlock();
-  };
-
   const linkBarStyle: CSSProperties = {
     top: linkDialog.top,
     left: linkDialog.left,
@@ -565,131 +419,70 @@ export default function ArticleEditorPage() {
           'border-b border-border/60 bg-white px-2 py-1 sm:px-3'
         )}
       >
-        <ToolbarButton
-          label={text.h1}
-          active={mode === 'rich' && toolbarState.h1}
-          onClick={() => applyStyle('h1')}
-        >
+        <ToolbarButton label={text.h1} active={toolbarState.h1} onClick={() => applyStyle('h1')}>
           <Heading1 className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton
-          label={text.h2}
-          active={mode === 'rich' && toolbarState.h2}
-          onClick={() => applyStyle('h2')}
-        >
+        <ToolbarButton label={text.h2} active={toolbarState.h2} onClick={() => applyStyle('h2')}>
           <Heading2 className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton
-          label={text.h3}
-          active={mode === 'rich' && toolbarState.h3}
-          onClick={() => applyStyle('h3')}
-        >
+        <ToolbarButton label={text.h3} active={toolbarState.h3} onClick={() => applyStyle('h3')}>
           <Heading3 className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label={text.bold}
-          active={mode === 'rich' && toolbarState.bold}
+          active={toolbarState.bold}
           onClick={() => applyStyle('bold')}
         >
           <Bold className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label={text.italic}
-          active={mode === 'rich' && toolbarState.italic}
+          active={toolbarState.italic}
           onClick={() => applyStyle('italic')}
         >
           <Italic className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label={text.unorderedList}
-          active={mode === 'rich' && toolbarState.ul}
+          active={toolbarState.ul}
           onClick={() => applyStyle('ul')}
         >
           <List className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label={text.orderedList}
-          active={mode === 'rich' && toolbarState.ol}
+          active={toolbarState.ol}
           onClick={() => applyStyle('ol')}
         >
           <ListOrdered className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label={text.quote}
-          active={mode === 'rich' && toolbarState.quote}
+          active={toolbarState.quote}
           onClick={() => applyStyle('quote')}
         >
           <Quote className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label={text.codeBlock}
-          active={mode === 'rich' && toolbarState.code}
+          active={toolbarState.code}
           onClick={() => applyStyle('code')}
         >
           <Code2 className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label={text.link}
-          active={mode === 'rich' && toolbarState.link}
+          active={toolbarState.link}
           onClick={() => applyStyle('link')}
         >
           <LinkIcon className="h-4 w-4" />
         </ToolbarButton>
-
-        <div className="ml-auto flex shrink-0 rounded-full bg-muted p-0.5">
-          <button
-            type="button"
-            onClick={() => setEditorMode('rich')}
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-full',
-              mode === 'rich' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground'
-            )}
-            title={text.richMode}
-          >
-            <Eye className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditorMode('markdown')}
-            className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-full',
-              mode === 'markdown' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground'
-            )}
-            title={text.markdownMode}
-          >
-            <FileText className="h-4 w-4" />
-          </button>
-        </div>
       </div>
 
-      {mode === 'rich' ? (
-        <EditorContent
-          editor={editor}
-          className="article-rich-editor min-h-[420px] px-4 py-4 sm:min-h-[560px] sm:px-6 sm:py-6"
-        />
-      ) : (
-        <div className="grid gap-0 lg:grid-cols-2">
-          <Textarea
-            ref={textareaRef}
-            value={content}
-            onChange={event => setContent(event.target.value)}
-            maxLength={ARTICLE_CONTENT_MAX_LENGTH}
-            className={cn(
-              'min-h-[420px] resize-none rounded-none border-0 px-4 py-4 sm:min-h-[560px] sm:px-5 sm:py-5',
-              'font-mono text-sm leading-6 shadow-none focus-visible:ring-0'
-            )}
-            placeholder={text.markdownPlaceholder}
-          />
-          <div
-            className={cn(
-              'min-h-[320px] border-t border-border/60 px-4 py-4 sm:min-h-[560px] sm:px-5 sm:py-5',
-              'lg:border-l lg:border-t-0'
-            )}
-          >
-            <MarkdownRenderer content={content} />
-          </div>
-        </div>
-      )}
+      <EditorContent
+        editor={editor}
+        className="article-rich-editor min-h-[420px] px-4 py-4 sm:min-h-[560px] sm:px-6 sm:py-6"
+      />
 
       <div className="flex items-center justify-end gap-2 border-t border-border/60 px-3 py-3 sm:px-4">
         <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
@@ -780,10 +573,6 @@ function getToolbarState(editor: Editor): ToolbarState {
   };
 }
 
-function markdownToHtml(markdown: string): string {
-  return marked.parse(markdown, { async: false, gfm: true }) as string;
-}
-
 function htmlToMarkdown(html: string): string {
   return markdownConverter
     .turndown(html)
@@ -804,66 +593,6 @@ function getRichEditorCaretPosition(editor: Editor): Pick<LinkDialogState, 'top'
   return normalizeLinkBarPosition({
     top: rect.bottom + 8,
     left: rect.left,
-  });
-}
-
-/**
- * 计算 textarea 当前光标附近的链接编辑条位置。
- *
- * @param textarea Markdown 编辑 textarea。
- * @returns 固定定位坐标。
- */
-function getTextareaCaretPosition(
-  textarea: HTMLTextAreaElement
-): Pick<LinkDialogState, 'top' | 'left'> {
-  const textareaRect = textarea.getBoundingClientRect();
-  const computedStyle = window.getComputedStyle(textarea);
-  const mirror = document.createElement('div');
-  const caret = document.createElement('span');
-  const copyStyleProperties = [
-    'box-sizing',
-    'width',
-    'font-family',
-    'font-size',
-    'font-weight',
-    'letter-spacing',
-    'line-height',
-    'padding-top',
-    'padding-right',
-    'padding-bottom',
-    'padding-left',
-    'border-top-width',
-    'border-right-width',
-    'border-bottom-width',
-    'border-left-width',
-    'white-space',
-    'word-break',
-    'overflow-wrap',
-    'tab-size',
-  ];
-
-  copyStyleProperties.forEach(property => {
-    mirror.style.setProperty(property, computedStyle.getPropertyValue(property));
-  });
-  mirror.style.position = 'fixed';
-  mirror.style.left = `${textareaRect.left}px`;
-  mirror.style.top = `${textareaRect.top}px`;
-  mirror.style.visibility = 'hidden';
-  mirror.style.pointerEvents = 'none';
-  mirror.style.whiteSpace = 'pre-wrap';
-  mirror.style.overflowWrap = 'break-word';
-  mirror.textContent = textarea.value.slice(0, textarea.selectionStart);
-  caret.textContent =
-    textarea.value.slice(textarea.selectionStart, textarea.selectionStart + 1) || ' ';
-  mirror.append(caret);
-  document.body.append(mirror);
-
-  const caretRect = caret.getBoundingClientRect();
-  mirror.remove();
-
-  return normalizeLinkBarPosition({
-    top: caretRect.bottom - textarea.scrollTop + 8,
-    left: caretRect.left - textarea.scrollLeft,
   });
 }
 

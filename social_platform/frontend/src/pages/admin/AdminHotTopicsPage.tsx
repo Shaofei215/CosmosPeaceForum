@@ -24,6 +24,7 @@ import {
 import {
   adminApi,
   adminKeys,
+  refreshAdminAccessToken,
   type HotTopic,
   type HotTopicGenerationRunResponse,
   type HotTopicPromptConfig,
@@ -34,7 +35,11 @@ import {
 } from '@/features/admin';
 import { Button, Card, CardContent, Input, Textarea } from '@/shared/components/ui';
 import { getAdminAccessToken } from '@/features/admin/tokenStorage';
+import { openAuthenticatedSse } from '@/shared/api/authenticatedSse';
 import { cn } from '@/shared/lib/utils';
+import { AdminPagination } from './AdminPagination';
+
+const PAGE_SIZE = 50;
 
 const emptyTopic: HotTopicRequest = {
   title: '',
@@ -92,12 +97,19 @@ export default function AdminHotTopicsPage() {
   const [promptDraft, setPromptDraft] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
-  const generateEventSourceRef = useRef<EventSource | null>(null);
+  const [activePage, setActivePage] = useState(0);
+  const [draftPage, setDraftPage] = useState(0);
+  const generateStreamRef = useRef<AbortController | null>(null);
   const queryClient = useQueryClient();
 
   const { data: activeTopicsData } = useQuery({
-    queryKey: adminKeys.hotTopics('active', ''),
-    queryFn: () => adminApi.hotTopics({ skip: 0, limit: 200, status: 'active' }),
+    queryKey: [...adminKeys.hotTopics('active', ''), activePage],
+    queryFn: () =>
+      adminApi.hotTopics({
+        skip: activePage * PAGE_SIZE,
+        limit: PAGE_SIZE,
+        status: 'active',
+      }),
   });
 
   const { data: settings } = useQuery({
@@ -106,11 +118,11 @@ export default function AdminHotTopicsPage() {
   });
 
   const { data: agentDraftsData } = useQuery({
-    queryKey: adminKeys.hotTopics('draft', 'agent'),
+    queryKey: [...adminKeys.hotTopics('draft', 'agent'), draftPage],
     queryFn: () =>
       adminApi.hotTopics({
-        skip: 0,
-        limit: 200,
+        skip: draftPage * PAGE_SIZE,
+        limit: PAGE_SIZE,
         status: 'draft',
         source: 'agent',
       }),
@@ -136,7 +148,7 @@ export default function AdminHotTopicsPage() {
 
   useEffect(() => {
     return () => {
-      generateEventSourceRef.current?.close();
+      generateStreamRef.current?.abort();
     };
   }, []);
 
@@ -217,8 +229,8 @@ export default function AdminHotTopicsPage() {
   }, [settings, settingsForm]);
 
   const closeGenerateStream = () => {
-    generateEventSourceRef.current?.close();
-    generateEventSourceRef.current = null;
+    generateStreamRef.current?.abort();
+    generateStreamRef.current = null;
     setIsGenerating(false);
   };
 
@@ -229,16 +241,16 @@ export default function AdminHotTopicsPage() {
       return;
     }
 
-    generateEventSourceRef.current?.close();
+    generateStreamRef.current?.abort();
     setGenerationError(null);
     setIsGenerating(true);
 
-    const eventSource = new EventSource(adminApi.getHotTopicGenerateEventsUrl(token));
-    generateEventSourceRef.current = eventSource;
+    const controller = new AbortController();
+    generateStreamRef.current = controller;
 
-    const handleCompleted = (event: MessageEvent<string>) => {
+    const handleCompleted = (eventData: string) => {
       try {
-        JSON.parse(event.data) as HotTopicGenerationRunResponse;
+        JSON.parse(eventData) as HotTopicGenerationRunResponse;
       } catch {
         // 收到完成事件后仍以列表刷新作为最终状态来源。
       }
@@ -247,9 +259,9 @@ export default function AdminHotTopicsPage() {
       closeGenerateStream();
     };
 
-    const handleFailed = (event: MessageEvent<string>) => {
+    const handleFailed = (eventData: string) => {
       try {
-        const data = JSON.parse(event.data) as { error?: string };
+        const data = JSON.parse(eventData) as { error?: string };
         setGenerationError(data.error || '热榜生成失败，请检查后端日志');
       } catch {
         setGenerationError('热榜生成失败，请检查后端日志');
@@ -258,14 +270,22 @@ export default function AdminHotTopicsPage() {
       closeGenerateStream();
     };
 
-    eventSource.addEventListener('hot-topics.generate.completed', handleCompleted);
-    eventSource.addEventListener('hot-topics.generate.failed', handleFailed);
-    eventSource.onerror = () => {
-      if (generateEventSourceRef.current === eventSource) {
+    void openAuthenticatedSse({
+      url: adminApi.getHotTopicGenerateEventsUrl(),
+      method: 'POST',
+      signal: controller.signal,
+      getAccessToken: getAdminAccessToken,
+      refreshAccessToken: refreshAdminAccessToken,
+      onMessage: message => {
+        if (message.event === 'hot-topics.generate.completed') handleCompleted(message.data);
+        if (message.event === 'hot-topics.generate.failed') handleFailed(message.data);
+      },
+    }).catch(() => {
+      if (!controller.signal.aborted && generateStreamRef.current === controller) {
         setGenerationError('热榜生成连接中断，请稍后重试');
         closeGenerateStream();
       }
-    };
+    });
   };
 
   const startEdit = (topic: HotTopic) => {
@@ -395,6 +415,12 @@ export default function AdminHotTopicsPage() {
                 </IconButton>
               </div>
             )}
+          />
+          <AdminPagination
+            page={activePage}
+            pageSize={PAGE_SIZE}
+            total={activeTopicsData?.total ?? 0}
+            onPageChange={setActivePage}
           />
         </section>
 
@@ -570,24 +596,32 @@ export default function AdminHotTopicsPage() {
           </Card>
 
           {publishPolicy === 'draft' && (
-            <HotTopicPanel
-              title="LLM 生成待审批"
-              topics={agentDrafts}
-              emptyText="暂无待审批草稿"
-              action={topic => (
-                <div className="flex gap-1">
-                  <IconButton
-                    title="通过并发布"
-                    onClick={() => publishTopicMutation.mutate(topic.id)}
-                  >
-                    <Check size={15} />
-                  </IconButton>
-                  <IconButton title="删除" onClick={() => deleteTopicMutation.mutate(topic.id)}>
-                    <Trash2 size={15} />
-                  </IconButton>
-                </div>
-              )}
-            />
+            <>
+              <HotTopicPanel
+                title="LLM 生成待审批"
+                topics={agentDrafts}
+                emptyText="暂无待审批草稿"
+                action={topic => (
+                  <div className="flex gap-1">
+                    <IconButton
+                      title="通过并发布"
+                      onClick={() => publishTopicMutation.mutate(topic.id)}
+                    >
+                      <Check size={15} />
+                    </IconButton>
+                    <IconButton title="删除" onClick={() => deleteTopicMutation.mutate(topic.id)}>
+                      <Trash2 size={15} />
+                    </IconButton>
+                  </div>
+                )}
+              />
+              <AdminPagination
+                page={draftPage}
+                pageSize={PAGE_SIZE}
+                total={agentDraftsData?.total ?? 0}
+                onPageChange={setDraftPage}
+              />
+            </>
           )}
 
           <PromptTemplatePanel

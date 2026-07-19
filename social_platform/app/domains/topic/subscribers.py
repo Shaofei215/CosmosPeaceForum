@@ -9,7 +9,13 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from social_platform.app.domains.comment.events import CommentCreated, CommentDeleted
-from social_platform.app.domains.post.events import PostCreated, PostDeleted, PostUpdated, RepostCreated
+from social_platform.app.domains.post.events import (
+    PostCreated,
+    PostDeleted,
+    PostUpdated,
+    RepostCountChanged,
+    RepostCreated,
+)
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.events import LikeChanged
 from social_platform.app.domains.topic import application as topic_application
@@ -54,6 +60,13 @@ def handle_repost_created(db: Session, event: RepostCreated) -> None:
     topic_application.refresh_topics_for_post(db, event.root_post_id)
 
 
+def handle_repost_count_changed(db: Session, event: RepostCountChanged) -> None:
+    """转发计数增减后刷新受影响帖子的话题热度。"""
+
+    for post_id in event.post_ids:
+        topic_application.refresh_topics_for_post(db, post_id)
+
+
 def handle_like_changed(db: Session, event: LikeChanged) -> None:
     """点赞状态变化后刷新相关帖子的话题热度。"""
 
@@ -79,6 +92,7 @@ def register_topic_subscribers() -> None:
     subscribe_domain_event(PostUpdated, handle_post_updated)
     subscribe_domain_event(PostDeleted, handle_post_deleted)
     subscribe_domain_event(RepostCreated, handle_repost_created)
+    subscribe_domain_event(RepostCountChanged, handle_repost_count_changed)
     subscribe_domain_event(LikeChanged, handle_like_changed)
     subscribe_domain_event(CommentCreated, handle_comment_created)
     subscribe_domain_event(CommentDeleted, handle_comment_deleted)

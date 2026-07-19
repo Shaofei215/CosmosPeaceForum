@@ -7,7 +7,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from social_platform.app.admin.api.deps import require_permission
-from social_platform.app.admin.services import auth_service
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.admin.schemas import (
     HotTopicCreateRequest,
@@ -21,10 +20,11 @@ from social_platform.app.admin.schemas import (
     HotTopicUpdateRequest,
     PaginatedResponse,
 )
-from social_platform.app.admin.services.permissions import ALL_PERMISSIONS, PERMISSION_MANAGE_HOT_TOPICS
-from social_platform.app.api.deps import get_access_payload, get_db
+from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_HOT_TOPICS
+from social_platform.app.api.deps import get_db
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.hot_topic import application as hot_topic_service
+from social_platform.app.shared.external_errors import format_external_error
 
 router = APIRouter(prefix="/hot-topics", tags=["platform-admin-hot-topics"])
 logger = logging.getLogger(__name__)
@@ -44,37 +44,17 @@ def _serialize_generation_run(generation, topics) -> dict:
 def _run_generation_for_stream() -> dict:
     db = SessionLocal()
     try:
-        logger.info("收到 SSE 立即生成热榜请求")
         generation, topics = hot_topic_service.run_hot_topic_agent(db, force=True)
         payload = _serialize_generation_run(generation, topics)
         if generation.status == "failed":
-            payload["error"] = generation.error_message or "热榜生成失败，请检查后端日志"
+            payload["error"] = generation.error_message or "生成失败，请检查后端日志"
         return payload
     except Exception as exc:
-        logger.exception("SSE 立即生成热榜失败")
-        return {"error": str(exc) or "热榜生成失败，请检查后端日志"}
+        logger.exception("立即生成 SSE 响应生成或序列化失败")
+        safe_error = format_external_error(exc)
+        return {"error_code": safe_error.code, "error": safe_error.message}
     finally:
         db.close()
-
-
-def _require_admin_token(token: str, db: Session) -> PlatformAdminUser:
-    """校验热门话题 SSE query token 对应 active platform_admin session。"""
-    try:
-        payload = get_access_payload(token, db, "platform_admin")
-        admin_id = int(payload.get("sub"))
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的管理员认证凭证")
-
-    admin = auth_service.get_admin_by_id(db, admin_id)
-    if admin is None or not admin.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员不存在或已停用")
-    if admin.must_change_credentials:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="首次登录必须修改用户名和密码")
-
-    permissions = ALL_PERMISSIONS if admin.is_super_admin else auth_service.parse_permissions(admin.permissions)
-    if PERMISSION_MANAGE_HOT_TOPICS not in permissions:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="缺少管理员权限")
-    return admin
 
 
 @router.get("/", response_model=PaginatedResponse[HotTopicResponse])
@@ -82,7 +62,7 @@ async def list_hot_topics(
     status_filter: str | None = Query(default=None, alias="status"),
     source: str | None = Query(default=None),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
@@ -224,7 +204,7 @@ async def reset_prompt_config(
 @router.get("/generations", response_model=PaginatedResponse[HotTopicGenerationResponse])
 async def list_generations(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
@@ -232,13 +212,11 @@ async def list_generations(
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
 
 
-@router.get("/generate/events")
+@router.post("/generate/events")
 async def stream_generate_hot_topics(
-    token: str = Query(...),
-    db: Session = Depends(get_db),
+    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
-    """流式触发热门话题生成，建立连接前先校验管理员 session。"""
-    _require_admin_token(token, db)
+    """通过 Authorization Header 流式触发热门话题生成。"""
 
     async def event_stream():
         yield _sse_event("hot-topics.generate.started", {"status": "running"})
@@ -262,7 +240,6 @@ def generate_hot_topics(
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
-        logger.info("收到立即生成热榜请求")
         generation, topics = hot_topic_service.run_hot_topic_agent(db, force=True)
         if generation.status == "failed":
             logger.error(
@@ -280,11 +257,14 @@ def generate_hot_topics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         ) from exc
+    except HTTPException:
+        # 业务失败已经转换为带安全消息的 HTTPException，避免再次记录并覆盖响应。
+        raise
     except Exception as exc:
-        logger.exception("立即生成热榜失败")
+        logger.exception("立即生成失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="热榜生成失败，请检查后端日志",
+            detail="生成失败，请检查后端日志",
         ) from exc
 
 

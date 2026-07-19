@@ -144,12 +144,22 @@ async def me(current_admin: PlatformAdminUser = Depends(get_current_admin)):
 @router.put("/profile", response_model=AdminResponse)
 async def update_profile(
     request: AdminProfileUpdateRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(admin_security),
     db: Session = Depends(get_db),
     current_admin: PlatformAdminUser = Depends(get_current_admin),
 ):
     """更新平台管理员自己的登录资料。"""
+    password_changed = bool(request.new_password)
     try:
         admin = auth_service.update_profile(db, current_admin, request)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if password_changed:
+        payload = _current_admin_payload(credentials, db)
+        session_service.revoke_other_sessions(
+            db,
+            int(payload["sub"]),
+            "platform_admin",
+            str(payload["sid"]),
+        )
     return auth_service.admin_to_response(admin)

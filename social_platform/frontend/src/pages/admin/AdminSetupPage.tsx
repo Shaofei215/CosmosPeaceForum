@@ -55,6 +55,8 @@ export default function AdminSetupPage() {
               value={username}
               onChange={event => setUsername(event.target.value)}
               disabled={updateProfile.isPending}
+              minLength={1}
+              maxLength={30}
             />
             <Input
               type="password"

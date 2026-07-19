@@ -23,6 +23,7 @@ from social_platform.app.domains.email.templates import build_verification_email
 from social_platform.app.domains import registry as domain_models  # noqa: F401
 from social_platform.app.domains.identity import application, sessions, verification
 from social_platform.app.domains.identity.models import EmailVerificationCode
+from social_platform.app.domains.user.models import User
 
 
 @dataclass
@@ -172,7 +173,7 @@ def test_verification_email_sender_adapter_renders_template_and_delegates() -> N
     assert len(sender.sent) == 1
     message = sender.sent[0]
     assert message.recipient_email == "person@example.com"
-    assert message.subject == "【CosmosPeaceForum】登录验证码"
+    assert message.subject == "【宇宙和平论坛】登录验证码"
     assert "123456 是您的登录验证码" in message.text_body
     assert "7 分钟后过期" in message.text_body
 
@@ -236,3 +237,57 @@ def test_refresh_token_pair_rotates_refresh_token(db_session: Session) -> None:
             user_agent="pytest-old",
             ip_address="127.0.0.3",
         )
+
+
+def test_password_reset_revokes_all_existing_user_sessions(db_session: Session) -> None:
+    """密码重置与验证码消费、全部用户 Session 撤销在同一事务内完成。"""
+
+    user = User(
+        username="reset-user",
+        email="reset@example.com",
+        email_verified=True,
+        password_hash=core_security.get_password_hash("old-password"),
+    )
+    db_session.add(user)
+    db_session.commit()
+    sender = FakeEmailSender()
+    verification.send_password_reset_code(db_session, user.email, sender)
+    first = sessions.create_session_token_pair(
+        db=db_session,
+        account_id=user.id,
+        scope="user",
+        client_type="desktop",
+        remember_me=False,
+        user_agent="pytest-desktop",
+        ip_address="127.0.0.1",
+        revoke_same_client=False,
+    )
+    sessions.create_session_token_pair(
+        db=db_session,
+        account_id=user.id,
+        scope="user",
+        client_type="mobile",
+        remember_me=True,
+        user_agent="pytest-mobile",
+        ip_address="127.0.0.2",
+        revoke_same_client=False,
+    )
+
+    application.reset_password_with_code(
+        db_session,
+        user.email,
+        sender.sent[0].code,
+        "new-password",
+    )
+
+    assert sessions.list_sessions(db_session, user.id, "user") == []
+    with pytest.raises(sessions.RefreshTokenInvalidError):
+        sessions.refresh_token_pair(
+            db=db_session,
+            refresh_token=str(first["refresh_token"]),
+            expected_scope="user",
+            user_agent="pytest-old",
+            ip_address="127.0.0.3",
+        )
+    db_session.refresh(user)
+    assert core_security.verify_password("new-password", user.password_hash)

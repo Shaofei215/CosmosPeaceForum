@@ -35,6 +35,11 @@ def create_report(
     except report_service.SelfReportError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+    content_moderation_llm_service.logger.info(
+        "被举报内容 LLM 审查已入队 report_id=%s target_type=%s",
+        report.id,
+        report.target_type,
+    )
     background_tasks.add_task(content_moderation_llm_service.review_report_in_background, report.id)
     return ContentReportResponse(
         id=report.id,

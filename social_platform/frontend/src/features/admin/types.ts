@@ -64,7 +64,6 @@ export interface AdminUpdateRequest {
   permissions?: AdminPermission[];
   is_active?: boolean;
   is_super_admin?: boolean;
-  new_password?: string;
 }
 
 export interface PaginatedResponse<T> {

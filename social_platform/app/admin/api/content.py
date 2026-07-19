@@ -44,7 +44,7 @@ router = APIRouter(prefix="/content", tags=["platform-admin-content"])
 async def content(
     content_type: ContentType | None = Query(default=None, alias="type"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=100),
     keyword: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
@@ -113,7 +113,7 @@ async def reset_report_moderation_prompt(
 async def reported_content(
     content_type: ContentType | None = Query(default=None, alias="type"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=100),
     keyword: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
@@ -132,7 +132,7 @@ async def reported_content(
 async def archived_content(
     content_type: ContentType | None = Query(default=None, alias="type"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=100),
     keyword: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),
@@ -150,7 +150,7 @@ async def archived_content(
 @router.get("/appeals", response_model=PaginatedResponse[ModerationAppealItemResponse])
 async def content_appeals(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=100),
     keyword: str | None = Query(default=None),
     db: Session = Depends(get_db),
     _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_CONTENT)),

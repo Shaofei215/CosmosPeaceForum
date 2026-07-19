@@ -43,6 +43,7 @@ import {
   Input,
   Textarea,
 } from '@/shared/components/ui';
+import { AdminPagination } from './AdminPagination';
 
 function getErrorMessage(error: unknown) {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -109,6 +110,7 @@ function reportedUserToModerationUser(
 }
 
 type UserMode = 'all' | 'reported' | 'appeals' | 'invite';
+const PAGE_SIZE = 50;
 
 const userReportPromptPlaceholders = [
   {
@@ -151,6 +153,7 @@ function reportSettingsFormsEqual(
 
 export default function AdminUsersPage() {
   const [mode, setMode] = useState<UserMode>('all');
+  const [page, setPage] = useState(0);
   const [keyword, setKeyword] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserWithModeration | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -168,36 +171,57 @@ export default function AdminUsersPage() {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: adminKeys.users(keyword),
-    queryFn: () => adminApi.users({ skip: 0, limit: 80, keyword: keyword.trim() || undefined }),
+    queryKey: [...adminKeys.users(keyword), page],
+    queryFn: () =>
+      adminApi.users({
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
+        keyword: keyword.trim() || undefined,
+      }),
     enabled: mode === 'all',
   });
 
   const reportedQuery = useQuery({
-    queryKey: adminKeys.reportedUsers(keyword),
+    queryKey: [...adminKeys.reportedUsers(keyword), page],
     queryFn: () =>
-      adminApi.reportedUsers({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
+      adminApi.reportedUsers({
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
+        keyword: keyword.trim() || undefined,
+      }),
     enabled: mode === 'reported',
   });
 
   const moderatedQuery = useQuery({
-    queryKey: adminKeys.moderatedUsers(keyword),
+    queryKey: [...adminKeys.moderatedUsers(keyword), page],
     queryFn: () =>
-      adminApi.moderatedUsers({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
+      adminApi.moderatedUsers({
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
+        keyword: keyword.trim() || undefined,
+      }),
     enabled: mode === 'reported' || mode === 'appeals',
   });
 
   const appealsQuery = useQuery({
-    queryKey: adminKeys.userAppeals(keyword),
+    queryKey: [...adminKeys.userAppeals(keyword), page],
     queryFn: () =>
-      adminApi.userAppeals({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
+      adminApi.userAppeals({
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
+        keyword: keyword.trim() || undefined,
+      }),
     enabled: mode === 'appeals',
   });
 
   const invitationQuery = useQuery({
-    queryKey: adminKeys.invitations(keyword),
+    queryKey: [...adminKeys.invitations(keyword), page],
     queryFn: () =>
-      adminApi.invitations({ skip: 0, limit: 100, keyword: keyword.trim() || undefined }),
+      adminApi.invitations({
+        skip: page * PAGE_SIZE,
+        limit: PAGE_SIZE,
+        keyword: keyword.trim() || undefined,
+      }),
     enabled: mode === 'invite',
   });
 
@@ -375,6 +399,7 @@ export default function AdminUsersPage() {
 
   const switchMode = (nextMode: UserMode) => {
     setMode(nextMode);
+    setPage(0);
     setSelectedIds([]);
   };
 
@@ -448,6 +473,7 @@ export default function AdminUsersPage() {
               value={keyword}
               onChange={event => {
                 setKeyword(event.target.value);
+                setPage(0);
                 setSelectedIds([]);
               }}
               placeholder={
@@ -631,6 +657,24 @@ export default function AdminUsersPage() {
           onCreate={payload => createInvitationMutation.mutate(payload)}
         />
       )}
+
+      <AdminPagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={
+          mode === 'all'
+            ? (data?.total ?? 0)
+            : mode === 'appeals'
+              ? (appealsQuery.data?.total ?? 0)
+              : mode === 'invite'
+                ? (invitationQuery.data?.total ?? 0)
+                : Math.max(reportedQuery.data?.total ?? 0, moderatedQuery.data?.total ?? 0)
+        }
+        onPageChange={nextPage => {
+          setSelectedIds([]);
+          setPage(nextPage);
+        }}
+      />
 
       {selectedUser && (
         <ViolationEditor

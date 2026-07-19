@@ -28,6 +28,7 @@ from social_platform.app.domains.content_safety.events import (
 from social_platform.app.domains.content_safety.models import ContentReport, ContentReportEscalation
 from social_platform.app.domains.heat import application as heat_service
 from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.post import application as post_application
 from social_platform.app.domains.search import application as search_service
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.domains.user.models import User
@@ -96,6 +97,8 @@ def delete_post_as_admin(
         raise ValueError("帖子已归档")
 
     author_id = post.author_id
+    if post.repost_source_type:
+        post_application.adjust_repost_counts(db, post, -1)
     post.moderation_status = CONTENT_STATUS_ARCHIVED
     post.archived_at = local_now()
     post.archived_by_admin_id = admin.id
@@ -243,6 +246,8 @@ def restore_post_as_admin(db: Session, post_id: int, admin: PlatformAdminUser) -
     post.archived_at = None
     post.archived_by_admin_id = None
     post.archive_reason = None
+    if post.repost_source_type:
+        post_application.adjust_repost_counts(db, post, 1)
     from social_platform.app.admin.services.moderation_service import release_violation_event
     from social_platform.app.domains.content_safety.models import UserViolationEvent
 

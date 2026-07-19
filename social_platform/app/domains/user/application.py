@@ -10,10 +10,14 @@ from typing import Any, Protocol
 from urllib.parse import unquote
 
 import aiofiles
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from social_platform.app.core.config import get_settings
 from social_platform.app.core.paths import get_avatar_upload_dir
+from social_platform.app.domains.follow.models import Follow
+from social_platform.app.domains.post import application as post_application
+from social_platform.app.domains.post.events import PostDeleted
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.events import UserDeleted, UserUpdated
 from social_platform.app.domains.user.models import User
@@ -711,7 +715,44 @@ def delete_user(db: Session, current_user: User, user_id: int) -> None:
     if not user:
         raise UserNotFoundError()
 
-    post_ids = tuple(row[0] for row in db.query(Post.id).filter(Post.author_id == user_id).all())
-    db.delete(user)
-    publish_domain_event(db, UserDeleted(user_id=user_id, post_ids=post_ids))
-    commit_session(db)
+    posts = db.query(Post).filter(Post.author_id == user_id).all()
+    post_ids = tuple(post.id for post in posts)
+
+    # 用户帖子由 ORM 级联删除会绕过帖子应用服务，因此先显式维护转发计数与根帖引用。
+    for post in posts:
+        if post.repost_source_type:
+            post_application.adjust_repost_counts(db, post, -1)
+    if post_ids:
+        db.query(Post).filter(
+            Post.repost_root_post_id.in_(post_ids),
+        ).update({Post.repost_root_post_id: None}, synchronize_session=False)
+
+    # 删除关注关系前，按真实关系数量回减仍然存在的对端用户冗余计数。
+    outgoing = db.query(Follow.following_id, func.count(Follow.id)).filter(
+        Follow.follower_id == user_id,
+    ).group_by(Follow.following_id).all()
+    incoming = db.query(Follow.follower_id, func.count(Follow.id)).filter(
+        Follow.following_id == user_id,
+    ).group_by(Follow.follower_id).all()
+    for target_id, count in outgoing:
+        next_count = User.followers_count - int(count)
+        db.query(User).filter(User.id == target_id).update(
+            {User.followers_count: case((next_count < 0, 0), else_=next_count)},
+            synchronize_session=False,
+        )
+    for follower_id, count in incoming:
+        next_count = User.following_count - int(count)
+        db.query(User).filter(User.id == follower_id).update(
+            {User.following_count: case((next_count < 0, 0), else_=next_count)},
+            synchronize_session=False,
+        )
+
+    try:
+        db.delete(user)
+        for post in posts:
+            publish_domain_event(db, PostDeleted(post_id=post.id, author_id=user_id))
+        publish_domain_event(db, UserDeleted(user_id=user_id, post_ids=post_ids))
+        commit_session(db)
+    except Exception:
+        rollback_session(db)
+        raise

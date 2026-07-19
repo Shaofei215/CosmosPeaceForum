@@ -375,7 +375,7 @@ function FollowBackButton({ userId }: { userId: number }) {
     <Button
       variant="ghost"
       size="sm"
-      className="mt-2 h-7 gap-1 rounded-md bg-zinc-950 px-2 text-white hover:opacity-90"
+      className="mt-2 h-7 gap-1 rounded-md px-2 text-muted-foreground hover:text-foreground"
       onClick={() => toggleFollow.mutate(userId)}
       disabled={toggleFollow.isPending}
     >

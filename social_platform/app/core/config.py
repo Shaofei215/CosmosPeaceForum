@@ -4,7 +4,7 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Literal, Optional
 
-from pydantic import model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -101,8 +101,22 @@ class Settings(BaseSettings):
     SERVER_PORT: int = 8000
 
     # 公开平台管理器初始管理员。首次启动会创建该账号，并强制登录后修改。
-    PLATFORM_ADMIN_INITIAL_USERNAME: str = "platform_admin"
+    PLATFORM_ADMIN_INITIAL_USERNAME: str = Field(
+        default="platform_admin",
+        min_length=1,
+        max_length=30,
+    )
     PLATFORM_ADMIN_INITIAL_PASSWORD: str = "ChangeMe123!"
+
+    @field_validator("PLATFORM_ADMIN_INITIAL_USERNAME", mode="before")
+    @classmethod
+    def normalize_platform_admin_username(cls, value: str) -> str:
+        """初始管理员用户名沿用平台管理员 1–30 字和 trim 约束。"""
+
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("PLATFORM_ADMIN_INITIAL_USERNAME 不能为空")
+        return normalized
 
     @model_validator(mode="after")
     def validate_avatar_storage_settings(self):

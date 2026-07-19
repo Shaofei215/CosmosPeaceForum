@@ -1,11 +1,16 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi, adminKeys } from '@/features/admin';
 import { Card, CardContent } from '@/shared/components/ui';
+import { AdminPagination } from './AdminPagination';
+
+const PAGE_SIZE = 50;
 
 export default function AdminLogsPage() {
+  const [page, setPage] = useState(0);
   const { data } = useQuery({
-    queryKey: adminKeys.operations,
-    queryFn: () => adminApi.operationLogs({ skip: 0, limit: 100 }),
+    queryKey: [...adminKeys.operations, page],
+    queryFn: () => adminApi.operationLogs({ skip: page * PAGE_SIZE, limit: PAGE_SIZE }),
   });
 
   return (
@@ -51,6 +56,12 @@ export default function AdminLogsPage() {
           </div>
         </CardContent>
       </Card>
+      <AdminPagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+      />
     </div>
   );
 }

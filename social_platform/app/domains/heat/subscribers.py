@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from social_platform.app.domains.comment.events import CommentCreated, CommentDeleted
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.heat import application as heat_application
-from social_platform.app.domains.post.events import PostCreated, RepostCreated
+from social_platform.app.domains.post.events import PostCreated, RepostCountChanged, RepostCreated
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.reaction.events import LikeChanged
 from social_platform.app.shared.events import subscribe_domain_event
@@ -79,6 +79,13 @@ def handle_repost_created(db: Session, event: RepostCreated) -> None:
     _refresh_post_by_id(db, event.root_post_id)
 
 
+def handle_repost_count_changed(db: Session, event: RepostCountChanged) -> None:
+    """转发计数增减后刷新所有受影响帖子的热度。"""
+
+    for post_id in event.post_ids:
+        _refresh_post_by_id(db, post_id)
+
+
 def register_heat_subscribers() -> None:
     """注册热度领域事件订阅器。"""
 
@@ -87,3 +94,4 @@ def register_heat_subscribers() -> None:
     subscribe_domain_event(CommentDeleted, handle_comment_deleted)
     subscribe_domain_event(PostCreated, handle_post_created)
     subscribe_domain_event(RepostCreated, handle_repost_created)
+    subscribe_domain_event(RepostCountChanged, handle_repost_count_changed)

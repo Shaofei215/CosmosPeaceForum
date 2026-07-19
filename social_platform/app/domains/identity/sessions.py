@@ -332,6 +332,34 @@ def revoke_other_sessions(db: Session, account_id: int, scope: str, current_sess
     return count
 
 
+def revoke_all_sessions(
+    db: Session,
+    account_id: int,
+    scope: str,
+    *,
+    commit: bool = True,
+) -> int:
+    """撤销指定账号和作用域下的全部 active session。
+
+    Args:
+        db: 当前数据库会话。
+        account_id: 账号 ID。
+        scope: 身份作用域，避免不同账号表的相同整数 ID 相互影响。
+        commit: 是否立即提交；密码重置传入 ``False`` 以加入同一事务。
+
+    Returns:
+        int: 被撤销的 active session 数量。
+    """
+
+    count = _active_query(db).filter(
+        UserSession.account_id == account_id,
+        UserSession.scope == scope,
+    ).update({"revoked_at": local_now()}, synchronize_session=False)
+    if commit:
+        db.commit()
+    return count
+
+
 def list_sessions(db: Session, account_id: int, scope: str) -> list[UserSession]:
     """列出当前账号可管理的 active sessions，最近使用的排在前面。
 
