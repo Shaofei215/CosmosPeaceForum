@@ -1,5 +1,6 @@
 # 应用主入口
 # 初始化 FastAPI 应用，注册路由和中间件
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -37,6 +38,7 @@ from social_platform.app.api.routers import (
 
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 # 创建定时任务调度器
 scheduler = BackgroundScheduler()
@@ -71,7 +73,9 @@ def start_scheduler():
     # 启动时先刷新一次，避免旧数据在首次定时任务前全部以 0 分参与推荐排序。
     scheduler.start()
     refresh_all_heat_scores()
-    print("[启动] 验证码清理任务调度器已启动（每6小时执行），热度分数任务已启动（每5分钟执行）")
+    logger.info(
+        "定时验证码清理任务与热度分数任务已启动"
+    )
 
 
 def ensure_search_indexes():
@@ -125,7 +129,7 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown()
     terminal_log_capture.stop()
-    print("[关闭] 调度器已关闭")
+    logger.info("定时任务调度器已关闭")
 
 
 # 创建 FastAPI 应用实例
