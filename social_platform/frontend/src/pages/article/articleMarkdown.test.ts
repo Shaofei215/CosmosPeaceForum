@@ -50,6 +50,10 @@ describe('editorHtmlToMarkdown', () => {
     );
   });
 
+  it('将同时带有斜体和粗体 mark 的文本转为三个星号语法', () => {
+    expect(editorHtmlToMarkdown('<p><strong><em>斜粗体</em></strong></p>')).toBe('***斜粗体***');
+  });
+
   it('使 TipTap 保留可编辑的结构化表格节点', () => {
     const editor = new Editor({ extensions: [StarterKit, TableKit] });
 

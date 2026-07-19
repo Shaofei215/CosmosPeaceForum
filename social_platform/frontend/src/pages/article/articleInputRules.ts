@@ -1,12 +1,20 @@
 /**
  * 文章编辑器的 Markdown 所见即所得输入规则。
  *
- * 上游由文章编辑页注册到 TipTap，下游在用户输入完整链接或
+ * 上游由文章编辑页注册到 TipTap，下游在用户输入完整的强调、链接或
  * GFM 表格的最后一个闭合字符时，将 Markdown 源文本替换为可编辑的
- * TipTap 结构化节点。
+ * TipTap mark 或结构化节点。
  */
 
-import { Extension, InputRule, type JSONContent } from '@tiptap/core';
+import {
+  Extension,
+  InputRule,
+  PasteRule,
+  type JSONContent,
+  type PasteRuleMatch,
+} from '@tiptap/core';
+import { Bold as BoldExtension } from '@tiptap/extension-bold';
+import { Italic as ItalicExtension } from '@tiptap/extension-italic';
 import LinkExtension from '@tiptap/extension-link';
 import { normalizeLinkHref } from '@/shared/lib/externalRedirect';
 
@@ -14,11 +22,208 @@ const markdownLinkPattern = /\[([^\]\n]+)\]\(([^\s()]+)\)$/;
 const completedMarkdownTableRowPattern = /^\s*\|.*\|\s*$/;
 const markdownTableSeparatorPattern = /^:?-{3,}:?$/;
 
+type MarkdownEmphasisMarkName = 'bold' | 'italic';
+
+interface MarkdownEmphasisRuleConfig {
+  inputPattern: RegExp;
+  pastePattern: RegExp;
+  delimiterLength: number;
+  markNames: readonly MarkdownEmphasisMarkName[];
+}
+
+type MarkdownInputRuleHandlerProps = Parameters<InputRule['handler']>[0];
+
+const markdownEmphasisRules: readonly MarkdownEmphasisRuleConfig[] = [
+  {
+    inputPattern: /(?<![\\*])\*\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*\*$/,
+    pastePattern: /(?<![\\*])\*\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*\*(?!\*)/g,
+    delimiterLength: 3,
+    markNames: ['bold', 'italic'],
+  },
+  {
+    inputPattern: /(?<![\\_])___(?!\s)([^_\n]+?)(?<!\s)___$/,
+    pastePattern: /(?<![\\_])___(?!\s)([^_\n]+?)(?<!\s)___(?!_)/g,
+    delimiterLength: 3,
+    markNames: ['bold', 'italic'],
+  },
+  {
+    inputPattern: /(?<![\\*])\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*$/,
+    pastePattern: /(?<![\\*])\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*(?!\*)/g,
+    delimiterLength: 2,
+    markNames: ['bold'],
+  },
+  {
+    inputPattern: /(?<![\\_])__(?!\s)([^_\n]+?)(?<!\s)__$/,
+    pastePattern: /(?<![\\_])__(?!\s)([^_\n]+?)(?<!\s)__(?!_)/g,
+    delimiterLength: 2,
+    markNames: ['bold'],
+  },
+  {
+    inputPattern: /(?<![\\*])\*(?!\s)([^*\n]+?)(?<!\s)\*$/,
+    pastePattern: /(?<![\\*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)/g,
+    delimiterLength: 1,
+    markNames: ['italic'],
+  },
+  {
+    inputPattern: /(?<![\\_])_(?!\s)([^_\n]+?)(?<!\s)_$/,
+    pastePattern: /(?<![\\_])_(?!\s)([^_\n]+?)(?<!\s)_(?!_)/g,
+    delimiterLength: 1,
+    markNames: ['italic'],
+  },
+];
+
 interface TopLevelBlockSnapshot {
   position: number;
   nodeSize: number;
   typeName: string;
   text: string;
+}
+
+/**
+ * 保留 TipTap 粗体 mark、命令与快捷键，但关闭其边界不一致的内置 Markdown 规则。
+ *
+ * 强调语法的键入与粘贴统一交给 `MarkdownEmphasisExtension` 处理。
+ */
+export const MarkdownBoldMarkExtension = BoldExtension.extend({
+  addInputRules(): InputRule[] {
+    return [];
+  },
+
+  addPasteRules(): PasteRule[] {
+    return [];
+  },
+});
+
+/**
+ * 保留 TipTap 斜体 mark、命令与快捷键，但关闭其边界不一致的内置 Markdown 规则。
+ *
+ * 强调语法的键入与粘贴统一交给 `MarkdownEmphasisExtension` 处理。
+ */
+export const MarkdownItalicMarkExtension = ItalicExtension.extend({
+  addInputRules(): InputRule[] {
+    return [];
+  },
+
+  addPasteRules(): PasteRule[] {
+    return [];
+  },
+});
+
+/**
+ * 统一处理 Markdown 星号与下划线强调语法。
+ *
+ * 覆盖斜体、粗体与斜粗体的六种写法，并允许开始标签紧邻普通文字或标点。
+ * 较高优先级确保强调转换先于其他可能读取同一输入事务的扩展执行。
+ */
+export const MarkdownEmphasisExtension = Extension.create({
+  name: 'markdownEmphasis',
+  priority: 110,
+
+  addInputRules(): InputRule[] {
+    return markdownEmphasisRules.map(config => createMarkdownEmphasisInputRule(config));
+  },
+
+  addPasteRules(): PasteRule[] {
+    return [createMarkdownEmphasisPasteRule()];
+  },
+});
+
+/**
+ * 为一类 Markdown 强调语法创建逐字输入规则。
+ *
+ * @param config 分隔符、匹配表达式及目标 mark 配置。
+ * @returns 在闭合分隔符输入完成后移除源码标签并应用 mark 的 TipTap 输入规则。
+ */
+function createMarkdownEmphasisInputRule(config: MarkdownEmphasisRuleConfig): InputRule {
+  return new InputRule({
+    find: config.inputPattern,
+    handler: context => applyMarkdownEmphasis(context, config),
+  });
+}
+
+/**
+ * 为全部 Markdown 强调语法创建统一的粘贴规则。
+ *
+ * @returns 将粘贴进来的 Markdown 强调源码转换为可编辑 mark 的 TipTap 粘贴规则。
+ */
+function createMarkdownEmphasisPasteRule(): PasteRule {
+  return new PasteRule({
+    find: findMarkdownEmphasisPasteMatches,
+    handler: context => {
+      const ruleIndex = context.match.data?.ruleIndex;
+
+      if (typeof ruleIndex !== 'number') {
+        return null;
+      }
+
+      const config = markdownEmphasisRules[ruleIndex];
+      return config ? applyMarkdownEmphasis(context, config) : null;
+    },
+  });
+}
+
+/**
+ * 一次扫描粘贴文本中的全部强调写法，避免多条粘贴插件重复处理同一事务。
+ *
+ * @param text 用户粘贴进编辑器的纯文本。
+ * @returns 按源码位置排序的 TipTap 粘贴匹配及其规则索引。
+ */
+function findMarkdownEmphasisPasteMatches(text: string): PasteRuleMatch[] {
+  const matches: PasteRuleMatch[] = [];
+
+  markdownEmphasisRules.forEach((config, ruleIndex) => {
+    for (const match of text.matchAll(config.pastePattern)) {
+      const content = match[1];
+
+      if (match.index === undefined || !content) {
+        continue;
+      }
+
+      matches.push({
+        text: match[0],
+        index: match.index,
+        replaceWith: content,
+        data: { ruleIndex },
+      });
+    }
+  });
+
+  return matches.sort((first, second) => first.index - second.index);
+}
+
+/**
+ * 删除 Markdown 强调分隔符，并为其中的正文应用一个或多个 TipTap mark。
+ *
+ * @param context 当前输入或粘贴规则的文档状态、匹配范围与捕获内容。
+ * @param config 分隔符长度及要应用的 mark 名称。
+ * @returns mark 不存在或捕获内容为空时返回 null，否则直接更新当前事务。
+ */
+function applyMarkdownEmphasis(
+  context: Pick<MarkdownInputRuleHandlerProps, 'state' | 'range' | 'match'>,
+  config: MarkdownEmphasisRuleConfig
+): void | null {
+  const { state, range, match } = context;
+  const content = match[1];
+  const marks = config.markNames.map(markName => state.schema.marks[markName]);
+
+  if (!content || marks.some(mark => !mark)) {
+    return null;
+  }
+
+  const contentStart = range.from + config.delimiterLength;
+  const contentEnd = contentStart + content.length;
+  const markEnd = range.from + content.length;
+
+  state.tr.delete(contentEnd, range.to);
+  state.tr.delete(range.from, contentStart);
+
+  marks.forEach(mark => {
+    if (!mark) return;
+
+    state.tr.addMark(range.from, markEnd, mark.create());
+  });
+
+  state.tr.setStoredMarks([]);
 }
 
 /**

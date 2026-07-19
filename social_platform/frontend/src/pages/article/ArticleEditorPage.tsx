@@ -33,7 +33,13 @@ import { ARTICLE_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { hasVisibleContent } from '@/shared/lib/content';
 import { normalizeLinkHref } from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
-import { MarkdownLinkExtension, MarkdownTableInputExtension } from './articleInputRules';
+import {
+  MarkdownBoldMarkExtension,
+  MarkdownEmphasisExtension,
+  MarkdownItalicMarkExtension,
+  MarkdownLinkExtension,
+  MarkdownTableInputExtension,
+} from './articleInputRules';
 import { editorHtmlToMarkdown } from './articleMarkdown';
 
 type ToolbarAction =
@@ -147,11 +153,15 @@ export default function ArticleEditorPage() {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
+        bold: false,
         heading: {
           levels: [1, 2, 3],
         },
+        italic: false,
         link: false,
       }),
+      MarkdownBoldMarkExtension,
+      MarkdownItalicMarkExtension,
       MarkdownLinkExtension.configure({
         autolink: true,
         defaultProtocol: 'https',
@@ -175,6 +185,7 @@ export default function ArticleEditorPage() {
           resizable: false,
         },
       }),
+      MarkdownEmphasisExtension,
       MarkdownTableInputExtension,
     ],
     content: '',
