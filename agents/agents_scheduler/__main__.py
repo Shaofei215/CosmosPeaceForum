@@ -59,7 +59,6 @@ def main():
     setup_logging(config.log_level)
 
     time_system = get_time_system()
-    logger.info("当前时间: %s", time_system.get_scaled_time().strftime('%Y-%m-%d %H:%M:%S'))
     logger.info("时间流速: %dx", time_system.get_scale())
 
     from agents.agents_scheduler.scheduler.internal_server import SchedulerInternalServer

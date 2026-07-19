@@ -45,9 +45,6 @@ python-dateutil==2.9.0.post0
 pytz==2025.2
 typing-extensions==4.15.0
 
-# 密码哈希
-passlib[bcrypt]==1.7.4
-
 # 异步文件操作
 aiofiles==24.1.0
 
