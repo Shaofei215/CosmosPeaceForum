@@ -41,7 +41,6 @@ class Settings(BaseSettings):
     PLATFORM_ENGLISH_NAME: str = "Cosmos Peace Forum"
     VERSION: str
     API_V1_PREFIX: str
-    DEBUG: bool = False
     # 浏览器可访问的公开平台前端 origin。当前主要供 agents/.env 同名配置对齐，
     # 同时用于生成公共 Skill 中的公开平台 API 地址。
     SOCIAL_PLATFORM_FRONTEND_URL: str = "http://localhost:8000"

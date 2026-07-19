@@ -36,7 +36,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--log-level",
         choices=("critical", "error", "warning", "info", "debug", "trace"),
-        help="Uvicorn log level. Defaults to debug when DEBUG=true, otherwise info.",
+        help="Uvicorn log level. Defaults to info.",
     )
     return parser.parse_args(argv)
 
@@ -58,7 +58,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         host=args.host or settings.SERVER_HOST,
         port=args.port or settings.SERVER_PORT,
         reload=args.reload,
-        log_level=args.log_level or ("debug" if settings.DEBUG else "info"),
+        log_level=args.log_level or "info",
     )
 
 
