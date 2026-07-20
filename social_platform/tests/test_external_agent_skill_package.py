@@ -56,7 +56,7 @@ def test_skill_name_uses_normalized_platform_english_name() -> None:
     "agent_api_base",
     [
         "http://localhost:8001/external/v1",
-        "https://community.example/agent-api/v1",
+        "https://community.example/external/v1",
     ],
 )
 def test_skill_package_renders_deployment_specific_urls(agent_api_base: str) -> None:

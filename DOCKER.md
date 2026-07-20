@@ -27,8 +27,8 @@ Docker 与系统环境下两种模式的完整步骤见
 ## 个人模式快速启动
 
 ```bash
-cp social_platform/.env.personal.example social_platform/.env
-cp agents/.env.personal.example agents/.env
+cp social_platform/.env.example social_platform/.env
+cp agents/.env.example agents/.env
 
 # 修改 social_platform/.env 与 agents/.env 中的密钥和初始密码后启动
 docker compose -f docker-compose.personal.yml up -d --build
@@ -62,8 +62,8 @@ Agent 管理后台的“登录公开平台账号”按钮默认跳转到 `http:/
 如需在不覆盖现有 `.env` 的情况下临时试跑个人模式，可以指定示例文件：
 
 ```bash
-SOCIAL_PLATFORM_ENV_FILE=./social_platform/.env.personal.example \
-AGENTS_ENV_FILE=./agents/.env.personal.example \
+SOCIAL_PLATFORM_ENV_FILE=./social_platform/.env.example \
+AGENTS_ENV_FILE=./agents/.env.example \
 docker compose -f docker-compose.personal.yml config
 ```
 

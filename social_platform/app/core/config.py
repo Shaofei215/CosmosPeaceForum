@@ -1,11 +1,21 @@
 # 应用配置模块
 # 管理应用的所有配置项，所有配置从环境变量/social_platform/.env文件加载
-from pathlib import Path
+import secrets
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal, Optional
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings
+
+from social_platform.app.core.runtime_secrets import resolve_persistent_secrets
+
+
+_DEFAULT_RUNTIME_SECRETS_PATH = (
+    Path(__file__).resolve().parents[1] / "data" / "generated_secrets.json"
+)
+_JWT_SECRET_PLACEHOLDERS = {"change-this-to-a-long-random-secret"}
+_PASSWORD_PLACEHOLDERS = {"ChangeMe123!"}
 
 
 def find_env_file() -> str:
@@ -34,12 +44,21 @@ class Settings(BaseSettings):
     应用配置类
     所有配置从环境变量或.env文件加载，生产环境必须正确配置
     """
-    PROJECT_NAME: str
+    # 仅用于兼容尚未删除旧变量的现有 .env；标题改用 PLATFORM_DISPLAY_NAME，版本固定在 main.py。
+    legacy_project_name: str | None = Field(
+        default=None,
+        validation_alias="PROJECT_NAME",
+        exclude=True,
+    )
+    legacy_version: str | None = Field(
+        default=None,
+        validation_alias="VERSION",
+        exclude=True,
+    )
     # 平台对外展示名，用于网页标题、邮件模板和系统提示词等可品牌化位置。
     PLATFORM_DISPLAY_NAME: str = "宇宙和平论坛"
     # 平台外文名，用于生成只允许 ASCII 字符的 Skill 机器标识与下载文件名。
     PLATFORM_ENGLISH_NAME: str = "Cosmos Peace Forum"
-    VERSION: str
     API_V1_PREFIX: str
     # 浏览器可访问的公开平台前端 origin。当前主要供 agents/.env 同名配置对齐，
     # 同时用于生成公共 Skill 中的公开平台 API 地址。
@@ -108,6 +127,8 @@ class Settings(BaseSettings):
     )
     PLATFORM_ADMIN_INITIAL_PASSWORD: str = "ChangeMe123!"
 
+    _platform_admin_password_was_generated: bool = PrivateAttr(default=False)
+
     @field_validator("PLATFORM_ADMIN_INITIAL_USERNAME", mode="before")
     @classmethod
     def normalize_platform_admin_username(cls, value: str) -> str:
@@ -143,6 +164,16 @@ class Settings(BaseSettings):
             self.OBJECT_STORAGE_ENDPOINT_URL = self.OBJECT_STORAGE_ENDPOINT_URL.rstrip("/")
         return self
 
+    @property
+    def platform_admin_password_was_generated(self) -> bool:
+        """返回平台初始管理员密码是否由本进程自动生成。
+
+        Returns:
+            bool: 使用空值或示例默认值触发自动生成时为 ``True``。
+        """
+
+        return self._platform_admin_password_was_generated
+
     class Config:
         env_file = find_env_file()
         env_file_encoding = "utf-8"
@@ -150,4 +181,41 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()  # pyright: ignore[reportCallIssue] -- 字段由 BaseSettings 从环境读取。
+    settings = Settings()  # pyright: ignore[reportCallIssue] -- 字段由 BaseSettings 从环境读取。
+    return finalize_runtime_secrets(settings)
+
+
+def finalize_runtime_secrets(
+    settings: Settings,
+    secret_file: Path = _DEFAULT_RUNTIME_SECRETS_PATH,
+) -> Settings:
+    """将不安全的示例值替换为运行期 JWT secret 和一次性管理员密码。
+
+    JWT secret 需要跨重启稳定，因此写入公开平台数据目录；初始管理员密码只用于
+    创建首个账号，不写入运行期密钥文件，并由启动流程在确实创建账号时输出。
+
+    Args:
+        settings: 已完成环境变量解析和类型校验的公开平台配置。
+        secret_file: 自动生成 JWT secret 的持久化文件，测试可传入临时路径。
+
+    Returns:
+        Settings: 已就地替换不安全示例值的同一配置实例。
+
+    Raises:
+        RuntimeError: 已有运行期密钥文件损坏时抛出。
+        OSError: 运行期密钥无法安全持久化时抛出。
+    """
+
+    resolved_values, _ = resolve_persistent_secrets(
+        {"JWT_SECRET_KEY": settings.JWT_SECRET_KEY},
+        {"JWT_SECRET_KEY": _JWT_SECRET_PLACEHOLDERS},
+        secret_file,
+    )
+    settings.JWT_SECRET_KEY = resolved_values["JWT_SECRET_KEY"]
+
+    normalized_admin_password = settings.PLATFORM_ADMIN_INITIAL_PASSWORD.strip()
+    if not normalized_admin_password or normalized_admin_password in _PASSWORD_PLACEHOLDERS:
+        # 24 个随机字节编码后恰为 32 个 URL-safe 字符，满足管理端密码长度上限。
+        settings.PLATFORM_ADMIN_INITIAL_PASSWORD = secrets.token_urlsafe(24)
+        settings._platform_admin_password_was_generated = True
+    return settings

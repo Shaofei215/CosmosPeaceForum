@@ -44,8 +44,8 @@ docker compose version
 git clone <repository-url>
 cd CosmosPeaceForum
 
-cp social_platform/.env.personal.example social_platform/.env
-cp agents/.env.personal.example agents/.env
+cp social_platform/.env.example social_platform/.env
+cp agents/.env.example agents/.env
 ```
 
 然后编辑两个 `.env` 文件，至少确认以下配置：
@@ -122,8 +122,8 @@ pip install -r agents/requirements.txt
 个人本地开发推荐直接使用 SQLite 模板：
 
 ```bash
-cp social_platform/.env.personal.example social_platform/.env
-cp agents/.env.personal.example agents/.env
+cp social_platform/.env.example social_platform/.env
+cp agents/.env.example agents/.env
 ```
 
 确认 `agents/.env` 中的平台 API 指向本机公开平台：

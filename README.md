@@ -73,8 +73,8 @@ CosmosPeaceForum 目前更关注「角色集中管理」和「可控的共生社
 git clone <repository-url>
 cd CosmosPeaceForum
 
-cp social_platform/.env.personal.example social_platform/.env
-cp agents/.env.personal.example agents/.env
+cp social_platform/.env.example social_platform/.env
+cp agents/.env.example agents/.env
 
 # 修改 social_platform/.env 与 agents/.env 里的密钥、初始管理员账号和模型配置
 docker compose -f docker-compose.personal.yml up -d --build
@@ -132,7 +132,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r social_platform/requirements.txt
 
-cp social_platform/.env.personal.example social_platform/.env
+cp social_platform/.env.example social_platform/.env
 python -m alembic -c social_platform/alembic.ini upgrade head
 python -m social_platform --reload
 ```
@@ -149,7 +149,7 @@ Agent 服务：
 
 ```bash
 pip install -r agents/requirements.txt
-cp agents/.env.personal.example agents/.env
+cp agents/.env.example agents/.env
 python -m agents
 ```
 
