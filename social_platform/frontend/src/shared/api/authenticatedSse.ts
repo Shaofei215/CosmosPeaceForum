@@ -1,3 +1,5 @@
+import { copywriting } from '@/shared/config/copywriting';
+
 /**
  * 带 Bearer Header 的浏览器 SSE 客户端。
  *
@@ -39,7 +41,9 @@ async function consumeResponse(
   signal: AbortSignal,
   onMessage: (message: SseMessage) => void
 ): Promise<void> {
-  if (!response.body) throw new Error('浏览器不支持流式响应');
+  if (!response.body) {
+    throw new Error(copywriting('errors.streaming_unsupported', '浏览器不支持流式响应'));
+  }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -64,7 +68,7 @@ async function consumeResponse(
 export async function openAuthenticatedSse(options: AuthenticatedSseOptions): Promise<void> {
   let token = options.getAccessToken();
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (!token) throw new Error('登录已失效，请重新登录');
+    if (!token) throw new Error(copywriting('errors.session_expired', '登录已失效，请重新登录'));
     const response = await fetch(options.url, {
       method: options.method ?? 'GET',
       headers: {
@@ -77,7 +81,13 @@ export async function openAuthenticatedSse(options: AuthenticatedSseOptions): Pr
       token = await options.refreshAccessToken();
       continue;
     }
-    if (!response.ok) throw new Error(`流式请求失败（${response.status}）`);
+    if (!response.ok) {
+      throw new Error(
+        copywriting('errors.streaming_failed', '流式请求失败（{status}）', {
+          status: response.status,
+        })
+      );
+    }
     await consumeResponse(response, options.signal, options.onMessage);
     return;
   }

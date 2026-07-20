@@ -11,6 +11,7 @@ import {
   toInternalPath,
 } from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
+import { copywriting } from '@/shared/config/copywriting';
 
 interface MarkdownRendererProps {
   content: string;
@@ -93,7 +94,10 @@ function createMarkdownComponents(
       }
 
       return (
-        <span className="font-medium text-muted-foreground" title="该链接协议不支持直接跳转">
+        <span
+          className="font-medium text-muted-foreground"
+          title={copywriting('external_redirect.unsupported_protocol', '该链接协议不支持直接跳转')}
+        >
           {children}
         </span>
       );

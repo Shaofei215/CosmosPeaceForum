@@ -27,6 +27,7 @@ import { useCommentLikeStatus, useCreateComment, useToggleCommentLike } from '@/
 import { useFollowStatus, useToggleFollow } from '@/features/follow';
 import { useLikeStatus, useToggleLike } from '@/features/like';
 import { hasVisibleContent } from '@/shared/lib/content';
+import { copywriting } from '@/shared/config/copywriting';
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
@@ -47,12 +48,14 @@ export default function NotificationsPage() {
 
   return (
     <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
-      <h2 className="text-lg font-semibold px-3 pt-3">消息</h2>
+      <h2 className="text-lg font-semibold px-3 pt-3">
+        {copywriting('notifications.title', '消息')}
+      </h2>
 
       {items.length === 0 ? (
         <div className="py-10 text-center text-muted-foreground">
           <Bell className="h-10 w-10 mx-auto mb-3" />
-          <p>暂无消息</p>
+          <p>{copywriting('notifications.empty', '暂无消息')}</p>
         </div>
       ) : (
         <div className="divide-y divide-border/50">
@@ -73,7 +76,9 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
   const targetPath = getTargetPath(notification);
   const isArticle = notification.source_post_type === 'article';
   const isPlatformSystem = isPlatformSystemNotification(notification);
-  const senderName = sender?.username ?? (isPlatformSystem ? PLATFORM_DISPLAY_NAME : '有人');
+  const senderName =
+    sender?.username ??
+    (isPlatformSystem ? PLATFORM_DISPLAY_NAME : copywriting('common.someone', '有人'));
   const shouldShowFullContent =
     notification.type === 'moderation' || notification.type === 'announcement';
 
@@ -86,7 +91,11 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
       <div className="flex gap-2 sm:gap-3">
         {sender ? (
           <Link to={`/user/${sender.id}`} onClick={e => e.stopPropagation()}>
-            <Avatar src={sender.avatar_url} alt={sender.username ?? '用户'} size="md" />
+            <Avatar
+              src={sender.avatar_url}
+              alt={sender.username ?? copywriting('common.user', '用户')}
+              size="md"
+            />
           </Link>
         ) : isPlatformSystem ? (
           <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full">
@@ -176,11 +185,11 @@ function ModerationAppealAction({ notification }: { notification: NotificationIt
   const canAppeal = Boolean(notification.can_appeal);
   const statusText =
     notification.appeal_status === 'pending'
-      ? '申诉待处理'
+      ? copywriting('notifications.appeal_pending', '申诉待处理')
       : notification.appeal_status === 'approved'
-        ? '申诉已通过'
+        ? copywriting('notifications.appeal_approved', '申诉已通过')
         : notification.appeal_status === 'rejected'
-          ? '申诉已拒绝'
+          ? copywriting('notifications.appeal_rejected', '申诉已拒绝')
           : null;
 
   if (!canAppeal) {
@@ -191,7 +200,7 @@ function ModerationAppealAction({ notification }: { notification: NotificationIt
     event.preventDefault();
     const value = reason.trim();
     if (!value) {
-      setError('请填写申诉理由');
+      setError(copywriting('notifications.appeal_reason_required', '请填写申诉理由'));
       return;
     }
     setError('');
@@ -206,7 +215,7 @@ function ModerationAppealAction({ notification }: { notification: NotificationIt
           const message =
             error && typeof error === 'object' && 'message' in error
               ? String((error as { message?: unknown }).message)
-              : '提交失败，请稍后重试';
+              : copywriting('notifications.appeal_submit_failed', '提交失败，请稍后重试');
           setError(message);
         },
       }
@@ -224,7 +233,7 @@ function ModerationAppealAction({ notification }: { notification: NotificationIt
           disabled={notification.appeal_status === 'approved'}
         >
           <ShieldAlert className="h-3.5 w-3.5" />
-          申诉
+          {copywriting('notifications.appeal_action', '申诉')}
         </Button>
         {statusText && <span className="text-xs text-muted-foreground">{statusText}</span>}
       </div>
@@ -236,11 +245,16 @@ function ModerationAppealAction({ notification }: { notification: NotificationIt
             onClick={event => event.stopPropagation()}
           >
             <div className="mb-3">
-              <h3 className="text-base font-semibold">提交申诉</h3>
+              <h3 className="text-base font-semibold">
+                {copywriting('notifications.appeal_dialog_title', '提交申诉')}
+              </h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 {notification.appeal_status === 'pending'
-                  ? '再次提交会覆盖当前待处理申诉理由。'
-                  : '说明你认为本次处理需要复核的原因。'}
+                  ? copywriting(
+                      'notifications.appeal_replace_hint',
+                      '再次提交会覆盖当前待处理申诉理由。'
+                    )
+                  : copywriting('notifications.appeal_hint', '说明你认为本次处理需要复核的原因。')}
               </p>
             </div>
             <Textarea
@@ -248,15 +262,15 @@ function ModerationAppealAction({ notification }: { notification: NotificationIt
               onChange={event => setReason(event.target.value)}
               rows={5}
               maxLength={1000}
-              placeholder="填写申诉理由"
+              placeholder={copywriting('notifications.appeal_placeholder', '填写申诉理由')}
             />
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-                取消
+                {copywriting('common.cancel', '取消')}
               </Button>
               <Button type="submit" disabled={!reason.trim() || submitAppeal.isPending}>
-                提交
+                {copywriting('common.submit', '提交')}
               </Button>
             </div>
           </form>
@@ -305,7 +319,7 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
           disabled={!user || likeMutation.isPending}
         >
           <ThumbsUp className={`h-3.5 w-3.5 ${isLiked ? 'fill-current' : ''}`} />
-          点赞
+          {copywriting('common.like', '点赞')}
         </Button>
         <Button
           variant="ghost"
@@ -319,7 +333,7 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
           disabled={!user}
         >
           <MessageCircle className="h-3.5 w-3.5" />
-          回复
+          {copywriting('common.reply', '回复')}
         </Button>
       </div>
 
@@ -330,7 +344,7 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
             onChange={event => setContent(event.target.value)}
             maxLength={COMMENT_CONTENT_MAX_LENGTH}
             rows={2}
-            placeholder="写下你的回复..."
+            placeholder={copywriting('notifications.reply_placeholder', '写下你的回复...')}
             className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
           />
           <div className="flex items-center justify-between">
@@ -341,18 +355,18 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
                 onChange={event => setShouldRepost(event.target.checked)}
                 className="h-3.5 w-3.5"
               />
-              同时转发
+              {copywriting('post.comment_with_repost', '同时转发')}
             </label>
             <div className="flex gap-2">
               <Button type="button" variant="ghost" size="sm" onClick={() => setIsReplying(false)}>
-                取消
+                {copywriting('common.cancel', '取消')}
               </Button>
               <Button
                 type="submit"
                 size="sm"
                 disabled={!hasVisibleContent(content) || createComment.isPending}
               >
-                回复
+                {copywriting('common.reply', '回复')}
               </Button>
             </div>
           </div>
@@ -380,7 +394,7 @@ function FollowBackButton({ userId }: { userId: number }) {
       disabled={toggleFollow.isPending}
     >
       <UserPlus className="h-3.5 w-3.5" />
-      回关
+      {copywriting('notifications.follow_back', '回关')}
     </Button>
   );
 }
@@ -424,7 +438,7 @@ function PostActionBar({ postId }: { postId: number }) {
           disabled={!user || likeMutation.isPending}
         >
           <ThumbsUp className={`h-3.5 w-3.5 ${isLiked ? 'fill-current' : ''}`} />
-          点赞
+          {copywriting('common.like', '点赞')}
         </Button>
         <Button
           variant="ghost"
@@ -438,7 +452,7 @@ function PostActionBar({ postId }: { postId: number }) {
           disabled={!user}
         >
           <MessageCircle className="h-3.5 w-3.5" />
-          回复
+          {copywriting('common.reply', '回复')}
         </Button>
       </div>
 
@@ -449,7 +463,7 @@ function PostActionBar({ postId }: { postId: number }) {
             onChange={event => setContent(event.target.value)}
             maxLength={COMMENT_CONTENT_MAX_LENGTH}
             rows={2}
-            placeholder="写下你的回复..."
+            placeholder={copywriting('notifications.reply_placeholder', '写下你的回复...')}
             className="border-0 shadow-none bg-muted/30 focus-visible:ring-0"
           />
           <div className="flex items-center justify-between">
@@ -460,18 +474,18 @@ function PostActionBar({ postId }: { postId: number }) {
                 onChange={event => setShouldRepost(event.target.checked)}
                 className="h-3.5 w-3.5"
               />
-              同时转发
+              {copywriting('post.comment_with_repost', '同时转发')}
             </label>
             <div className="flex gap-2">
               <Button type="button" variant="ghost" size="sm" onClick={() => setIsReplying(false)}>
-                取消
+                {copywriting('common.cancel', '取消')}
               </Button>
               <Button
                 type="submit"
                 size="sm"
                 disabled={!hasVisibleContent(content) || createComment.isPending}
               >
-                回复
+                {copywriting('common.reply', '回复')}
               </Button>
             </div>
           </div>
@@ -506,20 +520,56 @@ function isPlatformSystemNotification(notification: NotificationItem): boolean {
 
 function getTypeInfo(type: string) {
   const map = {
-    repost: { label: '转发了你的内容', icon: Repeat2, color: 'text-primary' },
-    post_like: { label: '赞了你的帖子', icon: ThumbsUp, color: 'text-primary' },
-    comment_like: { label: '赞了你的评论', icon: ThumbsUp, color: 'text-primary' },
-    comment: { label: '评论了你的帖子', icon: MessageCircle, color: 'text-primary' },
-    comment_reply: { label: '回复了你', icon: MessageCircle, color: 'text-primary' },
-    mention: { label: '提及了你', icon: AtSign, color: 'text-primary' },
-    follow: { label: '关注了你', icon: UserPlus, color: 'text-emerald-600' },
-    moderation: { label: '发来一条管理通知', icon: Info, color: 'text-destructive' },
-    announcement: { label: '发布了一条公告', icon: Bell, color: 'text-primary' },
+    repost: {
+      label: copywriting('notifications.repost', '转发了你的内容'),
+      icon: Repeat2,
+      color: 'text-primary',
+    },
+    post_like: {
+      label: copywriting('notifications.post_like', '赞了你的帖子'),
+      icon: ThumbsUp,
+      color: 'text-primary',
+    },
+    comment_like: {
+      label: copywriting('notifications.comment_like', '赞了你的评论'),
+      icon: ThumbsUp,
+      color: 'text-primary',
+    },
+    comment: {
+      label: copywriting('notifications.comment', '评论了你的帖子'),
+      icon: MessageCircle,
+      color: 'text-primary',
+    },
+    comment_reply: {
+      label: copywriting('notifications.comment_reply', '回复了你'),
+      icon: MessageCircle,
+      color: 'text-primary',
+    },
+    mention: {
+      label: copywriting('notifications.mention', '提及了你'),
+      icon: AtSign,
+      color: 'text-primary',
+    },
+    follow: {
+      label: copywriting('notifications.follow', '关注了你'),
+      icon: UserPlus,
+      color: 'text-emerald-600',
+    },
+    moderation: {
+      label: copywriting('notifications.moderation', '发来一条管理通知'),
+      icon: Info,
+      color: 'text-destructive',
+    },
+    announcement: {
+      label: copywriting('notifications.announcement', '发布了一条公告'),
+      icon: Bell,
+      color: 'text-primary',
+    },
   };
 
   return (
     map[type as keyof typeof map] ?? {
-      label: '给你发来一条消息',
+      label: copywriting('notifications.direct_message', '给你发来一条消息'),
       icon: Info,
       color: 'text-sky-600',
     }

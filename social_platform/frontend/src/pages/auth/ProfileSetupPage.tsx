@@ -12,6 +12,7 @@ import { AvatarUpload } from '@/shared/components/avatar-upload';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
 import { isValidOptionalProfileText, isValidUsername } from '@/shared/lib/profileValidation';
+import { copywriting } from '@/shared/config/copywriting';
 
 function extractErrorMessage(err: unknown): string | null {
   if (typeof err === 'object' && err !== null) {
@@ -57,7 +58,9 @@ export default function ProfileSetupPage() {
     setAvatarError('');
     uploadAvatar(file, {
       onError: (err: unknown) => {
-        setAvatarError(extractErrorMessage(err) || '头像上传失败');
+        setAvatarError(
+          extractErrorMessage(err) || copywriting('auth.avatar_upload_failed', '头像上传失败')
+        );
       },
     });
   };
@@ -66,7 +69,7 @@ export default function ProfileSetupPage() {
     deleteAvatar(undefined, {
       onError: (err: unknown) => {
         const message = extractErrorMessage(err);
-        setAvatarError(message || '头像删除失败');
+        setAvatarError(message || copywriting('auth.avatar_delete_failed', '头像删除失败'));
       },
     });
   };
@@ -79,17 +82,19 @@ export default function ProfileSetupPage() {
     const normalizedBio = bio.trim();
 
     if (normalizedUsername === '') {
-      setError('请输入用户名');
+      setError(copywriting('auth.username_required', '请输入用户名'));
       return;
     }
 
     if (!isValidUsername(normalizedUsername)) {
-      setError('用户名只能包含字母、数字、下划线和中文');
+      setError(copywriting('auth.username_invalid', '用户名只能包含字母、数字、下划线和中文'));
       return;
     }
 
     if (!isValidOptionalProfileText(normalizedBio)) {
-      setError('个人签名不能包含控制字符或不可见字符');
+      setError(
+        copywriting('auth.personal_signature_invalid', '个人签名不能包含控制字符或不可见字符')
+      );
       return;
     }
 
@@ -105,7 +110,9 @@ export default function ProfileSetupPage() {
           navigate('/feed');
         },
         onError: (err: unknown) => {
-          setError(extractErrorMessage(err) || '保存失败，请稍后重试');
+          setError(
+            extractErrorMessage(err) || copywriting('profile.save_failed', '保存失败，请稍后重试')
+          );
         },
       }
     );
@@ -117,7 +124,9 @@ export default function ProfileSetupPage() {
       <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
-          <CardTitle className="auth-title text-2xl font-bold text-center">完善个人资料</CardTitle>
+          <CardTitle className="auth-title text-2xl font-bold text-center">
+            {copywriting('auth.profile_setup_title', '完善个人资料')}
+          </CardTitle>
         </CardHeader>
         <CardContent className="auth-card-content">
           <form onSubmit={handleSubmit} className="auth-form space-y-6">
@@ -143,14 +152,15 @@ export default function ProfileSetupPage() {
             <div className="auth-field space-y-2">
               <div className="flex items-center justify-between">
                 <label htmlFor="username" className="text-sm font-medium">
-                  用户名 <span className="text-destructive">*</span>
+                  {copywriting('auth.username', '用户名')}{' '}
+                  <span className="text-destructive">*</span>
                 </label>
                 <span className="text-xs text-muted-foreground">{username.length}/30</span>
               </div>
               <Input
                 id="username"
                 type="text"
-                placeholder="给自己取一个好记的名字"
+                placeholder={copywriting('auth.username_placeholder', '给自己取一个好记的名字')}
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 disabled={isPending}
@@ -162,14 +172,17 @@ export default function ProfileSetupPage() {
             <div className="auth-field space-y-2">
               <div className="flex items-center justify-between">
                 <label htmlFor="bio" className="text-sm font-medium">
-                  个人签名
+                  {copywriting('auth.personal_signature', '个人签名')}
                 </label>
                 <span className="text-xs text-muted-foreground">{bio.length}/100</span>
               </div>
               <Input
                 id="bio"
                 type="text"
-                placeholder="写一句介绍自己的签名"
+                placeholder={copywriting(
+                  'auth.personal_signature_placeholder',
+                  '写一句介绍自己的签名'
+                )}
                 value={bio}
                 onChange={e => setBio(e.target.value)}
                 disabled={isPending}
@@ -179,7 +192,9 @@ export default function ProfileSetupPage() {
             </div>
 
             <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
-              {isCompleting ? '保存中...' : '完成设置'}
+              {isCompleting
+                ? copywriting('common.saving', '保存中...')
+                : copywriting('auth.complete_setup', '完成设置')}
             </Button>
           </form>
         </CardContent>

@@ -13,6 +13,7 @@ import { PostCard } from '@/widgets/post-card';
 import { Avatar, Skeleton, Button, Input, Textarea } from '@/shared/components/ui';
 import { isValidOptionalProfileText, isValidUsername } from '@/shared/lib/profileValidation';
 import { Camera, Flag, MoreVertical, Pencil, Save, X } from 'lucide-react';
+import { copywriting } from '@/shared/config/copywriting';
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 const MAX_USERNAME_LENGTH = 30;
@@ -103,7 +104,7 @@ export default function ProfilePage() {
     if (!user) return;
     const reason = reportReason.trim();
     if (!reason) {
-      setReportError('请填写举报原因');
+      setReportError(copywriting('report.reason_required', '请填写举报原因'));
       return;
     }
     setReportError('');
@@ -116,7 +117,9 @@ export default function ProfilePage() {
       setReportOpen(false);
       setReportReason('');
     } catch (err) {
-      setReportError(extractErrorMessage(err) || '举报提交失败，请稍后重试');
+      setReportError(
+        extractErrorMessage(err) || copywriting('report.submit_failed', '举报提交失败，请稍后重试')
+      );
     }
   };
 
@@ -216,11 +219,11 @@ export default function ProfilePage() {
 
     setAvatarError('');
     if (file.type.startsWith('image/') === false) {
-      setAvatarError('请选择图片文件');
+      setAvatarError(copywriting('profile.select_image', '请选择图片文件'));
       return;
     }
     if (file.size > MAX_AVATAR_SIZE) {
-      setAvatarError('图片大小不能超过 5MB');
+      setAvatarError(copywriting('profile.image_too_large', '图片大小不能超过 5MB'));
       return;
     }
 
@@ -238,15 +241,15 @@ export default function ProfilePage() {
     setAvatarError('');
 
     if (username === '') {
-      setEditError('请输入昵称');
+      setEditError(copywriting('profile.nickname_required', '请输入昵称'));
       return;
     }
     if (!isValidUsername(username)) {
-      setEditError('昵称只能包含字母、数字、下划线和中文');
+      setEditError(copywriting('profile.nickname_invalid', '昵称只能包含字母、数字、下划线和中文'));
       return;
     }
     if (!isValidOptionalProfileText(bio)) {
-      setEditError('签名不能包含控制字符或不可见字符');
+      setEditError(copywriting('profile.signature_invalid', '签名不能包含控制字符或不可见字符'));
       return;
     }
 
@@ -263,7 +266,9 @@ export default function ProfilePage() {
       setIsUserMenuOpen(false);
       setIsEditing(false);
     } catch (err) {
-      setEditError(extractErrorMessage(err) || '保存失败，请稍后重试');
+      setEditError(
+        extractErrorMessage(err) || copywriting('profile.save_failed', '保存失败，请稍后重试')
+      );
     }
   };
 
@@ -274,9 +279,9 @@ export default function ProfilePage() {
   if (!user) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground">用户不存在</p>
+        <p className="text-muted-foreground">{copywriting('profile.not_found', '用户不存在')}</p>
         <Link to="/feed" className="text-primary hover:underline mt-2 inline-block">
-          返回主页
+          {copywriting('common.back_home', '返回主页')}
         </Link>
       </div>
     );
@@ -295,7 +300,7 @@ export default function ProfilePage() {
               onClick={() => isEditing && avatarInputRef.current?.click()}
               disabled={isSaving || isEditing === false}
               className="group relative block rounded-full disabled:cursor-default"
-              aria-label="上传头像"
+              aria-label={copywriting('profile.upload_avatar', '上传头像')}
             >
               <Avatar
                 src={avatarPreviewUrl ?? user.avatar_url}
@@ -331,7 +336,7 @@ export default function ProfilePage() {
                 onChange={event => setDraftUsername(event.target.value)}
                 disabled={isSaving}
                 maxLength={MAX_USERNAME_LENGTH}
-                aria-label="昵称"
+                aria-label={copywriting('profile.nickname', '昵称')}
                 className="h-auto truncate border-0 bg-transparent px-0 py-0 text-xl font-bold shadow-none focus-visible:ring-1 sm:text-2xl"
               />
             ) : (
@@ -343,8 +348,8 @@ export default function ProfilePage() {
                 onChange={event => setDraftBio(event.target.value)}
                 disabled={isSaving}
                 maxLength={MAX_BIO_LENGTH}
-                aria-label="签名"
-                placeholder="写一句签名"
+                aria-label={copywriting('profile.signature', '签名')}
+                placeholder={copywriting('profile.signature_placeholder', '写一句签名')}
                 className="mt-1 h-5 truncate border-0 bg-transparent px-0 py-0 text-sm text-muted-foreground shadow-none focus-visible:ring-1"
               />
             ) : (
@@ -361,14 +366,14 @@ export default function ProfilePage() {
                 className="text-sm text-muted-foreground transition-colors hover:text-primary"
               >
                 <span className="font-medium text-foreground">{user.following_count ?? 0}</span>{' '}
-                关注
+                {copywriting('common.follow', '关注')}
               </Link>
               <Link
                 to={'/user/' + user.id + '/followers'}
                 className="text-sm text-muted-foreground transition-colors hover:text-primary"
               >
                 <span className="font-medium text-foreground">{user.followers_count ?? 0}</span>{' '}
-                被关注
+                {copywriting('common.followers', '被关注')}
               </Link>
             </div>
           </div>
@@ -387,11 +392,11 @@ export default function ProfilePage() {
               {toggleFollow.isPending ? (
                 <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
               ) : followStatus?.is_mutual ? (
-                '互相关注'
+                copywriting('common.mutual_follow', '互相关注')
               ) : followStatus?.is_following ? (
-                '已关注'
+                copywriting('common.followed', '已关注')
               ) : (
-                '关注'
+                copywriting('common.follow', '关注')
               )}
             </Button>
           )}
@@ -406,14 +411,14 @@ export default function ProfilePage() {
                       onClick={handleSave}
                       disabled={isSaving}
                       className="gap-1 px-2 text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground sm:px-3"
-                      aria-label="保存资料"
+                      aria-label={copywriting('profile.save_profile', '保存资料')}
                     >
                       {isSaving ? (
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent sm:hidden" />
                       ) : (
                         <Save className="h-4 w-4 sm:hidden" />
                       )}
-                      <span className="hidden sm:inline">保存</span>
+                      <span className="hidden sm:inline">{copywriting('common.save', '保存')}</span>
                     </Button>
                     <Button
                       variant="ghost"
@@ -421,10 +426,12 @@ export default function ProfilePage() {
                       onClick={handleCancelEdit}
                       disabled={isSaving}
                       className="gap-1 px-2 text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground sm:px-3"
-                      aria-label="退出编辑"
+                      aria-label={copywriting('profile.exit_editing', '退出编辑')}
                     >
                       <X className="h-4 w-4 sm:hidden" />
-                      <span className="hidden sm:inline">退出</span>
+                      <span className="hidden sm:inline">
+                        {copywriting('profile.exit', '退出')}
+                      </span>
                     </Button>
                   </>
                 ) : (
@@ -433,10 +440,10 @@ export default function ProfilePage() {
                     size="sm"
                     onClick={handleEnterEdit}
                     className="gap-1 px-2 text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground sm:px-3"
-                    aria-label="编辑资料"
+                    aria-label={copywriting('profile.edit_profile', '编辑资料')}
                   >
                     <Pencil className="h-4 w-4 sm:hidden" />
-                    <span className="hidden sm:inline">编辑</span>
+                    <span className="hidden sm:inline">{copywriting('common.edit', '编辑')}</span>
                   </Button>
                 )}
               </div>
@@ -449,7 +456,7 @@ export default function ProfilePage() {
                 event.stopPropagation();
                 setIsUserMenuOpen(value => !value);
               }}
-              aria-label="更多操作"
+              aria-label={copywriting('common.more_actions', '更多操作')}
             >
               <MoreVertical className="h-4 w-4" />
             </button>
@@ -465,7 +472,7 @@ export default function ProfilePage() {
                     onClick={handleOpenReport}
                   >
                     <Flag className="h-3.5 w-3.5" />
-                    举报
+                    {copywriting('common.report', '举报')}
                   </button>
                 )}
                 {isCurrentUser && (
@@ -474,7 +481,7 @@ export default function ProfilePage() {
                     className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={handleLogout}
                   >
-                    登出
+                    {copywriting('common.logout', '登出')}
                   </button>
                 )}
               </div>
@@ -495,7 +502,11 @@ export default function ProfilePage() {
       {/* 用户帖子列表 - 包含在大容器中 */}
       <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
         <h2 className="text-lg font-semibold px-3 pt-3">
-          {isCurrentUser ? '我的帖子' : `${user.username} 的帖子`}
+          {isCurrentUser
+            ? copywriting('profile.my_posts', '我的帖子')
+            : copywriting('profile.user_posts', '{username} 的帖子', {
+                username: user.username,
+              })}
         </h2>
 
         {isFeedLoading ? (
@@ -510,7 +521,9 @@ export default function ProfilePage() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-10 text-muted-foreground">暂无帖子</div>
+          <div className="text-center py-10 text-muted-foreground">
+            {copywriting('profile.empty_posts', '暂无帖子')}
+          </div>
         )}
 
         {/* 加载更多 */}
@@ -518,11 +531,13 @@ export default function ProfilePage() {
           {isFetchingNextPage && (
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-              加载中...
+              {copywriting('common.loading', '加载中...')}
             </div>
           )}
           {!hasNextPage && posts.length > 0 && (
-            <span className="text-muted-foreground text-sm">没有更多内容了</span>
+            <span className="text-muted-foreground text-sm">
+              {copywriting('common.no_more_content', '没有更多内容了')}
+            </span>
           )}
         </div>
       </div>
@@ -549,25 +564,29 @@ function ReportUserDialog({
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-lg bg-background p-5 shadow-xl">
         <div>
-          <h2 className="text-lg font-semibold">举报用户</h2>
+          <h2 className="text-lg font-semibold">
+            {copywriting('profile.report_title', '举报用户')}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            请填写违规类型及举报原因，确认违规后将被处理。
+            {copywriting('report.description', '请填写违规类型及举报原因，确认违规后将被处理。')}
           </p>
         </div>
         <Textarea
           value={reason}
           onChange={event => onReasonChange(event.target.value)}
-          placeholder="填写举报原因"
+          placeholder={copywriting('report.reason_placeholder', '填写举报原因')}
           className="mt-4 min-h-28"
           maxLength={1000}
         />
         {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="outline" className="rounded-md" onClick={onClose} disabled={saving}>
-            取消
+            {copywriting('common.cancel', '取消')}
           </Button>
           <Button className="rounded-md" onClick={onSubmit} disabled={saving || !reason.trim()}>
-            {saving ? '提交中...' : '提交举报'}
+            {saving
+              ? copywriting('report.submitting', '提交中...')
+              : copywriting('report.submit', '提交举报')}
           </Button>
         </div>
       </div>

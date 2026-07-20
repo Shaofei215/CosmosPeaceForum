@@ -6,6 +6,7 @@ import { useAuthStore } from '@/features/auth';
 import { useNotificationUnreadCount } from '@/features/notification';
 import { CreatePostForm } from '@/widgets/create-post-form';
 import { cn } from '@/shared/lib/utils';
+import { copywriting } from '@/shared/config/copywriting';
 
 export function MobileBottomBar() {
   const location = useLocation();
@@ -37,16 +38,18 @@ export function MobileBottomBar() {
         <>
           <button
             type="button"
-            aria-label="关闭发布面板"
+            aria-label={copywriting('navigation.close_publish_panel', '关闭发布面板')}
             className="fixed inset-0 z-40 bg-black/10"
             onClick={() => setIsComposerOpen(false)}
           />
           <div className="mobile-composer-panel fixed inset-x-2 bottom-[5.25rem] z-50 rounded-2xl bg-white p-3 shadow-lg">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">发布动态</span>
+              <span className="text-sm font-medium text-foreground">
+                {copywriting('navigation.publish_post', '发布动态')}
+              </span>
               <button
                 type="button"
-                aria-label="关闭发布面板"
+                aria-label={copywriting('navigation.close_publish_panel', '关闭发布面板')}
                 className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 onClick={() => setIsComposerOpen(false)}
               >
@@ -62,17 +65,21 @@ export function MobileBottomBar() {
         <div className="grid grid-cols-5 items-center gap-1">
           <MobileNavLink
             to="/feed"
-            label="主页"
+            label={copywriting('navigation.home', '主页')}
             active={location.pathname === '/feed' || location.pathname === '/'}
           >
             <Home className="h-5 w-5" />
           </MobileNavLink>
-          <MobileNavLink to="/hot" label="热门" active={location.pathname === '/hot'}>
+          <MobileNavLink
+            to="/hot"
+            label={copywriting('navigation.hot', '热门')}
+            active={location.pathname === '/hot'}
+          >
             <Flame className="h-5 w-5" />
           </MobileNavLink>
           <MobileNavLink
             to={notificationPath}
-            label="消息"
+            label={copywriting('common.messages', '消息')}
             active={location.pathname === '/notifications'}
           >
             {unreadCount > 0 ? (
@@ -94,9 +101,15 @@ export function MobileBottomBar() {
             onClick={openComposer}
           >
             <PlusCircle className="h-5 w-5" />
-            <span className="mobile-bottom-label truncate">发布</span>
+            <span className="mobile-bottom-label truncate">
+              {copywriting('navigation.publish', '发布')}
+            </span>
           </button>
-          <MobileNavLink to={profilePath} label="我的" active={location.pathname === profilePath}>
+          <MobileNavLink
+            to={profilePath}
+            label={copywriting('navigation.my_profile', '我的')}
+            active={location.pathname === profilePath}
+          >
             <UserRound className="h-5 w-5" />
           </MobileNavLink>
         </div>

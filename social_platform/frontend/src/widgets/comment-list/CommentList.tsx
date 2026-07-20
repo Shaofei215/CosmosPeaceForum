@@ -18,6 +18,7 @@ import { Avatar, Button, Textarea } from '@/shared/components/ui';
 import { COMMENT_CONTENT_MAX_LENGTH, POST_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { formatDate } from '@/shared/lib/utils';
 import { hasVisibleContent } from '@/shared/lib/content';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 评论列表组件属性
@@ -32,7 +33,11 @@ interface CommentListProps {
  */
 export function CommentList({ comments, postId }: CommentListProps) {
   if (comments.length === 0) {
-    return <div className="text-center py-8 text-muted-foreground">暂无评论，快来抢沙发吧！</div>;
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        {copywriting('comments.empty', '暂无评论，快来抢沙发吧！')}
+      </div>
+    );
   }
 
   return (
@@ -140,7 +145,12 @@ function CommentItem({
         <Link to={`/user/${comment.owner_id}`}>
           <Avatar
             src={comment.owner?.avatar_url}
-            alt={comment.owner?.username || `用户${comment.owner_id}`}
+            alt={
+              comment.owner?.username ||
+              copywriting('comments.fallback_user', '用户{user_id}', {
+                user_id: comment.owner_id,
+              })
+            }
             size={isTopLevel ? 'md' : 'sm'}
           />
         </Link>
@@ -153,7 +163,10 @@ function CommentItem({
                 to={`/user/${comment.owner_id}`}
                 className="font-medium text-sm hover:text-primary transition-colors"
               >
-                {comment.owner?.username || `用户${comment.owner_id}`}
+                {comment.owner?.username ||
+                  copywriting('comments.fallback_user', '用户{user_id}', {
+                    user_id: comment.owner_id,
+                  })}
               </Link>
             ) : (
               // 三级及以上（回复的回复）：显示 xxx 回复 xxx
@@ -162,9 +175,12 @@ function CommentItem({
                   to={`/user/${comment.owner_id}`}
                   className="font-medium hover:text-primary transition-colors"
                 >
-                  {comment.owner?.username || `用户${comment.owner_id}`}
+                  {comment.owner?.username ||
+                    copywriting('comments.fallback_user', '用户{user_id}', {
+                      user_id: comment.owner_id,
+                    })}
                 </Link>
-                <span className="text-muted-foreground">回复</span>
+                <span className="text-muted-foreground">{copywriting('common.reply', '回复')}</span>
                 <Link
                   to={`/user/${parentOwner?.id || comment.owner_id}`}
                   className="text-muted-foreground hover:text-primary"
@@ -197,7 +213,11 @@ function CommentItem({
                 }`}
               >
                 <MessageCircle className="h-3.5 w-3.5" />
-                <span>{isReplying ? '取消回复' : '回复'}</span>
+                <span>
+                  {isReplying
+                    ? copywriting('comments.cancel_reply', '取消回复')
+                    : copywriting('common.reply', '回复')}
+                </span>
               </button>
             )}
             {user && (
@@ -208,17 +228,23 @@ function CommentItem({
                 }`}
               >
                 <Repeat2 className="h-3.5 w-3.5" />
-                <span>转发</span>
+                <span>{copywriting('common.repost', '转发')}</span>
               </button>
             )}
-            {comment.created_by_agent && <span>AI生成</span>}
+            {comment.created_by_agent && (
+              <span>{copywriting('common.ai_generated', 'AI生成')}</span>
+            )}
             {isTopLevel && hasReplies && (
               <button
                 onClick={() => setShowReplies(!showReplies)}
                 className="flex items-center gap-1 hover:text-primary transition-colors"
               >
                 <CornerDownRight className="h-3.5 w-3.5" />
-                {showReplies ? '收起回复' : `查看 ${totalReplies} 条回复`}
+                {showReplies
+                  ? copywriting('comments.collapse_replies', '收起回复')
+                  : copywriting('comments.view_replies', '查看 {count} 条回复', {
+                      count: totalReplies,
+                    })}
               </button>
             )}
           </div>
@@ -227,10 +253,12 @@ function CommentItem({
           {isReplying && (
             <form onSubmit={handleReplySubmit} className="mt-3 space-y-2">
               <div className="text-xs text-muted-foreground">
-                回复 @{comment.owner?.username || '用户'}
+                {copywriting('comments.reply_to', '回复 @{username}', {
+                  username: comment.owner?.username || copywriting('common.user', '用户'),
+                })}
               </div>
               <Textarea
-                placeholder="写下你的回复..."
+                placeholder={copywriting('comments.reply_placeholder', '写下你的回复...')}
                 value={replyContent}
                 onChange={e => setReplyContent(e.target.value)}
                 maxLength={COMMENT_CONTENT_MAX_LENGTH}
@@ -245,14 +273,14 @@ function CommentItem({
                   size="sm"
                   onClick={() => setIsReplying(false)}
                 >
-                  取消
+                  {copywriting('common.cancel', '取消')}
                 </Button>
                 <Button
                   type="submit"
                   size="sm"
                   disabled={!hasVisibleContent(replyContent) || isPending}
                 >
-                  评论
+                  {copywriting('post.comments', '评论')}
                 </Button>
               </div>
             </form>
@@ -281,7 +309,7 @@ function CommentItem({
               className="mt-3 space-y-2"
             >
               <Textarea
-                placeholder="写点什么再转发..."
+                placeholder={copywriting('post.repost_placeholder', '写点什么再转发...')}
                 value={repostContent}
                 onChange={e => setRepostContent(e.target.value)}
                 maxLength={POST_CONTENT_MAX_LENGTH}
@@ -296,10 +324,10 @@ function CommentItem({
                   size="sm"
                   onClick={() => setIsReposting(false)}
                 >
-                  取消
+                  {copywriting('common.cancel', '取消')}
                 </Button>
                 <Button type="submit" size="sm" disabled={repost.isPending}>
-                  转发
+                  {copywriting('common.repost', '转发')}
                 </Button>
               </div>
             </form>
@@ -328,7 +356,11 @@ function CommentItem({
                   depth={depth + 1}
                   parentOwner={{
                     id: comment.owner_id,
-                    username: comment.owner?.username || `用户${comment.owner_id}`,
+                    username:
+                      comment.owner?.username ||
+                      copywriting('comments.fallback_user', '用户{user_id}', {
+                        user_id: comment.owner_id,
+                      }),
                   }}
                   visibleReplyLimit={childVisibleReplyLimit}
                 />
@@ -343,7 +375,10 @@ function CommentItem({
               }
               className="mt-3 text-sm text-primary transition-colors hover:text-primary/80"
             >
-              展开更多回复 ({visibleReplyCount}/{totalReplies})
+              {copywriting('comments.expand_more', '展开更多回复 ({visible}/{total})', {
+                visible: visibleReplyCount,
+                total: totalReplies,
+              })}
             </button>
           )}
         </div>

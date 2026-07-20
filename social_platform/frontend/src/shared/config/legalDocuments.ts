@@ -15,17 +15,17 @@ export interface LegalDocumentLink {
 export const LEGAL_DOCUMENT_LINKS: LegalDocumentLink[] = [
   {
     slug: 'terms-of-service',
-    title: '服务条款',
+    title: copywriting('legal.terms', '服务条款'),
     href: '/legal/terms-of-service',
   },
   {
     slug: 'privacy-policy',
-    title: '隐私政策',
+    title: copywriting('legal.privacy', '隐私政策'),
     href: '/legal/privacy-policy',
   },
   {
     slug: 'community-guidelines',
-    title: '社区规范',
+    title: copywriting('legal.guidelines', '社区规范'),
     href: '/legal/community-guidelines',
   },
 ];
@@ -39,3 +39,4 @@ export const LEGAL_DOCUMENT_LINKS: LegalDocumentLink[] = [
 export function isLegalDocumentSlug(value: string | undefined): value is LegalDocumentSlug {
   return value !== undefined && LEGAL_DOCUMENT_LINKS.some(document => document.slug === value);
 }
+import { copywriting } from '@/shared/config/copywriting';

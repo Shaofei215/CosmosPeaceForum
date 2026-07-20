@@ -4,6 +4,7 @@
 
 import { apiClient } from '@/shared/api/client';
 import { validateRequiredContent } from '@/shared/lib/content';
+import { copywriting } from '@/shared/config/copywriting';
 import type {
   Comment,
   CommentSort,
@@ -65,7 +66,7 @@ export const commentApi = {
   createComment: (postId: number, data: CreateCommentData) =>
     apiClient.post<Comment>(`/posts/${postId}/comments`, {
       ...data,
-      content: validateRequiredContent(data.content, '评论'),
+      content: validateRequiredContent(data.content, copywriting('content.comment', '评论')),
     }),
 
   /**

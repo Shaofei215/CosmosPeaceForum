@@ -11,6 +11,7 @@ import { BigLogo } from '@/shared/components/auth/BigLogo';
 import { Button } from '@/shared/components/ui';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 import { getExternalRedirectTarget } from '@/shared/lib/externalRedirect';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 渲染离站确认页。
@@ -41,17 +42,25 @@ export default function ExternalRedirectPage(): ReactElement {
 
         <div className="w-full space-y-6">
           <div className="space-y-3">
-            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">即将离开本站</h1>
+            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
+              {copywriting('external_redirect.title', '即将离开本站')}
+            </h1>
             <p className="mx-auto max-w-xl text-sm leading-7 text-muted-foreground sm:text-base">
-              您即将跳转到一个外部网站。该页面不属于{PLATFORM_DISPLAY_NAME}
-              ，其内容、安全性与隐私政策由目标网站自行负责，请确认地址可信后再继续访问。
+              {copywriting(
+                'external_redirect.description',
+                '您即将跳转到一个外部网站。该页面不属于{platform_name}，其内容、安全性与隐私政策由目标网站自行负责，请确认地址可信后再继续访问。',
+                { platform_name: PLATFORM_DISPLAY_NAME }
+              )}
             </p>
           </div>
 
           <div className="w-full rounded-lg border border-border bg-muted/40 px-4 py-4 text-left">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">原地址</p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              {copywriting('external_redirect.original_url', '原地址')}
+            </p>
             <p className="break-all font-mono text-sm leading-6 text-foreground">
-              {targetUrl ?? '未提供有效的外部链接地址'}
+              {targetUrl ??
+                copywriting('external_redirect.invalid_url', '未提供有效的外部链接地址')}
             </p>
           </div>
 
@@ -62,12 +71,12 @@ export default function ExternalRedirectPage(): ReactElement {
                 className="w-28 rounded-md hover:bg-zinc-800 hover:text-white hover:shadow-md"
               >
                 <a href={targetUrl} rel="noreferrer">
-                  确认跳转
+                  {copywriting('external_redirect.confirm', '确认跳转')}
                 </a>
               </Button>
             ) : null}
             <Button type="button" variant="outline" className="w-28 rounded-md" onClick={goBack}>
-              返回
+              {copywriting('common.back', '返回')}
             </Button>
           </div>
         </div>

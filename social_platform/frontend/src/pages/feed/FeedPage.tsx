@@ -10,6 +10,7 @@ import type { FeedType } from '@/features/feed';
 import { useAuthStore } from '@/features/auth';
 import { PostCard } from '@/widgets/post-card';
 import { Skeleton } from '@/shared/components/ui';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 信息流页面组件
@@ -71,7 +72,9 @@ export default function FeedPage() {
         </div>
       ) : (
         <div className="text-center py-10 text-muted-foreground">
-          {feedType === 'following' ? '关注的人还没有新内容。' : '暂无帖子，快来发布第一条吧！'}
+          {feedType === 'following'
+            ? copywriting('feed.empty_following', '关注的人还没有新内容。')
+            : copywriting('feed.empty_global', '暂无帖子，快来发布第一条吧！')}
         </div>
       )}
 
@@ -80,11 +83,13 @@ export default function FeedPage() {
         {isFetchingNextPage && (
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-            加载中...
+            {copywriting('common.loading', '加载中...')}
           </div>
         )}
         {!hasNextPage && posts.length > 0 && (
-          <span className="text-muted-foreground text-sm">没有更多内容了</span>
+          <span className="text-muted-foreground text-sm">
+            {copywriting('common.no_more_content', '没有更多内容了')}
+          </span>
         )}
       </div>
     </div>

@@ -9,6 +9,7 @@ import { AlertCircle } from 'lucide-react';
 import { useLogin, useSendLoginCode } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
+import { copywriting } from '@/shared/config/copywriting';
 
 type LoginMethod = 'password' | 'code';
 
@@ -73,12 +74,12 @@ export default function LoginPage() {
     setError('');
 
     if (!email.trim()) {
-      setError('请输入邮箱地址');
+      setError(copywriting('auth.email_required', '请输入邮箱地址'));
       return;
     }
 
     if (!validateEmail(email)) {
-      setError('请输入有效的邮箱地址');
+      setError(copywriting('auth.email_invalid', '请输入有效的邮箱地址'));
       return;
     }
 
@@ -87,11 +88,17 @@ export default function LoginPage() {
       {
         onSuccess: data => {
           setCountdown(60);
-          setSuccessMessage(`${data.message}，有效期10分钟`);
+          setSuccessMessage(
+            copywriting('auth.code_sent_from_response', '{message}，有效期10分钟', {
+              message: data.message,
+            })
+          );
           setTimeout(() => setSuccessMessage(''), 5000);
         },
         onError: (err: { message?: string }) => {
-          setError(err.message || '发送验证码失败，请稍后重试');
+          setError(
+            err.message || copywriting('auth.send_code_failed', '发送验证码失败，请稍后重试')
+          );
         },
       }
     );
@@ -105,23 +112,23 @@ export default function LoginPage() {
     setError('');
 
     if (!email.trim()) {
-      setError('请输入邮箱地址');
+      setError(copywriting('auth.email_required', '请输入邮箱地址'));
       return;
     }
 
     if (!validateEmail(email)) {
-      setError('请输入有效的邮箱地址');
+      setError(copywriting('auth.email_invalid', '请输入有效的邮箱地址'));
       return;
     }
 
     if (loginMethod === 'password') {
       if (!password.trim()) {
-        setError('请输入密码');
+        setError(copywriting('auth.password_required', '请输入密码'));
         return;
       }
 
       if (password.length < 8) {
-        setError('密码至少需要8位');
+        setError(copywriting('auth.password_too_short_short', '密码至少需要8位'));
         return;
       }
 
@@ -132,18 +139,20 @@ export default function LoginPage() {
             navigate(from, { replace: true });
           },
           onError: (err: { message?: string }) => {
-            setError(err.message || '登录失败，请检查邮箱和密码');
+            setError(
+              err.message || copywriting('auth.password_login_failed', '登录失败，请检查邮箱和密码')
+            );
           },
         }
       );
     } else {
       if (!code.trim()) {
-        setError('请输入验证码');
+        setError(copywriting('auth.verification_code_required', '请输入验证码'));
         return;
       }
 
       if (code.length !== 6) {
-        setError('验证码应为6位数字');
+        setError(copywriting('auth.verification_code_invalid_should', '验证码应为6位数字'));
         return;
       }
 
@@ -154,7 +163,9 @@ export default function LoginPage() {
             navigate(from, { replace: true });
           },
           onError: (err: { message?: string }) => {
-            setError(err.message || '登录失败，请检查验证码');
+            setError(
+              err.message || copywriting('auth.code_login_failed', '登录失败，请检查验证码')
+            );
           },
         }
       );
@@ -167,7 +178,9 @@ export default function LoginPage() {
       <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
-          <CardTitle className="auth-title text-2xl font-bold text-center">登录</CardTitle>
+          <CardTitle className="auth-title text-2xl font-bold text-center">
+            {copywriting('auth.login_title', '登录')}
+          </CardTitle>
         </CardHeader>
         <CardContent className="auth-card-content">
           <form onSubmit={handleSubmit} className="auth-form space-y-4">
@@ -187,12 +200,12 @@ export default function LoginPage() {
             {/* 邮箱输入 */}
             <div className="auth-field space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
-                邮箱
+                {copywriting('auth.email', '邮箱')}
               </label>
               <Input
                 id="email"
                 type="email"
-                placeholder="请输入邮箱地址"
+                placeholder={copywriting('auth.email_placeholder', '请输入邮箱地址')}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 disabled={isPending}
@@ -213,7 +226,7 @@ export default function LoginPage() {
                   loginMethod === 'password' ? 'text-white' : 'text-zinc-600 hover:text-foreground'
                 }`}
               >
-                密码登录
+                {copywriting('auth.password_login', '密码登录')}
               </button>
               <button
                 type="button"
@@ -222,7 +235,7 @@ export default function LoginPage() {
                   loginMethod === 'code' ? 'text-white' : 'text-zinc-600 hover:text-foreground'
                 }`}
               >
-                验证码登录
+                {copywriting('auth.code_login', '验证码登录')}
               </button>
             </div>
 
@@ -230,12 +243,12 @@ export default function LoginPage() {
             {loginMethod === 'password' && (
               <div className="auth-field space-y-2">
                 <label htmlFor="password" className="text-sm font-medium">
-                  密码
+                  {copywriting('auth.password', '密码')}
                 </label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="请输入密码"
+                  placeholder={copywriting('auth.password_placeholder', '请输入密码')}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   disabled={isPending}
@@ -249,13 +262,16 @@ export default function LoginPage() {
             {loginMethod === 'code' && (
               <div className="auth-field space-y-2">
                 <label htmlFor="code" className="text-sm font-medium">
-                  验证码
+                  {copywriting('auth.verification_code', '验证码')}
                 </label>
                 <div className="auth-code-row flex gap-2">
                   <Input
                     id="code"
                     type="text"
-                    placeholder="请输入6位验证码"
+                    placeholder={copywriting(
+                      'auth.verification_code_placeholder',
+                      '请输入6位验证码'
+                    )}
                     value={code}
                     onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     disabled={isPending}
@@ -269,7 +285,11 @@ export default function LoginPage() {
                     disabled={isPending || countdown > 0 || !email.trim()}
                     className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
                   >
-                    {countdown > 0 ? `${countdown}秒后重发` : '获取验证码'}
+                    {countdown > 0
+                      ? copywriting('auth.resend_after_short', '{seconds}秒后重发', {
+                          seconds: countdown,
+                        })
+                      : copywriting('auth.get_verification_code', '获取验证码')}
                   </Button>
                 </div>
               </div>
@@ -284,24 +304,26 @@ export default function LoginPage() {
                   disabled={isPending}
                   className="h-4 w-4 rounded border-gray-300"
                 />
-                记住我
+                {copywriting('auth.remember_me', '记住我')}
               </label>
               <Link to="/forgot-password" className="text-sm text-primary hover:underline">
-                忘记密码？
+                {copywriting('auth.forgot_password', '忘记密码？')}
               </Link>
             </div>
 
             {/* 登录按钮 */}
             <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
-              {isLoginPending ? '登录中...' : '登录'}
+              {isLoginPending
+                ? copywriting('auth.logging_in', '登录中...')
+                : copywriting('common.login', '登录')}
             </Button>
           </form>
 
           {/* 注册链接 */}
           <div className="auth-footer mt-4 text-center text-sm">
-            还没有账号？{' '}
+            {copywriting('auth.no_account', '还没有账号？')}{' '}
             <Link to="/register" className="text-primary hover:underline">
-              立即注册
+              {copywriting('auth.register_now', '立即注册')}
             </Link>
           </div>
         </CardContent>

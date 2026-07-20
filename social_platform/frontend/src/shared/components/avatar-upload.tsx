@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Camera, X } from 'lucide-react';
 import { Avatar } from '@/shared/components/ui';
 import { cn } from '@/shared/lib/utils';
+import { copywriting } from '@/shared/config/copywriting';
 
 interface AvatarUploadProps {
   /** 当前头像URL */
@@ -186,7 +187,9 @@ export function AvatarUpload({
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
-      <p className="text-xs text-muted-foreground">点击上传或拖拽图片（最大5MB）</p>
+      <p className="text-xs text-muted-foreground">
+        {copywriting('profile.avatar_upload_hint', '点击上传或拖拽图片（最大5MB）')}
+      </p>
     </div>
   );
 }

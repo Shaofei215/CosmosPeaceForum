@@ -5,6 +5,7 @@ import type { UserSearchItem } from '@/features/search';
 import { PostCard } from '@/widgets/post-card';
 import { UserListItem, UserListItemSkeleton } from '@/widgets/user-list-item';
 import { Skeleton } from '@/shared/components/ui';
+import { copywriting } from '@/shared/config/copywriting';
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams();
@@ -59,7 +60,9 @@ export default function SearchPage() {
         </div>
       ) : (
         <div className="py-10 text-center text-muted-foreground">
-          {query.trim() ? '没有找到匹配结果。' : '输入关键词开始搜索。'}
+          {query.trim()
+            ? copywriting('search.empty_results', '没有找到匹配结果。')
+            : copywriting('search.empty_query', '输入关键词开始搜索。')}
         </div>
       )}
 
@@ -67,11 +70,13 @@ export default function SearchPage() {
         {isFetchingNextPage && (
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            加载中...
+            {copywriting('common.loading', '加载中...')}
           </div>
         )}
         {!hasNextPage && items.length > 0 && (
-          <span className="text-sm text-muted-foreground">没有更多结果了</span>
+          <span className="text-sm text-muted-foreground">
+            {copywriting('search.end_results', '没有更多结果了')}
+          </span>
         )}
       </div>
     </div>

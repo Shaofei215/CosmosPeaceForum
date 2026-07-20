@@ -1,3 +1,5 @@
+import { copywriting } from '@/shared/config/copywriting';
+
 /**
  * 用户内容校验工具。
  *
@@ -37,9 +39,12 @@ export function toOptionalVisibleContent(content: string | undefined): string | 
  * @returns 未经裁剪的原正文。
  * @throws {Error} 正文为空或只包含空白字符时抛出。
  */
-export function validateRequiredContent(content: string, label = '内容'): string {
+export function validateRequiredContent(
+  content: string,
+  label = copywriting('content.generic', '内容')
+): string {
   if (!hasVisibleContent(content)) {
-    throw new Error(`${label}不能为空`);
+    throw new Error(copywriting('content.required', '{label}不能为空', { label }));
   }
   return content;
 }

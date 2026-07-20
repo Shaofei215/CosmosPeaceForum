@@ -15,6 +15,7 @@ import { BrandImage } from '@/shared/components/BrandImage';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
 import { cn } from '@/shared/lib/utils';
 import type { SearchType } from '@/features/search';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 筛选类型
@@ -61,14 +62,22 @@ export function TopBar() {
       : 'recommended';
 
   const filters = [
-    { id: 'recommended' as FilterType, label: '推荐', icon: Flame },
-    { id: 'latest' as FilterType, label: '最新', icon: Clock },
-    { id: 'following' as FilterType, label: '关注', icon: Users },
+    {
+      id: 'recommended' as FilterType,
+      label: copywriting('search.recommended', '推荐'),
+      icon: Flame,
+    },
+    { id: 'latest' as FilterType, label: copywriting('search.latest', '最新'), icon: Clock },
+    { id: 'following' as FilterType, label: copywriting('search.following', '关注'), icon: Users },
   ];
 
   const searchFilters = [
-    { id: 'content' as SearchFilterType, label: '帖子', icon: FileText },
-    { id: 'user' as SearchFilterType, label: '用户', icon: User },
+    {
+      id: 'content' as SearchFilterType,
+      label: copywriting('search.posts', '帖子'),
+      icon: FileText,
+    },
+    { id: 'user' as SearchFilterType, label: copywriting('search.users', '用户'), icon: User },
   ];
 
   useEffect(() => {
@@ -126,7 +135,7 @@ export function TopBar() {
         <button
           type="button"
           onClick={handleLogoClick}
-          aria-label="回到主页并刷新"
+          aria-label={copywriting('navigation.refresh_home', '回到主页并刷新')}
           className="flex h-9 min-w-9 max-w-36 shrink-0 items-center justify-start overflow-hidden rounded-[1.5rem] transition-opacity hover:opacity-85 sm:h-10 sm:max-w-48"
         >
           <BrandImage
@@ -146,14 +155,14 @@ export function TopBar() {
         >
           <button
             type="submit"
-            aria-label="搜索"
+            aria-label={copywriting('navigation.search', '搜索')}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
           >
             <Search className="h-4 w-4" />
           </button>
           <Input
             type="text"
-            placeholder="搜索内容..."
+            placeholder={copywriting('search.placeholder', '搜索内容...')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="mobile-top-input h-9 rounded-[1.5rem] border-0 bg-muted/50 pl-10 shadow-none focus-visible:ring-1 sm:h-10"
@@ -214,21 +223,21 @@ export function TopBar() {
             })}
             <button
               onClick={handleBack}
-              aria-label="返回"
+              aria-label={copywriting('common.back', '返回')}
               className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-zinc-100/80 text-sm font-medium text-zinc-600 transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">返回</span>
+              <span className="hidden sm:inline">{copywriting('common.back', '返回')}</span>
             </button>
           </div>
         ) : (
           <button
             onClick={handleBack}
-            aria-label="返回"
+            aria-label={copywriting('common.back', '返回')}
             className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-zinc-100/80 text-sm font-medium text-zinc-600 transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">返回</span>
+            <span className="hidden sm:inline">{copywriting('common.back', '返回')}</span>
           </button>
         )}
       </div>

@@ -3,6 +3,7 @@ import { usePost } from '@/features/post';
 import { useAuthStore } from '@/features/auth';
 import { Skeleton } from '@/shared/components/ui';
 import { PostCard } from '@/widgets/post-card';
+import { copywriting } from '@/shared/config/copywriting';
 
 export default function PostDetailPage() {
   const { postId } = useParams<{ postId: string }>();
@@ -20,9 +21,11 @@ export default function PostDetailPage() {
   if (!post) {
     return (
       <div className="py-12 text-center">
-        <p className="text-muted-foreground">帖子不存在或已被删除</p>
+        <p className="text-muted-foreground">
+          {copywriting('post.not_found', '帖子不存在或已被删除')}
+        </p>
         <Link to="/feed" className="mt-2 inline-block text-primary hover:underline">
-          返回主页
+          {copywriting('common.back_home', '返回主页')}
         </Link>
       </div>
     );

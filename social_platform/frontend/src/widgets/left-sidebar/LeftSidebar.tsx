@@ -11,6 +11,7 @@ import { useUser } from '@/features/user';
 import { useNotificationUnreadCount } from '@/features/notification';
 import { Avatar, Button } from '@/shared/components/ui';
 import { SidebarFooter } from './SidebarFooter';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 左侧边栏组件
@@ -55,14 +56,18 @@ export function LeftSidebar() {
                 className="text-center hover:bg-muted/30 rounded-lg p-1 transition-colors"
               >
                 <p className="text-lg font-semibold">{displayedUser.following_count ?? 0}</p>
-                <p className="text-xs text-muted-foreground">关注</p>
+                <p className="text-xs text-muted-foreground">
+                  {copywriting('common.follow', '关注')}
+                </p>
               </Link>
               <Link
                 to={`/user/${user.id}/followers`}
                 className="text-center hover:bg-muted/30 rounded-lg p-1 transition-colors"
               >
                 <p className="text-lg font-semibold">{displayedUser.followers_count ?? 0}</p>
-                <p className="text-xs text-muted-foreground">被关注</p>
+                <p className="text-xs text-muted-foreground">
+                  {copywriting('common.followers', '被关注')}
+                </p>
               </Link>
             </div>
 
@@ -75,7 +80,7 @@ export function LeftSidebar() {
             >
               <Link to="/notifications">
                 <MessageCircle className="h-4 w-4" />
-                消息
+                {copywriting('common.messages', '消息')}
                 {unreadCount > 0 && (
                   <span className="text-xs font-semibold">
                     {unreadCount > 99 ? '99+' : unreadCount}
@@ -92,13 +97,15 @@ export function LeftSidebar() {
               </div>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground mb-3">登录以查看个人信息</p>
+              <p className="text-sm text-muted-foreground mb-3">
+                {copywriting('profile.login_to_view', '登录以查看个人信息')}
+              </p>
               <Button
                 asChild
                 size="sm"
                 className="w-full gap-2 rounded-md border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800 hover:text-white"
               >
-                <Link to="/login">登录</Link>
+                <Link to="/login">{copywriting('common.login', '登录')}</Link>
               </Button>
             </div>
           </div>
