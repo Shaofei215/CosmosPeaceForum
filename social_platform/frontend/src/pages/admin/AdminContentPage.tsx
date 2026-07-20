@@ -9,13 +9,13 @@ import {
   Braces,
   CheckCircle,
   FileText,
-  Heart,
   MessageCircle,
   RotateCcw,
   Save,
   ScrollText,
   Search,
   ShieldAlert,
+  ThumbsUp,
 } from 'lucide-react';
 import {
   adminApi,
@@ -1236,7 +1236,7 @@ function InteractionStats({ item }: { item: ContentItem }) {
   return (
     <div className="flex items-center gap-3">
       <span className="inline-flex items-center gap-1 text-muted-foreground" title="点赞数">
-        <Heart size={15} />
+        <ThumbsUp size={15} />
         <span className="font-medium tabular-nums text-foreground">{item.like_count}</span>
       </span>
       {item.comment_count !== null && (

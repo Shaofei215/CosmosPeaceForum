@@ -15,10 +15,10 @@ import {
   CornerDownRight,
   Flag,
   Flame,
-  Heart,
   MessageCircle,
   MoreHorizontal,
   Repeat2,
+  ThumbsUp,
   Trash2,
 } from 'lucide-react';
 import type { PostFeedItem } from '@/features/feed';
@@ -557,7 +557,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           }}
           disabled={toggleLike.isPending}
         >
-          <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
+          <ThumbsUp className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
           <span>{post.like_count}</span>
         </button>
         <button
@@ -1195,7 +1195,7 @@ function CommentItem({
                 comment.is_liked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
               }`}
             >
-              <Heart className={`h-3 w-3 ${comment.is_liked ? 'fill-current' : ''}`} />
+              <ThumbsUp className={`h-3 w-3 ${comment.is_liked ? 'fill-current' : ''}`} />
               {comment.like_count > 0 && <span>{comment.like_count}</span>}
             </button>
             {isAuthenticated && !isReplying && (

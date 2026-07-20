@@ -11,7 +11,7 @@ import pytest
 
 from social_platform.app.api.routers import external_agent_skill as skill_router
 from social_platform.app.services.external_agent_skill import (
-    SKILL_VERSION,
+    SKILL_DOWNLOAD_PATH,
     SOURCE_FILES,
     SkillPackage,
     build_skill_package,
@@ -72,13 +72,7 @@ def test_skill_package_renders_deployment_specific_urls(agent_api_base: str) -> 
         }
 
     assert names == SOURCE_FILES
-    assert package.manifest["name"] == "stellar-community"
-    assert package.manifest["platform_display_name"] == "星海社区"
-    assert package.manifest["platform_english_name"] == "Stellar Community"
-    assert package.manifest["platform_api_base"] == "https://community.example/api/v1"
-    assert package.manifest["agent_api_base"] == agent_api_base
-    assert package.manifest["version"] == SKILL_VERSION
-    assert package.download_filename == f"stellar-community-skill-v{SKILL_VERSION}.zip"
+    assert package.download_filename == "stellar-community-skill.zip"
 
     assert rendered_files["SKILL.md"].startswith("---\nname: stellar-community\n")
     assert 'platform_api_base: "https://community.example/api/v1"' in rendered_files["SKILL.md"]
@@ -114,7 +108,7 @@ def test_skill_package_renders_deployment_specific_urls(agent_api_base: str) -> 
         "references/COMMUNITY_GUIDELINES.md": "community-guidelines.md",
     }
     for agreement_path, source_name in agreement_sources.items():
-        assert agreement_path in package.manifest["files"]
+        assert agreement_path in SOURCE_FILES
         assert "星海社区" in rendered_files[agreement_path]
         expected = (license_directory / source_name).read_text(encoding="utf-8").replace(
             "{{PLATFORM_NAME}}",
@@ -144,8 +138,8 @@ def test_skill_config_rejects_unsafe_public_urls(invalid_url: str, error: str) -
         )
 
 
-def test_download_routes_return_cached_runtime_package(monkeypatch: pytest.MonkeyPatch) -> None:
-    """下载端点必须返回同一份部署级缓存以及平台化下载文件名。"""
+def test_download_route_returns_cached_runtime_package(monkeypatch: pytest.MonkeyPatch) -> None:
+    """下载端点必须返回部署级缓存以及平台化下载文件名。"""
 
     settings = SimpleNamespace(
         PLATFORM_DISPLAY_NAME="星海社区",
@@ -157,18 +151,14 @@ def test_download_routes_return_cached_runtime_package(monkeypatch: pytest.Monke
     monkeypatch.setattr(skill_router, "get_settings", lambda: settings)
     skill_router.get_runtime_skill_package.cache_clear()
 
-    manifest_response = skill_router.download_skill_manifest()
-    latest_response = skill_router.download_latest_skill()
-    version_response = skill_router.download_versioned_skill()
+    response = skill_router.download_skill()
 
-    assert manifest_response.status_code == 200
-    assert b'"agent_api_base":"http://localhost:8001/external/v1"' in manifest_response.body
-    assert latest_response.status_code == 200
-    assert latest_response.media_type == "application/zip"
-    assert latest_response.headers["content-disposition"] == (
-        f'attachment; filename="stellar-community-skill-v{SKILL_VERSION}.zip"'
+    assert response.status_code == 200
+    assert response.media_type == "application/zip"
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="stellar-community-skill.zip"'
     )
-    assert latest_response.body == version_response.body
+    assert [route.path for route in skill_router.router.routes] == [SKILL_DOWNLOAD_PATH]
     assert skill_router.get_runtime_skill_package.cache_info().misses == 1
 
     skill_router.get_runtime_skill_package.cache_clear()
