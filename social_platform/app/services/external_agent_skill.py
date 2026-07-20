@@ -1,7 +1,7 @@
 """渲染并打包公开外部 Agent Skill。
 
 本模块以应用内的只读模板为输入，把当前部署的品牌与公开 API 地址注入 Skill，
-供下载路由生成 manifest 和 zip。它不读取账号凭据，也不写入运行期文件。
+供下载路由在内存中生成 zip。它不读取账号凭据，也不写入运行期文件。
 """
 
 from __future__ import annotations
@@ -12,14 +12,11 @@ import unicodedata
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import TypedDict
 from urllib.parse import urlsplit, urlunsplit
 from zipfile import ZIP_DEFLATED, ZipFile
 
 
-SKILL_VERSION = "1.3.0"
-SKILL_SCHEMA_VERSION = "1"
-DOWNLOAD_BASE_PATH = "/downloads/cosmos-peace-forum-skill"
+SKILL_DOWNLOAD_PATH = "/downloads/agent-skill.zip"
 _SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _TEMPLATE_DIRECTORY = Path(__file__).resolve().parents[1] / "skill_templates" / "external_agent"
 _LICENSE_DIRECTORY = Path(__file__).resolve().parents[2] / "license"
@@ -33,29 +30,6 @@ _SOURCE_PATHS: dict[str, Path] = {
     "references/COMMUNITY_GUIDELINES.md": _LICENSE_DIRECTORY / "community-guidelines.md",
 }
 SOURCE_FILES = tuple(_SOURCE_PATHS)
-
-
-class SkillVersionManifest(TypedDict):
-    """可下载 Skill 历史版本的清单项。"""
-
-    version: str
-    url: str
-
-
-class SkillManifest(TypedDict):
-    """外部 Agent Skill 下载接口返回的结构化清单。"""
-
-    name: str
-    version: str
-    schema_version: str
-    description: str
-    platform_display_name: str
-    platform_english_name: str
-    platform_api_base: str
-    agent_api_base: str
-    latest: str
-    versions: list[SkillVersionManifest]
-    files: list[str]
 
 
 @dataclass(frozen=True)
@@ -82,12 +56,10 @@ class SkillPackage:
     """已经渲染完成、可直接返回给下载请求的 Skill 包。
 
     Attributes:
-        manifest: 下载清单及当前部署的公开配置。
         archive: 包含 Skill 文件的 zip 字节串。
         download_filename: HTTP 下载响应使用的安全 ASCII 文件名。
     """
 
-    manifest: SkillManifest
     archive: bytes
     download_filename: str
 
@@ -276,36 +248,6 @@ def _read_rendered_source(relative_path: str, config: SkillBuildConfig) -> str:
     return _render_template(source.read_text(encoding="utf-8"), config)
 
 
-def _create_manifest(config: SkillBuildConfig) -> SkillManifest:
-    """生成当前部署的 Skill 下载清单。
-
-    Args:
-        config: 当前部署的渲染配置。
-
-    Returns:
-        SkillManifest: 可直接序列化为 JSON 的下载清单。
-    """
-
-    return {
-        "name": config.skill_name,
-        "version": SKILL_VERSION,
-        "schema_version": SKILL_SCHEMA_VERSION,
-        "description": f"让外部 Agent 使用普通 {config.platform_display_name} 账号参与社区互动。",
-        "platform_display_name": config.platform_display_name,
-        "platform_english_name": config.platform_english_name,
-        "platform_api_base": config.platform_api_base,
-        "agent_api_base": config.agent_api_base,
-        "latest": f"{DOWNLOAD_BASE_PATH}/latest.zip",
-        "versions": [
-            {
-                "version": SKILL_VERSION,
-                "url": f"{DOWNLOAD_BASE_PATH}/v{SKILL_VERSION}.zip",
-            }
-        ],
-        "files": list(SOURCE_FILES),
-    }
-
-
 def build_skill_package(config: SkillBuildConfig) -> SkillPackage:
     """在内存中构建当前部署可下载的公共 Skill 包。
 
@@ -313,7 +255,7 @@ def build_skill_package(config: SkillBuildConfig) -> SkillPackage:
         config: 当前部署的渲染配置。
 
     Returns:
-        SkillPackage: manifest、zip 字节串和下载文件名。
+        SkillPackage: zip 字节串和下载文件名。
 
     Raises:
         FileNotFoundError: 任一模板文件不存在。
@@ -325,7 +267,6 @@ def build_skill_package(config: SkillBuildConfig) -> SkillPackage:
             archive.writestr(relative_path, _read_rendered_source(relative_path, config))
 
     return SkillPackage(
-        manifest=_create_manifest(config),
         archive=archive_buffer.getvalue(),
-        download_filename=f"{config.skill_name}-skill-v{SKILL_VERSION}.zip",
+        download_filename=f"{config.skill_name}-skill.zip",
     )
