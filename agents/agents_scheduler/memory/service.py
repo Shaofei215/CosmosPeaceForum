@@ -348,7 +348,7 @@ class MemoryService:
 
     async def _retrieve_ranked_memories(
         self,
-        owner_id: int,
+        owner_id: Optional[int],
         context: str,
         limit: int,
         config: MemoryConfig,
@@ -356,12 +356,13 @@ class MemoryService:
         predicate: Callable[[MemoryChunk], bool],
         memory_type: Optional[str] = None,
         max_semantic_timestamp: Optional[float] = None,
+        max_candidates: Optional[int] = None,
     ) -> List[MemoryChunk]:
         """
         自适应扩大双路检索窗口并返回经过主数据校验的最终排序。
 
         Args:
-            owner_id: 记忆所有者 ID。
+            owner_id: 可选的记忆所有者 ID；为空时检索所有角色。
             context: 检索上下文。
             limit: 期望返回的有效记忆数量。
             config: 本次召回使用的配置快照。
@@ -369,6 +370,7 @@ class MemoryService:
             predicate: 基于 SQLite 主数据执行的业务过滤条件。
             memory_type: 可选的 Chroma 记忆类型预过滤。
             max_semantic_timestamp: 可选的 Chroma 最大语义时间预过滤。
+            max_candidates: 可选候选总量上限；管理查询传入主数据总量以取消召回上限。
 
         Returns:
             List[MemoryChunk]: 按相关性和记忆系数综合排序的有效记忆。
@@ -385,7 +387,7 @@ class MemoryService:
             vector_exhausted = True
             logger.warning("向量检索不可用: %s", exc)
 
-        max_candidates = config.recall_max_candidates
+        max_candidates = max_candidates or config.recall_max_candidates
         vector_window = min(config.recall_vector_results, max_candidates)
         bm25_window = min(config.recall_bm25_results, max_candidates)
 
@@ -643,7 +645,7 @@ class MemoryService:
     async def _load_ranked_memories(
         self,
         fused_results: List[Tuple[str, float]],
-        owner_id: int,
+        owner_id: Optional[int],
         predicate: Callable[[MemoryChunk], bool],
         importance_weight: float,
     ) -> List[MemoryChunk]:
@@ -655,7 +657,7 @@ class MemoryService:
 
         Args:
             fused_results: RRF 输出的记忆 ID 与融合分数。
-            owner_id: 当前召回主体的所有者 ID，最终以 SQLite 主数据再次校验。
+            owner_id: 可选召回主体；为空时允许管理端跨角色读取。
             predicate: 针对 SQLite 主数据执行的过滤函数。
             importance_weight: 记忆系数对 RRF 分数的最大乘法增强权重。
 
@@ -665,7 +667,7 @@ class MemoryService:
         candidates: List[Tuple[MemoryChunk, float, float]] = []
         for memory_id, fused_score in fused_results:
             chunk = await self.db.get_memory(memory_id)
-            if chunk and chunk.owner_id == owner_id and predicate(chunk):
+            if chunk and (owner_id is None or chunk.owner_id == owner_id) and predicate(chunk):
                 final_score = fused_score * (
                     1.0 + importance_weight * chunk.memory_coefficient
                 )
@@ -680,6 +682,158 @@ class MemoryService:
             ),
         )
         return [chunk for chunk, _, _ in candidates]
+
+    async def search_memories(
+        self,
+        query: str,
+        owner_id: Optional[int] = None,
+    ) -> List[MemoryChunk]:
+        """
+        使用正式召回算法执行无副作用的管理端记忆检索。
+
+        该入口复用向量检索、BM25、RRF、重要度权重与阈值，但不使用
+        ``recall_limit``，也不会触发普通召回的唤醒增强。候选上限取当前范围内
+        的 SQLite 主数据总量，调用方可在完整排序结果上做稳定分页。
+
+        Args:
+            query: 管理员输入的检索文本。
+            owner_id: 可选角色 ID；为空时跨全部角色检索。
+
+        Returns:
+            List[MemoryChunk]: 按正式召回规则排序的全部有效匹配记忆。
+
+        Raises:
+            ValueError: 查询为空或 owner_id 非正整数时抛出。
+        """
+        normalized_query = query.strip()
+        if not normalized_query:
+            raise ValueError("query 不能为空")
+        if owner_id is not None and owner_id <= 0:
+            raise ValueError("owner_id 必须是正整数")
+
+        with self._config_lock:
+            config = self.config
+            embedding_model = self.embedding_model
+
+        memories = (
+            await self.db.get_user_memories(owner_id)
+            if owner_id is not None
+            else await self.db.get_all_memories()
+        )
+        if not memories:
+            return []
+
+        return await self._retrieve_ranked_memories(
+            owner_id=owner_id,
+            context=normalized_query,
+            limit=len(memories),
+            config=config,
+            embedding_model=embedding_model,
+            predicate=lambda chunk: chunk.memory_coefficient >= config.threshold,
+            max_candidates=len(memories),
+        )
+
+    async def update_memory_primary(
+        self,
+        memory_id: str,
+        content: str,
+        memory_coefficient: float | str,
+        semantic_timestamp: float | str,
+        memory_type: str,
+    ) -> Optional[MemoryChunk]:
+        """
+        校验并更新 SQLite 中的一条记忆主数据。
+
+        派生索引由 ``refresh_memory_indexes`` 在 HTTP 响应后重建，以免远程
+        Embedding 请求阻塞管理员的编辑操作。
+
+        Args:
+            memory_id: 待编辑记忆 ID。
+            content: 新记忆内容。
+            memory_coefficient: 新记忆系数。
+            semantic_timestamp: 新语义时间戳。
+            memory_type: 新记忆类型。
+
+        Returns:
+            Optional[MemoryChunk]: 更新后的记忆；记录不存在时返回 None。
+
+        Raises:
+            TypeError: 内容类型非法时抛出。
+            ValueError: 任一业务字段非法时抛出。
+        """
+        chunk = await self.db.get_memory(memory_id)
+        if chunk is None:
+            return None
+        (
+            normalized_content,
+            _,
+            normalized_coefficient,
+            normalized_semantic_timestamp,
+            normalized_memory_type,
+        ) = _normalize_memory_input(
+            content,
+            chunk.owner_id,
+            memory_coefficient,
+            semantic_timestamp,
+            memory_type,
+        )
+        chunk.content = normalized_content
+        chunk.memory_coefficient = normalized_coefficient
+        chunk.semantic_timestamp = normalized_semantic_timestamp
+        chunk.memory_type = normalized_memory_type
+        await self.db.update_memory(chunk)
+        return chunk
+
+    async def refresh_memory_indexes(self, memory_id: str) -> None:
+        """
+        使用当前主数据异步重建单条记忆的向量与关键词索引。
+
+        Embedding 完成后会再次读取 SQLite；若编辑期间内容再次变化，则重新计算，
+        避免较慢的旧后台任务覆盖较新的向量。记录已删除时直接清理派生索引。
+
+        Args:
+            memory_id: 待重建索引的记忆 ID。
+
+        Returns:
+            None: 两套派生索引处理完成或失败已记录后返回。
+        """
+        while True:
+            chunk = await self.db.get_memory(memory_id)
+            if chunk is None:
+                try:
+                    self.vector_store.delete_vector(memory_id)
+                    self.bm25_index.delete_doc(memory_id)
+                except Exception as exc:
+                    logger.warning("清理已删除记忆的派生索引失败: %s", exc)
+                return
+
+            with self._config_lock:
+                embedding_model = self.embedding_model
+            try:
+                embedding = await embedding_model.get_embedding(chunk.content)
+            except Exception as exc:
+                logger.warning("编辑后重新向量化失败: id=%s..., error=%s", memory_id[:8], exc)
+                return
+
+            latest = await self.db.get_memory(memory_id)
+            if latest is None or latest.content != chunk.content:
+                continue
+
+            try:
+                self.vector_store.upsert_vector(
+                    memory_id=memory_id,
+                    embedding=embedding,
+                    metadata=self._vector_metadata(latest),
+                )
+            except Exception as exc:
+                logger.warning("编辑后更新向量索引失败: id=%s..., error=%s", memory_id[:8], exc)
+
+            try:
+                self.bm25_index.delete_doc(memory_id)
+                self.bm25_index.add_doc(memory_id, latest.content, latest.owner_id)
+            except Exception as exc:
+                logger.warning("编辑后更新 BM25 索引失败: id=%s..., error=%s", memory_id[:8], exc)
+            return
 
     async def decay_memories(self, decay_rate: Optional[float] = None) -> List[str]:
         """

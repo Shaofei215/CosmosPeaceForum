@@ -8,7 +8,7 @@ import {
   Badge, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription,
 } from '@/shared/components/ui';
-import { Upload, Loader2, Brain, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Upload, Loader2, Brain, CheckCircle, AlertCircle, Clock, Search } from 'lucide-react';
 
 type UploadResult = {
   ownerId: number;
@@ -25,6 +25,13 @@ function getErrorMessage(err: unknown): string {
   return '上传失败';
 }
 
+function getSearchErrorMessage(err: unknown): string {
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    return String((err as { message?: unknown }).message ?? '记忆检索失败');
+  }
+  return '记忆检索失败，请确认 Agents 后端已重启并加载最新接口';
+}
+
 function formatTimestamp(ts: number): string {
   if (!ts || ts < 1000000) return 'N/A';
   return new Date(ts * 1000).toLocaleString('zh-CN');
@@ -33,6 +40,10 @@ function formatTimestamp(ts: number): string {
 export default function MemoryListPage() {
   const navigate = useNavigate();
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchPage, setSearchPage] = useState(0);
+  const searchLimit = 20;
 
   const { data: agents, isLoading: agentsLoading } = useQuery({
     queryKey: ['agents'],
@@ -42,6 +53,12 @@ export default function MemoryListPage() {
   const { data: memoryOwners, isLoading: ownersLoading } = useQuery({
     queryKey: ['memory-owners'],
     queryFn: () => memoryApi.listOwners(),
+  });
+
+  const { data: searchResults, isLoading: searchLoading, error: searchError } = useQuery({
+    queryKey: ['memories-all', searchQuery, searchPage],
+    queryFn: () => memoryApi.search(searchQuery, searchPage * searchLimit, searchLimit),
+    enabled: Boolean(searchQuery),
   });
 
   const configuredAgents = agents?.items.filter((a) => a.social_platform_user_id) ?? [];
@@ -66,6 +83,13 @@ export default function MemoryListPage() {
   });
 
   const totalMemories = memoryOwners?.items.reduce((sum, owner) => sum + owner.memory_count, 0) ?? 0;
+  const searchTotalPages = Math.ceil((searchResults?.total ?? 0) / searchLimit);
+
+  const submitSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    setSearchPage(0);
+    setSearchQuery(searchInput.trim());
+  };
 
   if (agentsLoading || ownersLoading) {
     return (
@@ -94,42 +118,150 @@ export default function MemoryListPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {agentsWithMemoryInfo.map(({ agent, ownerId, memoryCount, latestSystemTimestamp, latestSemanticTimestamp, hasMemory }) => (
-          <Card
-            key={ownerId}
-            className="cursor-pointer hover:border-primary transition-colors"
-            onClick={() => navigate(`/memories/${ownerId}`)}
-          >
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="font-semibold text-lg truncate">{agent.name || agent.username}</h3>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Brain size={14} className="text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">{memoryCount} 条记忆</span>
-                  </div>
-                  {hasMemory ? (
-                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                      <Clock size={12} />
-                      <span>最近: {formatTimestamp(latestSemanticTimestamp || latestSystemTimestamp)}</span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground mt-1">暂无记忆，点击添加</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <form onSubmit={submitSearch} className="relative mb-6 max-w-md">
+        <Search
+          size={18}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          value={searchInput}
+          onChange={(event) => {
+            const value = event.target.value;
+            setSearchInput(value);
+            if (!value) {
+              setSearchQuery('');
+              setSearchPage(0);
+            }
+          }}
+          placeholder="检索全部角色记忆，按回车确认..."
+          className="pl-10"
+        />
+      </form>
 
-      {agentsWithMemoryInfo.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            暂无已配置的角色，请先在角色管理页创建角色
-          </CardContent>
-        </Card>
+      {searchQuery ? (
+        <div>
+          {searchError ? (
+            <Card className="border-destructive/50">
+              <CardContent className="py-8 text-center text-destructive">
+                {getSearchErrorMessage(searchError)}
+              </CardContent>
+            </Card>
+          ) : searchLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} className="h-28 w-full" />
+              ))}
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">
+                “{searchQuery}”找到 {searchResults?.total ?? 0} 条相关记忆
+              </p>
+              <div className="space-y-3">
+                {searchResults?.items.map((memory) => (
+                <Card
+                  key={memory.id}
+                  className="cursor-pointer hover:border-primary transition-colors"
+                  onClick={() => navigate(`/memories/${memory.owner_id}`)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="font-medium">{memory.owner_username}</span>
+                          <Badge variant="secondary">
+                            系数: {memory.memory_coefficient.toFixed(2)}
+                          </Badge>
+                          <Badge variant="outline">
+                            {memory.memory_type === 'static' ? '静态记忆' : '动态记忆'}
+                          </Badge>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{memory.content}</p>
+                        {memory.semantic_timestamp > 1000000 && (
+                          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                            <Clock size={12} />
+                            产生于: {formatTimestamp(memory.semantic_timestamp)}
+                          </div>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm">查看角色记忆</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+                ))}
+                {searchResults?.items.length === 0 && (
+                  <Card>
+                    <CardContent className="py-12 text-center text-muted-foreground">
+                      没有找到符合当前检索条件的记忆
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </>
+          )}
+
+          {!searchError && searchTotalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={searchPage === 0}
+                onClick={() => setSearchPage((current) => current - 1)}
+              >
+                上一页
+              </Button>
+              <span className="text-sm">{searchPage + 1} / {searchTotalPages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={searchPage >= searchTotalPages - 1}
+                onClick={() => setSearchPage((current) => current + 1)}
+              >
+                下一页
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {agentsWithMemoryInfo.map(({ agent, ownerId, memoryCount, latestSystemTimestamp, latestSemanticTimestamp, hasMemory }) => (
+              <Card
+                key={ownerId}
+                className="cursor-pointer hover:border-primary transition-colors"
+                onClick={() => navigate(`/memories/${ownerId}`)}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-lg truncate">{agent.name || agent.username}</h3>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Brain size={14} className="text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">{memoryCount} 条记忆</span>
+                      </div>
+                      {hasMemory ? (
+                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                          <Clock size={12} />
+                          <span>最近: {formatTimestamp(latestSemanticTimestamp || latestSystemTimestamp)}</span>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">暂无记忆，点击添加</p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {agentsWithMemoryInfo.length === 0 && (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                暂无已配置的角色，请先在角色管理页创建角色
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       <BatchUploadDialog

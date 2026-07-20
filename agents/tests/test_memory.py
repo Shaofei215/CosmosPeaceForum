@@ -288,6 +288,144 @@ class TestBM25OwnerFiltering:
         assert [result["id"] for result in results] == ["owned"]
         assert index.get_doc_count(owner_id=1) == 1
 
+    def test_global_search_does_not_apply_owner_filter(self, tmp_path):
+        """管理端全局检索应允许不同 owner 的文档共同进入排序。"""
+        index = BM25Index(MemoryConfig(memory_dir=str(tmp_path)))
+        index.rebuild([
+            {"id": "owner-1", "content": "共同关键词", "owner_id": 1},
+            {"id": "owner-2", "content": "共同关键词", "owner_id": 2},
+        ])
+
+        results = index.search("共同关键词", owner_id=None, limit=10)
+
+        assert {result["id"] for result in results} == {"owner-1", "owner-2"}
+
+
+class TestManagementMemorySearch:
+    """验证管理检索复用正式召回配置，但取消 top-k 并保持无副作用。"""
+
+    @pytest.mark.asyncio
+    async def test_search_uses_scope_total_as_candidate_limit(self):
+        """全局检索应以主数据总量覆盖 recall_limit 与候选上限。"""
+        memories = [
+            MemoryChunk(
+                id=f"memory-{index}",
+                owner_id=index + 1,
+                content=f"记忆 {index}",
+                timestamp=1000.0,
+                memory_coefficient=0.8,
+            )
+            for index in range(3)
+        ]
+        service = MemoryService.__new__(MemoryService)
+        service._config_lock = threading.RLock()
+        service.config = MemoryConfig(recall_limit=1, recall_max_candidates=1)
+        service.embedding_model = MagicMock()
+        service.db = MagicMock()
+        service.db.get_all_memories = AsyncMock(return_value=memories)
+        service._retrieve_ranked_memories = AsyncMock(return_value=memories)
+
+        result = await service.search_memories("  共同主题  ")
+
+        assert result == memories
+        call = service._retrieve_ranked_memories.await_args.kwargs
+        assert call["owner_id"] is None
+        assert call["context"] == "共同主题"
+        assert call["limit"] == 3
+        assert call["max_candidates"] == 3
+
+    @pytest.mark.asyncio
+    async def test_owner_search_reads_only_that_owner_scope(self):
+        """角色页检索应在 Chroma、BM25 和 SQLite 三层保持 owner 隔离。"""
+        memory = MemoryChunk(
+            id="owned",
+            owner_id=42,
+            content="角色记忆",
+            timestamp=1000.0,
+            memory_coefficient=0.8,
+        )
+        service = MemoryService.__new__(MemoryService)
+        service._config_lock = threading.RLock()
+        service.config = MemoryConfig()
+        service.embedding_model = MagicMock()
+        service.db = MagicMock()
+        service.db.get_user_memories = AsyncMock(return_value=[memory])
+        service._retrieve_ranked_memories = AsyncMock(return_value=[memory])
+
+        await service.search_memories("主题", owner_id=42)
+
+        service.db.get_user_memories.assert_awaited_once_with(42)
+        assert service._retrieve_ranked_memories.await_args.kwargs["owner_id"] == 42
+
+
+class TestMemoryEditing:
+    """验证单条编辑的主数据提交与响应后派生索引重建。"""
+
+    @pytest.mark.asyncio
+    async def test_update_primary_preserves_identity_and_updates_editable_fields(self):
+        """管理编辑不得改变 owner、创建时间和记忆 ID。"""
+        original = MemoryChunk(
+            id="editable",
+            owner_id=42,
+            content="旧内容",
+            timestamp=1000.0,
+            semantic_timestamp=900.0,
+            memory_coefficient=0.5,
+        )
+        service = MemoryService.__new__(MemoryService)
+        service.db = MagicMock()
+        service.db.get_memory = AsyncMock(return_value=original)
+        service.db.update_memory = AsyncMock()
+
+        updated = await service.update_memory_primary(
+            memory_id="editable",
+            content="  新内容  ",
+            memory_coefficient=0.9,
+            semantic_timestamp=1200.0,
+            memory_type="static",
+        )
+
+        assert updated is original
+        assert updated.id == "editable"
+        assert updated.owner_id == 42
+        assert updated.timestamp == 1000.0
+        assert updated.content == "新内容"
+        assert updated.semantic_timestamp == 1200.0
+        assert updated.memory_coefficient == 0.9
+        assert updated.memory_type == "static"
+        service.db.update_memory.assert_awaited_once_with(original)
+
+    @pytest.mark.asyncio
+    async def test_refresh_indexes_reembeds_and_replaces_both_indexes(self):
+        """内容编辑后必须用当前 Embedding 配置重嵌入，并替换 BM25 文档。"""
+        memory = MemoryChunk(
+            id="editable",
+            owner_id=42,
+            content="新内容",
+            timestamp=1000.0,
+            semantic_timestamp=900.0,
+            memory_coefficient=0.8,
+        )
+        service = MemoryService.__new__(MemoryService)
+        service._config_lock = threading.RLock()
+        service.embedding_model = MagicMock()
+        service.embedding_model.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+        service.db = MagicMock()
+        service.db.get_memory = AsyncMock(return_value=memory)
+        service.vector_store = MagicMock()
+        service.bm25_index = MagicMock()
+
+        await service.refresh_memory_indexes("editable")
+
+        service.embedding_model.get_embedding.assert_awaited_once_with("新内容")
+        service.vector_store.upsert_vector.assert_called_once_with(
+            memory_id="editable",
+            embedding=[0.1, 0.2],
+            metadata=service._vector_metadata(memory),
+        )
+        service.bm25_index.delete_doc.assert_called_once_with("editable")
+        service.bm25_index.add_doc.assert_called_once_with("editable", "新内容", 42)
+
 
 class TestMemoryInputValidation:
     """验证记忆写入边界在服务层统一收口。"""
@@ -429,6 +567,21 @@ class TestVectorMetadataFiltering:
                 {"semantic_timestamp": {"$lte": 1234.0}},
             ]
         }
+
+    def test_global_query_omits_owner_where_filter(self):
+        """跨角色管理检索不应向 Chroma 注入 owner 条件。"""
+        store = VectorStore.__new__(VectorStore)
+        store._lock = threading.RLock()
+        store.collection = MagicMock()
+        store.collection.query.return_value = {
+            "ids": [[]],
+            "metadatas": [[]],
+            "distances": [[]],
+        }
+
+        store.query(query_embedding=[0.1, 0.2], owner_id=None, n_results=20)
+
+        assert "where" not in store.collection.query.call_args.kwargs
 
 
 class TestMemoryDecay:

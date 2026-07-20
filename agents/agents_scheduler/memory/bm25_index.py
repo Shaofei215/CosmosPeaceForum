@@ -132,7 +132,7 @@ class BM25Index:
     def search(
         self,
         query: str,
-        owner_id: int,
+        owner_id: Optional[int],
         limit: int = 5
     ) -> List[Dict]:
         """
@@ -140,7 +140,7 @@ class BM25Index:
 
         Args:
             query: 查询文本
-            owner_id: 用户 ID（用于所有权过滤）
+            owner_id: 可选的用户 ID；为空时用于管理端跨角色检索。
             limit: 返回结果数量
 
         Returns:
@@ -163,15 +163,17 @@ class BM25Index:
                 # 如果查询解析失败，返回空结果
                 return []
 
-            owner_query = tantivy.Query.term_query(
-                self.schema,
-                "owner_id",
-                owner_id,
-            )
-            filtered_query = tantivy.Query.boolean_query([
-                (tantivy.Occur.Must, parsed_query),
-                (tantivy.Occur.Must, owner_query),
-            ])
+            filtered_query = parsed_query
+            if owner_id is not None:
+                owner_query = tantivy.Query.term_query(
+                    self.schema,
+                    "owner_id",
+                    owner_id,
+                )
+                filtered_query = tantivy.Query.boolean_query([
+                    (tantivy.Occur.Must, parsed_query),
+                    (tantivy.Occur.Must, owner_query),
+                ])
             results = []
             top_docs = searcher.search(filtered_query, limit=limit)
 
