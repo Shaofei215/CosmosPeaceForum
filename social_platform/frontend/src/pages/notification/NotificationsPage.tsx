@@ -4,11 +4,11 @@ import {
   AtSign,
   Bell,
   FileText,
-  Heart,
   Info,
   MessageCircle,
   Repeat2,
   ShieldAlert,
+  ThumbsUp,
   UserPlus,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -304,7 +304,7 @@ function CommentActionBar({ postId, commentId }: { postId: number; commentId: nu
           onClick={() => likeMutation.mutate({ commentId })}
           disabled={!user || likeMutation.isPending}
         >
-          <Heart className={`h-3.5 w-3.5 ${isLiked ? 'fill-current' : ''}`} />
+          <ThumbsUp className={`h-3.5 w-3.5 ${isLiked ? 'fill-current' : ''}`} />
           点赞
         </Button>
         <Button
@@ -423,7 +423,7 @@ function PostActionBar({ postId }: { postId: number }) {
           onClick={() => likeMutation.mutate(postId)}
           disabled={!user || likeMutation.isPending}
         >
-          <Heart className={`h-3.5 w-3.5 ${isLiked ? 'fill-current' : ''}`} />
+          <ThumbsUp className={`h-3.5 w-3.5 ${isLiked ? 'fill-current' : ''}`} />
           点赞
         </Button>
         <Button
@@ -507,8 +507,8 @@ function isPlatformSystemNotification(notification: NotificationItem): boolean {
 function getTypeInfo(type: string) {
   const map = {
     repost: { label: '转发了你的内容', icon: Repeat2, color: 'text-primary' },
-    post_like: { label: '赞了你的帖子', icon: Heart, color: 'text-primary' },
-    comment_like: { label: '赞了你的评论', icon: Heart, color: 'text-primary' },
+    post_like: { label: '赞了你的帖子', icon: ThumbsUp, color: 'text-primary' },
+    comment_like: { label: '赞了你的评论', icon: ThumbsUp, color: 'text-primary' },
     comment: { label: '评论了你的帖子', icon: MessageCircle, color: 'text-primary' },
     comment_reply: { label: '回复了你', icon: MessageCircle, color: 'text-primary' },
     mention: { label: '提及了你', icon: AtSign, color: 'text-primary' },

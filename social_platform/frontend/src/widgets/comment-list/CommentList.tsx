@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle, CornerDownRight, Repeat2 } from 'lucide-react';
+import { CornerDownRight, MessageCircle, Repeat2, ThumbsUp } from 'lucide-react';
 import type { Comment } from '@/features/comment';
 import { useToggleCommentLike, useCreateComment } from '@/features/comment';
 import {
@@ -186,7 +186,7 @@ function CommentItem({
                 comment.is_liked ? 'text-red-500' : 'hover:text-red-500'
               }`}
             >
-              <Heart className={`h-3.5 w-3.5 ${comment.is_liked ? 'fill-current' : ''}`} />
+              <ThumbsUp className={`h-3.5 w-3.5 ${comment.is_liked ? 'fill-current' : ''}`} />
               <span>{comment.like_count}</span>
             </button>
             {user && (
