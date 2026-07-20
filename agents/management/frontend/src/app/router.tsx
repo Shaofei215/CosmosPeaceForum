@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { AuthGuard } from '@/features/auth';
 import { AppLayout } from '@/widgets/layout/AppLayout';
 
@@ -17,42 +17,49 @@ import SystemConfigPage from '@/pages/SystemConfigPage';
 import PromptConfigPage from '@/pages/PromptConfigPage';
 import LogPage from '@/pages/LogPage';
 import ErrorPage from '@/pages/ErrorPage';
+import RouteErrorPage from '@/pages/RouteErrorPage';
 
 export const router = createBrowserRouter([
   {
-    path: '/login',
-    element: <LoginPage />,
-  },
-  {
-    path: '/setup',
-    element: (
-      <AuthGuard>
-        <SetupPage />
-      </AuthGuard>
-    ),
-  },
-  {
-    path: '/',
-    element: (
-      <AuthGuard>
-        <AppLayout />
-      </AuthGuard>
-    ),
+    element: <Outlet />,
+    errorElement: <RouteErrorPage />,
     children: [
-      { index: true, element: <Navigate to="/dashboard" replace /> },
-      { path: 'dashboard', element: <DashboardPage /> },
-      { path: 'agents', element: <AgentListPage /> },
-      { path: 'agents/new', element: <AgentCreatePage /> },
-      { path: 'agents/:id', element: <AgentDetailPage /> },
-      { path: 'agents/:id/edit', element: <AgentEditPage /> },
-      { path: 'models', element: <ModelListPage /> },
-      { path: 'memories', element: <MemoryListPage /> },
-      { path: 'memories/:ownerId', element: <MemoryDetailPage /> },
-      { path: 'prompts', element: <PromptConfigPage /> },
-      { path: 'system', element: <SystemConfigPage /> },
-      { path: 'admins', element: <AdminListPage /> },
-      { path: 'logs', element: <LogPage /> },
+      {
+        path: '/login',
+        element: <LoginPage />,
+      },
+      {
+        path: '/setup',
+        element: (
+          <AuthGuard>
+            <SetupPage />
+          </AuthGuard>
+        ),
+      },
+      {
+        path: '/',
+        element: (
+          <AuthGuard>
+            <AppLayout />
+          </AuthGuard>
+        ),
+        children: [
+          { index: true, element: <Navigate to="/dashboard" replace /> },
+          { path: 'dashboard', element: <DashboardPage /> },
+          { path: 'agents', element: <AgentListPage /> },
+          { path: 'agents/new', element: <AgentCreatePage /> },
+          { path: 'agents/:id', element: <AgentDetailPage /> },
+          { path: 'agents/:id/edit', element: <AgentEditPage /> },
+          { path: 'models', element: <ModelListPage /> },
+          { path: 'memories', element: <MemoryListPage /> },
+          { path: 'memories/:ownerId', element: <MemoryDetailPage /> },
+          { path: 'prompts', element: <PromptConfigPage /> },
+          { path: 'system', element: <SystemConfigPage /> },
+          { path: 'admins', element: <AdminListPage /> },
+          { path: 'logs', element: <LogPage /> },
+        ],
+      },
+      { path: '*', element: <ErrorPage /> },
     ],
   },
-  { path: '*', element: <ErrorPage /> },
 ]);
