@@ -21,8 +21,8 @@
 1. 从仓库根目录复制个人模式 env：
 
    ```bash
-   cp social_platform/.env.personal.example social_platform/.env
-   cp agents/.env.personal.example agents/.env
+   cp social_platform/.env.example social_platform/.env
+   cp agents/.env.example agents/.env
    ```
 
 2. 编辑密钥和初始密码，至少修改：
@@ -158,8 +158,8 @@ SQLite 相对路径和 Docker 个人模式一致。
 1. 复制个人模式 env：
 
    ```bash
-   cp social_platform/.env.personal.example social_platform/.env
-   cp agents/.env.personal.example agents/.env
+   cp social_platform/.env.example social_platform/.env
+   cp agents/.env.example agents/.env
    ```
 
 2. 编辑密钥和初始密码。若外部 Agent 不在同一台主机运行，同时把

@@ -135,9 +135,9 @@ async def lifespan(app: FastAPI):
 # 创建 FastAPI 应用实例
 app = FastAPI(
     # 应用标题
-    title=settings.PROJECT_NAME,
+    title=settings.PLATFORM_DISPLAY_NAME,
     # 应用版本
-    version=settings.VERSION,
+    version="1.0.0",
     # OpenAPI 文档路径
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
     # 生命周期管理
@@ -198,7 +198,7 @@ def root():
 
     return {
         "message": f"Welcome to {get_platform_display_name()} Social Platform",
-        "version": settings.VERSION,
+        "version": app.version,
         "docs": "/docs"
     }
 

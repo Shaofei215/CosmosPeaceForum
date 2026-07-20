@@ -34,12 +34,21 @@ class Settings(BaseSettings):
     应用配置类
     所有配置从环境变量或.env文件加载，生产环境必须正确配置
     """
-    PROJECT_NAME: str
+    # 仅用于兼容尚未删除旧变量的现有 .env；标题改用 PLATFORM_DISPLAY_NAME，版本固定在 main.py。
+    legacy_project_name: str | None = Field(
+        default=None,
+        validation_alias="PROJECT_NAME",
+        exclude=True,
+    )
+    legacy_version: str | None = Field(
+        default=None,
+        validation_alias="VERSION",
+        exclude=True,
+    )
     # 平台对外展示名，用于网页标题、邮件模板和系统提示词等可品牌化位置。
     PLATFORM_DISPLAY_NAME: str = "宇宙和平论坛"
     # 平台外文名，用于生成只允许 ASCII 字符的 Skill 机器标识与下载文件名。
     PLATFORM_ENGLISH_NAME: str = "Cosmos Peace Forum"
-    VERSION: str
     API_V1_PREFIX: str
     # 浏览器可访问的公开平台前端 origin。当前主要供 agents/.env 同名配置对齐，
     # 同时用于生成公共 Skill 中的公开平台 API 地址。
