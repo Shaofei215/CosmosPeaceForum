@@ -14,9 +14,12 @@ Scheduler 内部 HTTP 接口服务
 
 import logging
 import threading
+import time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Optional
 from urllib.parse import urlparse
+
+from agents.logging_config import bind_log_context, normalize_request_id, reset_log_context
 
 logger = logging.getLogger(__name__)
 
@@ -26,53 +29,114 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
 
     scheduler_manager = None
 
+    def _begin_request(self) -> None:
+        """初始化内部请求的关联字段与计时器。"""
+
+        self._request_id = normalize_request_id(self.headers.get("X-Request-ID"))
+        self._request_started = time.perf_counter()
+        self._response_status = 500
+        self._log_context_token = bind_log_context(request_id=self._request_id)
+
+    def _finish_request(self, method: str, path: str) -> None:
+        """输出内部接口访问日志并恢复线程上下文。"""
+
+        elapsed_ms = round((time.perf_counter() - self._request_started) * 1000, 3)
+        status_code = self._response_status
+        if path == "/health":
+            level = logging.DEBUG
+        elif status_code >= 500:
+            level = logging.ERROR
+        elif status_code >= 400:
+            level = logging.WARNING
+        else:
+            level = logging.INFO
+        logger.log(
+            level,
+            "HTTP %s %s %d %.3fms",
+            method,
+            path,
+            status_code,
+            elapsed_ms,
+            extra={
+                "event": "http.request",
+                "component": "scheduler",
+                "http": {
+                    "method": method,
+                    "route": path,
+                    "status_code": status_code,
+                    "duration_ms": elapsed_ms,
+                    "client_ip": self.client_address[0],
+                    "user_agent": self.headers.get("User-Agent", ""),
+                },
+            },
+        )
+        reset_log_context(self._log_context_token)
+
     def log_message(self, format, *args):
         """覆盖默认日志输出"""
-        logger.debug(f"[内部接口] {format % args}")
+        logger.debug("[内部接口] %s", format % args)
 
     def _send_json_response(self, status_code: int, data: dict):
         """发送 JSON 响应"""
         try:
+            self._response_status = status_code
             self.send_response(status_code)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('X-Request-ID', self._request_id)
             self.end_headers()
             import json
             self.wfile.write(json.dumps(data).encode('utf-8'))
         except (ConnectionAbortedError, BrokenPipeError, ConnectionResetError) as e:
-            logger.warning(f"[内部接口] 发送响应时连接断开: {e}")
+            logger.warning("[内部接口] 发送响应时连接断开: %s", e)
         except Exception as e:
-            logger.error(f"[内部接口] 发送响应失败: {e}")
+            logger.exception("[内部接口] 发送响应失败: %s", e)
 
     def do_GET(self):
         """处理 GET 请求"""
         path = urlparse(self.path).path
-        if path == '/health':
-            self._send_json_response(200, {
-                "status": "ok",
-                "service": "scheduler",
-            })
-        elif path == '/internal/status':
-            self._handle_status()
-        else:
-            self._send_json_response(404, {"error": "not found"})
+        self._begin_request()
+        try:
+            if path == '/health':
+                self._send_json_response(200, {
+                    "status": "ok",
+                    "service": "scheduler",
+                })
+            elif path == '/internal/status':
+                self._handle_status()
+            else:
+                self._send_json_response(404, {"error": "not found"})
+        except Exception:
+            logger.exception("内部接口 GET 请求处理失败: path=%s", path)
+            if self._response_status == 500:
+                self._send_json_response(500, {"error": "internal server error"})
+        finally:
+            self._finish_request("GET", path)
 
     def do_POST(self):
         """处理 POST 请求"""
         path = urlparse(self.path).path
-        if path == '/internal/reload/system':
-            self._handle_reload_system()
-        elif path == '/internal/reload/model':
-            self._handle_reload_model()
-        elif path == '/internal/reload/agent':
-            self._handle_reload_agent()
-        elif path == '/internal/reload/agents':
-            self._handle_reload_agents()
-        elif path == '/internal/reload/all':
-            self._handle_reload_all()
-        elif path == '/internal/session-injections':
-            self._handle_session_injections()
-        else:
-            self._send_json_response(404, {"error": "not found"})
+        self._begin_request()
+        try:
+            if path == '/internal/reload/system':
+                self._handle_reload_system()
+            elif path == '/internal/reload/model':
+                self._handle_reload_model()
+            elif path == '/internal/reload/agent':
+                self._handle_reload_agent()
+            elif path == '/internal/reload/agents':
+                self._handle_reload_agents()
+            elif path == '/internal/reload/all':
+                self._handle_reload_all()
+            elif path == '/internal/session-injections':
+                self._handle_session_injections()
+            else:
+                self._send_json_response(404, {"error": "not found"})
+        except Exception:
+            logger.exception("内部接口 POST 请求处理失败: path=%s", path)
+            if self._response_status == 500:
+                self._send_json_response(500, {"error": "internal server error"})
+        finally:
+            self._finish_request("POST", path)
 
     def _read_json_body(self) -> dict:
         """读取 JSON 请求体。"""
@@ -114,7 +178,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             logger.info("系统配置已重载")
             self._send_json_response(200, {"message": "system config reloaded"})
         except Exception as e:
-            logger.error(f"系统配置重载失败: {e}")
+            logger.exception("系统配置重载失败: %s", e)
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_model(self):
@@ -129,7 +193,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             logger.info("模型配置已重载")
             self._send_json_response(200, {"message": "model config reloaded"})
         except Exception as e:
-            logger.error(f"模型配置重载失败: {e}")
+            logger.exception("模型配置重载失败: %s", e)
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_agent(self):
@@ -173,7 +237,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             logger.info("Agent 配置已重载")
             self._send_json_response(200, {"message": "agent config reloaded"})
         except Exception as e:
-            logger.error(f"Agent 配置重载失败: {e}")
+            logger.exception("Agent 配置重载失败: %s", e)
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_agents(self):
@@ -209,7 +273,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
                 "results": results,
             })
         except Exception as e:
-            logger.error(f"批量 Agent 配置重载失败: {e}")
+            logger.exception("批量 Agent 配置重载失败: %s", e)
             self._send_json_response(500, {"error": str(e)})
 
     def _handle_reload_all(self):
@@ -242,7 +306,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             logger.info("[热更新] 全部配置已重载")
             self._send_json_response(200, {"message": "all config reloaded"})
         except Exception as e:
-            logger.error(f"全部配置重载失败: {e}")
+            logger.exception("全部配置重载失败: %s", e)
             self._send_json_response(500, {"error": str(e)})
 
     def _restart_all_agents_in_background(self) -> None:
@@ -256,7 +320,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             if self.scheduler_manager:
                 self.scheduler_manager.restart_all()
         except Exception as e:
-            logger.error("[热更新] 后台重启全部 Agent 失败: %s", e)
+            logger.exception("[热更新] 后台重启全部 Agent 失败: %s", e)
 
     def _handle_session_injections(self):
         """添加下一次登录会话使用的一次性注入。"""
@@ -308,7 +372,7 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
         except ValueError as e:
             self._send_json_response(400, {"error": str(e)})
         except Exception as e:
-            logger.error(f"提示词注入 加入队列失败: {e}")
+            logger.exception("提示词注入 加入队列失败: %s", e)
             self._send_json_response(500, {"error": str(e)})
 
 

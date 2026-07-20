@@ -7,6 +7,7 @@ from io import TextIOWrapper
 import uvicorn
 
 from agents.agents_scheduler.__main__ import main as scheduler_main
+from agents.logging_config import configure_logging
 from agents.management.backend.core.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -25,21 +26,18 @@ BANNER: str = r"""
 
 
 def setup_logging(log_level: str = "INFO"):
-    """配置日志"""
-    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
-    logging.basicConfig(
-        level=numeric_level,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        force=True,
+    """使用 Management 与 Scheduler 共享配置初始化日志。"""
+    config = get_config()
+    configure_logging(
+        level=log_level,
+        log_dir=config.log_dir,
+        retention_days=config.log_retention_days,
+        segment_max_mb=config.log_segment_max_mb,
+        max_total_mb=config.log_max_total_mb,
     )
-    logging.getLogger().setLevel(numeric_level)
 
-    from agents.management.backend.services.terminal_log_service import (
-        restore_agents_loggers,
-        terminal_log_capture,
-    )
-    restore_agents_loggers()
+    from agents.management.backend.services.terminal_log_service import terminal_log_capture
+
     terminal_log_capture.start()
 
 
@@ -51,7 +49,8 @@ def start_management_backend():
         "agents.management.backend.main:app",
         host=config.server_host,
         port=config.server_port,
-        log_level="warning",
+        log_level=config.log_level.lower(),
+        log_config=None,
         access_log=False,
     )
 

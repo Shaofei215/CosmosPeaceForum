@@ -58,8 +58,24 @@ def init_db():
     engine = get_engine()
     alembic_cfg = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
     alembic_cfg.set_main_option("sqlalchemy.url", get_config().get_database_url())
-    command.upgrade(alembic_cfg, "head")
-    logger.info("表结构迁移完成: %s", get_config().get_db_path())
+    alembic_cfg.attributes["configure_logger"] = False
+    logger.info(
+        "Management 数据库迁移开始",
+        extra={"event": "migration.start", "component": "migration"},
+    )
+    try:
+        command.upgrade(alembic_cfg, "head")
+    except Exception:
+        logger.exception(
+            "Management 数据库迁移失败",
+            extra={"event": "migration.error", "component": "migration"},
+        )
+        raise
+    logger.info(
+        "表结构迁移完成: %s",
+        get_config().get_db_path(),
+        extra={"event": "migration.complete", "component": "migration"},
+    )
 
 
 def get_db():

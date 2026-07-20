@@ -21,6 +21,7 @@ from social_platform.app.admin.schemas import (
     PaginatedResponse,
 )
 from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_HOT_TOPICS
+from social_platform.app.admin.services.log_service import create_operation_log
 from social_platform.app.api.deps import get_db
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.hot_topic import application as hot_topic_service
@@ -41,16 +42,27 @@ def _serialize_generation_run(generation, topics) -> dict:
     }
 
 
-def _run_generation_for_stream() -> dict:
+def _run_generation_for_stream(admin_id: int | None = None) -> dict:
     db = SessionLocal()
     try:
         generation, topics = hot_topic_service.run_hot_topic_agent(db, force=True)
+        if generation.status != "failed" and admin_id is not None:
+            admin = db.query(PlatformAdminUser).filter(PlatformAdminUser.id == admin_id).first()
+            create_operation_log(
+                db,
+                admin,
+                "generate_hot_topics",
+                "hot_topic_generation",
+                generation.id,
+                details={"topic_count": len(topics), "stream": True},
+            )
+            db.commit()
         payload = _serialize_generation_run(generation, topics)
         if generation.status == "failed":
             payload["error"] = generation.error_message or "生成失败，请检查后端日志"
         return payload
     except Exception as exc:
-        logger.exception("立即生成 SSE 响应生成或序列化失败")
+        logger.exception("热榜 SSE 响应生成或序列化失败")
         safe_error = format_external_error(exc)
         return {"error_code": safe_error.code, "error": safe_error.message}
     finally:
@@ -83,10 +95,13 @@ async def list_hot_topics(
 async def create_hot_topic(
     request: HotTopicCreateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
-        return hot_topic_service.create_hot_topic(db, request.model_dump())
+        topic = hot_topic_service.create_hot_topic(db, request.model_dump())
+        create_operation_log(db, current_admin, "create_hot_topic", "hot_topic", topic.id)
+        db.commit()
+        return topic
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -96,14 +111,17 @@ async def update_hot_topic(
     topic_id: int,
     request: HotTopicUpdateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
-        return hot_topic_service.update_hot_topic(
+        topic = hot_topic_service.update_hot_topic(
             db,
             topic_id=topic_id,
             payload=request.model_dump(exclude_unset=True),
         )
+        create_operation_log(db, current_admin, "update_hot_topic", "hot_topic", topic_id)
+        db.commit()
+        return topic
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -112,10 +130,12 @@ async def update_hot_topic(
 async def delete_hot_topic(
     topic_id: int,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         hot_topic_service.delete_hot_topic(db, topic_id)
+        create_operation_log(db, current_admin, "delete_hot_topic", "hot_topic", topic_id)
+        db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return None
@@ -125,10 +145,13 @@ async def delete_hot_topic(
 async def publish_hot_topic(
     topic_id: int,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
-        return hot_topic_service.publish_hot_topic(db, topic_id)
+        topic = hot_topic_service.publish_hot_topic(db, topic_id)
+        create_operation_log(db, current_admin, "publish_hot_topic", "hot_topic", topic_id)
+        db.commit()
+        return topic
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -137,10 +160,13 @@ async def publish_hot_topic(
 async def archive_hot_topic(
     topic_id: int,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
-        return hot_topic_service.archive_hot_topic(db, topic_id)
+        topic = hot_topic_service.archive_hot_topic(db, topic_id)
+        create_operation_log(db, current_admin, "archive_hot_topic", "hot_topic", topic_id)
+        db.commit()
+        return topic
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -148,7 +174,7 @@ async def archive_hot_topic(
 @router.get("/settings", response_model=HotTopicSettingsResponse)
 async def get_settings(
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     settings = hot_topic_service.get_hot_topic_settings(db)
     return hot_topic_service.serialize_settings(settings)
@@ -158,13 +184,15 @@ async def get_settings(
 async def update_settings(
     request: HotTopicSettingsUpdateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         settings = hot_topic_service.update_hot_topic_settings(
             db,
             request.model_dump(exclude_unset=True),
         )
+        create_operation_log(db, current_admin, "update_hot_topic_settings", "hot_topic_settings")
+        db.commit()
         return hot_topic_service.serialize_settings(settings)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -173,7 +201,7 @@ async def update_settings(
 @router.get("/prompt", response_model=HotTopicPromptConfigResponse)
 async def get_prompt_config(
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     settings = hot_topic_service.get_hot_topic_settings(db)
     return hot_topic_service.serialize_prompt_config(settings)
@@ -183,10 +211,12 @@ async def get_prompt_config(
 async def update_prompt_config(
     request: HotTopicPromptConfigUpdateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
         settings = hot_topic_service.update_hot_topic_prompt_template(db, request.value)
+        create_operation_log(db, current_admin, "update_hot_topic_prompt", "hot_topic_settings")
+        db.commit()
         return hot_topic_service.serialize_prompt_config(settings)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -195,9 +225,11 @@ async def update_prompt_config(
 @router.post("/prompt/reset", response_model=HotTopicPromptConfigResponse)
 async def reset_prompt_config(
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     settings = hot_topic_service.reset_hot_topic_prompt_template(db)
+    create_operation_log(db, current_admin, "reset_hot_topic_prompt", "hot_topic_settings")
+    db.commit()
     return hot_topic_service.serialize_prompt_config(settings)
 
 
@@ -206,7 +238,7 @@ async def list_generations(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     items, total = hot_topic_service.list_generations(db, skip=skip, limit=limit)
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
@@ -214,13 +246,13 @@ async def list_generations(
 
 @router.post("/generate/events")
 async def stream_generate_hot_topics(
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     """通过 Authorization Header 流式触发热门话题生成。"""
 
     async def event_stream():
         yield _sse_event("hot-topics.generate.started", {"status": "running"})
-        payload = await asyncio.to_thread(_run_generation_for_stream)
+        payload = await asyncio.to_thread(_run_generation_for_stream, current_admin.id)
         event_name = "hot-topics.generate.failed" if payload.get("error") else "hot-topics.generate.completed"
         yield _sse_event(event_name, payload)
 
@@ -251,6 +283,15 @@ def generate_hot_topics(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=generation.error_message or "热榜生成失败，请检查后端日志",
             )
+        create_operation_log(
+            db,
+            _,
+            "generate_hot_topics",
+            "hot_topic_generation",
+            generation.id,
+            details={"topic_count": len(topics), "stream": False},
+        )
+        db.commit()
         return {"generation": generation, "topics": topics}
     except hot_topic_service.HotTopicAgentRunError as exc:
         raise HTTPException(
@@ -272,9 +313,19 @@ def generate_hot_topics(
 async def publish_generation(
     generation_id: int,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_HOT_TOPICS)),
 ):
     try:
-        return hot_topic_service.publish_generation(db, generation_id)
+        topics = hot_topic_service.publish_generation(db, generation_id)
+        create_operation_log(
+            db,
+            current_admin,
+            "publish_hot_topic_generation",
+            "hot_topic_generation",
+            generation_id,
+            details={"topic_count": len(topics)},
+        )
+        db.commit()
+        return topics
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

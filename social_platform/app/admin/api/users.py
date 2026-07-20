@@ -30,6 +30,7 @@ from social_platform.app.admin.services.moderation_service import (
     release_current_user_restriction,
 )
 from social_platform.app.admin.services.permissions import PERMISSION_MANAGE_USERS
+from social_platform.app.admin.services.log_service import create_operation_log
 from social_platform.app.api.deps import get_db
 from social_platform.app.domains.content_safety import llm_moderation as content_moderation_llm_service
 from social_platform.app.domains.content_safety.admin_application import (
@@ -84,13 +85,20 @@ async def get_user_report_moderation_settings(
 async def update_user_report_moderation_settings(
     request: ContentModerationLLMSettingsUpdateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
 ):
     try:
         settings = content_moderation_llm_service.update_content_moderation_llm_settings(
             db,
             request.model_dump(exclude_unset=True),
         )
+        create_operation_log(
+            db,
+            current_admin,
+            "update_user_report_moderation_settings",
+            "user_moderation_settings",
+        )
+        db.commit()
         return content_moderation_llm_service.serialize_settings(settings)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -109,10 +117,17 @@ async def get_user_report_moderation_prompt(
 async def update_user_report_moderation_prompt(
     request: ContentModerationLLMPromptConfigUpdateRequest,
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
 ):
     try:
         settings = content_moderation_llm_service.update_prompt_template(db, request.value)
+        create_operation_log(
+            db,
+            current_admin,
+            "update_user_report_moderation_prompt",
+            "user_moderation_settings",
+        )
+        db.commit()
         return content_moderation_llm_service.serialize_prompt_config(settings)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -121,9 +136,16 @@ async def update_user_report_moderation_prompt(
 @router.post("/report-moderation/prompt/reset", response_model=ContentModerationLLMPromptConfigResponse)
 async def reset_user_report_moderation_prompt(
     db: Session = Depends(get_db),
-    _: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
 ):
     settings = content_moderation_llm_service.reset_prompt_template(db)
+    create_operation_log(
+        db,
+        current_admin,
+        "reset_user_report_moderation_prompt",
+        "user_moderation_settings",
+    )
+    db.commit()
     return content_moderation_llm_service.serialize_prompt_config(settings)
 
 

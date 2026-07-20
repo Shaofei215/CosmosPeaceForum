@@ -3,8 +3,10 @@ Management Backend - FastAPI 应用主入口
 管理端后端服务，端口 8001
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+from contextlib import suppress
 from html import escape
 from pathlib import Path
 
@@ -14,15 +16,44 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from agents.management.backend.core.config import get_config
+from agents.logging_config import AccessLogMiddleware, SERVICE_NAME, configure_logging
 from agents.management.backend.core.database import init_db
 from agents.management.backend.api import api_router
 from agents.management.backend.services.init_data import initialize_database
+from agents.management.backend.services.log_service import cleanup_expired_logs
 from agents.management.backend.services.terminal_log_service import terminal_log_capture
 from agents.external_access import router as external_access_router
 
 logger = logging.getLogger(__name__)
 
 PLATFORM_DISPLAY_NAME_PLACEHOLDER = "__PLATFORM_DISPLAY_NAME__"
+
+
+def cleanup_management_audit_logs() -> None:
+    """使用独立数据库会话清理超过保留期限的 Management 审计日志。"""
+
+    from agents.management.backend.core.database import get_session_local
+
+    config = get_config()
+    with get_session_local()() as db:
+        deleted = cleanup_expired_logs(db, config.log_retention_days)
+    logger.info(
+        "Management 审计日志清理完成: deleted=%d retention_days=%d",
+        deleted,
+        config.log_retention_days,
+        extra={"event": "audit.retention_cleanup", "component": "management"},
+    )
+
+
+async def audit_cleanup_loop() -> None:
+    """每 24 小时执行一次 Management 审计日志清理。"""
+
+    while True:
+        await asyncio.sleep(24 * 60 * 60)
+        try:
+            await asyncio.to_thread(cleanup_management_audit_logs)
+        except Exception:
+            logger.exception("Management 审计日志清理失败")
 
 
 def get_frontend_dist_dir() -> Path:
@@ -92,6 +123,11 @@ async def lifespan(app: FastAPI):
 
     init_db()
     initialize_database()
+    try:
+        await asyncio.to_thread(cleanup_management_audit_logs)
+    except Exception:
+        logger.exception("Management 启动时审计日志清理失败")
+    audit_cleanup_task = asyncio.create_task(audit_cleanup_loop())
 
     logger.info("管理器启动完成!")
     logger.info("=" * 50)
@@ -99,12 +135,23 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("管理器关闭中...")
+    audit_cleanup_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await audit_cleanup_task
     terminal_log_capture.stop()
 
 
 def create_app() -> FastAPI:
     """创建 FastAPI 应用实例"""
     config = get_config()
+    if getattr(logging.getLogger(), "_cpf_logging_service", None) != SERVICE_NAME:
+        configure_logging(
+            level=config.log_level,
+            log_dir=config.log_dir,
+            retention_days=config.log_retention_days,
+            segment_max_mb=config.log_segment_max_mb,
+            max_total_mb=config.log_max_total_mb,
+        )
 
     app = FastAPI(
         title="Agent Management Backend",
@@ -121,6 +168,11 @@ def create_app() -> FastAPI:
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+    app.add_middleware(
+        AccessLogMiddleware,
+        api_prefixes=("/api", "/external/v1"),
+        health_paths=("/external/v1/health",),
     )
 
     # 注册路由

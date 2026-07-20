@@ -31,7 +31,7 @@ COPY requirements.txt ./social_platform/requirements.txt
 RUN pip install --no-cache-dir -r ./social_platform/requirements.txt
 
 COPY app/ ./social_platform/app/
-COPY __init__.py __main__.py ./social_platform/
+COPY __init__.py __main__.py migrate.py ./social_platform/
 COPY alembic/ ./social_platform/alembic/
 COPY alembic.ini ./social_platform/alembic.ini
 COPY entrypoint.sh ./social_platform/entrypoint.sh

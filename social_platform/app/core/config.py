@@ -14,6 +14,7 @@ from social_platform.app.core.runtime_secrets import resolve_persistent_secrets
 _DEFAULT_RUNTIME_SECRETS_PATH = (
     Path(__file__).resolve().parents[1] / "data" / "generated_secrets.json"
 )
+_DEFAULT_LOG_DIR = Path(__file__).resolve().parents[1] / "data" / "logs"
 _JWT_SECRET_PLACEHOLDERS = {"change-this-to-a-long-random-secret"}
 _PASSWORD_PLACEHOLDERS = {"ChangeMe123!"}
 
@@ -119,6 +120,13 @@ class Settings(BaseSettings):
     SERVER_HOST: str = "0.0.0.0"
     SERVER_PORT: int = 8000
 
+    # 运行日志配置。目录位于现有持久化 data volume 内。
+    LOG_LEVEL: str = "INFO"
+    LOG_DIR: str = str(_DEFAULT_LOG_DIR)
+    LOG_RETENTION_DAYS: int = Field(default=30, ge=1)
+    LOG_SEGMENT_MAX_MB: int = Field(default=50, ge=1)
+    LOG_MAX_TOTAL_MB: int = Field(default=512, ge=1)
+
     # 公开平台管理器初始管理员。首次启动会创建该账号，并强制登录后修改。
     PLATFORM_ADMIN_INITIAL_USERNAME: str = Field(
         default="platform_admin",
@@ -138,6 +146,24 @@ class Settings(BaseSettings):
         if not normalized:
             raise ValueError("PLATFORM_ADMIN_INITIAL_USERNAME 不能为空")
         return normalized
+
+    @field_validator("LOG_LEVEL", mode="before")
+    @classmethod
+    def normalize_log_level(cls, value: str) -> str:
+        """校验并规范化标准日志级别。"""
+
+        normalized = str(value).strip().upper()
+        if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError("LOG_LEVEL 必须是 DEBUG/INFO/WARNING/ERROR/CRITICAL")
+        return normalized
+
+    @field_validator("LOG_DIR", mode="before")
+    @classmethod
+    def normalize_log_dir(cls, value: str | None) -> str:
+        """空目录配置回退到公开平台持久化数据目录。"""
+
+        normalized = str(value or "").strip()
+        return normalized or str(_DEFAULT_LOG_DIR)
 
     @model_validator(mode="after")
     def validate_avatar_storage_settings(self):

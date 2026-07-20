@@ -14,7 +14,6 @@ import logging
 import random
 import time
 import threading
-import traceback
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List, Iterable
 
@@ -32,6 +31,7 @@ from agents.agents_scheduler.scheduler.time_system import get_time_system
 from agents.agents_scheduler.memory.decay_scheduler import MemoryDecayScheduler
 from agents.management.backend.db_client import get_db_client
 from agents.platform_access import PlatformAccessError, PlatformClient
+from agents.logging_config import logging_context
 
 logger = logging.getLogger(__name__)
 
@@ -129,15 +129,15 @@ class AIUserScheduler(threading.Thread):
 
     def run(self):
         """线程主循环"""
-        logger.info(f"{self.name} 调度线程启动")
-
-        try:
-            self._scheduling_loop()
-        except Exception as e:
-            logger.error(f"{self.name} 调度线程异常: {e}\n{traceback.format_exc()}")
-        finally:
-            clear_current_context()
-            logger.info(f"{self.name} 调度线程退出")
+        with logging_context(agent_id=self.agent_id):
+            logger.info("%s 调度线程启动", self.name, extra={"event": "agent.thread.start"})
+            try:
+                self._scheduling_loop()
+            except Exception:
+                logger.exception("%s 调度线程异常", self.name, extra={"event": "agent.thread.error"})
+            finally:
+                clear_current_context()
+                logger.info("%s 调度线程退出", self.name, extra={"event": "agent.thread.stop"})
 
     def _scheduling_loop(self):
         """调度循环"""
@@ -242,8 +242,8 @@ class AIUserScheduler(threading.Thread):
             llm_config = SessionConfig.from_db(model_config_id=int(self.model_config_id))
 
             run_session(session_cfg, self.relation_map, config=llm_config)
-        except Exception as e:
-            logger.error(f"{self.name} 会话执行失败: {e}\n{traceback.format_exc()}")
+        except Exception:
+            logger.exception("%s 会话执行失败", self.name, extra={"event": "agent.session.error"})
         finally:
             self.is_logged_in = False
             clear_current_context()

@@ -1,5 +1,7 @@
 """平台内管理员认证与可撤销 session 路由。"""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -15,11 +17,13 @@ from social_platform.app.admin.schemas import (
     AdminSessionResponse,
 )
 from social_platform.app.admin.services import auth_service
+from social_platform.app.admin.services.log_service import create_operation_log
 from social_platform.app.api.deps import AccessTokenPayload, get_access_payload, get_db
 from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.identity.models import UserSession
 
 router = APIRouter(prefix="/auth", tags=["platform-admin-auth"])
+logger = logging.getLogger(__name__)
 
 
 def _request_session_context(request: Request) -> tuple[str, str | None, str | None]:
@@ -61,6 +65,11 @@ async def login(request: AdminLoginRequest, http_request: Request, db: Session =
     """平台管理员登录，创建可撤销 session 并返回 access/refresh token。"""
     admin = auth_service.authenticate_admin(db, request.username, request.password)
     if not admin:
+        logger.warning(
+            "平台管理员登录失败: username=%s",
+            request.username,
+            extra={"event": "security.admin_login_failed", "component": "admin"},
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
     auth_service.update_last_login(db, admin)
     db.refresh(admin)
@@ -75,6 +84,14 @@ async def login(request: AdminLoginRequest, http_request: Request, db: Session =
         ip_address=ip_address,
         revoke_same_client=False,
     )
+    create_operation_log(
+        db,
+        admin,
+        "admin_login",
+        "admin_session",
+        details={"session_id": token_pair["session_id"]},
+    )
+    db.commit()
     return AdminLoginResponse(admin=auth_service.admin_to_response(admin), **token_pair)
 
 
@@ -105,9 +122,18 @@ async def logout(
 ):
     """撤销当前平台管理员 session。"""
     payload = _current_admin_payload(credentials, db)
+    admin = auth_service.get_admin_by_id(db, int(payload["sub"]))
     session = session_service.get_active_session(db, payload["sid"], "platform_admin")
     if session is not None:
         session_service.revoke_session(db, session)
+    create_operation_log(
+        db,
+        admin,
+        "admin_logout",
+        "admin_session",
+        details={"session_id": payload["sid"]},
+    )
+    db.commit()
     return {"message": "登出成功"}
 
 
@@ -134,7 +160,21 @@ async def revoke_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能通过该接口撤销当前会话，请使用 logout")
     revoked = session_service.revoke_session_id(db, int(payload["sub"]), "platform_admin", session_id)
     if not revoked:
+        logger.warning(
+            "平台管理员会话撤销失败: session_id=%s",
+            session_id,
+            extra={"event": "security.session_revoke_failed", "component": "admin"},
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在或已失效")
+    admin = auth_service.get_admin_by_id(db, int(payload["sub"]))
+    create_operation_log(
+        db,
+        admin,
+        "revoke_admin_session",
+        "admin_session",
+        details={"session_id": session_id},
+    )
+    db.commit()
     return {"message": "会话已撤销"}
 
 
@@ -156,6 +196,12 @@ async def update_profile(
     try:
         admin = auth_service.update_profile(db, current_admin, request)
     except ValueError as exc:
+        logger.warning(
+            "平台管理员凭据或资料变更失败: admin_id=%s reason=%s",
+            current_admin.id,
+            exc,
+            extra={"event": "security.admin_profile_update_failed", "component": "admin"},
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if password_changed:
         payload = _current_admin_payload(credentials, db)
@@ -165,4 +211,13 @@ async def update_profile(
             "platform_admin",
             str(payload["sid"]),
         )
+    create_operation_log(
+        db,
+        admin,
+        "update_admin_profile",
+        "admin",
+        admin.id,
+        details={"password_changed": password_changed},
+    )
+    db.commit()
     return auth_service.admin_to_response(admin)

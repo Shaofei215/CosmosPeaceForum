@@ -29,7 +29,7 @@ def initialize_database():
             logger.info("默认管理员账号已创建")
             config = get_config()
             if config.admin_password_was_generated:
-                # 敏感凭据绕过应用日志捕获器，避免写入 terminal_logs.jsonl。
+                # 敏感凭据绕过应用日志体系，避免写入终端缓冲和 JSONL。
                 print(
                     f"角色管理器初始管理员 {config.admin_username} 的初始密码: "
                     f"{config.admin_password}",

@@ -21,6 +21,7 @@ from sqlmodel import Session
 
 from agents.management.backend.core.database import get_db
 from agents.management.backend.core.config import get_config
+from agents.logging_config import get_outbound_request_headers
 from agents.management.backend.api.deps import require_permission
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.agent_config import AgentConfig
@@ -934,7 +935,10 @@ async def upload_agent_avatar(
         import requests
         response = requests.post(
             avatar_url,
-            headers={"Authorization": f"Bearer {token}"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                **get_outbound_request_headers(),
+            },
             files=files,
             timeout=30,
         )

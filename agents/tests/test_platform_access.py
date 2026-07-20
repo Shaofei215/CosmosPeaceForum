@@ -3,6 +3,7 @@
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+from agents.logging_config import logging_context
 from agents.platform_access import PlatformClient
 
 
@@ -77,3 +78,19 @@ def test_platform_client_uploads_file_without_optional_content_type() -> None:
 
     assert result == {"ok": True}
     assert request.call_args.kwargs["files"]["file"] == ("avatar.bin", image)
+
+
+def test_platform_client_propagates_current_request_id() -> None:
+    """Agent 调用公开平台时应沿用当前会话的关联 ID。"""
+
+    response = MagicMock(status_code=200, content=b'{"ok": true}')
+    response.json.return_value = {"ok": True}
+    client = PlatformClient("http://platform/api/v1", "admin-secret")
+
+    with (
+        logging_context(request_id="session-request-1"),
+        patch("agents.platform_access.client.requests.request", return_value=response) as request,
+    ):
+        client.request("GET", "/feeds/", access_token="user-token")
+
+    assert request.call_args.kwargs["headers"]["X-Request-ID"] == "session-request-1"

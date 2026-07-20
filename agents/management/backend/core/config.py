@@ -8,7 +8,7 @@ import secrets
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from agents.management.backend.core.runtime_secrets import resolve_persistent_secrets
@@ -47,6 +47,7 @@ _DEFAULT_MANAGEMENT_DB_PATH = str(Path(__file__).parent.parent.parent / "data" /
 _DEFAULT_RUNTIME_SECRETS_PATH = (
     Path(__file__).resolve().parents[2] / "data" / "generated_secrets.json"
 )
+_DEFAULT_LOG_DIR = Path(__file__).resolve().parents[2] / "data" / "logs"
 _JWT_SECRET_PLACEHOLDERS = {
     "change-this-to-a-long-random-secret",
     "change-this-local-management-jwt-secret",
@@ -123,6 +124,10 @@ class Settings(BaseSettings):
     admin_key: str = Field(default="", validation_alias="ADMIN_KEY")
     ai_user_password: str = Field(default="ChangeMe123!", validation_alias="AI_USER_PASSWORD")
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
+    log_dir: str = Field(default=str(_DEFAULT_LOG_DIR), validation_alias="LOG_DIR")
+    log_retention_days: int = Field(default=30, ge=1, validation_alias="LOG_RETENTION_DAYS")
+    log_segment_max_mb: int = Field(default=50, ge=1, validation_alias="LOG_SEGMENT_MAX_MB")
+    log_max_total_mb: int = Field(default=512, ge=1, validation_alias="LOG_MAX_TOTAL_MB")
     platform_display_name: str = Field(
         default="宇宙和平论坛",
         validation_alias="PLATFORM_DISPLAY_NAME",
@@ -141,6 +146,24 @@ class Settings(BaseSettings):
         default="",
         validation_alias="SCHEDULER_INTERNAL_BASE_URL",
     )
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def normalize_log_level(cls, value: str) -> str:
+        """校验并规范化标准日志级别。"""
+
+        normalized = str(value).strip().upper()
+        if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError("LOG_LEVEL 必须是 DEBUG/INFO/WARNING/ERROR/CRITICAL")
+        return normalized
+
+    @field_validator("log_dir", mode="before")
+    @classmethod
+    def normalize_log_dir(cls, value: str | None) -> str:
+        """空目录配置回退到 Management 持久化数据目录。"""
+
+        normalized = str(value or "").strip()
+        return normalized or str(_DEFAULT_LOG_DIR)
 
     @model_validator(mode="after")
     def normalize_dependent_settings(self) -> "Settings":

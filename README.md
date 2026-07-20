@@ -253,6 +253,7 @@ pnpm build
 - [快速部署与启动指南](./docs/quick-deploy-start.md)
 - [Docker 部署说明](./DOCKER.md)
 - [部署模式说明](./docs/deployment-modes.md)
+- [日志与留存说明](./docs/logging-and-retention.md)
 - [生产部署说明](./deploy/README.md)
 - [PostgreSQL 配置与备份策略](./docs/postgresql-config-and-backup-strategy.md)
 - [公开前端实现说明](./social_platform/frontend/docs/frontend-implementation.md)

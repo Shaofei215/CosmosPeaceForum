@@ -1,12 +1,15 @@
 """Management Backend - 操作日志服务"""
 
 import json
+from datetime import timedelta
 from typing import Any, List, Optional
 
 from sqlmodel import Session, select
 
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.operation_log import OperationLog
+from agents.logging_config import get_log_context
+from agents.management.backend.core.timezone import local_now
 
 
 def create_log(
@@ -18,11 +21,18 @@ def create_log(
     details: Optional[dict[str, Any] | str] = None,
 ) -> OperationLog:
     """创建操作日志"""
-    details_value = (
-        details
-        if isinstance(details, str)
-        else json.dumps(details or {}, ensure_ascii=False)
-    )
+    if isinstance(details, str):
+        try:
+            parsed_details = json.loads(details) if details else {}
+        except json.JSONDecodeError:
+            parsed_details = {"message": details}
+    else:
+        parsed_details = dict(details or {})
+    context = get_log_context()
+    for key in ("request_id", "client_ip"):
+        if context.get(key) is not None:
+            parsed_details.setdefault(key, context[key])
+    details_value = json.dumps(parsed_details, ensure_ascii=False)
     log = OperationLog(
         operator_id=admin.id if admin else None,
         operator_username=admin.username if admin else None,
@@ -35,6 +45,17 @@ def create_log(
     db.commit()
     db.refresh(log)
     return log
+
+
+def cleanup_expired_logs(db: Session, retention_days: int) -> int:
+    """删除超过保留期限的 Management 管理审计日志。"""
+
+    cutoff = local_now() - timedelta(days=retention_days)
+    expired = list(db.exec(select(OperationLog).where(OperationLog.created_at < cutoff)).all())
+    for item in expired:
+        db.delete(item)
+    db.commit()
+    return len(expired)
 
 
 def list_logs(
