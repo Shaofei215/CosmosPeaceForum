@@ -9,6 +9,7 @@ import type {
   EmbeddingConfig, EmbeddingConfigCreate, EmbeddingConfigUpdate,
   ChunkModelConfig, ChunkModelConfigCreate, ChunkModelConfigUpdate,
   MemoryListResponse, MemoryOwnerListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
+  MemoryUpdateRequest, MemoryUpdateResponse,
   TerminalLog, TerminalLogListResponse,
 } from '@/shared/types/api';
 
@@ -189,6 +190,12 @@ export const memoryApi = {
   listOwners: () =>
     apiClient.get<MemoryOwnerListResponse>('/memories/owners'),
 
+  search: (query: string, skip = 0, limit = 50, ownerId?: number) => {
+    const params = new URLSearchParams({ query, skip: String(skip), limit: String(limit) });
+    if (ownerId !== undefined) params.set('owner_id', String(ownerId));
+    return apiClient.get<MemoryListResponse>(`/memories/search?${params.toString()}`);
+  },
+
   uploadSingle: (data: MemoryUploadRequest) =>
     apiClient.post<MessageResponse>('/memories/upload', data, { timeout: 300000 }),
 
@@ -197,6 +204,9 @@ export const memoryApi = {
 
   deleteMemory: (memoryId: string) =>
     apiClient.delete<MessageResponse>(`/memories/${memoryId}`),
+
+  updateMemory: (memoryId: string, data: MemoryUpdateRequest) =>
+    apiClient.put<MemoryUpdateResponse>(`/memories/${memoryId}`, data),
 
   clearUserMemories: (ownerId: number) =>
     apiClient.delete<MessageResponse>(`/memories/user/${ownerId}`),

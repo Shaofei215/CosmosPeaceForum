@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 import jieba
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
 
 from langchain_core.tools import tool
@@ -19,6 +19,7 @@ from agents.management.backend.core.database import get_db
 from agents.management.backend.api.deps import require_permission
 from agents.management.backend.models.admin_user import AdminUser
 from agents.management.backend.models.agent_config import AgentConfig
+from agents.management.backend.schemas import MemoryUpdateRequest
 from agents.management.backend.services.log_service import create_log
 from agents.management.backend.services.chunk_model_service import get_active_chunk_model_config
 from agents.management.backend.services.prompt_service import get_prompt_config
@@ -42,11 +43,50 @@ def _get_memory_service():
     global MEMORY_SERVICE, MEMORY_DB
     if MEMORY_SERVICE is None:
         from agents.agents_scheduler.memory.service import get_memory_service
-        from agents.agents_scheduler.memory.database import MemoryDB
-        from agents.agents_scheduler.memory.config import get_memory_config
         MEMORY_SERVICE = get_memory_service()
-        MEMORY_DB = MemoryDB(get_memory_config())
+        MEMORY_DB = MEMORY_SERVICE.db
     return MEMORY_SERVICE, MEMORY_DB
+
+
+def _memory_item(chunk: Any, agent_map: dict[int, str]) -> dict[str, Any]:
+    """
+    将记忆主数据转换为管理前端的稳定响应结构。
+
+    Args:
+        chunk: Scheduler 的 MemoryChunk 实例。
+        agent_map: 社交平台用户 ID 到角色名称的映射。
+
+    Returns:
+        dict[str, Any]: 前端列表、检索和更新接口共用的记忆字段。
+    """
+    return {
+        "id": chunk.id,
+        "owner_id": chunk.owner_id,
+        "owner_username": agent_map.get(chunk.owner_id, f"User-{chunk.owner_id}"),
+        "content": chunk.content,
+        "semantic_timestamp": chunk.semantic_timestamp,
+        "system_timestamp": chunk.timestamp,
+        "memory_coefficient": chunk.memory_coefficient,
+        "memory_type": chunk.memory_type,
+    }
+
+
+def _agent_name_map(db: Session) -> dict[int, str]:
+    """
+    构建记忆 owner 到管理角色显示名的映射。
+
+    Args:
+        db: Management SQLModel 数据库会话。
+
+    Returns:
+        dict[int, str]: social_platform_user_id 到角色名的映射。
+    """
+    agents = db.exec(select(AgentConfig)).all()
+    return {
+        agent.social_platform_user_id: agent.name
+        for agent in agents
+        if agent.social_platform_user_id
+    }
 
 
 def _auto_chunk_text(text: str, chunk_size: int = 512, overlap: int = 50) -> list[str]:
@@ -284,8 +324,8 @@ async def _llm_smart_chunk(
 
 @router.get("/", response_model=dict)
 def list_memories(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=200),
     owner_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MEMORIES)),
@@ -299,27 +339,43 @@ def list_memories(
         all_memories = memory_db._get_all_memories_sync()
 
     # 获取 agent 用户名映射
-    agent_stmt = select(AgentConfig)
-    agents = db.exec(agent_stmt).all()
-    agent_map = {a.social_platform_user_id: a.name for a in agents if a.social_platform_user_id}
+    agent_map = _agent_name_map(db)
 
     total = len(all_memories)
     sliced = all_memories[skip:skip + limit]
 
-    items = []
-    for chunk in sliced:
-        items.append({
-            "id": chunk.id,
-            "owner_id": chunk.owner_id,
-            "owner_username": agent_map.get(chunk.owner_id, f"User-{chunk.owner_id}"),
-            "content": chunk.content,
-            "semantic_timestamp": chunk.semantic_timestamp,
-            "system_timestamp": chunk.timestamp,
-            "memory_coefficient": chunk.memory_coefficient,
-            "memory_type": chunk.memory_type,
-        })
+    items = [_memory_item(chunk, agent_map) for chunk in sliced]
 
     return {"items": items, "total": total}
+
+
+@router.get("/search", response_model=dict)
+async def search_memories(
+    query: str = Query(min_length=1),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    owner_id: Optional[int] = Query(default=None, gt=0),
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MEMORIES)),
+):
+    """
+    使用角色正式召回算法检索单个角色或全部角色的记忆。
+
+    该管理入口不触发唤醒增强、不使用召回数量上限；完整排序后再做分页，
+    RRF、重要度权重、阈值及双路候选配置继续与 Scheduler 共用。
+    """
+    service, _ = _get_memory_service()
+    try:
+        ranked = await service.search_memories(query=query, owner_id=owner_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    agent_map = _agent_name_map(db)
+    sliced = ranked[skip:skip + limit]
+    return {
+        "items": [_memory_item(chunk, agent_map) for chunk in sliced],
+        "total": len(ranked),
+    }
 
 
 @router.get("/owners", response_model=dict)
@@ -503,6 +559,50 @@ def delete_memory(
 
     create_log(db, current_admin, "delete_memory", "memory", None, details={"memory_id": memory_id})
     return {"message": "记忆已删除"}
+
+
+@router.put("/{memory_id}", response_model=dict, status_code=status.HTTP_202_ACCEPTED)
+async def update_memory(
+    memory_id: str,
+    request: MemoryUpdateRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_MEMORIES)),
+):
+    """
+    更新单条记忆主数据，并在响应后重新生成 Embedding 与 BM25 索引。
+
+    SQLite 更新成功即返回 202；后台任务总是重新读取最新主数据，可避免连续编辑时
+    较旧的慢速 Embedding 覆盖新内容。
+    """
+    service, _ = _get_memory_service()
+    try:
+        chunk = await service.update_memory_primary(
+            memory_id=memory_id,
+            content=request.content,
+            memory_coefficient=request.memory_coefficient,
+            semantic_timestamp=request.semantic_timestamp,
+            memory_type=request.memory_type,
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if chunk is None:
+        raise HTTPException(status_code=404, detail="记忆不存在")
+
+    background_tasks.add_task(service.refresh_memory_indexes, memory_id)
+    create_log(
+        db,
+        current_admin,
+        "update_memory",
+        "memory",
+        chunk.owner_id,
+        details={"memory_id": memory_id, "index_status": "processing"},
+    )
+    return {
+        "message": "记忆已更新，检索索引正在后台重建",
+        "item": _memory_item(chunk, _agent_name_map(db)),
+        "index_status": "processing",
+    }
 
 
 @router.delete("/user/{owner_id}", response_model=dict)

@@ -342,6 +342,18 @@ export interface MemoryUploadRequest {
   enable_rag_on_chunking?: boolean;
 }
 
+export interface MemoryUpdateRequest {
+  content: string;
+  semantic_timestamp: number;
+  memory_coefficient: number;
+  memory_type: 'normal' | 'static';
+}
+
+export interface MemoryUpdateResponse extends MessageResponse {
+  item: MemoryChunk;
+  index_status: 'processing';
+}
+
 export interface MemoryBatchUploadRequest {
   owner_ids: number[];
   content: string;

@@ -6,7 +6,7 @@ Management Backend - 请求/响应模型。
 """
 
 from datetime import datetime
-from typing import Annotated, Generic, List, Optional, TypeVar
+from typing import Annotated, Generic, List, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
@@ -199,6 +199,22 @@ class DashboardStatsResponse(BaseModel):
     daily_active_roles: int
     cpu_usage_percent: float = 0.0
     memory_usage_percent: float = 0.0
+
+
+# ==================== Memory ====================
+
+class MemoryUpdateRequest(BaseModel):
+    """
+    单条记忆编辑请求。
+
+    owner_id 与系统创建时间不可由管理端修改；内容、语义时间、系数和类型变更后，
+    后端会以 SQLite 为主数据并在响应后重建 Chroma 与 Tantivy 派生索引。
+    """
+
+    content: str = Field(min_length=1)
+    semantic_timestamp: float = Field(ge=0)
+    memory_coefficient: float = Field(ge=0, le=1)
+    memory_type: Literal["normal", "static"]
 
 
 # ==================== Model Config ====================

@@ -68,7 +68,7 @@ class VectorStore:
     def query(
         self,
         query_embedding: List[float],
-        owner_id: int,
+        owner_id: Optional[int],
         n_results: int = 5,
         memory_type: Optional[str] = None,
         max_semantic_timestamp: Optional[float] = None,
@@ -78,7 +78,7 @@ class VectorStore:
 
         Args:
             query_embedding: 查询向量
-            owner_id: 用户 ID（用于所有权过滤）
+            owner_id: 可选的用户 ID；为空时用于管理端跨角色检索。
             n_results: 返回结果数量
             memory_type: 可选的记忆类型过滤。
             max_semantic_timestamp: 可选的最大语义时间戳。
@@ -86,24 +86,25 @@ class VectorStore:
         Returns:
             List[Dict]: 检索结果列表，每个结果包含 id, metadata, distance
         """
-        filters: List[Dict[str, Any]] = [{"owner_id": owner_id}]
+        filters: List[Dict[str, Any]] = []
+        if owner_id is not None:
+            filters.append({"owner_id": owner_id})
         if memory_type is not None:
             filters.append({"memory_type": memory_type})
         if max_semantic_timestamp is not None:
             filters.append({"semantic_timestamp": {"$lte": max_semantic_timestamp}})
 
-        where: Dict[str, Any]
+        query_kwargs: Dict[str, Any] = {
+            "query_embeddings": [query_embedding],
+            "n_results": n_results,
+        }
         if len(filters) == 1:
-            where = filters[0]
-        else:
-            where = {"$and": filters}
+            query_kwargs["where"] = filters[0]
+        elif filters:
+            query_kwargs["where"] = {"$and": filters}
 
         with self._lock:
-            results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=n_results,
-                where=where,
-            )
+            results = self.collection.query(**query_kwargs)
 
         memories = []
         if results["ids"] and results["ids"][0]:
@@ -115,6 +116,33 @@ class VectorStore:
                 })
 
         return memories
+
+    def upsert_vector(
+        self,
+        memory_id: str,
+        embedding: List[float],
+        metadata: Dict[str, Any],
+    ) -> None:
+        """
+        写入或替换一条记忆向量及其完整元数据。
+
+        管理端编辑可能面对历史缺失向量，因此不能只调用 update；upsert 可同时
+        修复缺失记录，并保证内容变化后的 Embedding 与 SQLite 主数据一致。
+
+        Args:
+            memory_id: 记忆 ID。
+            embedding: 按当前 Embedding 配置生成的新向量。
+            metadata: 当前 SQLite 主数据对应的完整检索元数据。
+
+        Returns:
+            None: Chroma 提交完成后返回。
+        """
+        with self._lock:
+            self.collection.upsert(
+                ids=[memory_id],
+                embeddings=[embedding],
+                metadatas=[metadata],
+            )
 
     def update_vector(
         self,

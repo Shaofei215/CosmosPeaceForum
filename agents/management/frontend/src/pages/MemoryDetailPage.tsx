@@ -2,20 +2,23 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { memoryApi, agentApi } from '@/shared/api/modules';
-import type { MemoryUploadRequest } from '@/shared/types/api';
+import type { MemoryChunk, MemoryUpdateRequest, MemoryUploadRequest } from '@/shared/types/api';
 import {
   Button, Input, Textarea, Card, CardContent,
   Badge, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription,
 } from '@/shared/components/ui';
-import { ArrowLeft, Upload, Trash2, Loader2, Clock } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Loader2, Clock, Pencil, Search } from 'lucide-react';
 
 export default function MemoryDetailPage() {
   const { ownerId } = useParams<{ ownerId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [editMemory, setEditMemory] = useState<MemoryChunk | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
   const limit = 50;
 
@@ -29,9 +32,11 @@ export default function MemoryDetailPage() {
     enabled: !!ownerIdNum,
   });
 
-  const { data: memories, isLoading } = useQuery({
-    queryKey: ['memories', ownerId, page],
-    queryFn: () => memoryApi.list(page * limit, limit, ownerIdNum),
+  const { data: memories, isLoading, error: memoriesError } = useQuery({
+    queryKey: ['memories', ownerId, page, searchQuery],
+    queryFn: () => searchQuery
+      ? memoryApi.search(searchQuery, page * limit, limit, ownerIdNum)
+      : memoryApi.list(page * limit, limit, ownerIdNum),
     enabled: !!ownerIdNum,
   });
 
@@ -55,6 +60,12 @@ export default function MemoryDetailPage() {
   });
 
   const totalPages = Math.ceil((memories?.total ?? 0) / limit);
+
+  const submitSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    setPage(0);
+    setSearchQuery(searchInput.trim());
+  };
 
   if (!ownerIdNum) {
     return <div className="text-center py-12 text-muted-foreground">无效的角色链接</div>;
@@ -88,7 +99,39 @@ export default function MemoryDetailPage() {
         )}
       </div>
 
-      {isLoading ? (
+      <form onSubmit={submitSearch} className="relative mb-6 max-w-md">
+        <Search
+          size={18}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          value={searchInput}
+          onChange={(event) => {
+            const value = event.target.value;
+            setSearchInput(value);
+            if (!value) {
+              setSearchQuery('');
+              setPage(0);
+            }
+          }}
+          placeholder="检索这个角色的记忆，按回车确认..."
+          className="pl-10"
+        />
+      </form>
+
+      {searchQuery && !memoriesError && (
+        <p className="text-sm text-muted-foreground mb-4">
+          “{searchQuery}”找到 {memories?.total ?? 0} 条相关记忆
+        </p>
+      )}
+
+      {memoriesError ? (
+        <Card className="border-destructive/50">
+          <CardContent className="py-8 text-center text-destructive">
+            {getMemoryQueryErrorMessage(memoriesError)}
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-24 w-full" />
@@ -118,14 +161,25 @@ export default function MemoryDetailPage() {
                         </div>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDeleteId(mem.id)}
-                      className="text-destructive hover:text-destructive ml-4"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
+                    <div className="flex items-center ml-4">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditMemory(mem)}
+                        aria-label="编辑记忆"
+                      >
+                        <Pencil size={16} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeleteId(mem.id)}
+                        className="text-destructive hover:text-destructive"
+                        aria-label="删除记忆"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -134,7 +188,9 @@ export default function MemoryDetailPage() {
             {memories?.items.length === 0 && (
               <Card>
                 <CardContent className="py-12 text-center text-muted-foreground">
-                  暂无记忆记录，点击上方「上传记忆」添加
+                  {searchQuery
+                    ? '没有找到符合当前检索条件的记忆'
+                    : '暂无记忆记录，点击上方「上传记忆」添加'}
                 </CardContent>
               </Card>
             )}
@@ -173,6 +229,14 @@ export default function MemoryDetailPage() {
         ownerId={ownerIdNum}
       />
 
+      <EditMemoryDialog
+        memory={editMemory}
+        onOpenChange={(open) => {
+          if (!open) setEditMemory(null);
+        }}
+        ownerId={ownerIdNum}
+      />
+
       <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>
           <DialogHeader>
@@ -198,6 +262,171 @@ export default function MemoryDetailPage() {
 function formatTimestamp(ts: number): string {
   if (!ts || ts < 1000000) return 'N/A';
   return new Date(ts * 1000).toLocaleString('zh-CN');
+}
+
+function getMemoryQueryErrorMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message?: unknown }).message ?? '记忆查询失败');
+  }
+  return '记忆查询失败，请确认 Agents 后端已重启并加载最新接口';
+}
+
+function timestampToLocalInput(timestamp: number): string {
+  if (!timestamp || timestamp < 1000000) return '';
+  const date = new Date(timestamp * 1000);
+  const offsetMilliseconds = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMilliseconds).toISOString().slice(0, 16);
+}
+
+function EditMemoryDialog({
+  memory,
+  onOpenChange,
+  ownerId,
+}: {
+  memory: MemoryChunk | null;
+  onOpenChange: (open: boolean) => void;
+  ownerId: number;
+}) {
+  const queryClient = useQueryClient();
+  const [content, setContent] = useState('');
+  const [semanticTime, setSemanticTime] = useState('');
+  const [coefficient, setCoefficient] = useState('0.85');
+  const [memoryType, setMemoryType] = useState<'normal' | 'static'>('normal');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!memory) return;
+    setContent(memory.content);
+    setSemanticTime(timestampToLocalInput(memory.semantic_timestamp));
+    setCoefficient(String(memory.memory_coefficient));
+    setMemoryType(memory.memory_type);
+    setError('');
+  }, [memory]);
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: MemoryUpdateRequest }) =>
+      memoryApi.updateMemory(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['memories', ownerId.toString()] });
+      queryClient.invalidateQueries({ queryKey: ['memories-all'] });
+      queryClient.invalidateQueries({ queryKey: ['memory-owners'] });
+      onOpenChange(false);
+    },
+    onError: (err: unknown) => {
+      if (err instanceof Error) {
+        setError(err.message);
+        return;
+      }
+      if (typeof err === 'object' && err !== null && 'message' in err) {
+        setError(String((err as { message?: unknown }).message ?? '更新失败'));
+        return;
+      }
+      setError('更新失败');
+    },
+  });
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!memory) return;
+    if (!content.trim()) {
+      setError('请输入记忆内容');
+      return;
+    }
+    const parsedCoefficient = Number(coefficient);
+    if (
+      !coefficient
+      || !Number.isFinite(parsedCoefficient)
+      || parsedCoefficient < 0
+      || parsedCoefficient > 1
+    ) {
+      setError('记忆系数必须在 0.0 到 1.0 之间');
+      return;
+    }
+
+    const semanticTimestamp = semanticTime
+      ? new Date(semanticTime).getTime() / 1000
+      : memory.semantic_timestamp;
+    updateMutation.mutate({
+      id: memory.id,
+      data: {
+        content: content.trim(),
+        semantic_timestamp: semanticTimestamp,
+        memory_coefficient: parsedCoefficient,
+        memory_type: memoryType,
+      },
+    });
+  };
+
+  return (
+    <Dialog open={memory !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>编辑记忆</DialogTitle>
+          <DialogDescription>
+            保存后主数据立即更新，向量与关键词索引将在后台重新构建。
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4 py-4">
+            {error && (
+              <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+                {error}
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">记忆内容 *</label>
+              <Textarea
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                className="min-h-32"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">记忆类型</label>
+              <select
+                value={memoryType}
+                onChange={(event) =>
+                  setMemoryType(event.target.value as 'normal' | 'static')
+                }
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <option value="normal">动态记忆</option>
+                <option value="static">静态记忆</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">记忆发生时间</label>
+              <Input
+                type="datetime-local"
+                value={semanticTime}
+                onChange={(event) => setSemanticTime(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">记忆系数 (0.0 - 1.0)</label>
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                max="1"
+                value={coefficient}
+                onChange={(event) => setCoefficient(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              取消
+            </Button>
+            <Button type="submit" disabled={updateMutation.isPending}>
+              {updateMutation.isPending && <Loader2 size={16} className="mr-1 animate-spin" />}
+              保存
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function UploadDialog({
