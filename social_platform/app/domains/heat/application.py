@@ -1,10 +1,11 @@
 import logging
+import math
 from datetime import datetime
-from social_platform.app.core.timezone import local_now
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from social_platform.app.core.timezone import local_now
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.comment.models import Comment
 from social_platform.app.domains.post.models import Post
@@ -20,18 +21,19 @@ def _age_hours(created_at: Optional[datetime], now: datetime) -> float:
 
 
 def calculate_post_heat_score(post: Post, now: Optional[datetime] = None) -> float:
-    """计算帖子热度分数，综合互动计数和时间衰减。"""
+    """计算帖子热度分数，兼顾互动质量、新内容曝光与时间衰减。"""
     now = now or local_now()
     age_hours = _age_hours(post.created_at, now)
-    # 帖子热度只保存可解释的稳定质量分；请求层再做 Top-N 候选重排。
-    base_score = (
-        (post.like_count or 0) * 1
-        + (post.comment_count or 0) * 3
-        + (post.repost_count or 0) * 5
+    # 平方根压缩互动滚雪球，避免早期高互动帖子长期垄断推荐候选池。
+    weighted_interactions = (
+        1 + (post.like_count or 0) * 1
+        + (post.comment_count or 0) * 2
+        + (post.repost_count or 0) * 4
     )
-    time_decay = (age_hours + 2) ** 1.3
-    fresh_boost = 1 + max(0, 24 - age_hours) / 24 * 0.5
-    return (base_score + 1) / time_decay * fresh_boost
+    quality_score = math.sqrt(weighted_interactions)
+    # 六小时平滑窗口避免发布后分数断崖式下降，1.6 次幂让旧内容更快让位。
+    time_decay = (age_hours + 6) ** 1.6
+    return quality_score / time_decay
 
 
 def calculate_comment_heat_score(comment: Comment, now: Optional[datetime] = None) -> float:
