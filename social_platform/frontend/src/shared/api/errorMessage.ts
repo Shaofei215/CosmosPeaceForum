@@ -1,3 +1,5 @@
+import { copywriting } from '@/shared/config/copywriting';
+
 /**
  * API 错误消息标准化工具。
  *
@@ -12,13 +14,16 @@
  * @param fallback detail 缺失或结构未知时使用的兜底文本。
  * @returns 供页面直接展示的错误消息。
  */
-export function getApiErrorMessage(detail: unknown, fallback = '请求失败，请稍后重试'): string {
+export function getApiErrorMessage(
+  detail: unknown,
+  fallback = copywriting('errors.request_failed', '请求失败，请稍后重试')
+): string {
   if (typeof detail === 'string' && detail.trim()) {
     return detail.trim();
   }
 
   if (Array.isArray(detail)) {
-    return '请求参数有误，请检查后重试';
+    return copywriting('errors.invalid_parameters', '请求参数有误，请检查后重试');
   }
 
   return fallback;

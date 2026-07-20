@@ -12,6 +12,7 @@ import { useAuthStore } from '@/features/auth';
 import { setTokens } from '@/features/auth/tokenStorage';
 import { Card, CardContent } from '@/shared/components/ui';
 import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
+import { copywriting } from '@/shared/config/copywriting';
 
 function getSafeRedirect(value: string | null): string {
   if (!value || !value.startsWith('/') || value.startsWith('//')) {
@@ -33,7 +34,7 @@ export default function ManagementLoginPage() {
     const redirect = getSafeRedirect(hashParams.get('redirect') || searchParams.get('redirect'));
 
     if (!token || !refreshToken) {
-      setError('缺少登录令牌，请从管理端重新进入。');
+      setError(copywriting('auth.management_token_missing', '缺少登录令牌，请从管理端重新进入。'));
       return;
     }
 
@@ -48,7 +49,9 @@ export default function ManagementLoginPage() {
       })
       .catch(() => {
         logout();
-        setError('登录令牌无效或已过期，请从管理端重新进入。');
+        setError(
+          copywriting('auth.management_token_invalid', '登录令牌无效或已过期，请从管理端重新进入。')
+        );
       });
   }, [logout, navigate, setAuth]);
 
@@ -58,7 +61,7 @@ export default function ManagementLoginPage() {
       <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardContent className="auth-card-content p-6 text-center text-sm text-muted-foreground">
-          {error || '正在登录角色账号...'}
+          {error || copywriting('auth.management_logging_in', '正在登录角色账号...')}
         </CardContent>
       </Card>
     </div>

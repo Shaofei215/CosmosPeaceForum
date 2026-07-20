@@ -8,6 +8,7 @@ import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BigLogo } from '@/shared/components/auth/BigLogo';
 import { Button } from '@/shared/components/ui';
+import { copywriting } from '@/shared/config/copywriting';
 
 interface ErrorPageProps {
   /** 需要突出展示的错误码。 */
@@ -28,8 +29,11 @@ interface ErrorPageProps {
  */
 export default function ErrorPage({
   code = '404',
-  title = '页面不存在',
-  description = '发生了一些意外，请返回上页或主页继续浏览。',
+  title = copywriting('errors.not_found_title', '页面不存在'),
+  description = copywriting(
+    'errors.not_found_description',
+    '发生了一些意外，请返回上页或主页继续浏览。'
+  ),
 }: ErrorPageProps): ReactElement {
   const navigate = useNavigate();
 
@@ -69,10 +73,10 @@ export default function ErrorPage({
           <p className="mt-3 text-sm text-muted-foreground sm:text-base">{description}</p>
           <div className="mt-7 flex flex-wrap justify-center gap-3">
             <Button type="button" className="w-28 rounded-md" onClick={goBack}>
-              返回上页
+              {copywriting('common.back_previous', '返回上页')}
             </Button>
             <Button type="button" variant="outline" className="w-28 rounded-md" onClick={goHome}>
-              返回主页
+              {copywriting('common.back_home', '返回主页')}
             </Button>
           </div>
         </div>

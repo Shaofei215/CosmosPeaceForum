@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronUp } from 'lucide-react';
+import { copywriting } from '@/shared/config/copywriting';
 
 const SHOW_THRESHOLD = 320;
 
@@ -35,7 +36,7 @@ export function BackToTopButton() {
       <button
         type="button"
         onClick={handleBackToTop}
-        aria-label="回到顶部"
+        aria-label={copywriting('navigation.back_to_top', '回到顶部')}
         className="flex h-12 w-12 items-center justify-center rounded-lg bg-white shadow-sm transition-colors hover:bg-muted/40"
       >
         <ChevronUp className="h-5 w-5 text-foreground" />

@@ -11,6 +11,7 @@ import { CreatePostForm } from '@/widgets/create-post-form';
 import { useAuthStore } from '@/features/auth';
 import { useHotTopics } from '@/features/hot-topic';
 import { useTrendingTopics } from '@/features/topic';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 右侧边栏组件
@@ -34,11 +35,15 @@ export function RightSidebar() {
       <div className="rounded-lg bg-white p-3 shadow-sm">
         <div className="mb-3 flex items-center gap-2">
           <Flame className="h-5 w-5 text-orange-500" />
-          <h3 className="font-semibold">大家都在聊</h3>
+          <h3 className="font-semibold">{copywriting('hot_topics.title', '大家都在聊')}</h3>
         </div>
 
         <div className="space-y-3">
-          {isLoading && <div className="py-2 text-sm text-muted-foreground">加载中...</div>}
+          {isLoading && (
+            <div className="py-2 text-sm text-muted-foreground">
+              {copywriting('common.loading', '加载中...')}
+            </div>
+          )}
           {!isLoading &&
             hotTopics.slice(0, 8).map((topic, index) => (
               <Link
@@ -54,14 +59,16 @@ export function RightSidebar() {
               </Link>
             ))}
           {!isLoading && hotTopics.length === 0 && (
-            <div className="py-2 text-sm text-muted-foreground">暂无热门内容</div>
+            <div className="py-2 text-sm text-muted-foreground">
+              {copywriting('hot_topics.empty_hot', '暂无热门内容')}
+            </div>
           )}
         </div>
 
         {!isLoading && (
           <div className="mt-3 text-center">
             <Link to="/hot" className="text-xs text-muted-foreground hover:text-primary">
-              查看更多
+              {copywriting('hot_topics.view_more', '查看更多')}
             </Link>
           </div>
         )}
@@ -70,11 +77,15 @@ export function RightSidebar() {
       <div className="rounded-lg bg-white p-3 shadow-sm">
         <div className="mb-3 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold">话题</h3>
+          <h3 className="font-semibold">{copywriting('hot_topics.topics_title', '话题')}</h3>
         </div>
 
         <div className="space-y-2">
-          {isTopicsLoading && <div className="py-2 text-sm text-muted-foreground">加载中...</div>}
+          {isTopicsLoading && (
+            <div className="py-2 text-sm text-muted-foreground">
+              {copywriting('common.loading', '加载中...')}
+            </div>
+          )}
           {!isTopicsLoading &&
             displayTopics.map(topic => (
               <Link
@@ -86,7 +97,9 @@ export function RightSidebar() {
               </Link>
             ))}
           {!isTopicsLoading && displayTopics.length === 0 && (
-            <div className="py-3 text-center text-sm text-muted-foreground">暂无话题</div>
+            <div className="py-3 text-center text-sm text-muted-foreground">
+              {copywriting('hot_topics.empty_topics', '暂无话题')}
+            </div>
           )}
         </div>
       </div>

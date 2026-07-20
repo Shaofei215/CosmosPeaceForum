@@ -7,6 +7,7 @@
 
 import type { ReactElement } from 'react';
 import ErrorPage from '@/pages/error/ErrorPage';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 展示不包含内部异常详情的公开平台路由异常状态。
@@ -17,8 +18,11 @@ export default function RouteErrorPage(): ReactElement {
   return (
     <ErrorPage
       code="500"
-      title="页面暂时无法显示"
-      description="发生了一些意外，请返回上页或主页继续浏览。"
+      title={copywriting('errors.route_error_title', '页面暂时无法显示')}
+      description={copywriting(
+        'errors.route_error_description',
+        '发生了一些意外，请返回上页或主页继续浏览。'
+      )}
     />
   );
 }

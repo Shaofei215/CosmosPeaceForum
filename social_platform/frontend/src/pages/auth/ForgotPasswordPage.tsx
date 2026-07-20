@@ -9,6 +9,7 @@ import { AlertCircle } from 'lucide-react';
 import { useSendPasswordResetCode } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 忘记密码页面组件
@@ -42,11 +43,11 @@ export default function ForgotPasswordPage() {
     // 邮箱格式验证
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email.trim()) {
-      setError('请输入邮箱地址');
+      setError(copywriting('auth.email_required', '请输入邮箱地址'));
       return;
     }
     if (!emailRegex.test(email)) {
-      setError('请输入有效的邮箱地址');
+      setError(copywriting('auth.email_invalid', '请输入有效的邮箱地址'));
       return;
     }
 
@@ -55,11 +56,13 @@ export default function ForgotPasswordPage() {
       {
         onSuccess: () => {
           setCountdown(60);
-          setSuccessMessage('验证码已发送至您的邮箱，有效期10分钟');
+          setSuccessMessage(copywriting('auth.code_sent', '验证码已发送至您的邮箱，有效期10分钟'));
           setTimeout(() => setSuccessMessage(''), 5000);
         },
         onError: (err: { message?: string }) => {
-          setError(err.message || '发送验证码失败，请稍后重试');
+          setError(
+            err.message || copywriting('auth.send_code_failed', '发送验证码失败，请稍后重试')
+          );
         },
       }
     );
@@ -75,21 +78,21 @@ export default function ForgotPasswordPage() {
     // 邮箱验证
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email.trim()) {
-      setError('请输入邮箱地址');
+      setError(copywriting('auth.email_required', '请输入邮箱地址'));
       return;
     }
     if (!emailRegex.test(email)) {
-      setError('请输入有效的邮箱地址');
+      setError(copywriting('auth.email_invalid', '请输入有效的邮箱地址'));
       return;
     }
 
     // 验证码验证
     if (!code.trim()) {
-      setError('请输入验证码');
+      setError(copywriting('auth.verification_code_required', '请输入验证码'));
       return;
     }
     if (code.length !== 6) {
-      setError('验证码为6位数字');
+      setError(copywriting('auth.verification_code_invalid', '验证码为6位数字'));
       return;
     }
 
@@ -103,7 +106,9 @@ export default function ForgotPasswordPage() {
       <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
-          <CardTitle className="auth-title text-2xl font-bold text-center">忘记密码</CardTitle>
+          <CardTitle className="auth-title text-2xl font-bold text-center">
+            {copywriting('auth.forgot_password_title', '忘记密码')}
+          </CardTitle>
         </CardHeader>
         <CardContent className="auth-card-content">
           <form onSubmit={handleSubmit} className="auth-form space-y-4">
@@ -122,12 +127,12 @@ export default function ForgotPasswordPage() {
             {/* 邮箱 */}
             <div className="auth-field space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
-                邮箱
+                {copywriting('auth.email', '邮箱')}
               </label>
               <Input
                 id="email"
                 type="email"
-                placeholder="请输入邮箱地址"
+                placeholder={copywriting('auth.email_placeholder', '请输入邮箱地址')}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 disabled={isSending}
@@ -138,13 +143,13 @@ export default function ForgotPasswordPage() {
             {/* 验证码 */}
             <div className="auth-field space-y-2">
               <label htmlFor="code" className="text-sm font-medium">
-                验证码
+                {copywriting('auth.verification_code', '验证码')}
               </label>
               <div className="auth-code-row flex gap-2">
                 <Input
                   id="code"
                   type="text"
-                  placeholder="请输入6位验证码"
+                  placeholder={copywriting('auth.verification_code_placeholder', '请输入6位验证码')}
                   value={code}
                   onChange={e => setCode(e.target.value)}
                   maxLength={6}
@@ -157,14 +162,20 @@ export default function ForgotPasswordPage() {
                   disabled={isSending || countdown > 0 || !email.trim()}
                   className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
                 >
-                  {countdown > 0 ? `${countdown}秒后重试` : isSending ? '发送中...' : '获取验证码'}
+                  {countdown > 0
+                    ? copywriting('auth.resend_after', '{seconds}秒后重试', {
+                        seconds: countdown,
+                      })
+                    : isSending
+                      ? copywriting('auth.sending', '发送中...')
+                      : copywriting('auth.get_verification_code', '获取验证码')}
                 </Button>
               </div>
             </div>
 
             {/* 提交按钮 */}
             <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isSending}>
-              继续
+              {copywriting('auth.continue', '继续')}
             </Button>
 
             <div className="auth-footer mt-4 text-center text-sm">
@@ -172,7 +183,7 @@ export default function ForgotPasswordPage() {
                 to="/login"
                 className="text-muted-foreground hover:text-primary transition-colors"
               >
-                返回登录
+                {copywriting('auth.back_to_login', '返回登录')}
               </Link>
             </div>
           </form>

@@ -3,6 +3,7 @@ import { Flame, Search } from 'lucide-react';
 import { useHotTopics } from '@/features/hot-topic';
 import { useTrendingTopics } from '@/features/topic';
 import { Skeleton } from '@/shared/components/ui';
+import { copywriting } from '@/shared/config/copywriting';
 
 export default function HotTopicsPage() {
   const { data: hotTopics = [], isLoading } = useHotTopics(50);
@@ -14,7 +15,9 @@ export default function HotTopicsPage() {
         <div className="border-b border-border/50 p-4">
           <div className="flex items-center gap-2">
             <Flame className="h-5 w-5 text-orange-500" />
-            <h1 className="text-lg font-semibold">大家都在聊</h1>
+            <h1 className="text-lg font-semibold">
+              {copywriting('hot_topics.title', '大家都在聊')}
+            </h1>
           </div>
         </div>
 
@@ -51,16 +54,22 @@ export default function HotTopicsPage() {
             ))}
           </div>
         ) : (
-          <div className="py-12 text-center text-muted-foreground">暂无热门内容</div>
+          <div className="py-12 text-center text-muted-foreground">
+            {copywriting('hot_topics.empty_hot', '暂无热门内容')}
+          </div>
         )}
       </div>
 
       <div className="overflow-hidden rounded-lg bg-white shadow-sm lg:hidden">
         <div className="border-b border-border/50 p-4">
-          <h2 className="text-lg font-semibold">话题</h2>
+          <h2 className="text-lg font-semibold">
+            {copywriting('hot_topics.topics_title', '话题')}
+          </h2>
         </div>
         {isTopicsLoading ? (
-          <div className="p-4 text-sm text-muted-foreground">加载中...</div>
+          <div className="p-4 text-sm text-muted-foreground">
+            {copywriting('common.loading', '加载中...')}
+          </div>
         ) : trendingTopics.length > 0 ? (
           <div className="flex flex-wrap gap-2 p-4">
             {trendingTopics.map(topic => (
@@ -74,7 +83,9 @@ export default function HotTopicsPage() {
             ))}
           </div>
         ) : (
-          <div className="py-8 text-center text-sm text-muted-foreground">暂无话题</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {copywriting('hot_topics.empty_topics', '暂无话题')}
+          </div>
         )}
       </div>
     </div>

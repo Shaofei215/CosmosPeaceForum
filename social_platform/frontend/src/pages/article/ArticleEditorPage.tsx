@@ -33,6 +33,7 @@ import { ARTICLE_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { hasVisibleContent } from '@/shared/lib/content';
 import { normalizeLinkHref } from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
+import { copywriting } from '@/shared/config/copywriting';
 import {
   MarkdownBoldMarkExtension,
   MarkdownEmphasisExtension,
@@ -110,32 +111,35 @@ const emptyLinkDialogState: LinkDialogState = {
 };
 
 const text = {
-  titlePlaceholder: '\u6587\u7ae0\u6807\u9898',
-  editorPlaceholder: '支持 Markdown 输入哦~',
-  h1: '\u4e00\u7ea7\u6807\u9898',
-  h2: '\u4e8c\u7ea7\u6807\u9898',
-  h3: '\u4e09\u7ea7\u6807\u9898',
-  bold: '\u52a0\u7c97',
-  italic: '\u659c\u4f53',
-  unorderedList: '\u65e0\u5e8f\u5217\u8868',
-  orderedList: '\u6709\u5e8f\u5217\u8868',
-  quote: '\u5f15\u7528',
-  codeBlock: '\u4ee3\u7801\u5757',
-  link: '\u94fe\u63a5',
-  linkTextLabel: '\u94fe\u63a5\u63cf\u8ff0',
-  linkTextPlaceholder: '\u663e\u793a\u7ed9\u8bfb\u8005\u7684\u6587\u5b57',
-  linkHrefLabel: '\u94fe\u63a5\u5730\u5740',
-  linkHrefPlaceholder: 'https://example.com',
-  linkAdd: '\u6dfb\u52a0',
-  tableInsert: '\u63d2\u5165\u8868\u683c',
-  tableActive: '\u5df2\u5728\u8868\u683c\u4e2d',
-  addRow: '\u589e\u52a0\u4e00\u884c',
-  removeRow: '\u51cf\u5c11\u4e00\u884c',
-  addColumn: '\u589e\u52a0\u4e00\u5217',
-  removeColumn: '\u51cf\u5c11\u4e00\u5217',
-  cancel: '\u53d6\u6d88',
-  publishing: '\u53d1\u5e03\u4e2d...',
-  publish: '\u53d1\u5e03\u6587\u7ae0',
+  titlePlaceholder: copywriting('article.title_placeholder', '\u6587\u7ae0\u6807\u9898'),
+  editorPlaceholder: copywriting('article.editor_placeholder', '支持 Markdown 输入哦~'),
+  h1: copywriting('article.heading_1', '\u4e00\u7ea7\u6807\u9898'),
+  h2: copywriting('article.heading_2', '\u4e8c\u7ea7\u6807\u9898'),
+  h3: copywriting('article.heading_3', '\u4e09\u7ea7\u6807\u9898'),
+  bold: copywriting('article.bold', '\u52a0\u7c97'),
+  italic: copywriting('article.italic', '\u659c\u4f53'),
+  unorderedList: copywriting('article.unordered_list', '\u65e0\u5e8f\u5217\u8868'),
+  orderedList: copywriting('article.ordered_list', '\u6709\u5e8f\u5217\u8868'),
+  quote: copywriting('article.quote', '\u5f15\u7528'),
+  codeBlock: copywriting('article.code_block', '\u4ee3\u7801\u5757'),
+  link: copywriting('article.link', '\u94fe\u63a5'),
+  linkTextLabel: copywriting('article.link_text_label', '\u94fe\u63a5\u63cf\u8ff0'),
+  linkTextPlaceholder: copywriting(
+    'article.link_text_placeholder',
+    '\u663e\u793a\u7ed9\u8bfb\u8005\u7684\u6587\u5b57'
+  ),
+  linkHrefLabel: copywriting('article.link_href_label', '\u94fe\u63a5\u5730\u5740'),
+  linkHrefPlaceholder: copywriting('article.link_href_placeholder', 'https://example.com'),
+  linkAdd: copywriting('article.link_add', '\u6dfb\u52a0'),
+  tableInsert: copywriting('article.table_insert', '\u63d2\u5165\u8868\u683c'),
+  tableActive: copywriting('article.table_active', '\u5df2\u5728\u8868\u683c\u4e2d'),
+  addRow: copywriting('article.add_row', '\u589e\u52a0\u4e00\u884c'),
+  removeRow: copywriting('article.remove_row', '\u51cf\u5c11\u4e00\u884c'),
+  addColumn: copywriting('article.add_column', '\u589e\u52a0\u4e00\u5217'),
+  removeColumn: copywriting('article.remove_column', '\u51cf\u5c11\u4e00\u5217'),
+  cancel: copywriting('common.cancel', '\u53d6\u6d88'),
+  publishing: copywriting('article.publishing', '\u53d1\u5e03\u4e2d...'),
+  publish: copywriting('article.publish', '\u53d1\u5e03\u6587\u7ae0'),
 };
 
 export default function ArticleEditorPage() {

@@ -6,6 +6,7 @@
 import * as React from 'react';
 import { getFullAvatarUrl } from '@/shared/config/api';
 import { cn } from '@/shared/lib/utils';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 头像组件属性
@@ -93,7 +94,7 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
           )}
           {...props}
         >
-          {getInitials(alt || '用户')}
+          {getInitials(alt || copywriting('common.user', '用户'))}
         </div>
       );
     }

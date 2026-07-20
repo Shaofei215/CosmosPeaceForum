@@ -44,6 +44,7 @@ import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer'
 import { LinkedMentions as MentionText } from '@/shared/components/mention/LinkedMentions';
 import { stripMarkdown } from '@/shared/components/markdown/markdownUtils';
 import { hasVisibleContent } from '@/shared/lib/content';
+import { copywriting } from '@/shared/config/copywriting';
 
 const CONTENT_PREVIEW_LINES = 10;
 
@@ -141,7 +142,10 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const collapseViewportCleanupRef = useRef<(() => void) | null>(null);
 
   const authorName =
-    'author_name' in post ? post.author_name : post.author?.username || `用户${post.author_id}`;
+    'author_name' in post
+      ? post.author_name
+      : post.author?.username ||
+        copywriting('post.fallback_user', '用户{user_id}', { user_id: post.author_id });
   const authorAvatar =
     'author_avatar' in post ? post.author_avatar : post.author?.avatar_url || null;
   const authorBio = 'author_bio' in post ? post.author_bio : post.author?.bio || null;
@@ -367,7 +371,10 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           setIsMoreOpen(false);
         },
         onError: error => {
-          const message = error instanceof Error ? error.message : '举报提交失败，请稍后重试';
+          const message =
+            error instanceof Error
+              ? error.message
+              : copywriting('report.submit_failed', '举报提交失败，请稍后重试');
           setReportError(message);
         },
       }
@@ -405,7 +412,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             {post.created_by_agent && (
               <>
                 <span className="text-xs text-muted-foreground">·</span>
-                <p className="shrink-0 text-xs text-muted-foreground">AI生成</p>
+                <p className="shrink-0 text-xs text-muted-foreground">
+                  {copywriting('common.ai_generated', 'AI生成')}
+                </p>
               </>
             )}
           </div>
@@ -426,7 +435,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             {toggleFollow.isPending ? (
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : (
-              '关注'
+              copywriting('common.follow', '关注')
             )}
           </Button>
         )}
@@ -533,12 +542,12 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
             {isContentExpanded ? (
               <>
                 <ChevronUp className="h-3 w-3" />
-                收起
+                {copywriting('post.collapse', '收起')}
               </>
             ) : (
               <>
                 <ExpandIcon className="h-3 w-3" />
-                展开
+                {copywriting('post.expand', '展开')}
               </>
             )}
           </button>
@@ -597,7 +606,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               event.stopPropagation();
               setIsMoreOpen(value => !value);
             }}
-            aria-label="更多操作"
+            aria-label={copywriting('common.more_actions', '更多操作')}
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
@@ -613,7 +622,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   disabled={deletePost.isPending}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  删除
+                  {copywriting('common.delete', '删除')}
                 </button>
               )}
               {!isCurrentUser && (
@@ -622,7 +631,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   onClick={handleOpenPostReport}
                 >
                   <Flag className="h-3.5 w-3.5" />
-                  举报
+                  {copywriting('common.report', '举报')}
                 </button>
               )}
             </div>
@@ -633,7 +642,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
       {isRepostOpen && isAuthenticated && (
         <form onSubmit={handleSubmitRepost} className="mt-3">
           <Textarea
-            placeholder="写点什么再转发..."
+            placeholder={copywriting('post.repost_placeholder', '写点什么再转发...')}
             value={repostContent}
             onChange={event => setRepostContent(event.target.value)}
             maxLength={POST_CONTENT_MAX_LENGTH}
@@ -642,10 +651,10 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           />
           <div className="mt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" size="sm" onClick={() => setIsRepostOpen(false)}>
-              取消
+              {copywriting('common.cancel', '取消')}
             </Button>
             <Button type="submit" size="sm" disabled={repost.isPending}>
-              转发
+              {copywriting('common.repost', '转发')}
             </Button>
           </div>
         </form>
@@ -653,7 +662,11 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
 
       {isReportOpen && (
         <ReportDialog
-          targetLabel={post.type === 'article' ? '文章' : '帖子'}
+          targetLabel={
+            post.type === 'article'
+              ? copywriting('post.article', '文章')
+              : copywriting('search.posts', '帖子')
+          }
           saving={createReport.isPending}
           error={reportError}
           onClose={() => setIsReportOpen(false)}
@@ -664,7 +677,9 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
       {isCommentsExpanded && (
         <div className="mt-4">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <span className="text-sm font-medium text-foreground/80">评论</span>
+            <span className="text-sm font-medium text-foreground/80">
+              {copywriting('post.comments', '评论')}
+            </span>
             <div
               className="comment-sort-segmented relative grid grid-cols-2 rounded-md bg-muted/50 p-1"
               data-active={commentSort}
@@ -684,7 +699,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                 }`}
               >
                 <Flame className="h-3 w-3" />
-                默认
+                {copywriting('post.comment_sort_default', '默认')}
               </button>
               <button
                 type="button"
@@ -700,7 +715,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                 }`}
               >
                 <Clock className="h-3 w-3" />
-                最新
+                {copywriting('post.comment_sort_latest', '最新')}
               </button>
             </div>
           </div>
@@ -708,10 +723,14 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           {isAuthenticated && !replyingTo && (
             <form onSubmit={handleSubmitNewComment} className="mb-4">
               <div className="flex gap-2">
-                <Avatar src={user?.avatar_url || null} alt={user?.username || '用户'} size="sm" />
+                <Avatar
+                  src={user?.avatar_url || null}
+                  alt={user?.username || copywriting('common.user', '用户')}
+                  size="sm"
+                />
                 <div className="flex-1 space-y-2">
                   <Textarea
-                    placeholder="写下你的评论..."
+                    placeholder={copywriting('post.comment_placeholder', '写下你的评论...')}
                     value={newCommentContent}
                     onChange={event => setNewCommentContent(event.target.value)}
                     maxLength={COMMENT_CONTENT_MAX_LENGTH}
@@ -726,14 +745,14 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                         onChange={event => setCommentShouldRepost(event.target.checked)}
                         className="h-3.5 w-3.5"
                       />
-                      同时转发
+                      {copywriting('post.comment_with_repost', '同时转发')}
                     </label>
                     <Button
                       type="submit"
                       size="sm"
                       disabled={!hasVisibleContent(newCommentContent) || createComment.isPending}
                     >
-                      评论
+                      {copywriting('post.comments', '评论')}
                     </Button>
                   </div>
                 </div>
@@ -778,15 +797,18 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
                   }}
                   className="w-full py-2 text-center text-sm text-primary transition-colors hover:text-primary/80"
                 >
-                  查看所有评论
+                  {copywriting('post.view_all_comments', '查看所有评论')}
                 </button>
               )}
             </div>
           ) : (
             <p className="py-4 text-center text-sm text-muted-foreground">
               {isAuthenticated
-                ? '暂无评论，快来发表第一条评论吧。'
-                : '暂无评论，登录后发表你的看法。'}
+                ? copywriting(
+                    'post.empty_comments_authenticated',
+                    '暂无评论，快来发表第一条评论吧。'
+                  )
+                : copywriting('post.empty_comments_guest', '暂无评论，登录后发表你的看法。')}
             </p>
           )}
         </div>
@@ -800,7 +822,9 @@ function RepostOriginBlock({
 }: {
   origin: NonNullable<(PostFeedItem | PostWithLikeStatus)['repost_origin']>;
 }) {
-  const authorName = origin.author?.username || `用户${origin.author_id}`;
+  const authorName =
+    origin.author?.username ||
+    copywriting('post.fallback_user', '用户{user_id}', { user_id: origin.author_id });
   const isArticle = origin.type === 'article';
 
   return (
@@ -837,7 +861,7 @@ function RepostOriginBlock({
 function MissingRepostOriginBlock() {
   return (
     <div className="mt-3 rounded-md border border-dashed border-border/80 bg-muted/20 p-3 text-sm text-muted-foreground">
-      原内容不存在
+      {copywriting('post.original_missing', '原内容不存在')}
     </div>
   );
 }
@@ -923,7 +947,9 @@ function PollBlock({
         );
       })}
       {showResults && (
-        <p className="px-1 text-xs text-muted-foreground">{currentPoll.total_votes} 票</p>
+        <p className="px-1 text-xs text-muted-foreground">
+          {copywriting('post.vote_count', '{count} 票', { count: currentPoll.total_votes })}
+        </p>
       )}
     </div>
   );
@@ -952,15 +978,17 @@ function ReportDialog({
     >
       <div className="w-full max-w-lg rounded-lg border border-border bg-background p-5 shadow-xl">
         <div>
-          <h2 className="text-lg font-semibold">举报{targetLabel}</h2>
+          <h2 className="text-lg font-semibold">
+            {copywriting('report.title', '举报{target}', { target: targetLabel })}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            请填写违规类型及举报原因，确认违规后将被处理。
+            {copywriting('report.description', '请填写违规类型及举报原因，确认违规后将被处理。')}
           </p>
         </div>
         <Textarea
           value={reason}
           onChange={event => setReason(event.target.value)}
-          placeholder="填写举报原因"
+          placeholder={copywriting('report.reason_placeholder', '填写举报原因')}
           rows={4}
           className="mt-4"
           autoFocus
@@ -968,14 +996,16 @@ function ReportDialog({
         {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="outline" className="rounded-md" onClick={onClose} disabled={saving}>
-            取消
+            {copywriting('common.cancel', '取消')}
           </Button>
           <Button
             className="rounded-md"
             disabled={saving || !trimmedReason}
             onClick={() => onConfirm(trimmedReason)}
           >
-            {saving ? '提交中...' : '提交举报'}
+            {saving
+              ? copywriting('report.submitting', '提交中...')
+              : copywriting('report.submit', '提交举报')}
           </Button>
         </div>
       </div>
@@ -1118,7 +1148,10 @@ function CommentItem({
           setIsMoreOpen(false);
         },
         onError: error => {
-          const message = error instanceof Error ? error.message : '举报提交失败，请稍后重试';
+          const message =
+            error instanceof Error
+              ? error.message
+              : copywriting('report.submit_failed', '举报提交失败，请稍后重试');
           setReportError(message);
         },
       }
@@ -1144,7 +1177,12 @@ function CommentItem({
       >
         <Avatar
           src={comment.owner?.avatar_url}
-          alt={comment.owner?.username || `用户${comment.owner_id}`}
+          alt={
+            comment.owner?.username ||
+            copywriting('comments.fallback_user', '用户{user_id}', {
+              user_id: comment.owner_id,
+            })
+          }
           size="sm"
         />
         <div className="min-w-0 flex-1">
@@ -1153,7 +1191,10 @@ function CommentItem({
               to={`/user/${comment.owner_id}`}
               className="text-sm font-medium text-foreground/70 hover:text-primary"
             >
-              {comment.owner?.username || `用户${comment.owner_id}`}
+              {comment.owner?.username ||
+                copywriting('comments.fallback_user', '用户{user_id}', {
+                  user_id: comment.owner_id,
+                })}
             </Link>
           ) : (
             <div className="flex items-center gap-1 text-sm">
@@ -1161,9 +1202,12 @@ function CommentItem({
                 to={`/user/${comment.owner_id}`}
                 className="font-medium text-foreground/70 hover:text-primary"
               >
-                {comment.owner?.username || `用户${comment.owner_id}`}
+                {comment.owner?.username ||
+                  copywriting('comments.fallback_user', '用户{user_id}', {
+                    user_id: comment.owner_id,
+                  })}
               </Link>
-              <span className="text-muted-foreground">回复</span>
+              <span className="text-muted-foreground">{copywriting('common.reply', '回复')}</span>
               <Link
                 to={`/user/${replyTargetId}`}
                 className="text-muted-foreground hover:text-primary"
@@ -1203,7 +1247,13 @@ function CommentItem({
                 onClick={event => {
                   event.preventDefault();
                   event.stopPropagation();
-                  onReply(comment.id, comment.owner?.username || `用户${comment.owner_id}`);
+                  onReply(
+                    comment.id,
+                    comment.owner?.username ||
+                      copywriting('comments.fallback_user', '用户{user_id}', {
+                        user_id: comment.owner_id,
+                      })
+                  );
                 }}
                 className="comment-icon-action flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
               >
@@ -1225,7 +1275,9 @@ function CommentItem({
               </button>
             )}
             {comment.created_by_agent && (
-              <span className="comment-ai-label text-xs text-muted-foreground">AI生成</span>
+              <span className="comment-ai-label text-xs text-muted-foreground">
+                {copywriting('common.ai_generated', 'AI生成')}
+              </span>
             )}
             <div className="comment-more-menu relative order-2 ml-auto">
               <button
@@ -1237,7 +1289,7 @@ function CommentItem({
                   event.stopPropagation();
                   setIsMoreOpen(value => !value);
                 }}
-                aria-label="更多操作"
+                aria-label={copywriting('common.more_actions', '更多操作')}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
@@ -1253,7 +1305,7 @@ function CommentItem({
                       disabled={deleteComment.isPending}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      删除
+                      {copywriting('common.delete', '删除')}
                     </button>
                   )}
                   {!isCurrentUserComment && (
@@ -1262,7 +1314,7 @@ function CommentItem({
                       onClick={handleOpenCommentReport}
                     >
                       <Flag className="h-3.5 w-3.5" />
-                      举报
+                      {copywriting('common.report', '举报')}
                     </button>
                   )}
                 </div>
@@ -1279,10 +1331,18 @@ function CommentItem({
               >
                 <CornerDownRight className="h-3 w-3" />
                 <span className="reply-toggle-full">
-                  {showReplies ? '收起回复' : `查看 ${totalReplies} 条回复`}
+                  {showReplies
+                    ? copywriting('comments.collapse_replies', '收起回复')
+                    : copywriting('comments.view_replies', '查看 {count} 条回复', {
+                        count: totalReplies,
+                      })}
                 </span>
                 <span className="reply-toggle-short">
-                  {showReplies ? '收起' : `${totalReplies}回复`}
+                  {showReplies
+                    ? copywriting('post.collapse', '收起')
+                    : copywriting('comments.reply_count', '{count}回复', {
+                        count: totalReplies,
+                      })}
                 </span>
               </button>
             )}
@@ -1322,7 +1382,7 @@ function CommentItem({
               className="mt-3 space-y-2"
             >
               <Textarea
-                placeholder="写点什么再转发..."
+                placeholder={copywriting('post.repost_placeholder', '写点什么再转发...')}
                 value={repostContent}
                 onChange={event => setRepostContent(event.target.value)}
                 maxLength={POST_CONTENT_MAX_LENGTH}
@@ -1339,10 +1399,10 @@ function CommentItem({
                     setIsRepostOpen(false);
                   }}
                 >
-                  取消
+                  {copywriting('common.cancel', '取消')}
                 </Button>
                 <Button type="submit" size="sm" disabled={repost.isPending}>
-                  转发
+                  {copywriting('common.repost', '转发')}
                 </Button>
               </div>
             </form>
@@ -1352,7 +1412,7 @@ function CommentItem({
 
       {isReportOpen && (
         <ReportDialog
-          targetLabel="评论"
+          targetLabel={copywriting('post.comments', '评论')}
           saving={createReport.isPending}
           error={reportError}
           onClose={() => setIsReportOpen(false)}
@@ -1383,7 +1443,11 @@ function CommentItem({
                 depth={depth + 1}
                 parentOwner={{
                   id: comment.owner_id,
-                  username: comment.owner?.username || `用户${comment.owner_id}`,
+                  username:
+                    comment.owner?.username ||
+                    copywriting('comments.fallback_user', '用户{user_id}', {
+                      user_id: comment.owner_id,
+                    }),
                 }}
                 focusedCommentId={focusedCommentId}
                 threadRootId={comment.id}
@@ -1403,8 +1467,11 @@ function CommentItem({
               className="mt-3 text-xs text-primary transition-colors hover:text-primary/80"
             >
               {isFetchingNextReplyPage
-                ? '加载中...'
-                : `展开更多回复 (${loadedReplies.length}/${totalReplies})`}
+                ? copywriting('common.loading', '加载中...')
+                : copywriting('comments.expand_more', '展开更多回复 ({visible}/{total})', {
+                    visible: loadedReplies.length,
+                    total: totalReplies,
+                  })}
             </button>
           )}
         </div>
@@ -1455,7 +1522,11 @@ function ReplyInput({
     <form onSubmit={handleSubmit} className="mt-3">
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>回复 @{replyToUsername}</span>
+          <span>
+            {copywriting('comments.reply_to', '回复 @{username}', {
+              username: replyToUsername,
+            })}
+          </span>
           <button
             type="button"
             onClick={event => {
@@ -1464,11 +1535,11 @@ function ReplyInput({
             }}
             className="text-primary hover:text-primary/80"
           >
-            取消
+            {copywriting('common.cancel', '取消')}
           </button>
         </div>
         <Textarea
-          placeholder="写下你的回复..."
+          placeholder={copywriting('comments.reply_placeholder', '写下你的回复...')}
           value={content}
           onChange={event => setContent(event.target.value)}
           maxLength={COMMENT_CONTENT_MAX_LENGTH}
@@ -1484,14 +1555,14 @@ function ReplyInput({
               onChange={event => setShouldRepost(event.target.checked)}
               className="h-3.5 w-3.5"
             />
-            同时转发
+            {copywriting('post.comment_with_repost', '同时转发')}
           </label>
           <Button
             type="submit"
             size="sm"
             disabled={!hasVisibleContent(content) || createComment.isPending}
           >
-            评论
+            {copywriting('post.comments', '评论')}
           </Button>
         </div>
       </div>

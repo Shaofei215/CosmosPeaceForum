@@ -11,6 +11,7 @@ import privacyPolicyContent from '../../../../license/privacy-policy.md?raw';
 import termsOfServiceContent from '../../../../license/terms-of-service.md?raw';
 import { MarkdownRenderer } from '@/shared/components/markdown/MarkdownRenderer';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
+import { copywriting } from '@/shared/config/copywriting';
 import {
   LEGAL_DOCUMENT_LINKS,
   isLegalDocumentSlug,
@@ -53,13 +54,17 @@ export default function LegalDocumentPage(): ReactElement {
   if (!legalDocument) {
     return (
       <section className="rounded-lg bg-white p-6 text-center shadow-sm">
-        <h1 className="text-xl font-semibold text-foreground">协议不存在</h1>
-        <p className="mt-2 text-sm text-muted-foreground">请从注册页或站内链接访问有效协议。</p>
+        <h1 className="text-xl font-semibold text-foreground">
+          {copywriting('legal.not_found', '协议不存在')}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {copywriting('legal.not_found_hint', '请从注册页或站内链接访问有效协议。')}
+        </p>
         <Link
           className="mt-4 inline-flex text-sm font-medium text-sky-600 hover:text-sky-700"
           to="/feed"
         >
-          返回主页
+          {copywriting('common.back_home', '返回主页')}
         </Link>
       </section>
     );
@@ -72,7 +77,9 @@ export default function LegalDocumentPage(): ReactElement {
   return (
     <article className="rounded-lg bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-5 border-b border-border/70 pb-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Legal</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {copywriting('legal.eyebrow', 'Legal')}
+        </p>
         <h1 className="mt-1 text-2xl font-semibold text-foreground">{legalDocument.title}</h1>
       </div>
       <MarkdownRenderer content={renderedContent} />

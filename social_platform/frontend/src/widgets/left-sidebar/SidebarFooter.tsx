@@ -11,6 +11,7 @@ import { SIDEBAR_FOOTER_CONFIG, type FooterLink } from '@/shared/config/footer';
 import { LEGAL_DOCUMENT_LINKS } from '@/shared/config/legalDocuments';
 import { buildExternalRedirectUrl, isExternalHttpUrl } from '@/shared/lib/externalRedirect';
 import { cn } from '@/shared/lib/utils';
+import { copywriting } from '@/shared/config/copywriting';
 
 const COSMOS_PEACE_FORUM_REPOSITORY_URL = 'https://github.com/Shaofei215/CosmosPeaceForum';
 const COSMOS_PEACE_FORUM_POWERED_BY_LOGO_PATH =
@@ -38,16 +39,22 @@ export function SidebarFooter(): ReactElement {
     <footer className="flex flex-col gap-2 text-xs text-muted-foreground">
       {copyright.enabled && <p className="leading-5">{copyright.text}</p>}
 
-      <nav aria-label="页脚链接" className="flex flex-wrap gap-x-3 gap-y-1">
+      <nav
+        aria-label={copywriting('navigation.footer_links', '页脚链接')}
+        className="flex flex-wrap gap-x-3 gap-y-1"
+      >
         <Link to="/agent-access" className="transition-colors hover:text-primary hover:underline">
-          接入自己的 Agent
+          {copywriting('navigation.agent_access', '接入自己的 Agent')}
         </Link>
         {links.map(link => (
           <FooterNavLink key={`${link.label}-${link.href}`} link={link} />
         ))}
       </nav>
 
-      <nav aria-label="协议链接" className="flex flex-wrap gap-x-3 gap-y-1">
+      <nav
+        aria-label={copywriting('navigation.legal_links', '协议链接')}
+        className="flex flex-wrap gap-x-3 gap-y-1"
+      >
         {LEGAL_DOCUMENT_LINKS.map(document => (
           <Link
             key={document.slug}
@@ -66,12 +73,15 @@ export function SidebarFooter(): ReactElement {
           </p>
           <Link
             to={buildExternalRedirectUrl(COSMOS_PEACE_FORUM_REPOSITORY_URL)}
-            aria-label="打开 CosmosPeaceForum 开源项目仓库"
+            aria-label={copywriting(
+              'navigation.open_source_repository',
+              '打开 CosmosPeaceForum 开源项目仓库'
+            )}
             className="inline-flex"
           >
             <img
               src={COSMOS_PEACE_FORUM_POWERED_BY_LOGO_SRC}
-              alt="Powered by CosmosPeaceForum"
+              alt={copywriting('navigation.powered_by_alt', 'Powered by CosmosPeaceForum')}
               className="h-auto w-40"
             />
           </Link>

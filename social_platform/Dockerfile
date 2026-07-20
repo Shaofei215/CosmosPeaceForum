@@ -13,6 +13,7 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml 
 RUN pnpm install --frozen-lockfile
 
 COPY frontend/ ./
+COPY copywriting.yml ../copywriting.yml
 COPY footer.yml ../footer.yml
 COPY license/ ../license/
 RUN pnpm build

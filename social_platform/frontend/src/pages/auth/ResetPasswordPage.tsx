@@ -9,6 +9,7 @@ import { AlertCircle } from 'lucide-react';
 import { useConfirmPasswordReset } from '@/features/auth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui';
 import { AuthIllustration, BigLogo } from '@/shared/components/auth/BigLogo';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 重置密码页面组件 - Step 2
@@ -46,16 +47,16 @@ export default function ResetPasswordPage() {
 
     // 密码验证
     if (!password.trim()) {
-      setError('请输入新密码');
+      setError(copywriting('auth.new_password_required', '请输入新密码'));
       return;
     }
     if (password.length < 8) {
-      setError('密码至少需要8个字符');
+      setError(copywriting('auth.password_too_short', '密码至少需要8个字符'));
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('两次输入的密码不一致');
+      setError(copywriting('auth.password_mismatch', '两次输入的密码不一致'));
       return;
     }
 
@@ -69,11 +70,13 @@ export default function ResetPasswordPage() {
         onSuccess: () => {
           // 密码重置成功，跳转到登录页
           navigate('/login', {
-            state: { message: '密码重置成功，请使用新密码登录' },
+            state: {
+              message: copywriting('auth.reset_success', '密码重置成功，请使用新密码登录'),
+            },
           });
         },
         onError: (err: { message?: string }) => {
-          setError(err.message || '密码重置失败，请稍后重试');
+          setError(err.message || copywriting('auth.reset_failed', '密码重置失败，请稍后重试'));
         },
       }
     );
@@ -85,7 +88,9 @@ export default function ResetPasswordPage() {
       <BigLogo />
       <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
         <CardHeader className="auth-card-header space-y-1">
-          <CardTitle className="auth-title text-2xl font-bold text-center">设置新密码</CardTitle>
+          <CardTitle className="auth-title text-2xl font-bold text-center">
+            {copywriting('auth.reset_title', '设置新密码')}
+          </CardTitle>
         </CardHeader>
         <CardContent className="auth-card-content">
           <form onSubmit={handleSubmit} className="auth-form space-y-4">
@@ -99,7 +104,7 @@ export default function ResetPasswordPage() {
             {/* 邮箱显示（只读） */}
             <div className="auth-field space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
-                邮箱
+                {copywriting('auth.email', '邮箱')}
               </label>
               <Input
                 id="email"
@@ -113,12 +118,15 @@ export default function ResetPasswordPage() {
             {/* 新密码 */}
             <div className="auth-field space-y-2">
               <label htmlFor="password" className="text-sm font-medium">
-                新密码
+                {copywriting('auth.new_password', '新密码')}
               </label>
               <Input
                 id="password"
                 type="password"
-                placeholder="请输入新密码（至少8个字符）"
+                placeholder={copywriting(
+                  'auth.new_password_placeholder',
+                  '请输入新密码（至少8个字符）'
+                )}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 disabled={isPending}
@@ -130,12 +138,15 @@ export default function ResetPasswordPage() {
             {/* 确认新密码 */}
             <div className="auth-field space-y-2">
               <label htmlFor="confirmPassword" className="text-sm font-medium">
-                确认密码
+                {copywriting('auth.confirm_password', '确认密码')}
               </label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="请再次输入新密码"
+                placeholder={copywriting(
+                  'auth.confirm_new_password_placeholder',
+                  '请再次输入新密码'
+                )}
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
                 disabled={isPending}
@@ -145,7 +156,9 @@ export default function ResetPasswordPage() {
             </div>
 
             <Button type="submit" className="auth-submit w-full rounded-lg" disabled={isPending}>
-              {isPending ? '重置中...' : '确认重置'}
+              {isPending
+                ? copywriting('auth.resetting', '重置中...')
+                : copywriting('auth.reset', '确认重置')}
             </Button>
 
             <div className="auth-footer mt-4 text-center text-sm">
@@ -153,7 +166,7 @@ export default function ResetPasswordPage() {
                 to="/forgot-password"
                 className="text-muted-foreground hover:text-primary transition-colors"
               >
-                返回上一步
+                {copywriting('auth.back_previous', '返回上一步')}
               </Link>
             </div>
           </form>

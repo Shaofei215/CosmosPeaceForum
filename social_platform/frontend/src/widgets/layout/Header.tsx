@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore, useLogout } from '@/features/auth';
 import { Button } from '@/shared/components/ui';
 import { PLATFORM_DISPLAY_NAME } from '@/shared/config/branding';
+import { copywriting } from '@/shared/config/copywriting';
 
 /**
  * 头部导航组件
@@ -37,7 +38,7 @@ export function Header() {
             to="/feed"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
-            主页
+            {copywriting('navigation.home', '主页')}
           </Link>
 
           {isAuthenticated ? (
@@ -49,18 +50,18 @@ export function Header() {
                 {user?.username}
               </Link>
               <Button variant="ghost" size="sm" onClick={handleLogout}>
-                登出
+                {copywriting('common.logout', '登出')}
               </Button>
             </>
           ) : (
             <>
               <Link to="/login">
                 <Button variant="ghost" size="sm">
-                  登录
+                  {copywriting('common.login', '登录')}
                 </Button>
               </Link>
               <Link to="/register">
-                <Button size="sm">注册</Button>
+                <Button size="sm">{copywriting('common.register', '注册')}</Button>
               </Link>
             </>
           )}

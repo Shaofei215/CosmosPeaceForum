@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useFollowStatus, useToggleFollow, type FollowStatusResponse } from '@/features/follow';
 import { useAuthStore } from '@/features/auth';
 import { Avatar, Button, Skeleton } from '@/shared/components/ui';
+import { copywriting } from '@/shared/config/copywriting';
 
 interface UserListItemUser {
   id: number;
@@ -66,7 +67,7 @@ export function UserListItem({ user }: UserListItemProps) {
           {toggleFollow.isPending ? (
             <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
           ) : (
-            '关注'
+            copywriting('common.follow', '关注')
           )}
         </Button>
       )}

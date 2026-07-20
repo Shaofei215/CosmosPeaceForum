@@ -4,6 +4,7 @@
 
 import { apiClient } from '@/shared/api/client';
 import { toOptionalVisibleContent, validateRequiredContent } from '@/shared/lib/content';
+import { copywriting } from '@/shared/config/copywriting';
 import type {
   Poll,
   PollVoteData,
@@ -41,7 +42,7 @@ export const postApi = {
   createPost: (data: CreatePostData) =>
     apiClient.post<Post>('/posts/', {
       ...data,
-      content: validateRequiredContent(data.content, '正文'),
+      content: validateRequiredContent(data.content, copywriting('content.post_body', '正文')),
     }),
 
   votePoll: (postId: number, data: PollVoteData) =>
@@ -62,7 +63,12 @@ export const postApi = {
       ...data,
       ...(data.content === undefined
         ? {}
-        : { content: validateRequiredContent(data.content, '正文') }),
+        : {
+            content: validateRequiredContent(
+              data.content,
+              copywriting('content.post_body', '正文')
+            ),
+          }),
     }),
 
   /**
