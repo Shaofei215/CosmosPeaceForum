@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from agents.management.backend.core.config import Settings
+from agents.management.backend.core.config import Settings, finalize_runtime_secrets
 
 
 def test_settings_default_management_host_is_loopback() -> None:
@@ -99,3 +99,43 @@ def test_settings_ignore_removed_legacy_environment_names(
     assert settings.admin_username == "management_admin"
     assert settings.admin_password == "ChangeMe123!"
     assert settings.jwt_access_token_expire_minutes == 10
+
+
+def test_finalize_runtime_secrets_generates_and_reuses_persistent_values(
+    tmp_path: Path,
+) -> None:
+    """JWT 与 AI 密码应自动生成并跨配置实例复用，初始管理员密码则保持一次性。"""
+
+    secret_file = tmp_path / "generated_secrets.json"
+    first = finalize_runtime_secrets(Settings(_env_file=None), secret_file)
+    second = finalize_runtime_secrets(Settings(_env_file=None), secret_file)
+
+    assert first.jwt_secret_key != "change-this-local-management-jwt-secret"
+    assert first.ai_user_password != "ChangeMe123!"
+    assert len(first.ai_user_password) == 32
+    assert first.jwt_secret_key == second.jwt_secret_key
+    assert first.ai_user_password == second.ai_user_password
+    assert len(first.admin_password) == 32
+    assert first.admin_password != second.admin_password
+    assert first.admin_password_was_generated is True
+    assert secret_file.stat().st_mode & 0o777 == 0o600
+
+
+def test_finalize_runtime_secrets_preserves_explicit_values(tmp_path: Path) -> None:
+    """显式提供的安全配置应原样保留，且不创建运行期密钥文件。"""
+
+    secret_file = tmp_path / "generated_secrets.json"
+    settings = Settings(
+        _env_file=None,
+        jwt_secret_key="explicit-jwt-secret",
+        admin_password="explicit-admin-password",
+        ai_user_password="explicit-ai-password",
+    )
+
+    finalized = finalize_runtime_secrets(settings, secret_file)
+
+    assert finalized.jwt_secret_key == "explicit-jwt-secret"
+    assert finalized.admin_password == "explicit-admin-password"
+    assert finalized.ai_user_password == "explicit-ai-password"
+    assert finalized.admin_password_was_generated is False
+    assert not secret_file.exists()

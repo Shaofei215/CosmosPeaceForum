@@ -4,11 +4,14 @@ Agents 核心配置模块
 agents 侧的基础设施与敏感配置统一从环境变量或 agents/.env 读取。
 """
 
+import secrets
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from agents.management.backend.core.runtime_secrets import resolve_persistent_secrets
 
 
 def find_env_file() -> Path | None:
@@ -41,6 +44,14 @@ def _sqlite_url_to_path(database_url: str) -> str:
 
 
 _DEFAULT_MANAGEMENT_DB_PATH = str(Path(__file__).parent.parent.parent / "data" / "management.db")
+_DEFAULT_RUNTIME_SECRETS_PATH = (
+    Path(__file__).resolve().parents[2] / "data" / "generated_secrets.json"
+)
+_JWT_SECRET_PLACEHOLDERS = {
+    "change-this-to-a-long-random-secret",
+    "change-this-local-management-jwt-secret",
+}
+_PASSWORD_PLACEHOLDERS = {"ChangeMe123!"}
 
 
 class Settings(BaseSettings):
@@ -58,6 +69,8 @@ class Settings(BaseSettings):
         extra="ignore",
         populate_by_name=True,
     )
+
+    _admin_password_was_generated: bool = PrivateAttr(default=False)
 
     # JWT 认证配置
     jwt_secret_key: str = Field(
@@ -171,6 +184,64 @@ class Settings(BaseSettings):
         """
         return self.database_url
 
+    @property
+    def admin_password_was_generated(self) -> bool:
+        """返回初始管理员密码是否由本进程自动生成。
+
+        Returns:
+            bool: 使用空值或示例默认值触发自动生成时为 ``True``。
+        """
+
+        return self._admin_password_was_generated
+
+
+def finalize_runtime_secrets(
+    settings: Settings,
+    secret_file: Path = _DEFAULT_RUNTIME_SECRETS_PATH,
+) -> Settings:
+    """将不安全的示例值替换为运行期高熵密钥和一次性管理员密码。
+
+    JWT secret 与 AI 用户共用密码需要跨重启稳定，因此写入 Management 数据目录；
+    初始管理员密码仅用于创建首个账号，不写入运行期密钥文件，并由初始化流程按需输出。
+
+    Args:
+        settings: 已完成环境变量解析和类型校验的 Management 配置。
+        secret_file: 自动生成且需要持久化的运行期密钥文件，测试可传入临时路径。
+
+    Returns:
+        Settings: 已就地替换不安全示例值的同一配置实例。
+
+    Raises:
+        RuntimeError: 已有运行期密钥文件损坏时抛出。
+        OSError: 运行期密钥无法安全持久化时抛出。
+    """
+
+    resolved_values, _ = resolve_persistent_secrets(
+        {
+            "MANAGEMENT_JWT_SECRET_KEY": settings.jwt_secret_key,
+            "AI_USER_PASSWORD": settings.ai_user_password,
+        },
+        {
+            "MANAGEMENT_JWT_SECRET_KEY": _JWT_SECRET_PLACEHOLDERS,
+            "AI_USER_PASSWORD": _PASSWORD_PLACEHOLDERS,
+        },
+        secret_file,
+        token_bytes={
+            "MANAGEMENT_JWT_SECRET_KEY": 48,
+            # 24 字节编码为 32 字符，满足公开平台用户密码的最大长度约束。
+            "AI_USER_PASSWORD": 24,
+        },
+    )
+    settings.jwt_secret_key = resolved_values["MANAGEMENT_JWT_SECRET_KEY"]
+    settings.ai_user_password = resolved_values["AI_USER_PASSWORD"]
+
+    normalized_admin_password = settings.admin_password.strip()
+    if not normalized_admin_password or normalized_admin_password in _PASSWORD_PLACEHOLDERS:
+        # 24 个随机字节编码后恰为 32 个 URL-safe 字符，满足管理端密码长度上限。
+        settings.admin_password = secrets.token_urlsafe(24)
+        settings._admin_password_was_generated = True
+    return settings
+
 
 @lru_cache(maxsize=1)
 def get_config() -> Settings:
@@ -179,7 +250,7 @@ def get_config() -> Settings:
     Returns:
         Settings: 首次调用时从环境变量与 agents/.env 构建的配置实例。
     """
-    return Settings()
+    return finalize_runtime_secrets(Settings())
 
 
 def get_db_path() -> str:

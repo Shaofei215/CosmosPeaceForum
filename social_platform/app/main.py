@@ -2,6 +2,7 @@
 # 初始化 FastAPI 应用，注册路由和中间件
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -102,11 +103,15 @@ def ensure_topic_projection():
         db.close()
 
 
-def initialize_admin_manager():
-    """初始化公开平台管理器运行时数据。"""
+def initialize_admin_manager() -> bool:
+    """初始化公开平台管理器运行时数据。
+
+    Returns:
+        bool: 本次启动确实创建了首个管理员时为 ``True``。
+    """
     db = SessionLocal()
     try:
-        ensure_initial_admin(db)
+        return ensure_initial_admin(db)
     finally:
         db.close()
 
@@ -122,7 +127,15 @@ async def lifespan(app: FastAPI):
     external_agent_skill.get_runtime_skill_package()
     ensure_domain_event_handlers_registered()
     terminal_log_capture.start()
-    initialize_admin_manager()
+    admin_created = initialize_admin_manager()
+    if admin_created and settings.platform_admin_password_was_generated:
+        # 敏感凭据绕过应用日志捕获器，只直接写入当前进程的标准错误流。
+        print(
+            f"平台初始管理员 {settings.PLATFORM_ADMIN_INITIAL_USERNAME} 的初始密码: "
+            f"{settings.PLATFORM_ADMIN_INITIAL_PASSWORD}",
+            file=sys.stderr,
+            flush=True,
+        )
     start_scheduler()
     ensure_search_indexes()
     ensure_topic_projection()

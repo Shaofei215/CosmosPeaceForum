@@ -4,8 +4,10 @@ Management Backend - 数据库初始化服务
 """
 
 import logging
+import sys
 from sqlmodel import Session
 
+from agents.management.backend.core.config import get_config
 from agents.management.backend.core.database import get_session_local
 from agents.management.backend.services.auth_service import init_default_admin
 from agents.management.backend.services.prompt_service import init_default_prompt_configs
@@ -25,6 +27,15 @@ def initialize_database():
         admin_created = init_default_admin(session)
         if admin_created:
             logger.info("默认管理员账号已创建")
+            config = get_config()
+            if config.admin_password_was_generated:
+                # 敏感凭据绕过应用日志捕获器，避免写入 terminal_logs.jsonl。
+                print(
+                    f"角色管理器初始管理员 {config.admin_username} 的初始密码: "
+                    f"{config.admin_password}",
+                    file=sys.stderr,
+                    flush=True,
+                )
         else:
             logger.info("管理员账号已存在")
 
