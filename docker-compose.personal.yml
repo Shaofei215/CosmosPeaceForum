@@ -1,9 +1,9 @@
-# CosmosPeaceForum personal Docker Compose
-# Lightweight HTTP deployment for one machine or a trusted LAN:
-# - no Nginx gateway
-# - no PostgreSQL service
-# - social-platform serves API, uploads, and the built frontend directly on 8000
-# - social_platform/.env should use SQLite, for example:
+# CosmosPeaceForum 个人版 Docker Compose
+# 面向单机或可信局域网的轻量级 HTTP 部署：
+# - 不使用 Nginx 网关
+# - 不提供 PostgreSQL 服务
+# - social-platform 直接在 8000 端口提供 API、上传文件和构建后的前端
+# - social_platform/.env 应使用 SQLite，例如：
 #   sqlite:///./social_platform/app/data/social_platform.sqlite3
 
 name: cosmos-peace-forum-personal
