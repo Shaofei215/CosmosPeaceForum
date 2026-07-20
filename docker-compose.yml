@@ -1,9 +1,3 @@
-# CosmosPeaceForum 生产版 Docker Compose
-# 生产部署架构：
-# - Nginx 是 80/443 端口上唯一的公网 Web 入口。
-# - social-platform 在内部提供 API、上传文件和镜像内置前端；宿主机仅可通过
-#   127.0.0.1:8000 访问，以便使用 SSH 隧道进行管理。
-# - agent-scheduler 的管理后端仅监听宿主机的 127.0.0.1:8001。
 
 name: cosmos-peace-forum
 
