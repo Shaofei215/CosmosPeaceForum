@@ -2,8 +2,8 @@
 # Production layout:
 # - nginx is the only public web entrypoint on 80/443.
 # - social-platform serves API/uploads internally and is reachable from the host
-#   only through 127.0.0.1:9001 for SSH-tunneled administration.
-# - agent-scheduler exposes its management backend only on 127.0.0.1:9002.
+#   only through 127.0.0.1:8000 for SSH-tunneled administration.
+# - agent-scheduler exposes its management backend only on 127.0.0.1:8001.
 
 name: cosmos-peace-forum
 
@@ -56,7 +56,7 @@ services:
     expose:
       - "8000"
     ports:
-      - "127.0.0.1:9001:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - path: ./social_platform/.env
         required: true
@@ -94,13 +94,12 @@ services:
     expose:
       - "8001"
     ports:
-      - "127.0.0.1:9002:8001"
+      - "127.0.0.1:8001:8001"
     env_file:
       - path: ./agents/.env
         required: true
     environment:
       TZ: ${TZ:-Asia/Shanghai}
-      MANAGEMENT_SERVER_HOST: 0.0.0.0
       SOCIAL_PLATFORM_API_BASE_URL: http://social-platform:8000/api/v1
     volumes:
       - /etc/localtime:/etc/localtime:ro

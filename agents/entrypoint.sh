@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
 
-# Start AI Agent Scheduler
+export MANAGEMENT_SERVER_HOST=0.0.0.0
+
 exec python -u -m agents

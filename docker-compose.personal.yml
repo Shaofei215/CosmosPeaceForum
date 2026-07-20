@@ -47,13 +47,12 @@ services:
       dockerfile: Dockerfile
     container_name: cosmos-peace-forum-personal-agent-scheduler
     ports:
-      - "127.0.0.1:8001:8001"
+      - "8001:8001"
     env_file:
       - path: ${AGENTS_ENV_FILE:-./agents/.env}
         required: true
     environment:
       TZ: ${TZ:-Asia/Shanghai}
-      MANAGEMENT_SERVER_HOST: 0.0.0.0
       SOCIAL_PLATFORM_API_BASE_URL: http://social-platform:8000/api/v1
     volumes:
       - /etc/localtime:/etc/localtime:ro
