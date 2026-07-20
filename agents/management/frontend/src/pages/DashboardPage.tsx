@@ -31,6 +31,15 @@ type DashboardStat =
 export default function DashboardPage() {
   const [selectedLogRole, setSelectedLogRole] = useState('');
   const [logSearch, setLogSearch] = useState('');
+  const [debouncedLogSearch, setDebouncedLogSearch] = useState('');
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedLogSearch(logSearch.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [logSearch]);
 
   const { data: agents } = useQuery({
     queryKey: ['agents', 'dashboard'],
@@ -44,11 +53,11 @@ export default function DashboardPage() {
   });
 
   const { data: logsData, refetch } = useQuery({
-    queryKey: ['terminal-logs', 'dashboard', selectedLogRole, logSearch],
+    queryKey: ['terminal-logs', 'dashboard', selectedLogRole, debouncedLogSearch],
     queryFn: () =>
       terminalLogApi.list({
         count: 240,
-        keyword: logSearch.trim() || undefined,
+        keyword: debouncedLogSearch || undefined,
         role: selectedLogRole || undefined,
       }),
     refetchInterval: 2000,
@@ -170,8 +179,8 @@ export default function DashboardPage() {
             >
               <option value="">全部角色</option>
               {agents?.items.map((agent) => (
-                <option key={agent.id} value={agent.username}>
-                  {agent.name} (@{agent.username})
+                <option key={agent.id} value={agent.name}>
+                  {agent.name}
                 </option>
               ))}
             </select>
