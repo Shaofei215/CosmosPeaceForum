@@ -91,11 +91,17 @@ class TerminalLogCapture:
         if level:
             logs = [log for log in logs if log["level"] == level]
         if keyword:
-            normalized = keyword.lower()
-            logs = [log for log in logs if normalized in log["message"].lower()]
+            normalized = keyword.strip().casefold()
+            if normalized:
+                logs = [log for log in logs if normalized in log["message"].casefold()]
         if role:
-            marker = f"[{role}]"
-            logs = [log for log in logs if marker in log["message"]]
+            normalized_role = role.strip().casefold()
+            if normalized_role:
+                logs = [
+                    log
+                    for log in logs
+                    if normalized_role in log["message"].casefold()
+                ]
         return logs
 
     def get_logs(

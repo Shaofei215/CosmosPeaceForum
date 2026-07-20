@@ -24,6 +24,8 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  Minus,
+  Plus,
   Quote,
   Table2,
 } from 'lucide-react';
@@ -810,10 +812,10 @@ function TableEdgeControls({
             onClick={onAddColumn}
             visible={controls.columns < MAX_TABLE_COLUMNS}
           >
-            +
+            <Plus aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.5} />
           </TableDimensionButton>
           <TableDimensionButton label={text.removeColumn} onClick={onRemoveColumn} visible>
-            −
+            <Minus aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.5} />
           </TableDimensionButton>
         </div>
       </div>
@@ -830,10 +832,10 @@ function TableEdgeControls({
             onClick={onAddRow}
             visible={controls.rows < MAX_TABLE_ROWS}
           >
-            +
+            <Plus aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.5} />
           </TableDimensionButton>
           <TableDimensionButton label={text.removeRow} onClick={onRemoveRow} visible>
-            −
+            <Minus aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.5} />
           </TableDimensionButton>
         </div>
       </div>

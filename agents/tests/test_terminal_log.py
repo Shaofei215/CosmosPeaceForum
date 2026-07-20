@@ -113,6 +113,21 @@ class TestTerminalLogCapture:
         assert total == 2
         assert all("User" in log["message"] for log in logs)
 
+    def test_get_logs_with_role_name_filter(self, capture) -> None:
+        """角色筛选应匹配日志正文中的角色名，而不是旧用户名标记。"""
+
+        capture._append("星野 开始会话")
+        capture._append("Aurora 登录成功")
+        capture._append("其他服务启动")
+
+        logs, total = capture.get_logs(role="星野")
+        assert total == 1
+        assert logs[0]["message"] == "星野 开始会话"
+
+        logs, total = capture.get_logs(role="aurora")
+        assert total == 1
+        assert logs[0]["message"] == "Aurora 登录成功"
+
     def test_get_logs_with_pagination(self, capture):
         for i in range(20):
             capture._append(f"Log {i}")
