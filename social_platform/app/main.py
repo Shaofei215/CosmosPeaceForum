@@ -78,7 +78,10 @@ def start_scheduler():
         'interval',
         minutes=5,
         id='refresh_heat_scores',
-        replace_existing=True
+        replace_existing=True,
+        misfire_grace_time=60,
+        coalesce=True,
+        max_instances=1,
     )
     register_hot_topic_scheduler(scheduler)
     scheduler.add_job(
