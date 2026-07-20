@@ -19,26 +19,26 @@ from agents.agents_scheduler.scheduler.config import get_scheduler_config
 from agents.agents_scheduler.scheduler.relation_map import build_relation_maps_from_db
 from agents.agents_scheduler.scheduler.scheduler import AgentSchedulerManager
 from agents.agents_scheduler.scheduler.time_system import get_time_system
+from agents.logging_config import configure_logging
+from agents.management.backend.core.config import get_config
 
 logger = logging.getLogger(__name__)
 
 
 def setup_logging(log_level: str = "INFO"):
-    """配置日志"""
-    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
-    logging.basicConfig(
-        level=numeric_level,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        force=True,
+    """使用 Agent 统一配置初始化日志。"""
+    config = get_scheduler_config()
+    management_config = get_config()
+    configure_logging(
+        level=log_level or config.log_level,
+        log_dir=management_config.log_dir,
+        retention_days=management_config.log_retention_days,
+        segment_max_mb=management_config.log_segment_max_mb,
+        max_total_mb=management_config.log_max_total_mb,
     )
-    logging.getLogger().setLevel(numeric_level)
 
-    from agents.management.backend.services.terminal_log_service import (
-        restore_agents_loggers,
-        terminal_log_capture,
-    )
-    restore_agents_loggers()
+    from agents.management.backend.services.terminal_log_service import terminal_log_capture
+
     terminal_log_capture.start()
 
 
@@ -48,15 +48,12 @@ def main():
 
     从 agents/.env 和管理数据库加载配置并启动调度器。
     """
-    setup_logging()
+    config = get_scheduler_config()
+    setup_logging(config.log_level)
 
     logger.info("调度器启动中...")
-
-    config = get_scheduler_config()
     logger.info("API 地址: %s", config.api_base_url)
     logger.info("日志级别: %s", config.log_level)
-
-    setup_logging(config.log_level)
 
     time_system = get_time_system()
     logger.info("时间流速: %dx", time_system.get_scale())

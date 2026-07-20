@@ -126,22 +126,17 @@ class TestTerminalLogCapture:
         assert len(logs) == 5
         assert logs[0]["message"] == "Log 15"
 
-    def test_file_backed_logs_are_shared_between_instances(self, tmp_path):
-        log_file = tmp_path / "terminal_logs.jsonl"
-        writer = TerminalLogCapture(max_lines=100, log_file_path=log_file)
-        reader = TerminalLogCapture(max_lines=100, log_file_path=log_file)
+    def test_clear_only_affects_terminal_buffer(self, capture, tmp_path):
+        durable_log = tmp_path / "runtime.jsonl"
+        durable_log.write_text('{"message":"durable"}\n', encoding="utf-8")
+        capture._append("Visible terminal log", level="ERROR")
 
-        writer._append("Shared scheduler log", level="ERROR")
+        capture.clear()
 
-        logs, total = reader.recent(count=10)
-        assert total == 1
-        assert logs[0]["level"] == "ERROR"
-        assert logs[0]["message"] == "Shared scheduler log"
-
-        reader.clear()
-        logs, total = writer.recent(count=10)
+        logs, total = capture.recent(count=10)
         assert logs == []
         assert total == 0
+        assert durable_log.read_text(encoding="utf-8") == '{"message":"durable"}\n'
 
     def test_clear_logs(self, capture):
         capture._append("Log 1")
@@ -172,23 +167,13 @@ class TestTerminalLogCapture:
         assert len(root.handlers) == count_before + 1
         capture.stop()
 
-    def test_agents_logger_is_captured_when_root_handler_is_missing(self, capture):
+    def test_capture_uses_only_root_handler(self, capture):
         root = logging.getLogger()
-        old_level = root.level
-        root.setLevel(logging.INFO)
-
         capture.start()
-        root.removeHandler(capture._handler)
+        agents_logger = logging.getLogger("agents")
 
-        test_logger = logging.getLogger("agents.agents_scheduler.scheduler.internal_server")
-        test_logger.info("scheduler internal log")
-
-        logs, total = capture.get_logs()
-        assert total == 1
-        assert "scheduler internal log" in logs[0]["message"]
-
-        capture.stop()
-        root.setLevel(old_level)
+        assert capture._handler in root.handlers
+        assert capture._handler not in agents_logger.handlers
 
     def test_start_restores_disabled_agents_loggers(self, capture):
         test_logger = logging.getLogger("agents.agents_scheduler.scheduler.scheduler")

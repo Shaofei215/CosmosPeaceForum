@@ -12,6 +12,7 @@ from pydantic import SecretStr
 from agents.agents_scheduler.langgraph.state import SessionState, SessionSummary, ExitReason
 from agents.agents_scheduler.langgraph.config import SessionConfig, AgentConfig, get_default_config
 from agents.agents_scheduler.langgraph.session_graph import build_session_graph
+from agents.logging_config import logging_context
 from langchain_core.messages import AIMessage
 
 logger = logging.getLogger(__name__)
@@ -471,4 +472,9 @@ def run_session(
         config=config,
     )
 
-    return executor.run(llm_invoker, summarize_llm_invoker=summarize_llm_invoker)
+    with logging_context(
+        request_id=executor.session_id,
+        session_id=executor.session_id,
+        agent_id=agent_config.agent_id,
+    ):
+        return executor.run(llm_invoker, summarize_llm_invoker=summarize_llm_invoker)

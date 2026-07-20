@@ -49,7 +49,11 @@ logger = logging.getLogger(__name__)
 def _request_id(request: Request) -> str:
     """读取或生成请求 ID。"""
 
-    return request.headers.get("x-request-id") or uuid4().hex
+    return (
+        getattr(request.state, "request_id", None)
+        or request.headers.get("x-request-id")
+        or uuid4().hex
+    )
 
 
 def _error_payload(

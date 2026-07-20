@@ -1,5 +1,7 @@
 """Management Backend - 认证路由"""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlmodel import Session
@@ -23,9 +25,11 @@ from agents.management.backend.services.auth_service import (
     update_profile as update_admin_profile,
 )
 from agents.management.backend.services import session_service
+from agents.management.backend.services.log_service import create_log
 from agents.management.backend.api.deps import get_current_admin, get_management_access_payload, security
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _request_session_context(request: Request) -> tuple[str, str | None, str | None]:
@@ -54,6 +58,11 @@ def login(request: LoginRequest, http_request: Request, db: Session = Depends(ge
     """Management 管理员登录，创建可撤销 session 并返回 access/refresh token。"""
     admin = authenticate_admin(db, request.username, request.password)
     if not admin:
+        logger.warning(
+            "Management 管理员登录失败: username=%s",
+            request.username,
+            extra={"event": "security.admin_login_failed", "component": "management"},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
@@ -69,6 +78,13 @@ def login(request: LoginRequest, http_request: Request, db: Session = Depends(ge
         remember_me=request.remember_me,
         user_agent=user_agent,
         ip_address=ip_address,
+    )
+    create_log(
+        db,
+        admin,
+        "admin_login",
+        "admin_session",
+        details={"session_id": token_pair["session_id"]},
     )
 
     return LoginResponse(admin=admin_to_response(admin), **token_pair)
@@ -98,9 +114,17 @@ def logout(
 ):
     """撤销当前 management admin session。"""
     payload = get_management_access_payload(credentials.credentials, db)
+    admin = get_admin_by_id(db, int(payload["sub"]))
     session = session_service.get_active_session(db, payload["sid"])
     if session is not None:
         session_service.revoke_session(db, session)
+    create_log(
+        db,
+        admin,
+        "admin_logout",
+        "admin_session",
+        details={"session_id": payload["sid"]},
+    )
     return {"message": "登出成功"}
 
 
@@ -127,7 +151,20 @@ def revoke_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能通过该接口撤销当前会话，请使用 logout")
     revoked = session_service.revoke_session_id(db, int(payload["sub"]), session_id)
     if not revoked:
+        logger.warning(
+            "Management 管理员会话撤销失败: session_id=%s",
+            session_id,
+            extra={"event": "security.session_revoke_failed", "component": "management"},
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在或已失效")
+    admin = get_admin_by_id(db, int(payload["sub"]))
+    create_log(
+        db,
+        admin,
+        "revoke_admin_session",
+        "admin_session",
+        details={"session_id": session_id},
+    )
     return {"message": "会话已撤销"}
 
 
@@ -147,5 +184,19 @@ def update_profile(
     try:
         admin = update_admin_profile(db, current_admin, request)
     except ValueError as exc:
+        logger.warning(
+            "Management 管理员凭据或资料变更失败: admin_id=%s reason=%s",
+            current_admin.id,
+            exc,
+            extra={"event": "security.admin_profile_update_failed", "component": "management"},
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    create_log(
+        db,
+        admin,
+        "update_admin_profile",
+        "admin",
+        admin.id,
+        details={"password_changed": bool(request.new_password)},
+    )
     return admin_to_response(admin)

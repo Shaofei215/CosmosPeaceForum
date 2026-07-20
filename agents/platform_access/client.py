@@ -11,6 +11,7 @@ from typing import Any, BinaryIO
 
 import requests
 
+from agents.logging_config import get_outbound_request_headers
 from agents.platform_access.presenters import normalize_platform_response
 
 
@@ -113,6 +114,7 @@ class PlatformClient:
         """
 
         headers = {"Content-Type": "application/json"}
+        headers.update(get_outbound_request_headers())
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
         headers.update(build_agent_service_headers(self._admin_key))
@@ -170,6 +172,7 @@ class PlatformClient:
         """
 
         headers = build_agent_service_headers(self._admin_key)
+        headers.update(get_outbound_request_headers())
         headers["Authorization"] = f"Bearer {access_token}"
         file_spec = (
             (filename, file_object, content_type)

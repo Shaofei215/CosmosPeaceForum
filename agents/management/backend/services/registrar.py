@@ -32,9 +32,18 @@ from typing import Any, Optional, Sequence, Tuple, Union
 
 import requests
 
+from agents.logging_config import get_outbound_request_headers
 from agents.management.backend.core.config import get_config
 
 logger = logging.getLogger(__name__)
+
+
+def _with_request_id(headers: Optional[dict[str, str]] = None) -> dict[str, str]:
+    """把当前关联 ID 合并到下游请求头，且不覆盖调用方显式值。"""
+
+    merged = get_outbound_request_headers()
+    merged.update(headers or {})
+    return merged
 
 
 def _get_admin_key(db) -> str:
@@ -71,7 +80,7 @@ def _get_admin_login_headers() -> dict[str, str]:
     admin_key = get_config().admin_key
     if admin_key:
         headers["X-Admin-Key"] = admin_key
-    return headers
+    return _with_request_id(headers)
 
 
 def register_agent(
@@ -104,10 +113,10 @@ def register_agent(
         return False, None, "未配置 ADMIN_KEY，请先在 agents/.env 中设置"
 
     url = f"{api_base_url}/auth/register"
-    headers = {
+    headers = _with_request_id({
         "X-Admin-Key": admin_key,
         "Content-Type": "application/json",
-    }
+    })
     payload = {
         "username": username,
         "password": password,
@@ -225,7 +234,11 @@ def _get_user_id(api_base_url: str, token: str) -> Optional[int]:
     """获取当前用户 ID"""
     me_url = f"{api_base_url}/auth/me"
     try:
-        response = requests.get(me_url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        response = requests.get(
+            me_url,
+            headers=_with_request_id({"Authorization": f"Bearer {token}"}),
+            timeout=10,
+        )
         if response.status_code == 200:
             return response.json().get('id')
         return None
@@ -241,7 +254,11 @@ def _update_user_bio(api_base_url: str, username: str, password: str, bio: str) 
             return False
 
         me_url = f"{api_base_url}/auth/me"
-        me_response = requests.get(me_url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        me_response = requests.get(
+            me_url,
+            headers=_with_request_id({"Authorization": f"Bearer {token}"}),
+            timeout=10,
+        )
         if me_response.status_code != 200:
             return False
 
@@ -253,10 +270,10 @@ def _update_user_bio(api_base_url: str, username: str, password: str, bio: str) 
         response = requests.put(
             bio_url,
             json={"bio": bio},
-            headers={
+            headers=_with_request_id({
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
-            },
+            }),
             timeout=10,
         )
         return response.status_code == 200
@@ -301,10 +318,10 @@ def update_user_username(
         response = requests.put(
             f"{api_base_url}/users/{user_id}",
             json={"username": new_username},
-            headers={
+            headers=_with_request_id({
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
-            },
+            }),
             timeout=10,
         )
     except requests.exceptions.RequestException as exc:
@@ -338,7 +355,7 @@ def _upload_user_avatar(api_base_url: str, username: str, password: str, avatar_
             files = {'file': (os.path.basename(avatar_path), f, mime_type)}
             response = requests.post(
                 avatar_url,
-                headers={"Authorization": f"Bearer {token}"},
+                headers=_with_request_id({"Authorization": f"Bearer {token}"}),
                 files=files,
                 timeout=30,
             )
@@ -390,7 +407,7 @@ def notify_scheduler_reload(
 
     try:
         import json
-        headers = {"Content-Type": "application/json"} if payload else {}
+        headers = _with_request_id({"Content-Type": "application/json"} if payload else {})
         body = json.dumps(payload) if payload else None
         response = requests.post(url, data=body, headers=headers, timeout=10)
         return response.status_code == 200
@@ -429,7 +446,7 @@ def notify_scheduler_session_injection(
     }
 
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, headers=_with_request_id(), timeout=10)
         if response.status_code == 200:
             return True
         logger.error(
@@ -447,7 +464,7 @@ def get_scheduler_status() -> Optional[dict[str, Any]]:
     """获取 scheduler 当前运行态。"""
     url = f"{_get_scheduler_internal_url()}/internal/status"
     try:
-        response = requests.get(url, timeout=3)
+        response = requests.get(url, headers=_with_request_id(), timeout=3)
         if response.status_code == 200:
             return response.json()
         logger.warning("获取 scheduler 状态失败: HTTP %d", response.status_code)

@@ -7,6 +7,7 @@ FastAPI 应用。通过 ``python -m social_platform`` 运行包时会进入此�
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from collections.abc import Sequence
 from io import TextIOWrapper
@@ -14,6 +15,7 @@ from io import TextIOWrapper
 import uvicorn
 
 from social_platform.app.core.config import get_settings
+from social_platform.app.core.logging import configure_logging
 
 BANNER: str = r"""
  ██████╗██████╗ ███████╗ ██████╗ ██████╗ ██╗   ██╗███╗   ███╗
@@ -47,8 +49,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--log-level",
-        choices=("critical", "error", "warning", "info", "debug", "trace"),
-        help="Uvicorn log level. Defaults to info.",
+        choices=("critical", "error", "warning", "info", "debug"),
+        help="Process log level. Defaults to LOG_LEVEL.",
     )
     return parser.parse_args(argv)
 
@@ -63,8 +65,17 @@ def main(argv: Sequence[str] | None = None) -> None:
     """
     args = parse_args(argv)
     settings = get_settings()
+    selected_level = (args.log_level or settings.LOG_LEVEL).upper()
+    configure_logging(
+        level=selected_level,
+        log_dir=settings.LOG_DIR,
+        retention_days=settings.LOG_RETENTION_DAYS,
+        segment_max_mb=settings.LOG_SEGMENT_MAX_MB,
+        max_total_mb=settings.LOG_MAX_TOTAL_MB,
+    )
+    logger = logging.getLogger(__name__)
 
-    print(BANNER, flush=True)
+    logger.info("\n%s", BANNER, extra={"event": "service.banner", "component": "api"})
 
     # 使用导入字符串可以让 Uvicorn 的 reload 模式在子进程中重新加载应用。
     uvicorn.run(
@@ -72,7 +83,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         host=args.host or settings.SERVER_HOST,
         port=args.port or settings.SERVER_PORT,
         reload=args.reload,
-        log_level=args.log_level or "info",
+        log_level=selected_level.lower(),
+        log_config=None,
+        access_log=False,
     )
 
 

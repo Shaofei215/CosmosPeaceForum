@@ -12,12 +12,14 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from social_platform.app.core.branding import get_platform_display_name
 from social_platform.app.core.config import get_settings
+from social_platform.app.core.logging import AccessLogMiddleware, SERVICE_NAME, configure_logging
 from social_platform.app.core.paths import get_avatar_upload_dir, get_frontend_dist_dir
 from social_platform.app.core.static_files import RaceSafeStaticFiles, SPAStaticFiles
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.bootstrap import ensure_domain_event_handlers_registered
 from social_platform.app.admin.api import admin_router
 from social_platform.app.admin.services.auth_service import ensure_initial_admin
+from social_platform.app.admin.services.log_service import cleanup_expired_operation_logs
 from social_platform.app.admin.services.terminal_log_service import terminal_log_capture
 
 from social_platform.app.api.routers import (
@@ -39,6 +41,14 @@ from social_platform.app.api.routers import (
 
 
 settings = get_settings()
+if getattr(logging.getLogger(), "_cpf_logging_service", None) != SERVICE_NAME:
+    configure_logging(
+        level=settings.LOG_LEVEL,
+        log_dir=settings.LOG_DIR,
+        retention_days=settings.LOG_RETENTION_DAYS,
+        segment_max_mb=settings.LOG_SEGMENT_MAX_MB,
+        max_total_mb=settings.LOG_MAX_TOTAL_MB,
+    )
 logger = logging.getLogger(__name__)
 
 # 创建定时任务调度器
@@ -71,12 +81,38 @@ def start_scheduler():
         replace_existing=True
     )
     register_hot_topic_scheduler(scheduler)
+    scheduler.add_job(
+        cleanup_platform_audit_logs,
+        'interval',
+        hours=24,
+        id='cleanup_platform_audit_logs',
+        replace_existing=True,
+    )
     # 启动时先刷新一次，避免旧数据在首次定时任务前全部以 0 分参与推荐排序。
     scheduler.start()
     refresh_all_heat_scores()
     logger.info(
         "定时验证码清理任务与热度分数任务已启动"
     )
+
+
+def cleanup_platform_audit_logs() -> None:
+    """使用独立会话清理超过统一保留期限的平台管理审计日志。"""
+
+    db = SessionLocal()
+    try:
+        deleted = cleanup_expired_operation_logs(db, settings.LOG_RETENTION_DAYS)
+        logger.info(
+            "平台管理审计日志清理完成: deleted=%d retention_days=%d",
+            deleted,
+            settings.LOG_RETENTION_DAYS,
+            extra={"event": "audit.retention_cleanup", "component": "admin"},
+        )
+    except Exception:
+        db.rollback()
+        logger.exception("平台管理审计日志清理失败")
+    finally:
+        db.close()
 
 
 def ensure_search_indexes():
@@ -123,6 +159,10 @@ async def lifespan(app: FastAPI):
 
     在应用启动时启动调度器，关闭时停止调度器
     """
+    logger.info(
+        "公开平台服务启动中",
+        extra={"event": "service.starting", "component": "api"},
+    )
     # 启动时完成部署级 Skill 渲染和配置校验；后续下载直接复用进程内缓存。
     external_agent_skill.get_runtime_skill_package()
     ensure_domain_event_handlers_registered()
@@ -137,12 +177,24 @@ async def lifespan(app: FastAPI):
             flush=True,
         )
     start_scheduler()
+    cleanup_platform_audit_logs()
     ensure_search_indexes()
     ensure_topic_projection()
+    logger.info(
+        "公开平台服务启动完成",
+        extra={"event": "service.started", "component": "api"},
+    )
     yield
+    logger.info(
+        "公开平台服务关闭中",
+        extra={"event": "service.stopping", "component": "api"},
+    )
     scheduler.shutdown()
     terminal_log_capture.stop()
-    logger.info("定时任务调度器已关闭")
+    logger.info(
+        "公开平台服务已关闭",
+        extra={"event": "service.stopped", "component": "api"},
+    )
 
 
 # 创建 FastAPI 应用实例
@@ -166,6 +218,11 @@ app.add_middleware(
     allow_credentials=False,  # 通配来源不能与凭证模式同时启用
     allow_methods=["*"],  # 允许所有 HTTP 方法
     allow_headers=["*"],  # 允许所有 HTTP 头
+)
+app.add_middleware(
+    AccessLogMiddleware,
+    api_prefixes=(settings.API_V1_PREFIX,),
+    health_paths=("/health",),
 )
 
 if settings.AVATAR_STORAGE_STRATEGY == "local":
