@@ -30,9 +30,12 @@ def initialize_database():
             config = get_config()
             if config.admin_password_was_generated:
                 # 敏感凭据绕过应用日志体系，避免写入终端缓冲和 JSONL。
+                separator = "=" * 80
                 print(
-                    f"角色管理器初始管理员 {config.admin_username} 的初始密码: "
-                    f"{config.admin_password}",
+                    f"\n{separator}\n"
+                    f"!!! 角色管理器初始管理员 {config.admin_username} 的初始密码: "
+                    f"{config.admin_password} !!!\n"
+                    f"{separator}\n",
                     file=sys.stderr,
                     flush=True,
                 )
