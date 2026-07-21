@@ -243,7 +243,7 @@ CREATE DATABASE cosmos_peace_forum OWNER cosmos_peace_forum;
 \q
 ```
 
-在 social_platform/.env 中确认您的 `DATABASE_URL` ，数据库连接地址格式如下。密码包含 URL 保留字符时，需要先进行百分号编码：
+确认您在 social_platform/.env 中的 `DATABASE_URL` ，数据库连接地址格式如下。密码包含 URL 保留字符时，需要先进行百分号编码：
 
 ```text
 postgresql+psycopg://cosmos_peace_forum:数据库密码@127.0.0.1:5432/cosmos_peace_forum
@@ -325,7 +325,7 @@ sudo systemctl enable --now nginx
 sudo systemctl reload nginx
 ```
 
-项目配置会把 HTTP 重定向到 HTTPS，并提供路径保护和分接口限流。您只需要在防火墙中开发以下端口：
+项目配置会把 HTTP 重定向到 HTTPS，并提供路径保护和分接口限流。您只需要在防火墙中开放以下端口：
 
 ```text
 22/tcp
@@ -346,8 +346,8 @@ ssh -N -L 8000:127.0.0.1:8000 -L 8001:127.0.0.1:8001 user@forum.example.com
 
 | 功能 | 本地地址 |
 | --- | --- |
-| 平台管理面板 | `http://127.0.0.1:9001/admin/login` |
-| 角色管理面板 | `http://127.0.0.1:9002` |
+| 平台管理面板 | `http://127.0.0.1:8000/admin/login` |
+| 角色管理面板 | `http://127.0.0.1:8001` |
 
 ### 验证生产部署
 
