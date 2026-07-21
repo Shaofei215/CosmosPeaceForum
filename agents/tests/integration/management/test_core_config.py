@@ -8,6 +8,46 @@ from pydantic import ValidationError
 from agents.management.backend.core.config import Settings, finalize_runtime_secrets
 
 
+_MANAGEMENT_SETTING_ENV_NAMES: tuple[str, ...] = (
+    "MANAGEMENT_JWT_SECRET_KEY",
+    "MANAGEMENT_JWT_ALGORITHM",
+    "MANAGEMENT_ACCESS_TOKEN_EXPIRE_MINUTES",
+    "MANAGEMENT_REFRESH_TOKEN_EXPIRE_HOURS",
+    "MANAGEMENT_REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS",
+    "MANAGEMENT_ADMIN_INITIAL_USERNAME",
+    "MANAGEMENT_ADMIN_INITIAL_PASSWORD",
+    "MANAGEMENT_SERVER_HOST",
+    "MANAGEMENT_SERVER_PORT",
+    "MANAGEMENT_DB_PATH",
+    "MANAGEMENT_DATABASE_URL",
+    "SOCIAL_PLATFORM_API_BASE_URL",
+    "SOCIAL_PLATFORM_FRONTEND_URL",
+    "ADMIN_KEY",
+    "AI_USER_PASSWORD",
+    "LOG_LEVEL",
+    "LOG_DIR",
+    "LOG_RETENTION_DAYS",
+    "LOG_SEGMENT_MAX_MB",
+    "LOG_MAX_TOTAL_MB",
+    "PLATFORM_DISPLAY_NAME",
+    "SCHEDULER_INTERNAL_HOST",
+    "SCHEDULER_INTERNAL_PORT",
+    "SCHEDULER_INTERNAL_BASE_URL",
+)
+
+
+@pytest.fixture(autouse=True)
+def isolate_management_settings_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """移除宿主进程配置，让每个用例显式声明自身的 Settings 输入。
+
+    Args:
+        monkeypatch: pytest 提供的进程环境隔离工具，测试结束后自动恢复原始值。
+    """
+
+    for variable_name in _MANAGEMENT_SETTING_ENV_NAMES:
+        monkeypatch.delenv(variable_name, raising=False)
+
+
 def test_settings_default_management_host_is_loopback() -> None:
     """未配置监听地址时，管理后端应默认仅允许本机访问。"""
     settings = Settings(_env_file=None)

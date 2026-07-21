@@ -5,8 +5,7 @@ Management Backend - 安全认证模块。
 生成与哈希。access token 会携带 typ=access 与 jti，sid/scope 由 session service 写入。
 """
 
-from datetime import datetime, timedelta
-from agents.management.backend.core.timezone import local_now
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from secrets import token_urlsafe
 from typing import Optional
@@ -63,11 +62,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         函数会强制补充 typ=access 与 jti，实际可用性还要由 admin_sessions 回查决定。
     """
     to_encode = data.copy()
+    utc_now = datetime.now(UTC)
     if expires_delta:
-        expire = local_now() + expires_delta
+        expire = utc_now + expires_delta
     else:
         config = get_config()
-        expire = local_now() + timedelta(minutes=config.jwt_access_token_expire_minutes)
+        expire = utc_now + timedelta(minutes=config.jwt_access_token_expire_minutes)
     to_encode.update({"exp": expire, "typ": "access", "jti": to_encode.get("jti") or str(uuid4())})
     config = get_config()
     encoded_jwt = jwt.encode(to_encode, config.jwt_secret_key, algorithm=config.jwt_algorithm)

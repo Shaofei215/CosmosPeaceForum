@@ -12,8 +12,6 @@
 import pytest
 import time
 from unittest.mock import patch, MagicMock
-import sys
-import shutil
 from pathlib import Path
 
 # ==================== MemoryChunk Dual Timestamp ====================
@@ -103,13 +101,11 @@ class TestMemoryChunkDualTimestamp:
         assert chunk.timestamp > 0
 
     @pytest.mark.asyncio
-    async def test_memory_db_persists_semantic_timestamp(self):
+    async def test_memory_db_persists_semantic_timestamp(self, tmp_path: Path):
         """写入数据库后应保留 semantic_timestamp，管理端展示依赖该字段。"""
         from agents.agents_scheduler.memory.database import MemoryDB
 
-        test_dir = Path("agents/tests/.tmp_memory_db_semantic").resolve()
-        if test_dir.exists():
-            shutil.rmtree(test_dir)
+        test_dir = tmp_path / "memory_db_semantic"
         test_dir.mkdir(parents=True)
 
         class TestConfig:
@@ -131,7 +127,6 @@ class TestMemoryChunkDualTimestamp:
             retrieved = await db.get_memory(chunk.id)
         finally:
             db.close()
-            shutil.rmtree(test_dir)
 
         assert retrieved is not None
         assert retrieved.semantic_timestamp == 1672531200.0
@@ -400,9 +395,8 @@ def _create_mock_llm_response(memories):
 class TestLlmSmartChunk:
     """测试 _llm_smart_chunk 函数 (LangChain Tool 调用)"""
 
-    def test_successful_chunking_single_memory(self):
+    async def test_successful_chunking_single_memory(self):
         """成功调用 LLM 分块，返回单条记忆"""
-        import asyncio
         from agents.management.backend.api.memories import _llm_smart_chunk
         from fastapi import HTTPException
 
@@ -433,7 +427,7 @@ class TestLlmSmartChunk:
                     db=mock_db,
                 )
 
-        result = asyncio.run(run_test())
+        result = await run_test()
 
         assert len(result) == 1
         assert result[0]["content"] == "我今天学到了新知识"
@@ -483,9 +477,8 @@ class TestLlmSmartChunk:
 
         assert result == []
 
-    def test_successful_chunking_multiple_memories(self):
+    async def test_successful_chunking_multiple_memories(self):
         """成功调用 LLM 分块，返回多条记忆"""
-        import asyncio
         from agents.management.backend.api.memories import _llm_smart_chunk
 
         mock_config = _create_mock_chunk_config()
@@ -517,16 +510,15 @@ class TestLlmSmartChunk:
                     db=mock_db,
                 )
 
-        result = asyncio.run(run_test())
+        result = await run_test()
 
         assert len(result) == 3
         assert result[0]["content"] == "我今天学到了新知识"
         assert result[1]["content"] == "我和朋友讨论了问题"
         assert result[2]["content"] == "我决定明天继续学习"
 
-    def test_raises_when_no_config(self):
+    async def test_raises_when_no_config(self):
         """未配置分块模型时应抛出 HTTPException"""
-        import asyncio
         from agents.management.backend.api.memories import _llm_smart_chunk
         from fastapi import HTTPException, status
 
@@ -545,13 +537,12 @@ class TestLlmSmartChunk:
                 )
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(run_test())
+            await run_test()
 
         assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_raises_when_no_tool_calls(self):
+    async def test_raises_when_no_tool_calls(self):
         """LLM 未调用工具时应抛出 HTTPException"""
-        import asyncio
         from agents.management.backend.api.memories import _llm_smart_chunk
         from fastapi import HTTPException, status
 
@@ -582,13 +573,12 @@ class TestLlmSmartChunk:
                 )
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(run_test())
+            await run_test()
 
         assert exc_info.value.status_code == status.HTTP_502_BAD_GATEWAY
 
-    def test_raises_when_empty_memories(self):
+    async def test_raises_when_empty_memories(self):
         """LLM 工具调用返回空记忆列表时应抛出 HTTPException"""
-        import asyncio
         from agents.management.backend.api.memories import _llm_smart_chunk
         from fastapi import HTTPException, status
 
@@ -617,13 +607,12 @@ class TestLlmSmartChunk:
                 )
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(run_test())
+            await run_test()
 
         assert exc_info.value.status_code == status.HTTP_502_BAD_GATEWAY
 
-    def test_llm_invoked_with_correct_prompts(self):
+    async def test_llm_invoked_with_correct_prompts(self):
         """验证 LLM 调用时传入了正确的提示词"""
-        import asyncio
         from agents.management.backend.api.memories import _llm_smart_chunk
 
         mock_config = _create_mock_chunk_config()
@@ -660,11 +649,10 @@ class TestLlmSmartChunk:
                 assert "待分块文本" in call_args[1]["content"]
                 assert "512 tokens" in call_args[0]["content"]
 
-        asyncio.run(run_test())
+        await run_test()
 
-    def test_chatopenai_called_with_correct_kwargs(self):
+    async def test_chatopenai_called_with_correct_kwargs(self):
         """验证 ChatOpenAI 使用了正确的配置参数"""
-        import asyncio
         from agents.management.backend.api.memories import _llm_smart_chunk
 
         mock_config = _create_mock_chunk_config()
@@ -701,11 +689,10 @@ class TestLlmSmartChunk:
                 assert call_kwargs["api_key"] == "test-api-key"
                 assert call_kwargs["base_url"] == "https://custom-api.com/v1"
 
-        asyncio.run(run_test())
+        await run_test()
 
-    def test_empty_base_url_handled(self):
+    async def test_empty_base_url_handled(self):
         """空 base_url 应正确处理"""
-        import asyncio
         from agents.management.backend.api.memories import _llm_smart_chunk
 
         mock_config = _create_mock_chunk_config()
@@ -738,11 +725,10 @@ class TestLlmSmartChunk:
                 call_kwargs = mock_chat_openai.call_args[1]
                 assert "base_url" not in call_kwargs
 
-        asyncio.run(run_test())
+        await run_test()
 
-    def test_llm_exception_propagated_as_http_exception(self):
+    async def test_llm_exception_propagated_as_http_exception(self):
         """LLM 调用异常应转换为 HTTPException"""
-        import asyncio
         from agents.management.backend.api.memories import _llm_smart_chunk
         from fastapi import HTTPException
 
@@ -770,7 +756,7 @@ class TestLlmSmartChunk:
                 )
 
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(run_test())
+            await run_test()
 
         assert exc_info.value.status_code == 502
         assert "Connection error" in exc_info.value.detail

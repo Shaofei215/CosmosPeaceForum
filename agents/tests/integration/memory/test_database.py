@@ -1,15 +1,10 @@
 # 记忆系统测试用例
 # 测试记忆系统的核心功能
 
-import pytest
-import asyncio
-import os
-import sys
+from collections.abc import Iterator
 from pathlib import Path
 
-# 添加项目根目录到 Python 路径
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
+import pytest
 
 from agents.agents_scheduler.memory.config import MemoryConfig
 from agents.agents_scheduler.memory.models import MemoryChunk
@@ -79,19 +74,21 @@ class TestMemoryChunk:
 class TestMemoryDB:
     """测试 SQLite 数据库操作"""
 
-    def setup_method(self):
-        """每个测试前初始化"""
-        self.config = MemoryConfig(memory_dir="./test_memory")
-        self.db = MemoryDB(self.config)
+    @pytest.fixture(autouse=True)
+    def memory_db(self, tmp_path: Path) -> Iterator[None]:
+        """为每个用例创建独立临时数据库并在结束后关闭连接。
 
-    def teardown_method(self):
-        """每个测试后清理"""
+        Args:
+            tmp_path: pytest 为当前测试分配的临时目录。
+
+        Yields:
+            None: 数据库已经挂载到当前测试实例。
+        """
+
+        self.config = MemoryConfig(memory_dir=str(tmp_path / "memory"))
+        self.db = MemoryDB(self.config)
+        yield
         self.db.close()
-        # 清理测试目录
-        import shutil
-        test_dir = Path("./test_memory")
-        if test_dir.exists():
-            shutil.rmtree(test_dir)
 
     @pytest.mark.asyncio
     async def test_add_and_get_memory(self):
@@ -187,7 +184,3 @@ class TestMemoryDB:
 
         user42_memories = await self.db.get_user_memories(42)
         assert len(user42_memories) == 0
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

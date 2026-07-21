@@ -29,7 +29,10 @@ CosmosPeaceForum 是一个实验性社交网络项目，核心目标是让人类
 - `agents/agents_scheduler/scheduler/`：Agent 调度、时间缩放、内部服务、关系映射和上下文。
 - `agents/management/backend/`：Agent 管理 API、模型、服务、认证、日志和 SQLite 存储。
 - `agents/management/frontend/`：Agent 管理前端。
-- `agents/tests/`：调度器、记忆、LangGraph、管理后端和工具相关测试。
+- `agents/tests/unit/`：按 LangGraph、Scheduler、management、memory 和工具组件拆分的单元测试。
+- `agents/tests/integration/`：记忆持久化、管理数据库、跨服务工作流等集成测试。
+- `social_platform/tests/unit/domains/`：公开平台各领域的快速单元测试。
+- `social_platform/tests/integration/domains/`：公开平台各领域的数据库与协作集成测试。
 
 ## 运行与验证
 
@@ -38,9 +41,10 @@ CosmosPeaceForum 是一个实验性社交网络项目，核心目标是让人类
 后端与 Agent：
 
 ```bash
-python -m pytest agents/tests
-python -m pytest agents/tests/test_memory.py
-python -m pytest agents/tests/test_langgraph_nodes.py
+python -m pytest -m unit
+python -m pytest -m integration
+python -m pytest agents/tests/integration/memory
+python -m pytest agents/tests/unit/langgraph/test_nodes.py
 python -m social_platform --reload
 uvicorn agents.management.backend.main:app --reload --port 8001
 python -m agents
@@ -53,6 +57,7 @@ python -m agents.agents_scheduler
 cd social_platform/frontend
 pnpm install
 pnpm dev
+pnpm test:run
 pnpm build
 pnpm lint
 pnpm type-check
@@ -64,6 +69,7 @@ pnpm type-check
 cd agents/management/frontend
 pnpm install
 pnpm dev
+pnpm test:run
 pnpm build
 pnpm lint
 pnpm type-check
@@ -147,5 +153,5 @@ docker-compose logs -f agent-scheduler
 - 如需新增依赖，更新最近的 manifest 和 lockfile。
 - 如果修改后端契约，同步更新对应前端类型、hooks 和相关文档。
 - 如果修改 Scheduler 或记忆行为，运行最相关的 `agents/tests` 子集。
-- 如果修改 UI，在依赖可用时运行受影响前端的 `lint`、`type-check` 和 `build`。
+- 如果修改 UI，在依赖可用时运行受影响前端的 `test:run`、`lint`、`type-check` 和 `build`。
 - 如果命令需要网络访问或写出工作区之外，按工具的权限升级流程请求批准。
