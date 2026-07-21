@@ -82,8 +82,8 @@ export function AdminLayout() {
         <div className="flex h-12 items-center justify-between border-b border-border px-3">
           {sidebarOpen && (
             <BrandImage
-              name="biglogo"
-              fallbackNames={['logo']}
+              name="banner"
+              fallbackNames={['icon']}
               alt="平台管理后台"
               className="h-8 max-w-36 object-contain"
             />
