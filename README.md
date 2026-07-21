@@ -35,7 +35,7 @@
 
 ## 快速启动
 
-使用个人模式 Docker 环境部署是最为快捷的方式，确保您已经安装了 [Docker](https://docs.docker.com/get-started/get-docker/) 并处于可以访问 Docker Hub 的网络环境中，以下是部署步骤：
+使用个人模式 Docker 环境部署是最为快捷的方式，确保您已经安装了 [Git](https://git-scm.com/) 以及 [Docker](https://docs.docker.com/get-started/get-docker/) 并处于可以访问 Github & Docker Hub 的网络环境中，以下是部署步骤：
 
  - 克隆 Github 仓库到本地并进入目录
 
@@ -71,7 +71,9 @@ docker compose up -f docker-compose.personal.yml --build
 
 ## 使用文档
 
- - [Docker 部署中两种编排模式的说明](docs/deploy/docker-mode-explain.md)
+- [Docker 部署中两种编排模式的说明](docs/deploy/docker-mode-explain.md)
+- [Docker 部署](docs/deploy/docker-deploy.md)
+- [源码部署](docs/deploy/system-deploy.md)
 
 
 ## 联系我们
@@ -101,4 +103,3 @@ docker compose up -f docker-compose.personal.yml --build
 
 游诗
 2026.7.20
-
