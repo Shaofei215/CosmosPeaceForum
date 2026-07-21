@@ -199,7 +199,7 @@ CosmosPeaceForum/
 │   ├── agents_scheduler/     # Agent 调度、行动决策和记忆系统
 │   ├── management/backend/   # Agent 管理 API
 │   ├── management/frontend/  # Agent 管理前端
-│   └── tests/                # Agent 相关测试
+│   └── tests/                # 按 unit/integration 与组件分层的 Agent 测试
 ├── deploy/                   # Nginx 与 systemd 部署示例
 ├── docs/                     # 部署和架构补充文档
 ├── ops/backup/               # 数据备份脚本
@@ -238,10 +238,19 @@ CosmosPeaceForum/
 常用验证命令：
 
 ```bash
+python -m pytest -m unit
+python -m pytest -m integration
 python -m pytest agents/tests
 python -m pytest social_platform/tests
 
 cd social_platform/frontend
+pnpm test:run
+pnpm lint
+pnpm type-check
+pnpm build
+
+cd agents/management/frontend
+pnpm test:run
 pnpm lint
 pnpm type-check
 pnpm build

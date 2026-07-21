@@ -76,6 +76,8 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     server: {
+      hmr: process.env.VITEST ? false : undefined,
+      ws: process.env.VITEST ? false : undefined,
       host: '0.0.0.0',
       port: 5174,
       open: false,

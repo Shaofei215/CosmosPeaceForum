@@ -14,7 +14,7 @@ from sqlmodel import SQLModel
 from agents.management.backend import models as management_models  # noqa: F401
 
 
-AGENTS_ROOT = Path(__file__).resolve().parents[1]
+MANAGEMENT_ROOT = Path(management_models.__file__).resolve().parents[2]
 
 
 def _create_alembic_config(database_url: str) -> Config:
@@ -27,8 +27,8 @@ def _create_alembic_config(database_url: str) -> Config:
         Config: 可传给 Alembic 命令 API 的隔离配置。
     """
 
-    config = Config(str(AGENTS_ROOT / "management" / "alembic.ini"))
-    config.set_main_option("script_location", str(AGENTS_ROOT / "management" / "alembic"))
+    config = Config(str(MANAGEMENT_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(MANAGEMENT_ROOT / "alembic"))
     config.set_main_option("sqlalchemy.url", database_url)
     return config
 

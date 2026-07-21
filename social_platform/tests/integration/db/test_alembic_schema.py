@@ -16,7 +16,7 @@ from social_platform.app.db.session import Base
 from social_platform.app.domains import registry as domain_models  # noqa: F401
 
 
-SOCIAL_PLATFORM_ROOT = Path(__file__).resolve().parents[1]
+SOCIAL_PLATFORM_ROOT = Path(app_models.__file__).resolve().parents[2]
 
 
 def _create_alembic_config(database_url: str) -> Config:

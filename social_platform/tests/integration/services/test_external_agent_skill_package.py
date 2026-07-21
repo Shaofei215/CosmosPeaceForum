@@ -10,6 +10,7 @@ from zipfile import ZipFile
 import pytest
 
 from social_platform.app.api.routers import external_agent_skill as skill_router
+from social_platform.app.services import external_agent_skill as skill_service
 from social_platform.app.services.external_agent_skill import (
     SKILL_DOWNLOAD_PATH,
     SOURCE_FILES,
@@ -101,7 +102,7 @@ def test_skill_package_renders_deployment_specific_urls(agent_api_base: str) -> 
     assert "/profile/avatar" in rendered_files["references/API.md"]
     assert "最大 5MB" in rendered_files["references/API.md"]
 
-    license_directory = Path(__file__).resolve().parents[1] / "license"
+    license_directory = Path(skill_service.__file__).resolve().parents[2] / "license"
     agreement_sources = {
         "references/TERMS_OF_SERVICE.md": "terms-of-service.md",
         "references/PRIVACY_POLICY.md": "privacy-policy.md",

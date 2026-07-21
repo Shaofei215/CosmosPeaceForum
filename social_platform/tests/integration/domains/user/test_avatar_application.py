@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -20,7 +19,6 @@ from social_platform.app.domains import registry as domain_models  # noqa: F401
 from social_platform.app.domains.user import application as user_application
 from social_platform.app.domains.user.events import UserUpdated
 from social_platform.app.domains.user.models import User
-from social_platform.app.shared.events import domain_event_bus
 
 
 @dataclass
@@ -86,8 +84,25 @@ def avatar_environment(monkeypatch, tmp_path, avatar_settings):
     """将头像领域服务隔离到临时上传目录和测试配置。"""
 
     upload_dir = tmp_path / "uploads" / "avatars"
+
+    async def save_local_avatar_file(content: bytes, filename: str) -> str:
+        """使用临时目录实现测试用异步存储 adapter。
+
+        Args:
+            content: 待保存的头像内容。
+            filename: 目标头像文件名。
+
+        Returns:
+            str: 与生产 adapter 一致的公开相对路径。
+        """
+
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        (upload_dir / filename).write_bytes(content)
+        return f"uploads/avatars/{filename}"
+
     monkeypatch.setattr(user_application, "get_settings", lambda: avatar_settings)
     monkeypatch.setattr(user_application, "get_avatar_upload_dir", lambda: str(upload_dir))
+    monkeypatch.setattr(user_application, "_save_local_avatar_file", save_local_avatar_file)
     return upload_dir
 
 
@@ -109,7 +124,7 @@ def _create_user(db_session, username: str = "avatar_user") -> User:
     return user
 
 
-def test_upload_user_avatar_rejects_unsupported_mime_type(
+async def test_upload_user_avatar_rejects_unsupported_mime_type(
     db_session,
     avatar_environment,
 ) -> None:
@@ -119,14 +134,14 @@ def test_upload_user_avatar_rejects_unsupported_mime_type(
     file = FakeAvatarUploadFile(content_type="text/plain", content=b"not-image")
 
     with pytest.raises(user_application.AvatarValidationError) as exc_info:
-        asyncio.run(user_application.upload_user_avatar(db_session, user, file))
+        await user_application.upload_user_avatar(db_session, user, file)
 
     assert "不支持的图片格式" in str(exc_info.value)
     assert avatar_environment.exists() is False
     assert db_session.query(User).filter(User.id == user.id).one().avatar_url is None
 
 
-def test_upload_user_avatar_rejects_oversized_file(
+async def test_upload_user_avatar_rejects_oversized_file(
     db_session,
     avatar_environment,
     avatar_settings,
@@ -138,25 +153,30 @@ def test_upload_user_avatar_rejects_oversized_file(
     file = FakeAvatarUploadFile(content_type="image/png", content=b"x" * (1024 * 1024 + 1))
 
     with pytest.raises(user_application.AvatarValidationError) as exc_info:
-        asyncio.run(user_application.upload_user_avatar(db_session, user, file))
+        await user_application.upload_user_avatar(db_session, user, file)
 
     assert str(exc_info.value) == "图片大小不能超过 1MB"
     assert avatar_environment.exists() is False
     assert db_session.query(User).filter(User.id == user.id).one().avatar_url is None
 
 
-def test_upload_user_avatar_writes_file_updates_user_and_publishes_event(
+async def test_upload_user_avatar_writes_file_updates_user_and_publishes_event(
     db_session,
     avatar_environment,
+    monkeypatch,
 ) -> None:
     """本地头像上传会写入文件、更新用户头像 URL 并发布用户更新事件。"""
 
     captured: list[UserUpdated] = []
-    domain_event_bus.subscribe(UserUpdated, lambda _, event: captured.append(event))
+    monkeypatch.setattr(
+        user_application,
+        "publish_domain_event",
+        lambda _, event: captured.append(event),
+    )
     user = _create_user(db_session)
     file = FakeAvatarUploadFile(content_type="image/png", content=b"avatar-bytes")
 
-    updated_user = asyncio.run(user_application.upload_user_avatar(db_session, user, file))
+    updated_user = await user_application.upload_user_avatar(db_session, user, file)
 
     assert updated_user.avatar_url is not None
     assert updated_user.avatar_url.startswith(f"uploads/avatars/avatar_{user.id}_")
@@ -168,14 +188,19 @@ def test_upload_user_avatar_writes_file_updates_user_and_publishes_event(
     assert captured[-1].user_id == user.id
 
 
-def test_delete_user_avatar_clears_user_and_removes_local_file(
+async def test_delete_user_avatar_clears_user_and_removes_local_file(
     db_session,
     avatar_environment,
+    monkeypatch,
 ) -> None:
     """删除头像会清空用户头像 URL，并尽力删除旧的本地头像文件。"""
 
     captured: list[UserUpdated] = []
-    domain_event_bus.subscribe(UserUpdated, lambda _, event: captured.append(event))
+    monkeypatch.setattr(
+        user_application,
+        "publish_domain_event",
+        lambda _, event: captured.append(event),
+    )
     avatar_environment.mkdir(parents=True)
     old_file = avatar_environment / "old-avatar.jpg"
     old_file.write_bytes(b"old-avatar")
@@ -183,7 +208,7 @@ def test_delete_user_avatar_clears_user_and_removes_local_file(
     user.avatar_url = "uploads/avatars/old-avatar.jpg"
     db_session.commit()
 
-    updated_user = asyncio.run(user_application.delete_user_avatar(db_session, user))
+    updated_user = await user_application.delete_user_avatar(db_session, user)
 
     assert updated_user.avatar_url is None
     assert db_session.query(User).filter(User.id == user.id).one().avatar_url is None
