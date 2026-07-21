@@ -678,42 +678,44 @@ class TestMemoryDatabaseMigration:
         assert after_cooldown is not None
         assert after_cooldown.memory_coefficient == pytest.approx(0.9)
 
-    def test_legacy_memories_are_backfilled_from_creation_time(self):
-        """版本 3 数据升级时应以创建时间初始化上次衰减时间。"""
+    def test_fresh_database_uses_single_release_baseline(self):
+        """首个发布版本的新数据库应由单一基线创建完整结构。"""
         connection = sqlite3.connect(":memory:")
         connection.row_factory = sqlite3.Row
-        connection.executescript(
-            """
-            CREATE TABLE memories (
-                id TEXT PRIMARY KEY,
-                owner_id INTEGER NOT NULL,
-                content TEXT NOT NULL,
-                timestamp REAL NOT NULL,
-                memory_coefficient REAL NOT NULL,
-                semantic_timestamp REAL NOT NULL DEFAULT 0,
-                memory_type TEXT NOT NULL DEFAULT 'normal'
-            );
-            CREATE TABLE memory_schema_migrations (
-                version INTEGER PRIMARY KEY,
-                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            INSERT INTO memory_schema_migrations (version) VALUES (1), (2), (3);
-            INSERT INTO memories (
-                id, owner_id, content, timestamp, memory_coefficient
-            ) VALUES ('legacy-memory', 1, '历史记忆', 1234.0, 0.8);
-            """
-        )
 
         try:
             run_memory_migrations(connection)
-            row = connection.execute(
-                "SELECT last_decay_timestamp FROM memories WHERE id = 'legacy-memory'"
-            ).fetchone()
+            columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(memories)")
+            }
+            tables = {
+                row["name"]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            versions = [
+                row["version"]
+                for row in connection.execute(
+                    "SELECT version FROM memory_schema_migrations ORDER BY version"
+                )
+            ]
         finally:
             connection.close()
 
-        assert row is not None
-        assert row["last_decay_timestamp"] == 1234.0
+        assert columns == {
+            "id",
+            "owner_id",
+            "content",
+            "timestamp",
+            "memory_coefficient",
+            "semantic_timestamp",
+            "memory_type",
+            "last_decay_timestamp",
+            "last_boost_timestamp",
+        }
+        assert tables == {"memories", "memory_index_metadata", "memory_schema_migrations"}
+        assert versions == [1]
 
     def test_shared_connection_serializes_concurrent_writes(self, tmp_path):
         """多个 Agent 线程共享 SQLite connection 时应完整写入所有记忆。"""

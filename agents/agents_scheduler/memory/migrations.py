@@ -1,4 +1,8 @@
-"""Versioned SQLite migrations for the scheduler memory store."""
+"""Agent 长期记忆 SQLite 的版本化数据库迁移。
+
+v1.0.0-beta.1 是项目首个发布版本，因此本模块只保留能够从空库创建当前完整结构的
+初始基线。后续结构变化应继续在 ``MIGRATIONS`` 中追加新版本。
+"""
 
 from __future__ import annotations
 
@@ -9,11 +13,19 @@ from collections.abc import Callable
 Migration = Callable[[sqlite3.Connection], None]
 
 
-def _column_names(conn: sqlite3.Connection, table_name: str) -> set[str]:
-    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
-
-
 def _migration_0001_initial_schema(conn: sqlite3.Connection) -> None:
+    """创建 v1.0.0-beta.1 所需的完整长期记忆结构。
+
+    Args:
+        conn: 已开启迁移事务的 SQLite 连接。
+
+    Returns:
+        None: 全部表和索引创建完成后直接返回。
+
+    Raises:
+        sqlite3.Error: 创建表或索引失败时抛出。
+    """
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS memories (
@@ -21,7 +33,11 @@ def _migration_0001_initial_schema(conn: sqlite3.Connection) -> None:
             owner_id INTEGER NOT NULL,
             content TEXT NOT NULL,
             timestamp REAL NOT NULL,
-            memory_coefficient REAL NOT NULL
+            memory_coefficient REAL NOT NULL,
+            semantic_timestamp REAL NOT NULL DEFAULT 0,
+            memory_type TEXT NOT NULL DEFAULT 'normal',
+            last_decay_timestamp REAL NOT NULL DEFAULT 0,
+            last_boost_timestamp REAL NOT NULL DEFAULT 0
         )
         """
     )
@@ -29,80 +45,6 @@ def _migration_0001_initial_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_memory_coefficient ON memories(memory_coefficient)"
     )
-
-
-def _migration_0002_semantic_timestamp(conn: sqlite3.Connection) -> None:
-    if "semantic_timestamp" not in _column_names(conn, "memories"):
-        conn.execute(
-            "ALTER TABLE memories ADD COLUMN semantic_timestamp REAL NOT NULL DEFAULT 0"
-        )
-
-
-def _migration_0003_memory_type(conn: sqlite3.Connection) -> None:
-    if "memory_type" not in _column_names(conn, "memories"):
-        conn.execute(
-            "ALTER TABLE memories ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'normal'"
-        )
-
-
-def _migration_0004_last_decay_timestamp(conn: sqlite3.Connection) -> None:
-    """
-    增加增量衰减游标，并初始化历史记忆的衰减起点。
-
-    Args:
-        conn: 已开启迁移事务的 SQLite 连接。
-
-    Returns:
-        None: 迁移完成后直接返回。
-
-    Raises:
-        sqlite3.Error: 修改表结构或初始化历史数据失败时抛出。
-    """
-    if "last_decay_timestamp" not in _column_names(conn, "memories"):
-        conn.execute(
-            "ALTER TABLE memories ADD COLUMN last_decay_timestamp REAL NOT NULL DEFAULT 0"
-        )
-        conn.execute(
-            "UPDATE memories SET last_decay_timestamp = timestamp "
-            "WHERE last_decay_timestamp = 0"
-        )
-
-
-def _migration_0005_last_boost_timestamp(conn: sqlite3.Connection) -> None:
-    """
-    增加唤醒增强冷却游标。
-
-    Args:
-        conn: 已开启迁移事务的 SQLite 连接。
-
-    Returns:
-        None: 字段存在或创建完成后直接返回。
-
-    Raises:
-        sqlite3.Error: 修改表结构失败时抛出。
-    """
-    if "last_boost_timestamp" not in _column_names(conn, "memories"):
-        conn.execute(
-            "ALTER TABLE memories ADD COLUMN last_boost_timestamp REAL NOT NULL DEFAULT 0"
-        )
-
-
-def _migration_0006_index_metadata(conn: sqlite3.Connection) -> None:
-    """
-    创建派生索引元数据存储表。
-
-    当前不校验 Embedding 模型指纹；该通用表为未来的向量索引
-    版本记录与自动重建流程预留。
-
-    Args:
-        conn: 已开启迁移事务的 SQLite 连接。
-
-    Returns:
-        None: 表创建完成后直接返回。
-
-    Raises:
-        sqlite3.Error: 创建表失败时抛出。
-    """
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS memory_index_metadata (
@@ -115,15 +57,22 @@ def _migration_0006_index_metadata(conn: sqlite3.Connection) -> None:
 
 MIGRATIONS: tuple[tuple[int, Migration], ...] = (
     (1, _migration_0001_initial_schema),
-    (2, _migration_0002_semantic_timestamp),
-    (3, _migration_0003_memory_type),
-    (4, _migration_0004_last_decay_timestamp),
-    (5, _migration_0005_last_boost_timestamp),
-    (6, _migration_0006_index_metadata),
 )
 
 
 def run_memory_migrations(conn: sqlite3.Connection) -> None:
+    """把长期记忆 SQLite 升级到当前版本。
+
+    Args:
+        conn: 配置了 ``sqlite3.Row`` 行工厂的 SQLite 连接。
+
+    Returns:
+        None: 所有待执行迁移提交后直接返回。
+
+    Raises:
+        sqlite3.Error: 读取迁移记录、应用迁移或提交事务失败时抛出。
+    """
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS memory_schema_migrations (

@@ -2,10 +2,11 @@
 
 Revision ID: 0001_initial_schema
 Revises:
-Create Date: 2026-07-03 07:16:14.554927
+Create Date: 2026-07-21
 
-本基线由当前 SQLAlchemy metadata 自动生成，供全新 SQLite 或 PostgreSQL 数据库
-在公开平台启动前通过 ``alembic upgrade head`` 一次性建立完整表、约束和索引。
+本基线对应 v1.0.0-beta.1，由当前 SQLAlchemy metadata 自动生成，供全新 SQLite 或
+PostgreSQL 数据库在公开平台启动前通过 ``alembic upgrade head`` 一次性建立完整表、
+约束和索引。
 """
 
 from collections.abc import Sequence
