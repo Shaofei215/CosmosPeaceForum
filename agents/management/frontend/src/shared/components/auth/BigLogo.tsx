@@ -18,8 +18,8 @@ export function AuthIllustration() {
 export function BigLogo({ className }: { className?: string }) {
   return (
     <BrandImage
-      name="biglogo"
-      fallbackNames={['logo']}
+      name="banner"
+      fallbackNames={['icon']}
       alt={PLATFORM_DISPLAY_NAME}
       className={cn('auth-big-logo', className)}
     />

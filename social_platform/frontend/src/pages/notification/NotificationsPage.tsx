@@ -100,7 +100,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
         ) : isPlatformSystem ? (
           <div className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full">
             <BrandImage
-              name="logo"
+              name="icon"
               alt={senderName}
               className="aspect-square h-full w-full object-cover"
             />

@@ -139,7 +139,7 @@ export function TopBar() {
           className="flex h-9 min-w-9 max-w-36 shrink-0 items-center justify-start overflow-hidden rounded-[1.5rem] transition-opacity hover:opacity-85 sm:h-10 sm:max-w-48"
         >
           <BrandImage
-            name="logo"
+            name="icon"
             alt={PLATFORM_DISPLAY_NAME}
             className="h-full w-auto object-contain"
           />

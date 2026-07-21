@@ -32,7 +32,7 @@ const escapeHtmlText = (value: string): string =>
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '');
   const platformDisplayName = env.PLATFORM_DISPLAY_NAME?.trim() || DEFAULT_PLATFORM_DISPLAY_NAME;
-  const platformLogo = resolvePublicBrandImage('logo');
+  const platformLogo = resolvePublicBrandImage('icon');
 
   return {
     envPrefix: ['VITE_', 'PLATFORM_'],

@@ -47,7 +47,7 @@ export default defineConfig(({ command, mode }) => {
   );
   const platformDisplayName =
     platformEnv.PLATFORM_DISPLAY_NAME?.trim() || DEFAULT_PLATFORM_DISPLAY_NAME;
-  const platformLogo = resolvePublicBrandImage('logo');
+  const platformLogo = resolvePublicBrandImage('icon');
 
   return {
     plugins: [
