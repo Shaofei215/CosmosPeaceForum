@@ -1,11 +1,12 @@
-"""创建当前 Agent 管理服务初始数据库结构。
+"""创建当前角色管理服务初始数据库结构。
 
 Revision ID: 0001_initial_schema
 Revises:
-Create Date: 2026-07-03 09:25:12.161414
+Create Date: 2026-07-21
 
-本文件由 Alembic 生成，供 Agent 管理后端启动时按版本顺序升级或回退数据库结构。
-本基线显式描述当前 SQLModel metadata 中的全部表和索引，不依赖运行时 ``create_all``。
+本文件由 Alembic 生成，供角色管理后端启动时按版本顺序升级或回退数据库结构。
+本基线对应 v1.0.0-beta.1，显式描述当前 SQLModel metadata 中的全部表和索引，
+不依赖运行时 ``create_all``。
 """
 
 from collections.abc import Sequence
@@ -158,11 +159,22 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_agent_configs_username'), 'agent_configs', ['username'], unique=True)
+    op.create_table('scheduler_time_state',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('scaled_timestamp', sa.Float(), nullable=False),
+    sa.Column('real_timestamp', sa.Float(), nullable=False),
+    sa.Column('scale', sa.Float(), nullable=False),
+    sa.Column('offset_seconds', sa.Integer(), nullable=False),
+    sa.Column('paused', sa.Boolean(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
 
 
 def downgrade() -> None:
     """按外键依赖的逆序删除当前 Agent 管理服务数据库对象。"""
 
+    op.drop_table('scheduler_time_state')
     op.drop_index(op.f('ix_agent_configs_username'), table_name='agent_configs')
     op.drop_table('agent_configs')
     op.drop_index(op.f('ix_system_configs_key'), table_name='system_configs')
