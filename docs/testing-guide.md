@@ -145,3 +145,22 @@ pnpm build
 
 Vitest 运行时会关闭 Vite HMR 与 WebSocket；单元测试不需要监听开发服务器端口。
 修改后端契约时，需要同步更新对应前端类型和 hook，再运行上述验证。
+
+## 七、CI 分类与触发规则
+
+CI 使用“验证类型优先、产品界面其次”的命名方式。目录名仍描述源码归属，GitHub 检查名称则
+直接说明失败发生在哪一类验证中：
+
+| GitHub 检查 | 覆盖范围 | 本地等价命令 |
+| --- | --- | --- |
+| `Tests / Python / Unit` | 公开平台与 Agent 系统的全部单元测试 | `python -m pytest -m unit` |
+| `Tests / Python / Integration` | 公开平台与 Agent 系统的全部集成测试 | `python -m pytest -m integration` |
+| `Quality / Web / Community` | 公开社区前端测试、Lint、类型检查与构建 | `social_platform/frontend` 下的四条验证命令 |
+| `Quality / Web / Agent Console` | Agent 管理控制台测试、Lint、类型检查与构建 | `agents/management/frontend` 下的四条验证命令 |
+| `Smoke / Runtime Entrypoints` | 数据库迁移及公开平台、Agent Console API、Scheduler、组合入口 | 无单一等价命令 |
+
+这里的 `Community` 指面向普通用户的公开社区界面，`Agent Console` 指 Agent 配置、管理与
+运维界面。CI 不再使用含义过宽的 `public-frontend` 或 `management-frontend` 作为检查分类。
+
+工作流在 Pull Request、推送到 `main` 以及手动触发时运行。当前不使用路径过滤：根依赖、
+前后端契约和组合入口存在交叉影响，所有必选检查保持固定出现，避免变更因路径判断错误而漏检。

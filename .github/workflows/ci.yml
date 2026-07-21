@@ -2,6 +2,10 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,10 +15,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  python-backend-and-agents:
-    name: Python
+  python-validation:
+    name: ${{ matrix.check_name }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check_name: Tests / Python / Unit
+            test_marker: unit
+            runtime_smoke: false
+          - check_name: Tests / Python / Integration
+            test_marker: integration
+            runtime_smoke: false
+          - check_name: Smoke / Runtime Entrypoints
+            test_marker: ""
+            runtime_smoke: true
 
     env:
       PYTHONUNBUFFERED: "1"
@@ -90,23 +108,20 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -r requirements.txt
 
-      - name: Run agent test suite
-        run: python -m pytest agents/tests
-
-      - name: Run focused memory tests
-        run: python -m pytest agents/tests/test_memory.py
-
-      - name: Run focused LangGraph node tests
-        run: python -m pytest agents/tests/test_langgraph_nodes.py
+      - name: Run Python tests
+        if: matrix.test_marker != ''
+        run: python -m pytest -m "${{ matrix.test_marker }}"
 
       - name: Prepare public platform database
+        if: matrix.runtime_smoke
         run: python -m alembic -c social_platform/alembic.ini upgrade head
 
       - name: Smoke test public platform entrypoint
+        if: matrix.runtime_smoke
         run: |
           set -euo pipefail
 
-          python -m social_platform --reload --host 127.0.0.1 --port 8000 &
+          python -m social_platform --host 127.0.0.1 --port 8000 &
           server_pid=$!
           trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
 
@@ -123,11 +138,12 @@ jobs:
           echo "social_platform did not become ready in time" >&2
           exit 1
 
-      - name: Smoke test management backend entrypoint
+      - name: Smoke test agent console API entrypoint
+        if: matrix.runtime_smoke
         run: |
           set -euo pipefail
 
-          uvicorn agents.management.backend.main:app --reload --host 127.0.0.1 --port 8001 &
+          uvicorn agents.management.backend.main:app --host 127.0.0.1 --port 8001 &
           server_pid=$!
           trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
 
@@ -141,10 +157,11 @@ jobs:
             sleep 1
           done
 
-          echo "management backend did not become ready in time" >&2
+          echo "agent console API did not become ready in time" >&2
           exit 1
 
       - name: Smoke test agent scheduler entrypoint
+        if: matrix.runtime_smoke
         env:
           SCHEDULER_INTERNAL_PORT: "8012"
           SCHEDULER_INTERNAL_BASE_URL: http://127.0.0.1:8012
@@ -168,7 +185,8 @@ jobs:
           echo "agent scheduler did not become ready in time" >&2
           exit 1
 
-      - name: Smoke test combined agents entrypoint
+      - name: Smoke test combined agent services entrypoint
+        if: matrix.runtime_smoke
         env:
           MANAGEMENT_SERVER_PORT: "8011"
           SCHEDULER_INTERNAL_PORT: "8013"
@@ -191,17 +209,24 @@ jobs:
             sleep 1
           done
 
-          echo "combined agents entrypoint did not become ready in time" >&2
+          echo "combined agent services did not become ready in time" >&2
           exit 1
 
-  public-frontend:
-    name: Public frontend
+  web-quality:
+    name: Quality / Web / ${{ matrix.product_name }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    defaults:
-      run:
-        working-directory: social_platform/frontend
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - product_name: Community
+            working_directory: social_platform/frontend
+            lockfile: social_platform/frontend/pnpm-lock.yaml
+          - product_name: Agent Console
+            working_directory: agents/management/frontend
+            lockfile: agents/management/frontend/pnpm-lock.yaml
 
     env:
       HUSKY: "0"
@@ -221,99 +246,24 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
-          cache-dependency-path: social_platform/frontend/pnpm-lock.yaml
+          cache-dependency-path: ${{ matrix.lockfile }}
 
       - name: Install dependencies
+        working-directory: ${{ matrix.working_directory }}
         run: pnpm install --frozen-lockfile
 
-      - name: Smoke test dev server
-        run: |
-          set -euo pipefail
-
-          pnpm dev -- --host 127.0.0.1 --port 5173 &
-          server_pid=$!
-          trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
-
-          for _ in {1..45}; do
-            if curl -fsS http://127.0.0.1:5173 >/dev/null; then
-              exit 0
-            fi
-            if ! kill -0 "${server_pid}" 2>/dev/null; then
-              wait "${server_pid}"
-            fi
-            sleep 1
-          done
-
-          echo "public frontend dev server did not become ready in time" >&2
-          exit 1
-
-      - name: Build
-        run: pnpm build
+      - name: Run tests
+        working-directory: ${{ matrix.working_directory }}
+        run: pnpm test:run
 
       - name: Lint
+        working-directory: ${{ matrix.working_directory }}
         run: pnpm lint
 
       - name: Type-check
+        working-directory: ${{ matrix.working_directory }}
         run: pnpm type-check
-
-  management-frontend:
-    name: Management frontend
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    defaults:
-      run:
-        working-directory: agents/management/frontend
-
-    env:
-      HUSKY: "0"
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v5
-        with:
-          version: 11.0.9
-          run_install: false
-
-      - name: Set up Node.js 24
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          cache: pnpm
-          cache-dependency-path: agents/management/frontend/pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Smoke test dev server
-        run: |
-          set -euo pipefail
-
-          pnpm dev -- --host 127.0.0.1 --port 5174 &
-          server_pid=$!
-          trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
-
-          for _ in {1..45}; do
-            if curl -fsS http://127.0.0.1:5174 >/dev/null; then
-              exit 0
-            fi
-            if ! kill -0 "${server_pid}" 2>/dev/null; then
-              wait "${server_pid}"
-            fi
-            sleep 1
-          done
-
-          echo "management frontend dev server did not become ready in time" >&2
-          exit 1
 
       - name: Build
+        working-directory: ${{ matrix.working_directory }}
         run: pnpm build
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Type-check
-        run: pnpm type-check
