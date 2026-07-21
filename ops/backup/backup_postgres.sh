@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 # 备份 social_platform PostgreSQL 数据库。
 #
@@ -10,11 +11,11 @@ set -Eeuo pipefail
 # - POSTGRES_BACKUP_MODE=local  强制使用宿主机 pg_dump，可连接本机或远程 PostgreSQL。
 #
 # Cron example:
-# 15 3 * * * cd /path/to/cosmos-peace-forum && BACKUP_DIR=/data/backups ./ops/backup/backup_postgres.sh
+# 15 3 * * * cd /path/to/cosmos-peace-forum && BACKUP_DIR=/data/backups bash ./ops/backup/backup_postgres.sh
 #
 # Local/system PostgreSQL example:
 # POSTGRES_BACKUP_MODE=local PGHOST=127.0.0.1 PGPORT=5432 PGUSER=cosmos_peace_forum \
-#   PGPASSWORD=cosmos_peace_forum ./ops/backup/backup_postgres.sh
+#   PGPASSWORD=cosmos_peace_forum bash ./ops/backup/backup_postgres.sh
 
 BACKUP_DIR="${BACKUP_DIR:-./backups/postgres}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
@@ -27,6 +28,19 @@ POSTGRES_PORT="${POSTGRES_PORT:-${PGPORT:-5432}}"
 PGDUMP_BIN="${PGDUMP_BIN:-pg_dump}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+TEMP_FILE=""
+
+cleanup() {
+  if [[ -n "$TEMP_FILE" ]]; then
+    rm -f -- "$TEMP_FILE"
+  fi
+}
+trap cleanup EXIT
+
+if [[ ! "$RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
+  echo "RETENTION_DAYS must be a non-negative integer: $RETENTION_DAYS" >&2
+  exit 2
+fi
 
 resolve_compose_command() {
   if [[ -n "${COMPOSE_BIN:-}" ]]; then
@@ -120,12 +134,13 @@ for database in $DATABASE_LIST; do
   fi
 
   output_file="$BACKUP_DIR/$database-$TIMESTAMP.sql.gz"
-  temp_file="$output_file.tmp"
+  TEMP_FILE="$output_file.tmp"
 
   echo "Backing up PostgreSQL database '$database' with mode '$BACKUP_MODE' to '$output_file'..."
-  dump_database "$database" | gzip -9 > "$temp_file"
+  dump_database "$database" | gzip -9 > "$TEMP_FILE"
 
-  mv "$temp_file" "$output_file"
+  mv "$TEMP_FILE" "$output_file"
+  TEMP_FILE=""
 done
 
 find "$BACKUP_DIR" -type f -name "*.sql.gz" -mtime +"$RETENTION_DAYS" -delete

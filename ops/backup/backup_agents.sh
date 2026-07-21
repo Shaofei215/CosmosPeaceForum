@@ -1,25 +1,29 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 # 备份 agents 侧运行期数据库与索引。
 #
 # 默认覆盖：
 # - agents/management/data/management.db
-# - agents/management/data/.jwt_secret（若存在，属于管理端认证状态）
+# - agents/management/data/generated_secrets.json（若存在，属于管理端认证状态）
+# - agents/management/data/.jwt_secret（若存在，兼容旧版本）
 # - agents/agents_scheduler/memory/data/memories.db
 # - agents/agents_scheduler/memory/data/chroma_db
 # - agents/agents_scheduler/memory/data/tantivy_index
 #
-# Cron example:
-# 30 3 * * * cd /path/to/cosmos-peace-forum && BACKUP_DIR=/data/backups ./ops/backup/backup_agents.sh
-#
 # 注意：SQLite 使用 sqlite3 的在线备份接口（若可用）；目录型索引使用文件快照。
-# 如果 Scheduler 正在高频写入 memory，建议在维护窗口暂停写入后执行，确保 SQLite、
-# ChromaDB 和 Tantivy 三套存储处于同一业务时间点。
+# 为确保 SQLite、ChromaDB 和 Tantivy 三套存储处于同一业务时间点，应在维护窗口暂停
+# Agent/Scheduler 写入。自动化任务应使用能够在失败时仍恢复服务的外层脚本或 service。
 
 BACKUP_DIR="${BACKUP_DIR:-./backups/agents}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+
+if [[ ! "$RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
+  echo "RETENTION_DAYS must be a non-negative integer: $RETENTION_DAYS" >&2
+  exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
@@ -140,7 +144,14 @@ backup_archive=$ARCHIVE_PATH
 EOF
 
 backup_sqlite "$MANAGEMENT_DB_PATH" "$WORK_DIR/management/management.db" "management database"
-copy_file_if_exists "$MANAGEMENT_DATA_DIR/.jwt_secret" "$WORK_DIR/management/.jwt_secret" "management jwt secret"
+copy_file_if_exists \
+  "$MANAGEMENT_DATA_DIR/generated_secrets.json" \
+  "$WORK_DIR/management/generated_secrets.json" \
+  "management generated secrets"
+copy_file_if_exists \
+  "$MANAGEMENT_DATA_DIR/.jwt_secret" \
+  "$WORK_DIR/management/.jwt_secret" \
+  "legacy management jwt secret"
 
 backup_sqlite "$MEMORY_DB_PATH" "$WORK_DIR/memory/memories.db" "memory sqlite database"
 copy_dir_if_exists "$CHROMA_DB_DIR" "$WORK_DIR/memory/chroma_db" "memory chromadb"

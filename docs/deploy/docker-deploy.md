@@ -147,6 +147,35 @@ ssh -L 8000:127.0.0.1:8000 -L 8001:127.0.0.1:8001 user@example.com
 - 从生产模式切回个人模式时，应用会重新使用原有 SQLite 文件，而不是 PostgreSQL 数据；
 - 迁移模式前应分别备份数据库、上传文件、Agent 管理数据和记忆数据。
 
+## 使用备份脚本
+
+仓库的 `ops/backup/backup_postgres.sh` 可以直接调用 Compose 容器内的 `pg_dump`。先准备位于
+项目目录之外、仅部署账号可访问的备份目录，然后在仓库根目录执行：
+
+```bash
+BACKUP_DIR=/path/to/backups/postgres \
+  POSTGRES_BACKUP_MODE=docker \
+  COMPOSE_FILE=docker-compose.yml \
+  bash ./ops/backup/backup_postgres.sh
+```
+
+`ops/backup/backup_agents.sh` 读取 Compose 已挂载到宿主机的管理数据库和记忆目录。为了让
+SQLite、ChromaDB 和 Tantivy 保持在同一业务时间点，生产模式应暂停 Agent 容器后执行：
+
+```bash
+docker compose stop agent-scheduler
+BACKUP_DIR=/path/to/backups/agents bash ./ops/backup/backup_agents.sh
+docker compose start agent-scheduler
+```
+
+个人模式使用同一个 Agent 备份脚本，但停止和启动命令需要加上
+`-f docker-compose.personal.yml`。个人模式的公开平台使用 SQLite，不适用 PostgreSQL 备份脚本；
+应停止 `social-platform` 后备份 `social_platform/app/data/`。
+
+两个脚本默认保留 14 天，可通过 `RETENTION_DAYS` 修改。它们不备份本地上传文件、两份
+`.env`、证书或对象存储数据，这些内容仍需单独备份。将任务加入 cron 或其他调度器前，
+应先验证归档内容并进行恢复演练；自动化 Agent 备份时还应确保备份失败后容器也会重新启动。
+
 ## 常用运维命令
 
 个人模式的命令都需要显式指定 Compose 文件：
