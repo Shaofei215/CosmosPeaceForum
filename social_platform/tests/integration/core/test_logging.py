@@ -12,6 +12,7 @@ import pytest
 
 from social_platform.app.core.logging import (
     AccessLogMiddleware,
+    HumanFacingLogFilter,
     HybridRotatingFileHandler,
     JsonLogFormatter,
     get_log_context,
@@ -43,6 +44,23 @@ def test_json_formatter_contract_and_exception() -> None:
     assert payload["exception"]["type"] == "ValueError"
     assert "测试异常" in payload["exception"]["stack"]
     assert datetime.fromisoformat(payload["timestamp"]).tzinfo is not None
+
+
+def test_human_facing_filter_hides_routine_access_only() -> None:
+    """人工渠道应过滤成功访问日志，但保留失败访问与业务日志。"""
+
+    display_filter = HumanFacingLogFilter()
+    success = _record("HTTP GET /api 200")
+    success.event = "http.request"
+    success.http = {"status_code": 200}
+    server_error = _record("HTTP GET /api 500")
+    server_error.event = "http.request"
+    server_error.http = {"status_code": 500}
+    business = _record("帖子发布成功")
+
+    assert display_filter.filter(success) is False
+    assert display_filter.filter(server_error) is True
+    assert display_filter.filter(business) is True
 
 
 def test_daily_rollover_preserves_valid_jsonl(tmp_path: Path) -> None:

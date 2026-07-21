@@ -182,6 +182,27 @@ class TestTerminalLogCapture:
         assert len(root.handlers) == count_before + 1
         capture.stop()
 
+    def test_terminal_buffer_filters_successful_access_logs(self, capture) -> None:
+        """管理端终端不应被 2xx 访问日志淹没，但仍展示业务与失败请求。"""
+
+        capture.start()
+        assert capture._handler is not None
+        business = logging.LogRecord("agents.business", logging.INFO, __file__, 1, "业务日志", (), None)
+        success = logging.LogRecord("agents.access", logging.INFO, __file__, 1, "HTTP 200", (), None)
+        success.event = "http.request"
+        success.http = {"status_code": 200}
+        failure = logging.LogRecord("agents.access", logging.WARNING, __file__, 1, "HTTP 404", (), None)
+        failure.event = "http.request"
+        failure.http = {"status_code": 404}
+
+        capture._handler.handle(business)
+        capture._handler.handle(success)
+        capture._handler.handle(failure)
+
+        logs, total = capture.get_logs()
+        assert total == 2
+        assert [item["message"].split(": ")[-1] for item in logs] == ["业务日志", "HTTP 404"]
+
     def test_capture_uses_only_root_handler(self, capture):
         root = logging.getLogger()
         capture.start()

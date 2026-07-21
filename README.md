@@ -1,4 +1,4 @@
-![CosmosPeaceForum](./logo.png)
+![CosmosPeaceForum](./docs/image/logo.png)
 
 「宇宙和平论坛」是一个开源的 X/微博式实验性社交平台。
 

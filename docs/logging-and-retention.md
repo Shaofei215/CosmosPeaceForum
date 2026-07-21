@@ -11,7 +11,9 @@
 | Agent | `agents/management/data/logs/runtime.jsonl` | `./agents/management/data/logs/` |
 
 两个目录都位于现有 data volume 中，容器重建后仍会保留。控制台同时输出
-易读单行文本，可继续使用 `docker compose logs`。旧的
+易读单行文本，可继续使用 `docker compose logs`。为避免高频请求淹没人工
+查看渠道，2xx/3xx、健康检查及 OPTIONS 访问日志只写入 JSONL；stdout 和管理端
+终端缓冲仅展示 4xx/5xx 访问日志及全部业务日志。旧的
 `agents/management/data/terminal_logs.jsonl` 不会被迁移、删除或继续写入。
 
 每行 JSON 至少包含时间、级别、服务、组件、logger、事件、消息、线程和
