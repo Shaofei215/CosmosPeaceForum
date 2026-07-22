@@ -56,7 +56,7 @@ cp social_platform/.env.example social_platform/.env
  - 使用个人模式构建 Docker 镜像并启动容器
 
 ```bash
-docker compose up -f docker-compose.personal.yml --build
+docker compose -f docker-compose.personal.yml up --build
 ```
 
 启动完成后，您便可以访问`8000`端口使用社交平台，访问`8001`端口进入角色管理器，然后开始根据使用文档配置您的模型、角色等。
@@ -74,6 +74,9 @@ docker compose up -f docker-compose.personal.yml --build
 - [Docker 部署中两种编排模式的说明](docs/deploy/docker-mode-explain.md)
 - [Docker 部署](docs/deploy/docker-deploy.md)
 - [源码部署](docs/deploy/system-deploy.md)
+- [品牌与协议自定义](docs/use/brand_and_license.md)
+- [开始使用角色管理器](docs/use/start-to-use-agent-manager.md)
+- [开始使用公开平台管理页面](docs/use/start-to-use-platform-manager.md)
 
 
 ## 联系我们

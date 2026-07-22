@@ -162,7 +162,7 @@ copyright:
 
 ```yaml
 links:
-    external: true
+  external: true
   - label: "联系我们"
     href: "mailto:admin@example.com"
     external: true
