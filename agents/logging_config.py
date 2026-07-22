@@ -102,6 +102,23 @@ class ContextFilter(logging.Filter):
         return True
 
 
+class HumanFacingLogFilter(logging.Filter):
+    """阻止常规成功访问日志淹没 stdout 和管理端终端。
+
+    JSONL handler 不使用本过滤器，因此所有 HTTP 请求仍会完整持久化。人工
+    查看渠道保留业务日志、未处理异常，以及状态码不低于 400 的访问日志。
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """返回当前记录是否适合展示给人工查看渠道。"""
+
+        if getattr(record, "event", None) != "http.request":
+            return True
+        http = getattr(record, "http", None)
+        status_code = http.get("status_code") if isinstance(http, Mapping) else None
+        return isinstance(status_code, int) and status_code >= 400
+
+
 class JsonLogFormatter(logging.Formatter):
     """将日志记录序列化为统一 JSONL 对象。"""
 
@@ -339,6 +356,7 @@ def configure_logging(
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", "%Y-%m-%d %H:%M:%S"))
     console.addFilter(context_filter)
+    console.addFilter(HumanFacingLogFilter())
     console._cpf_managed = True  # type: ignore[attr-defined]
 
     file_handler = HybridRotatingFileHandler(

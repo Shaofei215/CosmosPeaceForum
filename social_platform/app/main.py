@@ -173,9 +173,12 @@ async def lifespan(app: FastAPI):
     admin_created = initialize_admin_manager()
     if admin_created and settings.platform_admin_password_was_generated:
         # 敏感凭据绕过应用日志捕获器，只直接写入当前进程的标准错误流。
+        separator = "=" * 80
         print(
-            f"平台初始管理员 {settings.PLATFORM_ADMIN_INITIAL_USERNAME} 的初始密码: "
-            f"{settings.PLATFORM_ADMIN_INITIAL_PASSWORD}",
+            f"\n{separator}\n"
+            f"!!! 平台初始管理员 {settings.PLATFORM_ADMIN_INITIAL_USERNAME} 的初始密码: "
+            f"{settings.PLATFORM_ADMIN_INITIAL_PASSWORD} !!!\n"
+            f"{separator}\n",
             file=sys.stderr,
             flush=True,
         )

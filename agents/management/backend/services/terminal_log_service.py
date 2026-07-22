@@ -11,7 +11,8 @@ from collections import deque
 from datetime import datetime
 from typing import List, Optional
 
-from agents.logging_config import restore_agents_loggers
+from agents.logging_config import HumanFacingLogFilter, restore_agents_loggers
+
 
 class TerminalLogHandler(logging.Handler):
     """自定义日志处理器，将日志写入捕获缓冲区"""
@@ -51,6 +52,7 @@ class TerminalLogCapture:
             self._handler.setFormatter(
                 logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
             )
+            self._handler.addFilter(HumanFacingLogFilter())
         for logger in self._target_loggers():
             if self._handler not in logger.handlers:
                 logger.addHandler(self._handler)

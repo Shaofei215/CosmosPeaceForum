@@ -15,6 +15,7 @@ import pytest
 from agents.logging_config import (
     AccessLogMiddleware,
     ContextFilter,
+    HumanFacingLogFilter,
     HybridRotatingFileHandler,
     JsonLogFormatter,
     configure_logging,
@@ -43,6 +44,23 @@ def test_json_formatter_keeps_unicode_timezone_and_context() -> None:
     assert payload["session_id"] == "session-1"
     assert payload["agent_id"] == 7
     assert datetime.fromisoformat(payload["timestamp"]).tzinfo is not None
+
+
+def test_human_facing_filter_hides_routine_access_only() -> None:
+    """人工渠道应过滤成功访问日志，但保留失败访问与业务日志。"""
+
+    display_filter = HumanFacingLogFilter()
+    success = _record("HTTP GET /api 200")
+    success.event = "http.request"
+    success.http = {"status_code": 200}
+    client_error = _record("HTTP GET /api 404")
+    client_error.event = "http.request"
+    client_error.http = {"status_code": 404}
+    business = _record("Agent 会话完成")
+
+    assert display_filter.filter(success) is False
+    assert display_filter.filter(client_error) is True
+    assert display_filter.filter(business) is True
 
 
 def test_logging_context_is_nested_and_restored() -> None:
@@ -209,6 +227,18 @@ def test_configure_logging_is_idempotent(tmp_path: Path) -> None:
     try:
         assert len(first_handlers) == 2
         assert second_handlers == first_handlers
+        console = next(
+            handler
+            for handler in second_handlers
+            if not isinstance(handler, HybridRotatingFileHandler)
+        )
+        durable = next(
+            handler
+            for handler in second_handlers
+            if isinstance(handler, HybridRotatingFileHandler)
+        )
+        assert any(isinstance(item, HumanFacingLogFilter) for item in console.filters)
+        assert not any(isinstance(item, HumanFacingLogFilter) for item in durable.filters)
     finally:
         for handler in second_handlers:
             root.removeHandler(handler)

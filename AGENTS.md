@@ -1,157 +1,139 @@
 # AGENTS.md
 
-项目已进入 review 与重构阶段，除非特别要求，多数情况下不要直接修改代码，而是帮助其查阅、理解。
+## Project Boundaries
 
-## 项目概览
+[CosmosPeaceForum](https://github.com/shaofei215/CosmosPeaceForum) is an experimental
+social platform where humans and AI Agents share the same rules and public APIs. The
+codebase is divided into:
 
-CosmosPeaceForum 是一个实验性社交网络项目，核心目标是让人类用户和 AI Agent 在同一套公开平台 API 与规则下共存互动。
+- `social_platform/`: the public platform backend, administrative capabilities, and
+  user-facing frontend.
+- `agents/`: Agent scheduling, memory, platform tools, external access, and the Agent
+  management interface.
 
-仓库主要由三个部分组成：
+Public interactions by humans and Agents must use the same platform APIs and permission
+checks. Unless strictly required by the technical implementation, do not attempt to give
+Agents hidden read/write privileges or access to additional content. Agent creation,
+configuration, and scheduling remain within the admin/management boundary.
 
-- `social_platform/`：公开社交平台，包含 FastAPI 后端和人类用户前端。
-- `agents/`：AI Agent 运行调度与管理，包括了角色的登录时机调度、记忆、Langchain工具系统以及Agent的管理器前后端。
+## Development Environment and Startup
 
-顶层 Docker 配置负责把公开社交平台、PostgreSQL 和 Agent 服务组合起来。数据库、上传文件、日志、记忆索引等属于运行期状态，除非任务明确要求，不要把它们当作源代码修改。
+All Python commands should be run within `.venv`.
 
-## 重要目录
-
-- `social_platform/app/main.py`：公开平台后端入口。
-- `social_platform/app/api/routers/`：公开平台 API 路由。
-- `social_platform/app/models/`：用户、帖子、评论、点赞、关注、通知、邮箱验证等数据库模型。
-- `social_platform/app/schemas/`：Pydantic 请求和响应模型。
-- `social_platform/app/services/`：后端业务逻辑。
-- `social_platform/frontend/src/app/`：前端入口、Provider、路由和全局样式。
-- `social_platform/frontend/src/features/`：按业务域拆分的功能模块，如 auth、feed、post、comment、like、follow、notification、user。
-- `social_platform/frontend/src/widgets/`：跨页面复用的业务组件。
-- `social_platform/frontend/src/shared/`：共享 API 客户端、UI 原语、配置、工具函数和类型。
-- `agents/agents_scheduler/langgraph/`：LangGraph 状态、节点、工具、Prompt、执行器和图结构。
-- `agents/agents_scheduler/memory/`：SQLite + ChromaDB + Tantivy 的混合记忆系统。
-- `agents/agents_scheduler/scheduler/`：Agent 调度、时间缩放、内部服务、关系映射和上下文。
-- `agents/management/backend/`：Agent 管理 API、模型、服务、认证、日志和 SQLite 存储。
-- `agents/management/frontend/`：Agent 管理前端。
-- `agents/tests/unit/`：按 LangGraph、Scheduler、management、memory 和工具组件拆分的单元测试。
-- `agents/tests/integration/`：记忆持久化、管理数据库、跨服务工作流等集成测试。
-- `social_platform/tests/unit/domains/`：公开平台各领域的快速单元测试。
-- `social_platform/tests/integration/domains/`：公开平台各领域的数据库与协作集成测试。
-
-## 运行与验证
-
-优先运行覆盖本次改动的最小验证集。
-
-后端与 Agent：
+The recommended environment is Python 3.10-3.12, Node.js 24, and pnpm 11.0.9. When
+preparing the development environment for the first time:
 
 ```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+# Copy configuration files only if they do not already exist, then fill them in as instructed
+test -e social_platform/.env || cp social_platform/.env.example social_platform/.env
+test -e agents/.env || cp agents/.env.example agents/.env
+corepack enable
+corepack prepare pnpm@11.0.9 --activate
+cd social_platform/frontend && pnpm install --frozen-lockfile && cd ../..
+cd agents/management/frontend && pnpm install --frozen-lockfile && cd ../../..
+.venv/bin/python -m alembic -c social_platform/alembic.ini upgrade head
+```
+
+For day-to-day development, open four terminals at the repository root:
+
+```bash
+# Terminal 1: public platform backend
+.venv/bin/python -m social_platform --reload
+
+# Terminal 2: Agent scheduler backend
+.venv/bin/python -m agents
+
+# Terminal 3: public platform Vite development server
+cd social_platform/frontend
+pnpm dev
+
+# Terminal 4: Agent management Vite development server
+cd agents/management/frontend
+pnpm dev
+```
+
+The development pages are available at `http://localhost:5173` and
+`http://localhost:5174`, respectively. Vite proxies API requests to ports `8000` and
+`8001`, respectively. When changing only one side, you may start only the services it
+depends on, but end-to-end Agent development usually requires all four processes.
+
+When Vite hot reload is not needed, start the complete environment with
+`docker compose -f docker-compose.personal.yml up --build`. Treat `docs/deploy/` as the
+source of truth for database migrations, production deployment, and differences between
+platforms; do not invent startup arguments or environment variables based on assumptions.
+
+## Working Principles
+
+- Read the relevant implementation, tests, and nearby documentation before reaching a
+  conclusion.
+- Make changes in the module that actually owns the behavior. Keep the scope minimal and
+  do not opportunistically refactor unrelated code.
+- Do not commit report files generated for individual changes to the remote repository.
+- Do not silently change public APIs, response structures, authentication semantics,
+  ports, database paths, or scheduler timing semantics.
+- When changing a backend contract, also check the corresponding frontend types, Agent
+  callers, tests, and documentation.
+- Follow the conventions already used in the module. New backend files, classes, and
+  functions should have type annotations and Google-style docstrings written in Chinese;
+  add necessary Chinese comments for complex branches. Use `logging` in service code and
+  do not scatter `print` calls throughout it.
+- Do not introduce another package manager. Both frontends use `pnpm`; dependency changes
+  must update the corresponding manifest and lockfile together.
+
+## Validation
+
+Run the smallest test set that covers the change first, then expand according to risk.
+See `docs/dev/testing-guide.md` for complete guidance.
+
+```bash
+# A specific test file or test directory
+python -m pytest path/to/test_file.py
+
+# All unit / integration tests
 python -m pytest -m unit
 python -m pytest -m integration
-python -m pytest agents/tests/integration/memory
-python -m pytest agents/tests/unit/langgraph/test_nodes.py
-python -m social_platform --reload
-uvicorn agents.management.backend.main:app --reload --port 8001
-python -m agents
-python -m agents.agents_scheduler
-```
 
-公开前端：
-
-```bash
-cd social_platform/frontend
-pnpm install
-pnpm dev
+# Run from the affected frontend directory
 pnpm test:run
-pnpm build
 pnpm lint
 pnpm type-check
-```
-
-管理前端：
-
-```bash
-cd agents/management/frontend
-pnpm install
-pnpm dev
-pnpm test:run
 pnpm build
-pnpm lint
-pnpm type-check
 ```
 
-Docker：
+The frontend directories are `social_platform/frontend/` and
+`agents/management/frontend/`. Use `README.md`, `docs/deploy/`, and the Compose files as
+the source of truth for deployment and runtime commands; do not duplicate them here.
 
-```bash
-docker-compose up -d
-docker-compose logs -f social-platform
-docker-compose logs -f agent-scheduler
-```
+## Content That Must Not Be Modified
 
-常用端口：
+Unless the task explicitly targets runtime data, migrations, or fixtures, do not edit,
+delete, or commit:
 
-- 公开平台 Docker/生产：`8000`，同时提供页面和 API，API 前缀 `/api/v1`。
-- 公开平台前端本地开发：`5173`。
-- 管理后端：`8001`，API 前缀 `/api`。
-- Scheduler 内部服务：`8002`。
+- `*.db`, `*.sqlite*`, `data/`, uploaded files, or memory indexes;
+- `dist/`, logs, caches, virtual environments, or `node_modules/`;
+- existing user changes or workspace changes unrelated to the current task.
 
-## Python 约定
+Chinese text rendering incorrectly in some terminals does not mean the file encoding is
+damaged. Do not use this as a reason to transcode files in bulk or change their line
+endings.
 
-- 路由层保持轻量，可复用业务逻辑放进 `services/`，公共依赖放进 `api/deps.py`。
-- 数据库会话使用现有依赖注入模式，如 `Depends(get_db)`。
-- 公开平台写操作使用 `get_current_user`；可匿名读取但登录后增强结果的接口使用 `get_current_user_optional`。
-- 请求/响应结构优先放在 `schemas/` 中，用 Pydantic 模型表达。
-- 查询关系数据时注意避免 N+1，现有 feed 逻辑使用 `joinedload`。
-- 管理后端使用 `sqlmodel.Session` 和 `select`；公开平台后端更多使用 SQLAlchemy ORM query 风格。修改时跟随所在模块的写法。
-- Scheduler 为每个 Agent 使用 daemon 线程，改动共享状态时注意锁、停止事件和上下文清理。
-- LangGraph 主流程为 `start -> recall_memory -> llm_decision -> tool_execution -> summarize -> end`，除非任务明确要求改变 Agent 行为，否则不要随意调整控制流。
-- 记忆写入会同步 SQLite、ChromaDB 和 Tantivy。改动记忆删除、召回、索引时要同时考虑三套存储。
-- 服务代码使用 `logging`；除独立诊断脚本外，避免新增零散 `print`。
-- 所有新增的文件和函数都应当具有完善的类型注解、中文注释与docstring，包括文件和函数的用途与上下游关系，以及函数的参数、返回值、异常等。
+## Branch Naming, Commits, and PRs
 
-## 前端约定
-
-- 两套前端均为 React 19 + TypeScript + Vite + Tailwind。
-- `src` 下导入使用 `@/` 路径别名。
-- 功能模块内的 API、hooks、types、components 放在对应 `features/<domain>/` 下。
-- 服务端状态使用 TanStack Query；认证、UI 或临时客户端状态使用 Zustand/local store。
-- 新增通用组件前，先复用 `src/shared/components/ui` 中已有 UI 原语。
-- API 调用使用 `src/shared/api/client.ts` 中的 `apiClient`，它已处理认证头和常见错误。
-- 遵循现有格式：分号、单引号、2 空格缩进、Prettier 需要的 trailing comma、100 字符 print width。
-- ESLint 中未使用变量是错误，未使用参数可用 `_` 前缀；`any` 是警告，能避免就避免。
-- 项目已使用 Lucide 图标，新增图标优先使用该库。
-
-## 产品与 API 原则
-
-- 人类用户和 AI Agent 应使用同一套公开社交平台 API。除非任务明确要求，不要为 Agent 增加公开平台特权接口。
-- 公开读取接口通常不需要认证；写入接口需要 Bearer JWT。
-- AI 账号创建和管理操作走 admin 或 management 认证，不走普通用户权限。
-- 保持 API 响应结构稳定。有些接口直接返回模型；feed 类接口返回 `{ code, message, data, pagination }`。
-- 前端新增调用时，先确认后端返回的是裸数据还是分页包装，再写类型和 hook。
-
-## 数据与生成文件
-
-避免编辑或提交运行期产物：
-
-- `*.db`、`*.sqlite`、`*.sqlite3`
-- `data/`
-- `social_platform/app/data/`
-- `social_platform/app/uploads/`
-- `social_platform/frontend/dist/`
-- `agents/agents_scheduler/memory/data/`
-- `agents/management/data/`
-- 前端构建产物，如 `dist/`
-- 日志文件，如 `*.log` 和 Vite 日志
-
-仓库中可能已经存在部分运行期文件。除非任务目标就是迁移、清理或构造 fixture，不要删除或重写这些文件。
-
-## 编码注意事项
-
-项目文档、注释和界面文案大量使用中文。在某些 Windows PowerShell 会话里，中文可能显示为乱码，即使文件内容本身可用。不要仅因为终端输出乱码就批量重编码文件。除非任务明确要求修复编码，否则保持原文件编码和换行风格。
-
-## Agent 工作规则
-
-- 改行为前先读本地代码；本项目的公开后端、Scheduler、管理系统存在概念重叠。
-- 保持改动归属于拥有该行为的服务或前端。
-- 不要静默修改端口、API 前缀、认证语义、数据库路径或调度时间行为。
-- 不要引入新的包管理器。两套前端都使用 `pnpm`，新增或更新依赖时同步更新对应的 `pnpm-lock.yaml`。
-- 如需新增依赖，更新最近的 manifest 和 lockfile。
-- 如果修改后端契约，同步更新对应前端类型、hooks 和相关文档。
-- 如果修改 Scheduler 或记忆行为，运行最相关的 `agents/tests` 子集。
-- 如果修改 UI，在依赖可用时运行受影响前端的 `test:run`、`lint`、`type-check` 和 `build`。
-- 如果命令需要网络访问或写出工作区之外，按工具的权限升级流程请求批准。
+- When a new branch is needed, create it from the latest `main` by default and name it
+  `<type>/<short-kebab-description>`. Common types are `feat`, `fix`, `refactor`, `docs`,
+  `test`, and `chore`. Do not rename or switch the user's existing branch unless the task
+  explicitly requires it.
+- Format commit messages as `<type>(optional-scope): <short-description>`, in either
+  Chinese or English. Ideally, each commit should contain only one logical change. Before
+  committing, inspect `git status` and the complete diff, and stage only files related to
+  the current task.
+- Do not proactively commit, push, rebase, rewrite history, or create a PR; perform these
+  actions only when the user explicitly requests them. Never force-push without
+  authorization, and do not overwrite the user's existing changes.
+- PRs should target `main` by default. The title should summarize the outcome, and the
+  body must at least describe the context, principal changes, verification commands and
+  results, any checks not run, compatibility risks, and configuration or migration
+  requirements. Create a Draft PR when the work is incomplete or still requires
+  confirmation.

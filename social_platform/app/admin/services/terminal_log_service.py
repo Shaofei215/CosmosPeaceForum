@@ -6,6 +6,8 @@ from collections import deque
 from datetime import datetime
 from typing import Optional
 
+from social_platform.app.core.logging import HumanFacingLogFilter
+
 
 class TerminalLogHandler(logging.Handler):
     """将应用 logging 输出捕获到内存缓冲，供管理端实时查看。"""
@@ -42,6 +44,7 @@ class TerminalLogCapture:
         self._handler.setFormatter(
             logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
         )
+        self._handler.addFilter(HumanFacingLogFilter())
         logging.getLogger().addHandler(self._handler)
 
     def stop(self) -> None:
