@@ -14,7 +14,7 @@ from agents.agents_scheduler.langgraph.prompts import (
 from agents.agents_scheduler.scheduler.context import (
     clear_current_context,
 )
-from agents.prompt_templates import get_default_prompt_template
+from agents.prompt_templates import PROMPT_TEMPLATE_DEFINITIONS, get_default_prompt_template
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +26,15 @@ def use_default_prompt_templates(monkeypatch: pytest.MonkeyPatch) -> None:
         "_get_configured_prompt_template",
         get_default_prompt_template,
     )
+
+
+def test_default_prompt_templates_use_markdown_layout():
+    """默认提示词统一使用 Markdown 排版，不再混用方头括号标题。"""
+
+    for definition in PROMPT_TEMPLATE_DEFINITIONS:
+        assert "## " in definition.default_value
+        assert "【" not in definition.default_value
+        assert "】" not in definition.default_value
 
 
 class TestBuildSystemPrompt:

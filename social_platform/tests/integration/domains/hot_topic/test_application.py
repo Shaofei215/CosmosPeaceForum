@@ -101,6 +101,9 @@ def test_prompt_context_contains_top_posts_current_and_history(db_session):
 def test_default_prompt_spells_out_public_output_constraints():
     prompt = hot_topic_service.DEFAULT_HOT_TOPIC_AGENT_PROMPT
 
+    assert "## 任务目标" in prompt
+    assert "【" not in prompt
+    assert "】" not in prompt
     assert "不超过 150" in prompt
     assert "只能是一个搜索关键词" in prompt
     assert "不评价热度、排名、趋势" in prompt
