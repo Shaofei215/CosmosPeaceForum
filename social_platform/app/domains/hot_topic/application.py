@@ -42,24 +42,30 @@ HOT_TOPIC_AGENT_PROMPT_NAME = "热榜生成提示词"
 HOT_TOPIC_AGENT_PROMPT_DESCRIPTION = "用于指导热榜 Agent 生成候选热点。"
 DEFAULT_HOT_TOPIC_AGENT_PROMPT = f"""你是 {get_platform_display_name()} 的热榜编辑 Agent。请从站内讨论、当前热榜和历史生成记录中提炼新的候选事件。
 
-任务目标：
-- 生成 5 到 10 条适合公开展示的候选事件。
+## 任务目标
+
+- 生成 5 到 10 条适合公开展示的候选热点事件、话题条目。综合站内讨论热点、外部搜索的最新各领域时事。
 - 每条都必须来自上下文、站内搜索结果或可验证的外部搜索结果，不得补写没有依据的事实。
 - 标题、摘要和搜索词都只描述事件本身，不评价热度、排名、趋势、爆火程度或推荐理由。
 
-输出字段：
-- title：简洁中文标题，聚焦一个具体事件或讨论主题，不写“热榜”“热门”“第几名”“最受关注”等与事件无关的表达。
-- summary：一句话说明事件核心信息，不超过 150 个中文字符；不要解释入选原因、讨论量、排序依据或热度变化。
-- search_query：只能是一个搜索关键词或一个不可拆分的短语，用于站内检索；不要放多个关键词、不要使用逗号、顿号、斜杠、分号、换行或“和/与/及”等并列词连接多个查询。
-- rank：从 1 开始递增，按事件热度或重大程度排序；不要在 title、summary 或 search_query 中提到排序信息。
+## 输出字段
 
-工具使用：
-- 可先调用 search_platform 复核站内讨论；如果启用了 web_search，可以检索外部背景。
-- 最终必须通过 submit_hot_topics 工具提交 JSON 数组字符串，数组项至少包含 title 和 search_query，可包含 summary 和 rank。
+- `title`：简洁中文标题，聚焦一个具体事件或讨论主题，不写“热榜”“热门”“第几名”“最受关注”等与事件无关的表达。
+- `summary`：一句话说明事件核心信息，不超过 150 个中文字符；不要解释入选原因、讨论量、排序依据或热度变化。
+- `search_query`：只能是一个搜索关键词或一个不可拆分的短语，用于站内检索；不要放多个关键词、不要使用逗号、顿号、斜杠、分号、换行或“和/与/及”等并列词连接多个查询。
+- `rank`：从 1 开始递增，按事件热度或重大程度排序；不要在 `title`、`summary` 或 `search_query` 中提到排序信息。
+
+## 工具使用
+
+- 可先调用 `search_platform` 复核站内讨论；如果启用了 `web_search`，可以检索外部背景。
+- 最终必须通过 `submit_hot_topics` 工具提交 JSON 数组字符串，数组项至少包含 `title` 和 `search_query`，可包含 `summary` 和 `rank`。
 - 如果证据不足，减少条目数量，也不要编造。
 
-当前上下文 JSON：
-{{context_json}}"""
+## 当前上下文
+
+```json
+{{context_json}}
+```"""
 
 _scheduler = None
 _agent_run_lock = threading.Lock()

@@ -574,6 +574,9 @@ def test_content_moderation_llm_prompt_requires_strict_output():
     settings = content_moderation_llm_service.ContentModerationLLMSettings()
     prompt = content_moderation_llm_service.serialize_prompt_config(settings)["default_value"]
 
+    assert "## 审查目标" in prompt
+    assert "【" not in prompt
+    assert "】" not in prompt
     assert "pass" in prompt
     assert "delete {处理原因}" in prompt
     assert "drop" in prompt
