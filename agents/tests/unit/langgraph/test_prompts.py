@@ -83,7 +83,11 @@ class TestBuildSystemPrompt:
         )
         assert "临时提示词注入" in prompt
         assert "今天重点关注活动通知" in prompt
-        assert prompt.index("个人签名") < prompt.index("临时提示词注入") < prompt.index("行为准则")
+        assert (
+            prompt.index("## 个人签名")
+            < prompt.index("## 临时提示词注入")
+            < prompt.index("## 行为准则")
+        )
 
     def test_build_system_prompt_uses_product_labels_without_duplicate_queries(self):
         with patch(
