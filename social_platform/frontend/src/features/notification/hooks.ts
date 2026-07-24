@@ -20,8 +20,6 @@ export const useNotifications = (params: { skip?: number; limit?: number; type?:
 };
 
 export const useNotificationUnreadCount = (enabled = true) => {
-  useNotificationEvents(enabled);
-
   return useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: notificationApi.getUnreadCount,

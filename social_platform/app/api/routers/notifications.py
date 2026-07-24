@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, object_session
 
-from social_platform.app.api.deps import get_db, get_current_user_including_banned
+from social_platform.app.api.deps import (
+    get_current_user_id_for_stream,
+    get_db,
+    get_current_user_including_banned,
+)
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.comment.models import Comment, CommentLike
 from social_platform.app.domains.notification.models import Notification
@@ -34,6 +38,8 @@ from social_platform.app.domains.notification.stream import (
 )
 
 router = APIRouter()
+_STREAM_MAX_LIFETIME_SECONDS = 300.0
+_STREAM_HEARTBEAT_SECONDS = 25.0
 
 
 @router.get("", response_model=NotificationListResponse)
@@ -82,11 +88,9 @@ def get_unread_count(
 
 @router.get("/events")
 async def stream_notification_events(
-    current_user: User = Depends(get_current_user_including_banned),
+    user_id: int = Depends(get_current_user_id_for_stream),
 ):
     """通过 Authorization Header 建立通知 SSE，避免凭据进入 URL 与访问日志。"""
-
-    user_id = current_user.id
 
     def build_payload(event_type: str) -> dict[str, int | str]:
         """为 SSE 事件即时读取最新通知摘要，避免长连接复用已关闭的请求会话。"""
@@ -104,13 +108,19 @@ async def stream_notification_events(
 
     async def event_stream():
         version = get_notification_version(user_id)
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _STREAM_MAX_LIFETIME_SECONDS
         yield _sse_event("notifications.changed", build_payload("connected"))
 
         while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return
             next_version = await asyncio.to_thread(
                 wait_for_notification_update,
                 user_id,
                 version,
+                min(_STREAM_HEARTBEAT_SECONDS, remaining),
             )
             if next_version > version:
                 version = next_version

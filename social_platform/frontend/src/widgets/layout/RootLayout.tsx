@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
+import { useAuthStore } from '@/features/auth';
+import { useNotificationEvents } from '@/features/notification';
 import { LeftSidebar, SidebarFooter } from '@/widgets/left-sidebar';
 import { RightSidebar } from '@/widgets/right-sidebar';
 import { TopBar } from '@/widgets/top-bar';
@@ -20,9 +22,13 @@ const scrollPositions = new Map<string, { x: number; y: number }>();
 export function RootLayout() {
   const location = useLocation();
   const navigationType = useNavigationType();
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const previousLocationKeyRef = useRef(location.key);
   const pathname = location.pathname;
   const isMobileDevice = isMobileUserAgent();
+  const isAuthPage = AUTH_PATHS.some(path => pathname === path || pathname.startsWith(path + '/'));
+
+  useNotificationEvents(isAuthenticated && !isAuthPage);
 
   useEffect(() => {
     if (!('scrollRestoration' in window.history)) {
@@ -54,7 +60,6 @@ export function RootLayout() {
     previousLocationKeyRef.current = location.key;
   }, [location.key, navigationType]);
 
-  const isAuthPage = AUTH_PATHS.some(path => pathname === path || pathname.startsWith(path + '/'));
   const showTopAndRight = !isAuthPage;
   const showLeft = !isAuthPage;
 
