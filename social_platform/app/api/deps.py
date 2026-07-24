@@ -168,6 +168,24 @@ def get_current_user_including_banned(
     return _get_user_from_payload(db, payload, include_banned=True)
 
 
+def get_current_user_id_for_stream(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db, scope="function"),
+) -> int:
+    """验证流式请求用户，并在响应开始前释放数据库会话。
+
+    Args:
+        credentials: Bearer access token。
+        db: 仅覆盖路由函数执行阶段的数据库会话。
+
+    Returns:
+        int: 已通过认证的用户 ID。
+    """
+
+    payload = get_access_payload(credentials.credentials, db, "user")
+    return _get_user_from_payload(db, payload, include_banned=True).id
+
+
 def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(
         HTTPBearer(auto_error=False)
