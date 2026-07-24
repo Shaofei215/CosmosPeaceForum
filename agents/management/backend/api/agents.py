@@ -56,6 +56,24 @@ router = APIRouter()
 _last_cpu_snapshot: tuple[int, int] | None = None
 
 
+def _clear_agent_memories(agent: AgentConfig) -> int:
+    """清除角色在记忆系统中的全部数据。
+
+    Args:
+        agent: 即将删除的角色配置。
+
+    Returns:
+        int: 已清除的记忆数量；角色尚未注册到公开平台时返回 0。
+    """
+    owner_id = agent.social_platform_user_id
+    if owner_id is None:
+        return 0
+
+    from agents.agents_scheduler.memory.service import get_memory_service
+
+    return asyncio.run(get_memory_service().clear_user_memories(owner_id))
+
+
 def _read_cpu_usage_percent() -> float:
     """读取当前管理后端进程的 CPU 占用百分比。"""
     global _last_cpu_snapshot
@@ -479,9 +497,20 @@ def delete_agent(
 
     notify_scheduler_reload("agent", agent_id, action="stop")
 
+    deleted_memory_count = _clear_agent_memories(agent)
     agent_service.delete_agent(db, agent_id)
 
-    create_log(db, current_admin, "delete_agent", "agent", agent_id)
+    create_log(
+        db,
+        current_admin,
+        "delete_agent",
+        "agent",
+        agent_id,
+        details={
+            "social_platform_user_id": agent.social_platform_user_id,
+            "deleted_memory_count": deleted_memory_count,
+        },
+    )
 
     return MessageResponse(message="Agent 已删除")
 
@@ -604,18 +633,29 @@ def batch_delete_agents(
 ):
     """批量删除 Agent"""
     deleted = 0
+    deleted_memory_count = 0
     for agent_id in agent_ids:
         agent = agent_service.get_agent(db, agent_id)
         if not agent:
             continue
 
         notify_scheduler_reload("agent", agent_id, action="stop")
+        deleted_memory_count += _clear_agent_memories(agent)
         agent_service.delete_agent(db, agent_id)
         deleted += 1
 
-    create_log(db, current_admin, "batch_delete_agents", "agent", details={"count": deleted})
+    create_log(
+        db,
+        current_admin,
+        "batch_delete_agents",
+        "agent",
+        details={
+            "count": deleted,
+            "deleted_memory_count": deleted_memory_count,
+        },
+    )
 
-    return MessageResponse(message=f"已批量删除 {deleted} 个 Agent")
+    return MessageResponse(message=f"已批量删除 {deleted} 个角色")
 
 
 @router.post("/import", response_model=AgentListResponse)
