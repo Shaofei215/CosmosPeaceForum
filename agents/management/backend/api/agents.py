@@ -15,7 +15,7 @@ from typing import Optional
 from datetime import datetime, time as datetime_time
 from agents.management.backend.core.timezone import local_now
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
-from sqlmodel import func, select
+from sqlmodel import col, func, select
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
@@ -54,6 +54,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 _last_cpu_snapshot: tuple[int, int] | None = None
+
+
+def _require_agent_id(agent: AgentConfig) -> int:
+    """获取已持久化 Agent 的主键。
+
+    Args:
+        agent: 已提交到数据库的 Agent 配置。
+
+    Returns:
+        int: Agent 的数据库主键。
+
+    Raises:
+        RuntimeError: 数据库提交后仍未生成主键。
+    """
+    if agent.id is None:
+        raise RuntimeError("Agent 已持久化但数据库未生成主键")
+    return agent.id
 
 
 def _clear_agent_memories(agent: AgentConfig) -> int:
@@ -237,7 +254,7 @@ def get_dashboard_stats(
     daily_active_roles = db.exec(
         select(func.count())
         .select_from(AgentConfig)
-        .where(AgentConfig.last_login_at >= today_start)
+        .where(col(AgentConfig.last_login_at) >= today_start)
     ).one()
 
     return DashboardStatsResponse(
@@ -348,6 +365,7 @@ def create_agent(
         raise HTTPException(status_code=400, detail="用户名已存在")
 
     agent = agent_service.create_agent(db, agent_in)
+    agent_id = _require_agent_id(agent)
 
     avatar_path = find_avatar_file(_get_avatar_dir(), agent.name, agent.username)
 
@@ -365,13 +383,13 @@ def create_agent(
         db.refresh(agent)
     else:
         logger.error("创建 Agent: 注册到 social_platform 失败: %s，回滚数据库记录", error)
-        agent_service.delete_agent(db, agent.id)
+        agent_service.delete_agent(db, agent_id)
         raise HTTPException(status_code=502, detail=f"Agent 注册到 social_platform 失败: {error}")
 
     if agent.is_active:
-        notify_scheduler_reload("agent", agent.id, action="start")
+        notify_scheduler_reload("agent", agent_id, action="start")
 
-    create_log(db, current_admin, "create_agent", "agent", agent.id)
+    create_log(db, current_admin, "create_agent", "agent", agent_id)
 
     return agent_service.agent_to_response(agent)
 
@@ -470,6 +488,8 @@ def update_agent(
         agent_in.username = new_username
 
     updated = agent_service.update_agent(db, agent_id, agent_in)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
 
     if agent_in.is_active is not None and agent_in.is_active != old_is_active:
         if agent_in.is_active:
@@ -665,7 +685,7 @@ async def import_agents(
     current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """批量导入 Agent（上传压缩包）"""
-    if not file.filename.endswith('.zip'):
+    if not file.filename or not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="仅支持 zip 格式压缩包")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp:
@@ -718,6 +738,7 @@ async def import_agents(
                 personality_prompt=user_data.get('personality_prompt', ''),
             )
             agent = agent_service.create_agent(db, agent_in)
+            agent_id = _require_agent_id(agent)
 
             avatar_filename = user_data.get('avatar')
             avatar_path = None
@@ -744,7 +765,7 @@ async def import_agents(
                 imported.append(agent)
             else:
                 logger.error("导入: 注册 %s 失败: %s，回滚数据库记录", username, error)
-                agent_service.delete_agent(db, agent.id)
+                agent_service.delete_agent(db, agent_id)
 
         notify_scheduler_reload("all")
 
@@ -768,7 +789,7 @@ async def import_agents_stream(
     current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """批量导入 Agent（SSE 流式推送）"""
-    if not file.filename.endswith('.zip'):
+    if not file.filename or not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="仅支持 zip 格式压缩包")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp:
@@ -842,6 +863,7 @@ async def import_agents_stream(
                         personality_prompt=user_data.get('personality_prompt', ''),
                     )
                     agent = agent_service.create_agent(db, agent_in)
+                    agent_id = _require_agent_id(agent)
 
                     avatar_filename = user_data.get('avatar')
                     avatar_path = None
@@ -869,12 +891,12 @@ async def import_agents_stream(
                         event_data = {
                             'event': 'success',
                             'username': username,
-                            'id': agent.id,
+                            'id': agent_id,
                             'social_platform_user_id': platform_id,
                         }
                     else:
                         failed_count += 1
-                        agent_service.delete_agent(db, agent.id)
+                        agent_service.delete_agent(db, agent_id)
                         event_data = {
                             'event': 'error',
                             'username': username,
@@ -932,13 +954,6 @@ async def upload_agent_avatar(
     current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
 ):
     """上传 Agent 头像"""
-    from agents.management.backend.services.registrar import (
-        _get_api_base_url,
-        _get_ai_user_password,
-        _login_user,
-    _login_user_response,
-    )
-
     agent = agent_service.get_agent(db, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent 不存在")
@@ -1004,6 +1019,8 @@ def update_agent_relation(
         raise HTTPException(status_code=404, detail="Agent 不存在")
 
     updated = agent_service.update_agent_knows(db, agent_id, relation_in.knows_ids, relation_in.bidirectional)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
 
     notify_scheduler_reload("all")
 

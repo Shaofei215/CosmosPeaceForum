@@ -86,9 +86,9 @@ def _get_admin_login_headers() -> dict[str, str]:
 def register_agent(
     db,
     username: str,
-    password: str = None,
-    avatar_path: str = None,
-    personal_signature: str = None,
+    password: Optional[str] = None,
+    avatar_path: Optional[str] = None,
+    personal_signature: Optional[str] = None,
 ) -> Tuple[bool, Optional[int], Optional[str]]:
     """
     注册单个 Agent 到 social_platform
@@ -169,8 +169,8 @@ def _get_existing_user_id(
     api_base_url: str,
     username: str,
     password: str,
-    personal_signature: str = None,
-    avatar_path: str = None,
+    personal_signature: Optional[str] = None,
+    avatar_path: Optional[str] = None,
 ) -> Tuple[bool, Optional[int], Optional[str]]:
     """获取已存在用户的 ID 并更新信息"""
     try:
