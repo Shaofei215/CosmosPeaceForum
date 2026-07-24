@@ -11,10 +11,10 @@ from datetime import datetime
 from agents.management.backend.core.timezone import local_now
 from typing import List, Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from agents.management.backend.models.agent_config import AgentConfig
-from agents.management.backend.schemas import AgentCreate, AgentUpdate
+from agents.management.backend.schemas import AgentCreate, AgentResponse, AgentUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def list_agents(db: Session, skip: int = 0, limit: int = 100) -> tuple[List[Agen
     count_stmt = select(AgentConfig)
     total = len(db.exec(count_stmt).all())
 
-    stmt = select(AgentConfig).offset(skip).limit(limit).order_by(AgentConfig.id)
+    stmt = select(AgentConfig).offset(skip).limit(limit).order_by(col(AgentConfig.id))
     items = db.exec(stmt).all()
     return list(items), total
 
@@ -145,25 +145,38 @@ def update_agent_knows(db: Session, agent_id: int, knows_ids: List[int], bidirec
     return db_agent
 
 
-def agent_to_response(agent: AgentConfig) -> dict:
-    """将 Agent 配置转换为响应字典"""
-    return {
-        "id": agent.id,
-        "name": agent.name,
-        "username": agent.username,
-        "monthly_logins": agent.monthly_logins,
-        "personal_signature": agent.personal_signature,
-        "personality_prompt": agent.personality_prompt,
-        "knows_ids": parse_knows_ids(agent),
-        "is_active": agent.is_active,
-        "model_config_id": agent.model_config_id,
-        "social_platform_user_id": agent.social_platform_user_id,
-        "last_login_at": agent.last_login_at,
-        "last_login_timestamp": agent.last_login_timestamp,
-        "total_login_count": agent.total_login_count,
-        "created_at": agent.created_at,
-        "updated_at": agent.updated_at,
-    }
+def agent_to_response(agent: AgentConfig) -> AgentResponse:
+    """将 Agent 配置转换为响应模型。
+
+    Args:
+        agent: 已持久化的 Agent 配置。
+
+    Returns:
+        AgentResponse: 可直接用于 API 响应的 Agent 数据。
+
+    Raises:
+        ValueError: Agent 尚未生成数据库主键。
+    """
+    if agent.id is None:
+        raise ValueError("无法序列化尚未持久化的 Agent")
+
+    return AgentResponse(
+        id=agent.id,
+        name=agent.name,
+        username=agent.username,
+        monthly_logins=agent.monthly_logins,
+        personal_signature=agent.personal_signature,
+        personality_prompt=agent.personality_prompt,
+        knows_ids=parse_knows_ids(agent),
+        is_active=agent.is_active,
+        model_config_id=agent.model_config_id,
+        social_platform_user_id=agent.social_platform_user_id,
+        last_login_at=agent.last_login_at,
+        last_login_timestamp=agent.last_login_timestamp,
+        total_login_count=agent.total_login_count,
+        created_at=agent.created_at,
+        updated_at=agent.updated_at,
+    )
 
 
 def import_agents_from_zip(db: Session, zip_path: str) -> List[AgentConfig]:
