@@ -136,7 +136,7 @@ def test_batch_delete_clears_each_agents_memories() -> None:
             current_admin=MagicMock(),
         )
 
-    assert response.message == "已批量删除 2 个 Agent"
+    assert response.message == "已批量删除 2 个角色"
     assert clear_memories.call_args_list == [call(agents[7]), call(agents[8])]
     assert delete_agent.call_args_list == [call(db, 7), call(db, 8)]
     assert create_log.call_args.kwargs["details"] == {
