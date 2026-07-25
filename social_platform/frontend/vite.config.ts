@@ -4,7 +4,9 @@ import { existsSync } from 'node:fs';
 import path from 'path';
 
 const DEFAULT_PLATFORM_DISPLAY_NAME = '宇宙和平论坛';
+const DEFAULT_API_V1_PREFIX = '/api/v1';
 const PLATFORM_DISPLAY_NAME_PLACEHOLDER = '__PLATFORM_DISPLAY_NAME__';
+const API_V1_PREFIX_PLACEHOLDER = '__API_V1_PREFIX__';
 const PLATFORM_LOGO_PATH_PLACEHOLDER = '__PLATFORM_LOGO_PATH__';
 const PLATFORM_LOGO_MIME_PLACEHOLDER = '__PLATFORM_LOGO_MIME__';
 const BRAND_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'] as const;
@@ -25,26 +27,38 @@ const resolvePublicBrandImage = (name: string): { path: string; mime: string } =
   return { path: `/${name}.${extension}`, mime: `image/${mimeExtension}` };
 };
 
-const escapeHtmlText = (value: string): string =>
-  value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#x27;');
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, __dirname, '');
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, path.resolve(__dirname, '..'), '');
   const platformDisplayName = env.PLATFORM_DISPLAY_NAME?.trim() || DEFAULT_PLATFORM_DISPLAY_NAME;
+  const apiV1Prefix = env.API_V1_PREFIX?.trim() || DEFAULT_API_V1_PREFIX;
   const platformLogo = resolvePublicBrandImage('icon');
 
   return {
-    envPrefix: ['VITE_', 'PLATFORM_'],
     plugins: [
       react(),
       {
-        name: 'platform-html-title',
+        name: 'platform-html-config',
         transformIndexHtml(html) {
-          return html
-            .replace(PLATFORM_DISPLAY_NAME_PLACEHOLDER, escapeHtmlText(platformDisplayName))
+          const brandedHtml = html
             .replace(PLATFORM_LOGO_PATH_PLACEHOLDER, platformLogo.path)
             .replace(PLATFORM_LOGO_MIME_PLACEHOLDER, platformLogo.mime);
+
+          if (command === 'serve') {
+            return brandedHtml
+              .replaceAll(PLATFORM_DISPLAY_NAME_PLACEHOLDER, escapeHtml(platformDisplayName))
+              .replaceAll(API_V1_PREFIX_PLACEHOLDER, escapeHtml(apiV1Prefix));
+          }
+
+          return brandedHtml;
         },
       },
     ],
@@ -60,7 +74,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       open: false,
       proxy: {
-        '/api': {
+        [apiV1Prefix]: {
           target: 'http://localhost:8000',
           changeOrigin: true,
         },

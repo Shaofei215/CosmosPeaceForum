@@ -4,17 +4,18 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from social_platform.app.core.branding import get_platform_display_name
 from social_platform.app.core.config import get_settings
 from social_platform.app.core.logging import AccessLogMiddleware, SERVICE_NAME, configure_logging
 from social_platform.app.core.paths import get_avatar_upload_dir, get_frontend_dist_dir
-from social_platform.app.core.static_files import RaceSafeStaticFiles, SPAStaticFiles
+from social_platform.app.core.static_files import RaceSafeStaticFiles, SPAStaticFiles, render_spa_index
 from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.bootstrap import ensure_domain_event_handlers_registered
 from social_platform.app.admin.api import admin_router
@@ -41,6 +42,8 @@ from social_platform.app.api.routers import (
 
 
 settings = get_settings()
+PLATFORM_DISPLAY_NAME_PLACEHOLDER = "__PLATFORM_DISPLAY_NAME__"
+API_V1_PREFIX_PLACEHOLDER = "__API_V1_PREFIX__"
 if getattr(logging.getLogger(), "_cpf_logging_service", None) != SERVICE_NAME:
     configure_logging(
         level=settings.LOG_LEVEL,
@@ -259,6 +262,20 @@ app.include_router(topics.router, prefix=f"{settings.API_V1_PREFIX}/topics", tag
 app.include_router(reports.router, prefix=f"{settings.API_V1_PREFIX}/reports", tags=["reports"])
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 
+frontend_dist_dir = get_frontend_dist_dir()
+frontend_index = Path(frontend_dist_dir) / "index.html"
+frontend_index_html = (
+    render_spa_index(
+        frontend_index,
+        {
+            PLATFORM_DISPLAY_NAME_PLACEHOLDER: get_platform_display_name(),
+            API_V1_PREFIX_PLACEHOLDER: settings.API_V1_PREFIX,
+        },
+    )
+    if frontend_index.is_file()
+    else None
+)
+
 
 @app.get("/")
 def root():
@@ -268,9 +285,8 @@ def root():
     Returns:
         应用基本信息和文档链接
     """
-    frontend_index = os.path.join(get_frontend_dist_dir(), "index.html")
-    if os.path.exists(frontend_index):
-        return FileResponse(frontend_index)
+    if frontend_index_html is not None:
+        return HTMLResponse(frontend_index_html)
 
     return {
         "message": f"Welcome to {get_platform_display_name()} Social Platform",
@@ -289,7 +305,14 @@ def health_check():
     """
     return {"status": "healthy"}
 
-
-frontend_dist_dir = get_frontend_dist_dir()
 if os.path.isdir(frontend_dist_dir):
-    app.mount("/", SPAStaticFiles(directory=frontend_dist_dir, html=True), name="frontend")
+    app.mount(
+        "/",
+        SPAStaticFiles(
+            directory=frontend_dist_dir,
+            html=True,
+            index_html=frontend_index_html,
+            excluded_prefixes=(settings.API_V1_PREFIX, "/uploads"),
+        ),
+        name="frontend",
+    )

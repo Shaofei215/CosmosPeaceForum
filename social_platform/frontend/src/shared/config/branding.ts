@@ -1,8 +1,11 @@
 /**
  * 平台品牌展示配置。
  *
- * 前端展示名通过 Vite 注入的 PLATFORM_DISPLAY_NAME 配置。
+ * 展示名由公开平台后端从 social_platform/.env 注入页面元数据。
  */
 
-export const PLATFORM_DISPLAY_NAME =
-  import.meta.env.PLATFORM_DISPLAY_NAME?.trim() || '宇宙和平论坛';
+const injectedPlatformDisplayName = document
+  .querySelector<HTMLMetaElement>('meta[name="platform-display-name"]')
+  ?.content.trim();
+
+export const PLATFORM_DISPLAY_NAME = injectedPlatformDisplayName || '宇宙和平论坛';

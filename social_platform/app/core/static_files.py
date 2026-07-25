@@ -1,10 +1,13 @@
 import os
+from html import escape
+from pathlib import Path
 from secrets import token_hex
+from typing import Mapping
 
 import anyio
 from starlette.exceptions import HTTPException
 from starlette.datastructures import Headers
-from starlette.responses import FileResponse, Response
+from starlette.responses import FileResponse, HTMLResponse, Response
 from starlette.staticfiles import NotModifiedResponse, StaticFiles
 from starlette.types import Scope, Send
 
@@ -20,6 +23,23 @@ async def _send_not_found(send: Send) -> None:
         "body": b"Not Found",
         "more_body": False,
     })
+
+
+def render_spa_index(index_file: Path, replacements: Mapping[str, str]) -> str:
+    """读取 SPA 入口页面并注入经过 HTML 转义的运行时配置。
+
+    Args:
+        index_file: 前端构建产物中的 ``index.html``。
+        replacements: HTML 占位符及其运行时配置值。
+
+    Returns:
+        str: 已替换运行时配置的入口页面。
+    """
+
+    html = index_file.read_text(encoding="utf-8")
+    for placeholder, value in replacements.items():
+        html = html.replace(placeholder, escape(value, quote=True))
+    return html
 
 
 class RaceSafeFileResponse(FileResponse):
@@ -178,7 +198,51 @@ class RaceSafeStaticFiles(StaticFiles):
 
 
 class SPAStaticFiles(RaceSafeStaticFiles):
+    def __init__(
+        self,
+        *,
+        directory: os.PathLike[str] | str | None = None,
+        packages: list[str | tuple[str, str]] | None = None,
+        html: bool = False,
+        check_dir: bool = True,
+        follow_symlink: bool = False,
+        index_html: str | None = None,
+        excluded_prefixes: tuple[str, ...] = ("/api", "/uploads"),
+    ) -> None:
+        """初始化支持运行时配置注入和客户端路由回退的静态文件服务。
+
+        Args:
+            directory: 静态文件目录。
+            packages: Starlette 包静态目录配置。
+            html: 是否启用 HTML 目录索引。
+            check_dir: 初始化时是否检查目录存在。
+            follow_symlink: 是否允许跟随符号链接。
+            index_html: 已注入运行时配置的 SPA 入口内容。
+            excluded_prefixes: 不允许回退到 SPA 的请求路径前缀。
+        """
+
+        super().__init__(
+            directory=directory,
+            packages=packages,
+            html=html,
+            check_dir=check_dir,
+            follow_symlink=follow_symlink,
+        )
+        self.index_html = index_html
+        self.excluded_prefixes = excluded_prefixes
+
+    def _index_response(self, scope: Scope) -> HTMLResponse:
+        """返回已注入配置的入口页面，并正确处理 HEAD 请求。"""
+
+        response = HTMLResponse(self.index_html or "")
+        if scope.get("method") == "HEAD":
+            response.body = b""
+        return response
+
     async def get_response(self, path: str, scope: Scope) -> Response:
+        if self.index_html is not None and path in ("", ".", "index.html"):
+            return self._index_response(scope)
+
         try:
             return await super().get_response(path, scope)
         except HTTPException as exc:
@@ -188,9 +252,11 @@ class SPAStaticFiles(RaceSafeStaticFiles):
             request_path = scope.get("path", "")
             if scope.get("method") not in ("GET", "HEAD"):
                 raise
-            if request_path.startswith("/api") or request_path.startswith("/uploads"):
+            if any(request_path.startswith(prefix) for prefix in self.excluded_prefixes):
                 raise
             if "." in os.path.basename(request_path):
                 raise
 
+            if self.index_html is not None:
+                return self._index_response(scope)
             return await super().get_response("index.html", scope)
