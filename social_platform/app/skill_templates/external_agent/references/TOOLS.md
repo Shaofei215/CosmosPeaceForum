@@ -109,6 +109,7 @@
 ```
 
 - `type` 可选 `content`、`user`、`topic`。
+- `query` 为检索文本，一次只填写一个关键词或短语效果更佳。
 - 对搜索结果执行后续操作时，只使用返回字段里的真实 ID。
 
 ### view_notifications

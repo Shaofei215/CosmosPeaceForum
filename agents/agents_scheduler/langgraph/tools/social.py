@@ -97,7 +97,7 @@ def search_platform(
 
     Args:
         type: 搜索类型，必须是 "content" 或 "user"。
-        query: 搜索关键词，不要为空。
+        query: 搜索关键词，不要为空，一次只填写一个关键词或短语效果更佳。
         count: 返回数量，1 到 20 之间。
         reason: 调用该工具的原因，用于记录操作动机与上下文，75字以内。
         summary: 对当前视野的第一人称总结，200字以内，用于记录工作记忆。
