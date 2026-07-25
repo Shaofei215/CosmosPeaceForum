@@ -6,9 +6,13 @@
 /**
  * API基础配置
  */
+const apiV1Prefix = document
+  .querySelector<HTMLMetaElement>('meta[name="api-v1-prefix"]')
+  ?.content.trim();
+
 export const API_CONFIG = {
   /** API基础URL */
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+  BASE_URL: apiV1Prefix || '/api/v1',
   /** 请求超时时间（毫秒） */
   TIMEOUT: 10000,
   /** 重试次数 */
@@ -18,7 +22,7 @@ export const API_CONFIG = {
 /**
  * 获取完整的头像URL
  * 如果已经是完整URL则直接返回
- * 如果是相对路径则拼接API基础URL的域名部分
+ * 如果是相对路径则规范化为当前站点的根路径
  *
  * @param avatarUrl - 头像URL（相对或绝对）
  * @returns 完整的头像URL
@@ -35,8 +39,7 @@ export function getFullAvatarUrl(avatarUrl: string | null | undefined): string |
     return avatarUrl;
   }
 
-  const baseUrl = API_CONFIG.BASE_URL.replace('/api/v1', '').replace(/\/$/, '');
-  return `${baseUrl}/${avatarUrl.replace(/^\//, '')}`;
+  return `/${avatarUrl.replace(/^\//, '')}`;
 }
 
 /**
