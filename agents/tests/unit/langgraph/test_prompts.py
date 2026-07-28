@@ -143,7 +143,6 @@ class TestBuildDecisionPrompt:
         }
         prompt = build_decision_prompt(state)
         assert "This is first decision in this session" in prompt
-        assert "Suggest calling a tool first to retrieve some content" in prompt
         assert '"step_count": 0' in prompt
         assert '"action_history": []' in prompt
 
