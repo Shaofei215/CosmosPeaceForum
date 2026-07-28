@@ -227,12 +227,10 @@ def build_decision_prompt(state: Mapping[str, Any]) -> str:
                 f"{_format_tool_result(last_result)}\n"
             )
 
-    # 仅在首次决策时提示 LLM 获取信息流
     initial_environment_text = ""
     if is_first_decision:
         initial_environment_text = (
             "\n [This is first decision in this session] \n"
-            " [Suggest calling a tool first to retrieve some content] \n"
         )
 
     # 构建召回的记忆注入文本
