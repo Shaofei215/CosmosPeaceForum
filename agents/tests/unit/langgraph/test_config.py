@@ -87,3 +87,33 @@ class TestSessionConfigFromDb:
         assert config.openai_api_key == "deepseek-key"
         assert config.openai_model_name == "deepseek-chat"
         assert config.openai_base_url == "https://api.deepseek.com/v1"
+
+    def test_from_db_loads_optional_tavily_overrides(self):
+        """测试 Tavily 管理员覆盖配置会进入会话配置。"""
+        model = {
+            "id": 11,
+            "provider": "openai",
+            "model_name": "gpt-4o",
+            "api_key": "sk-test",
+            "base_url": "",
+            "temperature": 1.0,
+            "is_active": 1,
+        }
+        values = {
+            "TAVILY_TOPIC": "news",
+            "TAVILY_MAX_RESULTS": "12",
+            "TAVILY_SEARCH_DEPTH": "advanced",
+            "TAVILY_INCLUDE_DOMAINS": "example.com",
+            "TAVILY_EXCLUDE_DOMAINS": "spam.example",
+        }
+        db = _build_db_client(model)
+        db.get_system_config.side_effect = lambda key: values.get(key, "")
+
+        with patch("agents.agents_scheduler.langgraph.config.get_db_client", return_value=db):
+            config = SessionConfig.from_db(model_config_id=11)
+
+        assert config.tavily_topic == "news"
+        assert config.tavily_max_results == 12
+        assert config.tavily_search_depth == "advanced"
+        assert config.tavily_include_domains == "example.com"
+        assert config.tavily_exclude_domains == "spam.example"

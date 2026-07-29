@@ -30,6 +30,13 @@ def test_default_system_configs_include_web_search_keys():
 
     assert "WEB_SEARCH_ENABLED" in default_keys
     assert "TAVILY_API_KEY" in default_keys
+    assert {
+        "TAVILY_TOPIC",
+        "TAVILY_MAX_RESULTS",
+        "TAVILY_SEARCH_DEPTH",
+        "TAVILY_INCLUDE_DOMAINS",
+        "TAVILY_EXCLUDE_DOMAINS",
+    }.issubset(default_keys)
 
 
 def test_default_system_configs_include_scheduler_time_scale():
@@ -176,6 +183,33 @@ def test_update_system_config_rejects_invalid_memory_values():
                 pass
             else:
                 raise AssertionError(f"非法记忆配置未被拒绝: {key}={value}")
+
+
+def test_update_system_config_validates_optional_tavily_overrides():
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    invalid_values = {
+        "TAVILY_TOPIC": "invalid",
+        "TAVILY_MAX_RESULTS": "21",
+        "TAVILY_SEARCH_DEPTH": "deep",
+    }
+    with Session(engine) as db:
+        for key in invalid_values:
+            db.add(SystemConfig(key=key, value="", description=key))
+        db.commit()
+
+        for key, value in invalid_values.items():
+            try:
+                update_system_config(db, key, value)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"非法 Tavily 配置未被拒绝: {key}={value}")
+
+        assert update_system_config(db, "TAVILY_TOPIC", "") is not None
+        assert update_system_config(db, "TAVILY_MAX_RESULTS", "20") is not None
+        assert update_system_config(db, "TAVILY_SEARCH_DEPTH", "ultra-fast") is not None
 
 
 def test_list_system_configs_uses_default_order_and_descriptions():

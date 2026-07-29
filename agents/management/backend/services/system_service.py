@@ -30,11 +30,16 @@ REMOVED_SYSTEM_CONFIG_KEYS: set[str] = {
 }
 
 DEFAULT_SYSTEM_CONFIGS = [
-    ("SCHEDULER_TIME_SCALE", "1.0", "Scheduler 时间倍率（1.0 为现实时间）"),
+    ("SCHEDULER_TIME_SCALE", "1.0", "登录时机调度器时间倍率（1.0 为现实时间）"),
     ("LANGGRAPH_MAX_STEPS", "20", "LangGraph 最大决策步数"),
     ("LANGGRAPH_TOOL_TIMEOUT", "30", "工具调用超时时间（秒）"),
     ("WEB_SEARCH_ENABLED", "false", "启用联网搜索工具"),
     ("TAVILY_API_KEY", "", "Tavily API Key"),
+    ("TAVILY_TOPIC", "", "Tavily 搜索类别（留空由 LLM 选择）"),
+    ("TAVILY_MAX_RESULTS", "", "Tavily 最大结果数 1-20（留空由 LLM 选择）"),
+    ("TAVILY_SEARCH_DEPTH", "", "Tavily 搜索深度（留空由 LLM 选择）"),
+    ("TAVILY_INCLUDE_DOMAINS", "", "Tavily 限定域名，多个域名用逗号分隔（留空由 LLM 选择）"),
+    ("TAVILY_EXCLUDE_DOMAINS", "", "Tavily 排除域名，多个域名用逗号分隔（留空由 LLM 选择）"),
     ("MEMORY_ENABLED", "true", "是否启用记忆系统"),
     ("MEMORY_RECALL_LIMIT", "5", "召回记忆数量"),
     ("MEMORY_RECALL_VECTOR_RESULTS", "20", "向量检索候选数量"),
@@ -109,8 +114,44 @@ def validate_system_config_value(key: str, value: str) -> None:
         if not math.isfinite(decay_rate) or decay_rate <= 0:
             raise ValueError("MEMORY_DECAY_RATE 必须大于 0")
 
-    if key == "MEMORY_ENABLED" and value.lower() not in {"true", "false"}:
-        raise ValueError("MEMORY_ENABLED 必须是 true 或 false")
+    if key in {"MEMORY_ENABLED", "WEB_SEARCH_ENABLED"} and value.lower() not in {
+        "true",
+        "false",
+    }:
+        raise ValueError(f"{key} 必须是 true 或 false")
+
+    if key == "TAVILY_TOPIC" and value.strip().lower() not in {
+        "",
+        "general",
+        "news",
+        "finance",
+    }:
+        raise ValueError("TAVILY_TOPIC 必须留空或为 general、news、finance")
+
+    if key == "TAVILY_SEARCH_DEPTH" and value.strip().lower() not in {
+        "",
+        "basic",
+        "advanced",
+        "fast",
+        "ultra-fast",
+    }:
+        raise ValueError(
+            "TAVILY_SEARCH_DEPTH 必须留空或为 basic、advanced、fast、ultra-fast"
+        )
+
+    if key == "TAVILY_MAX_RESULTS" and value.strip():
+        try:
+            max_results = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("TAVILY_MAX_RESULTS 必须留空或为 1 到 20 的整数") from exc
+        if not 1 <= max_results <= 20 or str(max_results) != value.strip():
+            raise ValueError("TAVILY_MAX_RESULTS 必须留空或为 1 到 20 的整数")
+
+    if (
+        key in {"TAVILY_INCLUDE_DOMAINS", "TAVILY_EXCLUDE_DOMAINS"}
+        and len(value) > 4000
+    ):
+        raise ValueError(f"{key} 长度不能超过 4000 个字符")
 
     if key == "MEMORY_BOOST_COOLDOWN_SECONDS":
         try:
@@ -231,6 +272,11 @@ def get_config_value(db: Session, key: str, default: str = "") -> str:
         "LANGGRAPH_TOOL_TIMEOUT": "30",
         "WEB_SEARCH_ENABLED": "false",
         "TAVILY_API_KEY": "",
+        "TAVILY_TOPIC": "",
+        "TAVILY_MAX_RESULTS": "",
+        "TAVILY_SEARCH_DEPTH": "",
+        "TAVILY_INCLUDE_DOMAINS": "",
+        "TAVILY_EXCLUDE_DOMAINS": "",
         "MEMORY_ENABLED": "true",
         "MEMORY_RECALL_LIMIT": "5",
         "MEMORY_RECALL_VECTOR_RESULTS": "20",

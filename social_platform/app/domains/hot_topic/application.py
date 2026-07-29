@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Literal, Optional
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
@@ -29,6 +29,8 @@ VALID_SOURCES = {"manual", "agent"}
 VALID_STATUSES = {"active", "draft", "archived"}
 VALID_GENERATION_STATUSES = {"pending", "success", "failed"}
 VALID_PUBLISH_POLICIES = {"auto", "draft"}
+VALID_TAVILY_TOPICS = {"general", "news", "finance"}
+VALID_TAVILY_SEARCH_DEPTHS = {"basic", "advanced", "fast", "ultra-fast"}
 SECRET_MASK = "********"
 DEFAULT_HISTORY_LIMIT = 3
 DEFAULT_MAX_LLM_ROUNDS = 6
@@ -186,6 +188,11 @@ def serialize_settings(settings: HotTopicSettings) -> dict[str, Any]:
         "llm_api_key": _mask_secret(settings.llm_api_key),
         "web_search_enabled": settings.web_search_enabled,
         "tavily_api_key": _mask_secret(settings.tavily_api_key),
+        "tavily_topic": settings.tavily_topic,
+        "tavily_max_results": settings.tavily_max_results,
+        "tavily_search_depth": settings.tavily_search_depth,
+        "tavily_include_domains": settings.tavily_include_domains,
+        "tavily_exclude_domains": settings.tavily_exclude_domains,
         "history_limit": settings.history_limit,
         "max_llm_rounds": settings.max_llm_rounds or DEFAULT_MAX_LLM_ROUNDS,
         "updated_at": settings.updated_at,
@@ -208,10 +215,28 @@ def serialize_prompt_config(settings: HotTopicSettings) -> dict[str, Any]:
 def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicSettings:
     """应用管理端局部更新；调度相关字段变更后重配后台任务。"""
     settings = get_hot_topic_settings(db)
-    string_fields = {"llm_base_url", "llm_model_name", "llm_api_key", "tavily_api_key"}
+    string_fields = {
+        "llm_base_url",
+        "llm_model_name",
+        "llm_api_key",
+        "tavily_api_key",
+        "tavily_topic",
+        "tavily_search_depth",
+        "tavily_include_domains",
+        "tavily_exclude_domains",
+    }
+    nullable_tavily_fields = {
+        "tavily_topic",
+        "tavily_max_results",
+        "tavily_search_depth",
+        "tavily_include_domains",
+        "tavily_exclude_domains",
+    }
 
     for field, value in payload.items():
         if value is None:
+            if field in nullable_tavily_fields:
+                setattr(settings, field, None)
             continue
         if field == "publish_policy":
             value = _validate_choice(value, VALID_PUBLISH_POLICIES, "publish_policy")
@@ -221,12 +246,22 @@ def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicS
             value = max(0, min(int(value), 10))
         if field == "max_llm_rounds":
             value = max(1, min(int(value), 20))
+        if field == "tavily_max_results":
+            value = max(1, min(int(value), 20))
         if field in string_fields:
             if not isinstance(value, str):
                 raise ValueError(f"{field} 必须是字符串")
             value = _normalize_text(value)
             if value == SECRET_MASK:
                 continue
+        if field == "tavily_topic" and value is not None:
+            value = _validate_choice(value, VALID_TAVILY_TOPICS, "tavily_topic")
+        if field == "tavily_search_depth" and value is not None:
+            value = _validate_choice(
+                value,
+                VALID_TAVILY_SEARCH_DEPTHS,
+                "tavily_search_depth",
+            )
         if hasattr(settings, field):
             setattr(settings, field, value)
 
@@ -725,30 +760,164 @@ def _create_submit_tool(submitted: dict[str, list[dict[str, Any]]]):
     return submit_hot_topics
 
 
+def _normalize_tavily_domains(domains: list[str] | None) -> list[str]:
+    """清理 Tavily 域名列表并保持原有顺序。
+
+    Args:
+        domains: LLM 提供的域名列表。
+
+    Returns:
+        list[str]: 去空、去重后的域名列表。
+    """
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for domain in domains or []:
+        value = str(domain).strip().lower()
+        if value and value not in seen:
+            normalized.append(value)
+            seen.add(value)
+    return normalized
+
+
+def _parse_tavily_domain_config(value: str | None) -> list[str]:
+    """把管理员填写的逗号分隔域名转换为 Tavily 参数。
+
+    Args:
+        value: 管理员保存的逗号分隔域名。
+
+    Returns:
+        list[str]: 可直接传给 Tavily 的域名列表。
+    """
+
+    if not value:
+        return []
+    return _normalize_tavily_domains(value.replace("，", ",").split(","))
+
+
+def _normalize_tavily_date(value: str | None, field_name: str) -> str | None:
+    """校验并清理 Tavily 的绝对日期参数。
+
+    Args:
+        value: LLM 提供的日期字符串。
+        field_name: 对外展示的参数名。
+
+    Returns:
+        str | None: ``YYYY-MM-DD`` 日期或空值。
+
+    Raises:
+        ValueError: 日期格式不符合 Tavily 要求。
+    """
+
+    normalized = (value or "").strip()
+    if not normalized:
+        return None
+    try:
+        parsed = datetime.strptime(normalized, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError(f"{field_name} 必须使用 YYYY-MM-DD 格式") from exc
+    if parsed.strftime("%Y-%m-%d") != normalized:
+        raise ValueError(f"{field_name} 必须使用 YYYY-MM-DD 格式")
+    return normalized
+
+
 def _create_web_search_tool(settings: HotTopicSettings):
     """按配置启用 Tavily 外部搜索，缺配置时返回结构化错误。"""
     from langchain_core.tools import tool
 
     @tool
-    def web_search(query: str, max_results: int = 5) -> str:
-        """联网搜索公开信息，返回紧凑 JSON。"""
+    def web_search(
+        query: str,
+        topic: Literal["general", "news", "finance"] = "general",
+        max_results: int = 10,
+        search_depth: Literal["basic", "advanced", "fast", "ultra-fast"] = "basic",
+        time_range: Literal["day", "week", "month", "year"] | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        include_domains: list[str] | None = None,
+        exclude_domains: list[str] | None = None,
+    ) -> str:
+        """联网搜索公开信息，并返回 Tavily 搜索结果 JSON。
+
+        Args:
+            query: 必填搜索查询。需要最新信息时应包含明确的事件、实体和时间意图。
+            topic: 搜索类别。general 用于通用信息，news 用于时政、体育等主流新闻，
+                finance 用于金融市场信息。默认 general。
+            max_results: 最大结果数，范围 1 到 20，默认 10。
+            search_depth: 搜索深度。basic 平衡速度与相关性，advanced 提高相关性，
+                fast 优先低延迟，ultra-fast 优先最低延迟。默认 basic。
+            time_range: 相对当前日期的发布时间范围，可选 day、week、month、year。
+                查询“今天”“最新”“最近”等信息时应主动设置。
+            start_time: 最早发布日期，格式 YYYY-MM-DD。与 end_time 组合可限定绝对
+                日期区间；提供绝对日期时会忽略 time_range。
+            end_time: 最晚发布日期，格式 YYYY-MM-DD。与 start_time 组合可限定绝对
+                日期区间；提供绝对日期时会忽略 time_range。
+            include_domains: 只允许这些域名出现在结果中，例如 ["who.int"]。
+            exclude_domains: 排除这些域名，例如 ["example.com"]。
+
+        Returns:
+            str: Tavily 响应的 JSON 字符串；失败时包含结构化错误。
+        """
         if not settings.web_search_enabled:
             return json.dumps({"query": query, "results": [], "error": "web_search_disabled"}, ensure_ascii=False)
         if not settings.tavily_api_key:
             return json.dumps({"query": query, "results": [], "error": "missing_tavily_api_key"}, ensure_ascii=False)
         try:
+            clean_start_time = _normalize_tavily_date(start_time, "start_time")
+            clean_end_time = _normalize_tavily_date(end_time, "end_time")
+            if clean_start_time and clean_end_time and clean_start_time > clean_end_time:
+                raise ValueError("start_time 不能晚于 end_time")
+
+            configured_include_domains = _parse_tavily_domain_config(
+                settings.tavily_include_domains
+            )
+            configured_exclude_domains = _parse_tavily_domain_config(
+                settings.tavily_exclude_domains
+            )
+            effective_topic = settings.tavily_topic or topic
+            effective_max_results = max(
+                1,
+                min(int(settings.tavily_max_results or max_results or 10), 20),
+            )
+            effective_search_depth = settings.tavily_search_depth or search_depth
+            effective_time_range = (
+                None if clean_start_time or clean_end_time else time_range
+            )
+            effective_include_domains = (
+                configured_include_domains
+                or _normalize_tavily_domains(include_domains)
+            )
+            effective_exclude_domains = (
+                configured_exclude_domains
+                or _normalize_tavily_domains(exclude_domains)
+            )
+
             logger.info("“大家都在聊” LLM 外部搜索开始")
             from langchain_tavily import TavilySearch
 
             os.environ["TAVILY_API_KEY"] = settings.tavily_api_key
             tavily = TavilySearch(
-                max_results=max(1, min(int(max_results or 5), 10)),
-                topic="general",
+                max_results=effective_max_results,
                 include_answer=True,
                 include_raw_content=False,
-                search_depth="basic",
             )
-            response = tavily.invoke({"query": query})
+            search_args: dict[str, Any] = {
+                "query": query,
+                "topic": effective_topic,
+                "search_depth": effective_search_depth,
+            }
+            if effective_time_range:
+                search_args["time_range"] = effective_time_range
+            if clean_start_time:
+                search_args["start_date"] = clean_start_time
+            if clean_end_time:
+                search_args["end_date"] = clean_end_time
+            if effective_include_domains:
+                search_args["include_domains"] = effective_include_domains
+            if effective_exclude_domains:
+                search_args["exclude_domains"] = effective_exclude_domains
+
+            response = tavily.invoke(search_args)
             logger.info("“大家都在聊” LLM 外部搜索完成")
             return json.dumps(response, ensure_ascii=False)
         except Exception as exc:

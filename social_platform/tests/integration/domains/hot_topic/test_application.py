@@ -1,3 +1,6 @@
+import json
+import sys
+import types
 from types import SimpleNamespace
 from typing import cast
 
@@ -69,6 +72,105 @@ def test_settings_masks_and_preserves_secrets(db_session):
 
     settings = hot_topic_service.update_hot_topic_settings(db_session, {"llm_api_key": "********"})
     assert settings.llm_api_key == "secret"
+
+
+def test_hot_topic_tavily_settings_can_be_set_and_cleared(db_session):
+    settings = hot_topic_service.update_hot_topic_settings(
+        db_session,
+        {
+            "tavily_topic": "news",
+            "tavily_max_results": 8,
+            "tavily_search_depth": "advanced",
+            "tavily_include_domains": "example.com, docs.example.com",
+            "tavily_exclude_domains": "spam.example",
+        },
+    )
+
+    serialized = hot_topic_service.serialize_settings(settings)
+    assert serialized["tavily_topic"] == "news"
+    assert serialized["tavily_max_results"] == 8
+    assert serialized["tavily_search_depth"] == "advanced"
+
+    settings = hot_topic_service.update_hot_topic_settings(
+        db_session,
+        {
+            "tavily_topic": None,
+            "tavily_max_results": None,
+            "tavily_search_depth": None,
+            "tavily_include_domains": "",
+            "tavily_exclude_domains": "",
+        },
+    )
+    assert settings.tavily_topic is None
+    assert settings.tavily_max_results is None
+    assert settings.tavily_search_depth is None
+    assert settings.tavily_include_domains is None
+    assert settings.tavily_exclude_domains is None
+
+
+def test_hot_topic_web_search_exposes_parameters_and_honors_admin_overrides(
+    db_session,
+    monkeypatch,
+):
+    settings = hot_topic_service.get_hot_topic_settings(db_session)
+    settings.web_search_enabled = True
+    settings.tavily_api_key = "test-key"
+    settings.tavily_topic = "news"
+    settings.tavily_max_results = 3
+    settings.tavily_search_depth = "basic"
+    settings.tavily_include_domains = "example.com, docs.example.com"
+    settings.tavily_exclude_domains = "spam.example"
+    db_session.commit()
+
+    fake_module = types.ModuleType("langchain_tavily")
+    captured = {}
+
+    class FakeTavilySearch:
+        def __init__(self, **kwargs):
+            captured["init"] = kwargs
+
+        def invoke(self, args):
+            captured["invoke"] = args
+            return {"results": [{"title": "最新结果"}]}
+
+    fake_module.TavilySearch = FakeTavilySearch
+    monkeypatch.setitem(sys.modules, "langchain_tavily", fake_module)
+
+    tool = hot_topic_service._create_web_search_tool(settings)
+    properties = tool.args_schema.model_json_schema()["properties"]
+    assert set(properties) == {
+        "query",
+        "topic",
+        "max_results",
+        "search_depth",
+        "time_range",
+        "start_time",
+        "end_time",
+        "include_domains",
+        "exclude_domains",
+    }
+    assert properties["max_results"]["default"] == 10
+
+    response = tool.invoke({
+        "query": "latest event",
+        "topic": "finance",
+        "max_results": 10,
+        "search_depth": "advanced",
+        "time_range": "day",
+        "include_domains": ["llm.example"],
+        "exclude_domains": ["llm-spam.example"],
+    })
+
+    assert json.loads(response)["results"][0]["title"] == "最新结果"
+    assert captured["init"]["max_results"] == 3
+    assert captured["invoke"] == {
+        "query": "latest event",
+        "topic": "news",
+        "search_depth": "basic",
+        "time_range": "day",
+        "include_domains": ["example.com", "docs.example.com"],
+        "exclude_domains": ["spam.example"],
+    }
 
 
 def test_prompt_context_contains_top_posts_current_and_history(db_session):

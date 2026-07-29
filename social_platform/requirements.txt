@@ -29,7 +29,7 @@ APScheduler==3.11.2
 langchain==0.3.30
 langchain-openai==0.3.35
 langchain-core==0.3.86
-langchain-tavily>=0.2.0,<0.2.18
+langchain-tavily>=0.2.17,<0.2.18
 openai==1.109.1
 
 # 其他工具

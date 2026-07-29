@@ -34,6 +34,11 @@ export interface HotTopicSettings {
   llm_api_key: string | null;
   web_search_enabled: boolean;
   tavily_api_key: string | null;
+  tavily_topic: 'general' | 'news' | 'finance' | null;
+  tavily_max_results: number | null;
+  tavily_search_depth: 'basic' | 'advanced' | 'fast' | 'ultra-fast' | null;
+  tavily_include_domains: string | null;
+  tavily_exclude_domains: string | null;
   history_limit: number;
   max_llm_rounds: number;
   updated_at: string;

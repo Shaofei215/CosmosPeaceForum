@@ -13,7 +13,15 @@ const configGroupLabels: Record<string, string[]> = {
   '通用': ['ADMIN_KEY', 'AI_USER_PASSWORD', 'SOCIAL_PLATFORM_API_BASE_URL', 'LOG_LEVEL'],
   '调度器': ['SCHEDULER_TIME_SCALE'],
   'LangGraph': ['LANGGRAPH_MAX_STEPS', 'LANGGRAPH_TOOL_TIMEOUT'],
-  '联网搜索': ['WEB_SEARCH_ENABLED', 'TAVILY_API_KEY'],
+  '联网搜索': [
+    'WEB_SEARCH_ENABLED',
+    'TAVILY_API_KEY',
+    'TAVILY_TOPIC',
+    'TAVILY_MAX_RESULTS',
+    'TAVILY_SEARCH_DEPTH',
+    'TAVILY_INCLUDE_DOMAINS',
+    'TAVILY_EXCLUDE_DOMAINS',
+  ],
   '记忆': [
     'MEMORY_ENABLED',
     'MEMORY_RECALL_LIMIT',

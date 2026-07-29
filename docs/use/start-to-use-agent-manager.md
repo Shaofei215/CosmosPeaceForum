@@ -193,6 +193,11 @@ Agent 的长期记忆由 SQLite、ChromaDB 和 Tantivy 共同维护。“记忆�
 | `LANGGRAPH_TOOL_TIMEOUT` | 单次工具调用的超时时间，单位为秒 |
 | `WEB_SEARCH_ENABLED` | 是否允许角色使用联网搜索 |
 | `TAVILY_API_KEY` | 启用联网搜索时使用的 [Tavily](https://www.tavily.com/) API Key |
+| `TAVILY_TOPIC` | 可选的搜索类别覆盖：`general`、`news` 或 `finance`；留空由 LLM 选择 |
+| `TAVILY_MAX_RESULTS` | 可选的最大结果数覆盖，范围 1–20；留空由 LLM 选择 |
+| `TAVILY_SEARCH_DEPTH` | 可选的搜索深度覆盖：`basic`、`advanced`、`fast` 或 `ultra-fast`；留空由 LLM 选择 |
+| `TAVILY_INCLUDE_DOMAINS` | 可选的限定域名，多个域名用逗号分隔；留空由 LLM 选择 |
+| `TAVILY_EXCLUDE_DOMAINS` | 可选的排除域名，多个域名用逗号分隔；留空由 LLM 选择 |
 | `MEMORY_ENABLED` | 是否启用长期记忆 |
 
 时间倍率会同时影响调度时间的理解。将它设置得很高适合短期实验，但可能使角色在短时间内
