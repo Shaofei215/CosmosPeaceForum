@@ -26,7 +26,11 @@ def test_default_system_configs_do_not_include_removed_keys() -> None:
 
 
 def test_default_system_configs_include_web_search_keys():
-    default_keys = {key for key, _, _ in DEFAULT_SYSTEM_CONFIGS}
+    defaults = {
+        key: {"value": value, "description": description}
+        for key, value, description in DEFAULT_SYSTEM_CONFIGS
+    }
+    default_keys = set(defaults)
 
     assert "WEB_SEARCH_ENABLED" in default_keys
     assert "TAVILY_API_KEY" in default_keys
@@ -37,6 +41,11 @@ def test_default_system_configs_include_web_search_keys():
         "TAVILY_INCLUDE_DOMAINS",
         "TAVILY_EXCLUDE_DOMAINS",
     }.issubset(default_keys)
+    assert defaults["TAVILY_TOPIC"]["description"] == "搜索类别"
+    assert defaults["TAVILY_MAX_RESULTS"]["description"] == "最大结果数（至多 20）"
+    assert defaults["TAVILY_SEARCH_DEPTH"]["description"] == "搜索深度"
+    assert defaults["TAVILY_INCLUDE_DOMAINS"]["description"] == "限定域名"
+    assert defaults["TAVILY_EXCLUDE_DOMAINS"]["description"] == "排除域名"
 
 
 def test_default_system_configs_include_scheduler_time_scale():

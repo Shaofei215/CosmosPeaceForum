@@ -8,6 +8,25 @@ import { Settings, Edit, Eye, EyeOff } from 'lucide-react';
 
 const PASSWORD_KEYS = ['AI_USER_PASSWORD', 'TAVILY_API_KEY'];
 const BOOLEAN_KEYS = ['MEMORY_ENABLED', 'WEB_SEARCH_ENABLED'];
+const INPUT_PLACEHOLDERS: Record<string, string> = {
+  TAVILY_INCLUDE_DOMAINS: '例如 who.int, un.org',
+  TAVILY_EXCLUDE_DOMAINS: '多个域名用逗号分隔',
+};
+const SELECT_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
+  TAVILY_TOPIC: [
+    { value: '', label: '由 Agent 填写' },
+    { value: 'general', label: 'general' },
+    { value: 'news', label: 'news' },
+    { value: 'finance', label: 'finance' },
+  ],
+  TAVILY_SEARCH_DEPTH: [
+    { value: '', label: '由 Agent 填写' },
+    { value: 'basic', label: 'basic' },
+    { value: 'advanced', label: 'advanced' },
+    { value: 'fast', label: 'fast' },
+    { value: 'ultra-fast', label: 'ultra-fast' },
+  ],
+};
 
 const configGroupLabels: Record<string, string[]> = {
   '通用': ['ADMIN_KEY', 'AI_USER_PASSWORD', 'SOCIAL_PLATFORM_API_BASE_URL', 'LOG_LEVEL'],
@@ -93,9 +112,21 @@ export default function SystemConfigPage() {
 
       {Object.entries(groupedConfigs).map(([group, items]) => (
         <div key={group} className="mb-6">
-          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <Settings size={18} /> {group}
-          </h2>
+          <div className="mb-3 flex items-center gap-3">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <Settings size={18} /> {group}
+            </h2>
+            {group === '联网搜索' && (
+              <a
+                href="https://app.tavily.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-sky-600 transition-colors hover:text-sky-700 hover:underline"
+              >
+                开始使用 Tavily
+              </a>
+            )}
+          </div>
           <Card>
             <CardContent className="p-0">
               <table className="w-full">
@@ -121,10 +152,35 @@ export default function SystemConfigPage() {
                             }}
                             disabled={updateMutation.isPending}
                           />
+                        ) : SELECT_OPTIONS[config.key] ? (
+                          <select
+                            value={editingKey === config.key ? editValue : config.value}
+                            onChange={(event) => {
+                              if (editingKey === config.key) setEditValue(event.target.value);
+                            }}
+                            disabled={editingKey !== config.key}
+                            className="h-7 w-full rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {SELECT_OPTIONS[config.key].map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
                         ) : (
                           <div className="relative">
                             <Input
-                              type={PASSWORD_KEYS.includes(config.key) && !visiblePasswords.has(config.key) ? 'password' : 'text'}
+                              type={
+                                config.key === 'TAVILY_MAX_RESULTS'
+                                  ? 'number'
+                                  : PASSWORD_KEYS.includes(config.key) &&
+                                      !visiblePasswords.has(config.key)
+                                    ? 'password'
+                                    : 'text'
+                              }
+                              min={config.key === 'TAVILY_MAX_RESULTS' ? 1 : undefined}
+                              max={config.key === 'TAVILY_MAX_RESULTS' ? 20 : undefined}
+                              placeholder={INPUT_PLACEHOLDERS[config.key]}
                               value={editingKey === config.key ? editValue : config.value}
                               onChange={(e) => {
                                 if (editingKey === config.key) setEditValue(e.target.value);

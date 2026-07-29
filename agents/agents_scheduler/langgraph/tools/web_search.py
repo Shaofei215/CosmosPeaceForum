@@ -43,7 +43,7 @@ def _normalize_topic(topic: str) -> str:
     """清理 Tavily 搜索类别。
 
     Args:
-        topic: LLM 或管理员提供的搜索类别。
+        topic: Agent 或管理员提供的搜索类别。
 
     Returns:
         str: Tavily 支持的搜索类别，非法值回退为 general。
@@ -57,7 +57,7 @@ def _normalize_domains(domains: List[str] | None) -> List[str]:
     """清理 Tavily 域名列表并保持原有顺序。
 
     Args:
-        domains: LLM 提供的域名列表。
+        domains: Agent 提供的域名列表。
 
     Returns:
         List[str]: 去空、去重后的域名列表。
@@ -92,7 +92,7 @@ def _normalize_date(value: str | None, field_name: str) -> str | None:
     """校验并清理 Tavily 的绝对日期参数。
 
     Args:
-        value: LLM 提供的日期字符串。
+        value: Agent 提供的日期字符串。
         field_name: 对外展示的参数名。
 
     Returns:

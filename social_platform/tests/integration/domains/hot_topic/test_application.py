@@ -511,7 +511,7 @@ def test_sse_wrapper_identifies_response_serialization_failure(monkeypatch) -> N
 
     payload = hot_topic_api._run_generation_for_stream()
 
-    assert messages == ["热榜 SSE 响应生成或序列化失败"]
+    assert messages == ["“大家都在聊” Agent SSE 响应生成或序列化失败"]
     assert payload == {
         "error_code": "AI_UNKNOWN_ERROR",
         "error": "外部 AI 服务调用失败，请检查后端日志",
