@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Literal, Optional
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
@@ -29,6 +29,8 @@ VALID_SOURCES = {"manual", "agent"}
 VALID_STATUSES = {"active", "draft", "archived"}
 VALID_GENERATION_STATUSES = {"pending", "success", "failed"}
 VALID_PUBLISH_POLICIES = {"auto", "draft"}
+VALID_TAVILY_TOPICS = {"general", "news", "finance"}
+VALID_TAVILY_SEARCH_DEPTHS = {"basic", "advanced", "fast", "ultra-fast"}
 SECRET_MASK = "********"
 DEFAULT_HISTORY_LIMIT = 3
 DEFAULT_MAX_LLM_ROUNDS = 6
@@ -40,11 +42,11 @@ HOT_TOPIC_LLM_MAX_RETRIES = 1
 HOT_TOPIC_AGENT_PROMPT_KEY = "hot_topic_agent_prompt"
 HOT_TOPIC_AGENT_PROMPT_NAME = "热榜生成提示词"
 HOT_TOPIC_AGENT_PROMPT_DESCRIPTION = "用于指导热榜 Agent 生成候选热点。"
-DEFAULT_HOT_TOPIC_AGENT_PROMPT = f"""你是 {get_platform_display_name()} 的热榜编辑 Agent。请从站内讨论、当前热榜和历史生成记录中提炼新的候选事件。
+DEFAULT_HOT_TOPIC_AGENT_PROMPT = f"""你是 {get_platform_display_name()} 的“大家都在聊”编辑，“大家都在聊”是一个综合站内热点与站外时事通讯的消息榜单。请从站内讨论、当前榜单、联网搜索和历史生成记录中提炼新的榜单条目。
 
 ## 任务目标
 
-- 生成 5 到 10 条适合公开展示的候选热点事件、话题条目。综合站内讨论热点、外部搜索的最新各领域时事。
+- 生成 5 到 10 条适合公开展示的候选热点事件、话题条目。综合站内讨论热点、外部搜索的最新的各领域时事。
 - 每条都必须来自上下文、站内搜索结果或可验证的外部搜索结果，不得补写没有依据的事实。
 - 标题、摘要和搜索词都只描述事件本身，不评价热度、排名、趋势、爆火程度或推荐理由。
 
@@ -57,7 +59,7 @@ DEFAULT_HOT_TOPIC_AGENT_PROMPT = f"""你是 {get_platform_display_name()} 的热
 
 ## 工具使用
 
-- 可先调用 `search_platform` 复核站内讨论；如果启用了 `web_search`，可以检索外部背景。
+- 可先调用 `search_platform` 复核站内讨论；如果 `web_search`可用，可以检索外部背景。
 - 最终必须通过 `submit_hot_topics` 工具提交 JSON 数组字符串，数组项至少包含 `title` 和 `search_query`，可包含 `summary` 和 `rank`。
 - 如果证据不足，减少条目数量，也不要编造。
 
@@ -186,6 +188,11 @@ def serialize_settings(settings: HotTopicSettings) -> dict[str, Any]:
         "llm_api_key": _mask_secret(settings.llm_api_key),
         "web_search_enabled": settings.web_search_enabled,
         "tavily_api_key": _mask_secret(settings.tavily_api_key),
+        "tavily_topic": settings.tavily_topic,
+        "tavily_max_results": settings.tavily_max_results,
+        "tavily_search_depth": settings.tavily_search_depth,
+        "tavily_include_domains": settings.tavily_include_domains,
+        "tavily_exclude_domains": settings.tavily_exclude_domains,
         "history_limit": settings.history_limit,
         "max_llm_rounds": settings.max_llm_rounds or DEFAULT_MAX_LLM_ROUNDS,
         "updated_at": settings.updated_at,
@@ -208,10 +215,28 @@ def serialize_prompt_config(settings: HotTopicSettings) -> dict[str, Any]:
 def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicSettings:
     """应用管理端局部更新；调度相关字段变更后重配后台任务。"""
     settings = get_hot_topic_settings(db)
-    string_fields = {"llm_base_url", "llm_model_name", "llm_api_key", "tavily_api_key"}
+    string_fields = {
+        "llm_base_url",
+        "llm_model_name",
+        "llm_api_key",
+        "tavily_api_key",
+        "tavily_topic",
+        "tavily_search_depth",
+        "tavily_include_domains",
+        "tavily_exclude_domains",
+    }
+    nullable_tavily_fields = {
+        "tavily_topic",
+        "tavily_max_results",
+        "tavily_search_depth",
+        "tavily_include_domains",
+        "tavily_exclude_domains",
+    }
 
     for field, value in payload.items():
         if value is None:
+            if field in nullable_tavily_fields:
+                setattr(settings, field, None)
             continue
         if field == "publish_policy":
             value = _validate_choice(value, VALID_PUBLISH_POLICIES, "publish_policy")
@@ -221,12 +246,22 @@ def update_hot_topic_settings(db: Session, payload: dict[str, Any]) -> HotTopicS
             value = max(0, min(int(value), 10))
         if field == "max_llm_rounds":
             value = max(1, min(int(value), 20))
+        if field == "tavily_max_results":
+            value = max(1, min(int(value), 20))
         if field in string_fields:
             if not isinstance(value, str):
                 raise ValueError(f"{field} 必须是字符串")
             value = _normalize_text(value)
             if value == SECRET_MASK:
                 continue
+        if field == "tavily_topic" and value is not None:
+            value = _validate_choice(value, VALID_TAVILY_TOPICS, "tavily_topic")
+        if field == "tavily_search_depth" and value is not None:
+            value = _validate_choice(
+                value,
+                VALID_TAVILY_SEARCH_DEPTHS,
+                "tavily_search_depth",
+            )
         if hasattr(settings, field):
             setattr(settings, field, value)
 
@@ -677,12 +712,12 @@ def _create_search_tool(db: Session):
         """搜索站内帖子和文章内容，返回紧凑 JSON。"""
         try:
             safe_count = max(1, min(int(count or 5), 10))
-            logger.info("热榜 Agent 站内搜索开始 query=%r count=%s", (query or "")[:80], safe_count)
+            logger.info("“大家都在聊” Agent 站内搜索开始 query=%r count=%s", (query or "")[:80], safe_count)
             posts = _search_platform_posts_for_agent(db, query, safe_count)
-            logger.info("热榜 Agent 站内搜索完成 query=%r results=%s", (query or "")[:80], len(posts))
+            logger.info("“大家都在聊” Agent 站内搜索完成 query=%r results=%s", (query or "")[:80], len(posts))
             return json.dumps({"query": query, "posts": posts}, ensure_ascii=False)
         except Exception as exc:
-            logger.exception("热榜 Agent 站内搜索失败 query=%r", (query or "")[:80])
+            logger.exception("“大家都在聊” Agent 站内搜索失败 query=%r", (query or "")[:80])
             return json.dumps({"query": query, "posts": [], "error": str(exc)}, ensure_ascii=False)
 
     return search_platform
@@ -698,7 +733,7 @@ def _create_submit_tool(submitted: dict[str, list[dict[str, Any]]]):
         try:
             topics = normalize_agent_topics(_extract_json_array(topics_json))
         except (json.JSONDecodeError, ValueError) as exc:
-            logger.warning("热榜 Agent 提交了非法 topics_json: %s", exc)
+            logger.warning("“大家都在聊” Agent 提交了非法 topics_json: %s", exc)
             return json.dumps(
                 {
                     "accepted": 0,
@@ -725,35 +760,169 @@ def _create_submit_tool(submitted: dict[str, list[dict[str, Any]]]):
     return submit_hot_topics
 
 
+def _normalize_tavily_domains(domains: list[str] | None) -> list[str]:
+    """清理 Tavily 域名列表并保持原有顺序。
+
+    Args:
+        domains: Agent 提供的域名列表。
+
+    Returns:
+        list[str]: 去空、去重后的域名列表。
+    """
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for domain in domains or []:
+        value = str(domain).strip().lower()
+        if value and value not in seen:
+            normalized.append(value)
+            seen.add(value)
+    return normalized
+
+
+def _parse_tavily_domain_config(value: str | None) -> list[str]:
+    """把管理员填写的逗号分隔域名转换为 Tavily 参数。
+
+    Args:
+        value: 管理员保存的逗号分隔域名。
+
+    Returns:
+        list[str]: 可直接传给 Tavily 的域名列表。
+    """
+
+    if not value:
+        return []
+    return _normalize_tavily_domains(value.replace("，", ",").split(","))
+
+
+def _normalize_tavily_date(value: str | None, field_name: str) -> str | None:
+    """校验并清理 Tavily 的绝对日期参数。
+
+    Args:
+        value: Agent 提供的日期字符串。
+        field_name: 对外展示的参数名。
+
+    Returns:
+        str | None: ``YYYY-MM-DD`` 日期或空值。
+
+    Raises:
+        ValueError: 日期格式不符合 Tavily 要求。
+    """
+
+    normalized = (value or "").strip()
+    if not normalized:
+        return None
+    try:
+        parsed = datetime.strptime(normalized, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError(f"{field_name} 必须使用 YYYY-MM-DD 格式") from exc
+    if parsed.strftime("%Y-%m-%d") != normalized:
+        raise ValueError(f"{field_name} 必须使用 YYYY-MM-DD 格式")
+    return normalized
+
+
 def _create_web_search_tool(settings: HotTopicSettings):
     """按配置启用 Tavily 外部搜索，缺配置时返回结构化错误。"""
     from langchain_core.tools import tool
 
     @tool
-    def web_search(query: str, max_results: int = 5) -> str:
-        """联网搜索公开信息，返回紧凑 JSON。"""
+    def web_search(
+        query: str,
+        topic: Literal["general", "news", "finance"] = "general",
+        max_results: int = 10,
+        search_depth: Literal["basic", "advanced", "fast", "ultra-fast"] = "basic",
+        time_range: Literal["day", "week", "month", "year"] | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        include_domains: list[str] | None = None,
+        exclude_domains: list[str] | None = None,
+    ) -> str:
+        """联网搜索公开信息，并返回 Tavily 搜索结果 JSON。
+
+        Args:
+            query: 必填搜索查询。需要最新信息时应包含明确的事件、实体和时间意图。
+            topic: 搜索类别。general 用于通用信息，news 用于时政、体育等主流新闻，
+                finance 用于金融市场信息。默认 general。
+            max_results: 最大结果数，范围 1 到 20，默认 10。
+            search_depth: 搜索深度。basic 平衡速度与相关性，advanced 提高相关性，
+                fast 优先低延迟，ultra-fast 优先最低延迟。默认 basic。
+            time_range: 相对当前日期的发布时间范围，可选 day、week、month、year。
+                查询“今天”“最新”“最近”等信息时应主动设置。
+            start_time: 最早发布日期，格式 YYYY-MM-DD。与 end_time 组合可限定绝对
+                日期区间；提供绝对日期时会忽略 time_range。
+            end_time: 最晚发布日期，格式 YYYY-MM-DD。与 start_time 组合可限定绝对
+                日期区间；提供绝对日期时会忽略 time_range。
+            include_domains: 只允许这些域名出现在结果中，例如 ["who.int"]。
+            exclude_domains: 排除这些域名，例如 ["example.com"]。
+
+        Returns:
+            str: Tavily 响应的 JSON 字符串；失败时包含结构化错误。
+        """
         if not settings.web_search_enabled:
             return json.dumps({"query": query, "results": [], "error": "web_search_disabled"}, ensure_ascii=False)
         if not settings.tavily_api_key:
             return json.dumps({"query": query, "results": [], "error": "missing_tavily_api_key"}, ensure_ascii=False)
         try:
-            logger.info("“大家都在聊” LLM 外部搜索开始")
+            clean_start_time = _normalize_tavily_date(start_time, "start_time")
+            clean_end_time = _normalize_tavily_date(end_time, "end_time")
+            if clean_start_time and clean_end_time and clean_start_time > clean_end_time:
+                raise ValueError("start_time 不能晚于 end_time")
+
+            configured_include_domains = _parse_tavily_domain_config(
+                settings.tavily_include_domains
+            )
+            configured_exclude_domains = _parse_tavily_domain_config(
+                settings.tavily_exclude_domains
+            )
+            effective_topic = settings.tavily_topic or topic
+            effective_max_results = max(
+                1,
+                min(int(settings.tavily_max_results or max_results or 10), 20),
+            )
+            effective_search_depth = settings.tavily_search_depth or search_depth
+            effective_time_range = (
+                None if clean_start_time or clean_end_time else time_range
+            )
+            effective_include_domains = (
+                configured_include_domains
+                or _normalize_tavily_domains(include_domains)
+            )
+            effective_exclude_domains = (
+                configured_exclude_domains
+                or _normalize_tavily_domains(exclude_domains)
+            )
+
+            logger.info("“大家都在聊” Agent 外部搜索开始")
             from langchain_tavily import TavilySearch
 
             os.environ["TAVILY_API_KEY"] = settings.tavily_api_key
             tavily = TavilySearch(
-                max_results=max(1, min(int(max_results or 5), 10)),
-                topic="general",
+                max_results=effective_max_results,
                 include_answer=True,
                 include_raw_content=False,
-                search_depth="basic",
             )
-            response = tavily.invoke({"query": query})
-            logger.info("“大家都在聊” LLM 外部搜索完成")
+            search_args: dict[str, Any] = {
+                "query": query,
+                "topic": effective_topic,
+                "search_depth": effective_search_depth,
+            }
+            if effective_time_range:
+                search_args["time_range"] = effective_time_range
+            if clean_start_time:
+                search_args["start_date"] = clean_start_time
+            if clean_end_time:
+                search_args["end_date"] = clean_end_time
+            if effective_include_domains:
+                search_args["include_domains"] = effective_include_domains
+            if effective_exclude_domains:
+                search_args["exclude_domains"] = effective_exclude_domains
+
+            response = tavily.invoke(search_args)
+            logger.info("“大家都在聊” Agent 外部搜索完成")
             return json.dumps(response, ensure_ascii=False)
         except Exception as exc:
             safe_error = format_external_error(exc)
-            logger.exception("“大家都在聊” LLM 外部搜索失败")
+            logger.exception("“大家都在聊” Agent 外部搜索失败")
             return json.dumps(
                 {
                     "query": query,
@@ -845,7 +1014,7 @@ def _mark_generation_failed(
         return persisted
     except Exception as record_exc:
         db.rollback()
-        logger.exception("“大家都在聊” LLM 失败状态写入失败")
+        logger.exception("“大家都在聊” Agent 失败状态写入失败")
         raise HotTopicAgentRunError(
             "“大家都在聊” LLM 生成失败，且失败状态无法写入数据库；请检查数据库迁移、连接和写入权限"
         ) from record_exc
@@ -859,7 +1028,7 @@ def run_hot_topic_agent(
     """执行一轮热榜 Agent：建上下文、跑工具循环、落库或记录失败。"""
     run_started_at = time.perf_counter()
     if not _agent_run_lock.acquire(blocking=False):
-        logger.warning("热榜 Agent 已在运行，拒绝新的生成请求 force=%s", force)
+        logger.warning("“大家都在聊” Agent 已在运行，拒绝新的生成请求 force=%s", force)
         raise HotTopicAgentRunError("热榜 Agent 已在运行，请稍后再试")
 
     try:
@@ -874,7 +1043,7 @@ def run_hot_topic_agent(
                 "publish_policy",
             )
             logger.info(
-                "热榜 Agent 开始运行 force=%s enabled=%s publish_policy=%s history_limit=%s max_llm_rounds=%s web_search=%s model=%s base_url_configured=%s",
+                "“大家都在聊” Agent 开始运行 force=%s enabled=%s publish_policy=%s history_limit=%s max_llm_rounds=%s web_search=%s model=%s base_url_configured=%s",
                 force,
                 settings.agent_enabled,
                 publish_policy,
@@ -885,10 +1054,10 @@ def run_hot_topic_agent(
                 bool(settings.llm_base_url),
             )
             generation = _create_generation_record(db, publish_policy)
-            logger.info("热榜 LLM 创建生成记录 generation_id=%s", generation.id)
+            logger.info("“大家都在聊” Agent 创建生成记录 generation_id=%s", generation.id)
         except Exception as exc:
             db.rollback()
-            logger.exception("热榜 LLM 初始化失败")
+            logger.exception("“大家都在聊” Agent 初始化失败")
             raise HotTopicAgentRunError(
                 "热榜 Agent 初始化失败；请检查数据库迁移、连接和写入权限"
             ) from exc
@@ -896,7 +1065,7 @@ def run_hot_topic_agent(
         submitted: dict[str, list[dict[str, Any]]] = {"topics": []}
 
         try:
-            logger.info("热榜 Agent 构建上下文开始 generation_id=%s", generation.id)
+            logger.info("“大家都在聊” Agent 构建上下文开始 generation_id=%s", generation.id)
             history_limit = DEFAULT_HISTORY_LIMIT if settings.history_limit is None else settings.history_limit
             context = build_hot_topic_agent_context(db, history_limit)
             prompt = build_hot_topic_agent_prompt(context, settings.prompt_template)
@@ -916,7 +1085,7 @@ def run_hot_topic_agent(
             if settings.web_search_enabled:
                 tools.append(_create_web_search_tool(settings))
             logger.info(
-                "热榜 Agent 工具准备完成 generation_id=%s tools=%s",
+                "“大家都在聊” Agent 工具准备完成 generation_id=%s tools=%s",
                 generation.id,
                 [tool.name for tool in tools],
             )
@@ -936,7 +1105,7 @@ def run_hot_topic_agent(
                 if settings.llm_base_url:
                     kwargs["base_url"] = settings.llm_base_url
                 logger.info(
-                    "热榜 Agent 初始化 LLM generation_id=%s model=%s timeout=%ss max_retries=%s",
+                    "“大家都在聊” Agent 初始化模型 generation_id=%s model=%s timeout=%ss max_retries=%s",
                     generation.id,
                     settings.llm_model_name,
                     HOT_TOPIC_LLM_TIMEOUT_SECONDS,
@@ -944,7 +1113,7 @@ def run_hot_topic_agent(
                 )
                 llm = ChatOpenAI(**kwargs).bind_tools(tools)
             else:
-                logger.info("热榜 Agent 使用测试/自定义 LLM factory generation_id=%s", generation.id)
+                logger.info("“大家都在聊” Agent 使用测试/自定义模型工厂 generation_id=%s", generation.id)
                 llm = llm_factory(settings, tools)
 
             observations: list[str] = []
@@ -965,7 +1134,7 @@ def run_hot_topic_agent(
                 if observations:
                     user_prompt += "## 已有工具观察结果\n" + "\n\n".join(observations)
                 logger.info(
-                    "热榜 Agent 调用 LLM generation_id=%s round=%s observations=%s",
+                    "“大家都在聊” Agent 调用模型 generation_id=%s round=%s observations=%s",
                     generation.id,
                     round_index,
                     len(observations),
@@ -973,7 +1142,7 @@ def run_hot_topic_agent(
                 response = _invoke_hot_topic_llm(llm, prompt, user_prompt)
                 tool_calls = _extract_tool_calls(response)
                 logger.info(
-                    "热榜 LLM 返回 generation_id=%s round=%s tool_calls=%s",
+                    "“大家都在聊” Agent 模型返回 generation_id=%s round=%s tool_calls=%s",
                     generation.id,
                     round_index,
                     [call.get("name") for call in tool_calls],
@@ -1003,7 +1172,7 @@ def run_hot_topic_agent(
                     tool_name = call.get("name")
                     tool_args = call.get("args") or {}
                     logger.info(
-                        "热榜 LLM 调用工具 generation_id=%s round=%s tool=%s",
+                        "“大家都在聊” Agent 调用工具 generation_id=%s round=%s tool=%s",
                         generation.id,
                         round_index,
                         tool_name,
@@ -1041,14 +1210,14 @@ def run_hot_topic_agent(
 
             generation.output_json = json.dumps(submitted["topics"], ensure_ascii=False)
             logger.info(
-                "“大家都在聊” LLM 写入生成结果开始 generation_id=%s topic_count=%s publish_policy=%s",
+                "“大家都在聊” Agent 写入生成结果开始 generation_id=%s topic_count=%s publish_policy=%s",
                 generation.id,
                 len(submitted["topics"]),
                 publish_policy,
             )
             topics = apply_generated_hot_topics(db, generation, submitted["topics"], publish_policy)
             logger.info(
-                "“大家都在聊” LLM 生成成功 generation_id=%s topic_count=%s duration=%.2fs",
+                "“大家都在聊” Agent 生成成功 generation_id=%s topic_count=%s duration=%.2fs",
                 generation.id,
                 len(topics),
                 time.perf_counter() - run_started_at,
@@ -1057,7 +1226,7 @@ def run_hot_topic_agent(
         except Exception as exc:
             generation = _mark_generation_failed(db, generation, exc)
             logger.exception(
-                "“大家都在聊” LLM 生成失败 generation_id=%s duration=%.2fs",
+                "“大家都在聊” Agent 生成失败 generation_id=%s duration=%.2fs",
                 generation.id,
                 time.perf_counter() - run_started_at,
             )
@@ -1113,6 +1282,6 @@ def configure_hot_topic_agent_job(scheduler=None) -> None:
             id=HOT_TOPIC_SCHEDULER_JOB_ID,
             replace_existing=True,
         )
-        logger.info("热榜 LLM 调度已启用，每 %s 分钟运行一次", settings.agent_interval_minutes)
+        logger.info("“大家都在聊” Agent 调度已启用，每 %s 分钟运行一次", settings.agent_interval_minutes)
     finally:
         db.close()

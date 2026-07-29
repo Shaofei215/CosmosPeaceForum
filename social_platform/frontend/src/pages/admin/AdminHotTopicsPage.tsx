@@ -64,6 +64,11 @@ function settingsToForm(settings: HotTopicSettings): HotTopicSettingsUpdate {
     llm_api_key: settings.llm_api_key || '',
     web_search_enabled: settings.web_search_enabled,
     tavily_api_key: settings.tavily_api_key || '',
+    tavily_topic: settings.tavily_topic,
+    tavily_max_results: settings.tavily_max_results,
+    tavily_search_depth: settings.tavily_search_depth,
+    tavily_include_domains: settings.tavily_include_domains || '',
+    tavily_exclude_domains: settings.tavily_exclude_domains || '',
     history_limit: settings.history_limit,
     max_llm_rounds: settings.max_llm_rounds,
   };
@@ -79,6 +84,11 @@ function normalizeSettingsForm(form: HotTopicSettingsUpdate): HotTopicSettingsUp
     llm_api_key: form.llm_api_key || '',
     web_search_enabled: !!form.web_search_enabled,
     tavily_api_key: form.tavily_api_key || '',
+    tavily_topic: form.tavily_topic || null,
+    tavily_max_results: form.tavily_max_results ?? null,
+    tavily_search_depth: form.tavily_search_depth || null,
+    tavily_include_domains: form.tavily_include_domains || '',
+    tavily_exclude_domains: form.tavily_exclude_domains || '',
     history_limit: Number(form.history_limit ?? 3),
     max_llm_rounds: Number(form.max_llm_rounds || 6),
   };
@@ -262,9 +272,9 @@ export default function AdminHotTopicsPage() {
     const handleFailed = (eventData: string) => {
       try {
         const data = JSON.parse(eventData) as { error?: string };
-        setGenerationError(data.error || '热榜生成失败，请检查后端日志');
+        setGenerationError(data.error || '“大家都在聊” Agent 生成失败，请检查后端日志');
       } catch {
-        setGenerationError('热榜生成失败，请检查后端日志');
+        setGenerationError('“大家都在聊” Agent 生成失败，请检查后端日志');
       }
       invalidateHotTopics();
       closeGenerateStream();
@@ -315,7 +325,7 @@ export default function AdminHotTopicsPage() {
       <div>
         <h1 className="text-2xl font-bold">热点管理</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          人工维护当前热榜，或让 LLM 生成候选后审批发布
+          人工维护当前热榜，或让 Agent 生成候选后审批发布
         </p>
       </div>
 
@@ -432,7 +442,7 @@ export default function AdminHotTopicsPage() {
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2 font-semibold">
                       <Bot size={17} className="text-primary" />
-                      LLM生成配置
+                      Agent 生成配置
                     </div>
                     <Switch
                       checked={agentEnabled}
@@ -440,6 +450,14 @@ export default function AdminHotTopicsPage() {
                         setSettingsForm(current => ({ ...current, agent_enabled: checked }))
                       }
                     />
+                    <a
+                      href="https://app.tavily.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-sky-600 transition-colors hover:text-sky-700 hover:underline"
+                    >
+                      开始使用 Tavily
+                    </a>
                     {settingsDirty && (
                       <span className="text-xs text-muted-foreground">
                         {saveSettingsMutation.isPending ? '保存中' : '待自动保存'}
@@ -590,6 +608,86 @@ export default function AdminHotTopicsPage() {
                       type="password"
                     />
                   </Field>
+                  <Field label="搜索类别">
+                    <select
+                      value={settingsForm.tavily_topic || ''}
+                      onChange={event =>
+                        setSettingsForm(current => ({
+                          ...current,
+                          tavily_topic: event.target.value
+                            ? (event.target.value as 'general' | 'news' | 'finance')
+                            : null,
+                        }))
+                      }
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="">由 Agent 填写</option>
+                      <option value="general">general</option>
+                      <option value="news">news</option>
+                      <option value="finance">finance</option>
+                    </select>
+                  </Field>
+                  <Field label="最大结果数（至多 20）">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      placeholder="由 Agent 填写"
+                      value={settingsForm.tavily_max_results ?? ''}
+                      onChange={event =>
+                        setSettingsForm(current => ({
+                          ...current,
+                          tavily_max_results: event.target.value
+                            ? Number(event.target.value)
+                            : null,
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="搜索深度">
+                    <select
+                      value={settingsForm.tavily_search_depth || ''}
+                      onChange={event =>
+                        setSettingsForm(current => ({
+                          ...current,
+                          tavily_search_depth: event.target.value
+                            ? (event.target.value as 'basic' | 'advanced' | 'fast' | 'ultra-fast')
+                            : null,
+                        }))
+                      }
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="">由 Agent 填写</option>
+                      <option value="basic">basic</option>
+                      <option value="advanced">advanced</option>
+                      <option value="fast">fast</option>
+                      <option value="ultra-fast">ultra-fast</option>
+                    </select>
+                  </Field>
+                  <Field label="限定域名">
+                    <Input
+                      placeholder="例如 who.int, un.org"
+                      value={settingsForm.tavily_include_domains || ''}
+                      onChange={event =>
+                        setSettingsForm(current => ({
+                          ...current,
+                          tavily_include_domains: event.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="排除域名">
+                    <Input
+                      placeholder="多个域名用逗号分隔"
+                      value={settingsForm.tavily_exclude_domains || ''}
+                      onChange={event =>
+                        setSettingsForm(current => ({
+                          ...current,
+                          tavily_exclude_domains: event.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
                 </fieldset>
               </div>
             </CardContent>
@@ -598,7 +696,7 @@ export default function AdminHotTopicsPage() {
           {publishPolicy === 'draft' && (
             <>
               <HotTopicPanel
-                title="LLM 生成待审批"
+                title="Agent 生成待审批"
                 topics={agentDrafts}
                 emptyText="暂无待审批草稿"
                 action={topic => (

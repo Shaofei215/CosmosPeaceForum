@@ -47,6 +47,11 @@ class HotTopicSettingsResponse(BaseModel):
     llm_api_key: Optional[str]
     web_search_enabled: bool
     tavily_api_key: Optional[str]
+    tavily_topic: Optional[str]
+    tavily_max_results: Optional[int]
+    tavily_search_depth: Optional[str]
+    tavily_include_domains: Optional[str]
+    tavily_exclude_domains: Optional[str]
     history_limit: int
     max_llm_rounds: int
     updated_at: datetime
@@ -61,6 +66,11 @@ class HotTopicSettingsUpdateRequest(BaseModel):
     llm_api_key: Optional[str] = Field(default=None, max_length=500)
     web_search_enabled: Optional[bool] = None
     tavily_api_key: Optional[str] = Field(default=None, max_length=500)
+    tavily_topic: Optional[str] = Field(default=None, max_length=20)
+    tavily_max_results: Optional[int] = Field(default=None, ge=1, le=20)
+    tavily_search_depth: Optional[str] = Field(default=None, max_length=20)
+    tavily_include_domains: Optional[str] = Field(default=None, max_length=4000)
+    tavily_exclude_domains: Optional[str] = Field(default=None, max_length=4000)
     history_limit: Optional[int] = Field(default=None, ge=0, le=10)
     max_llm_rounds: Optional[int] = Field(default=None, ge=1, le=20)
 

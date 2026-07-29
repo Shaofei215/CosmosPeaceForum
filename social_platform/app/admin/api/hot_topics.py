@@ -59,10 +59,10 @@ def _run_generation_for_stream(admin_id: int | None = None) -> dict:
             db.commit()
         payload = _serialize_generation_run(generation, topics)
         if generation.status == "failed":
-            payload["error"] = generation.error_message or "生成失败，请检查后端日志"
+            payload["error"] = generation.error_message or "“大家都在聊” Agent 生成失败，请检查后端日志"
         return payload
     except Exception as exc:
-        logger.exception("热榜 SSE 响应生成或序列化失败")
+        logger.exception("“大家都在聊” Agent SSE 响应生成或序列化失败")
         safe_error = format_external_error(exc)
         return {"error_code": safe_error.code, "error": safe_error.message}
     finally:
@@ -275,13 +275,13 @@ def generate_hot_topics(
         generation, topics = hot_topic_service.run_hot_topic_agent(db, force=True)
         if generation.status == "failed":
             logger.error(
-                "立即生成热榜失败 generation_id=%s error=%s",
+                "“大家都在聊” Agent 立即生成失败 generation_id=%s error=%s",
                 generation.id,
                 generation.error_message,
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=generation.error_message or "热榜生成失败，请检查后端日志",
+                detail=generation.error_message or "“大家都在聊” Agent 生成失败，请检查后端日志",
             )
         create_operation_log(
             db,
@@ -302,10 +302,10 @@ def generate_hot_topics(
         # 业务失败已经转换为带安全消息的 HTTPException，避免再次记录并覆盖响应。
         raise
     except Exception as exc:
-        logger.exception("立即生成失败")
+        logger.exception("“大家都在聊” Agent 立即生成失败")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="生成失败，请检查后端日志",
+            detail="“大家都在聊” Agent 生成失败，请检查后端日志",
         ) from exc
 
 

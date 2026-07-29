@@ -50,6 +50,11 @@ class SessionConfig:
     anthropic_model_name: str = ""
     web_search_enabled: bool = False
     tavily_api_key: str = ""
+    tavily_topic: str = ""
+    tavily_max_results: int | None = None
+    tavily_search_depth: str = ""
+    tavily_include_domains: str = ""
+    tavily_exclude_domains: str = ""
 
     @classmethod
     def from_db(cls, model_config_id: int | None = None) -> "SessionConfig":
@@ -92,6 +97,7 @@ class SessionConfig:
         anthropic_api_key = api_key if is_anthropic_provider else ""
         anthropic_model_name = model_name if is_anthropic_provider else ""
         temperature = float(active_model.get("temperature") or 1.2)
+        raw_tavily_max_results = _get("TAVILY_MAX_RESULTS", "").strip()
 
         return cls(
             model_config_id=int(model_config_id or active_model.get("id")),
@@ -110,6 +116,13 @@ class SessionConfig:
                 "false",
             ).lower() in ("true", "1", "yes"),
             tavily_api_key=_get("TAVILY_API_KEY", ""),
+            tavily_topic=_get("TAVILY_TOPIC", "").strip().lower(),
+            tavily_max_results=(
+                int(raw_tavily_max_results) if raw_tavily_max_results else None
+            ),
+            tavily_search_depth=_get("TAVILY_SEARCH_DEPTH", "").strip().lower(),
+            tavily_include_domains=_get("TAVILY_INCLUDE_DOMAINS", ""),
+            tavily_exclude_domains=_get("TAVILY_EXCLUDE_DOMAINS", ""),
         )
 
     def __post_init__(self):
