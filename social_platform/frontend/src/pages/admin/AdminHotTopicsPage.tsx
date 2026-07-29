@@ -27,7 +27,6 @@ import {
   refreshAdminAccessToken,
   type HotTopic,
   type HotTopicGenerationRunResponse,
-  type HotTopicPromptConfig,
   type HotTopicPublishPolicy,
   type HotTopicRequest,
   type HotTopicSettings,
@@ -723,7 +722,6 @@ export default function AdminHotTopicsPage() {
           )}
 
           <PromptTemplatePanel
-            prompt={promptConfig}
             draft={promptValue}
             isLoading={isPromptLoading}
             isDirty={isPromptDirty}
@@ -797,7 +795,6 @@ function HotTopicPanel({
 }
 
 function PromptTemplatePanel({
-  prompt,
   draft,
   isLoading,
   isDirty,
@@ -808,7 +805,6 @@ function PromptTemplatePanel({
   onReset,
   onSave,
 }: {
-  prompt?: HotTopicPromptConfig;
   draft: string;
   isLoading: boolean;
   isDirty: boolean;
@@ -837,7 +833,7 @@ function PromptTemplatePanel({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <ScrollText size={18} className="text-muted-foreground" />
-              <h2 className="text-lg font-semibold">{prompt?.name ?? '热榜生成提示词'}</h2>
+              <h2 className="text-lg font-semibold">生成提示词</h2>
               {isDirty && <Badge variant="secondary">未保存</Badge>}
             </div>
           </div>
