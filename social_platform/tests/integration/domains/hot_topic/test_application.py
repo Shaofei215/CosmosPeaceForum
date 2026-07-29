@@ -204,10 +204,11 @@ def test_default_prompt_spells_out_public_output_constraints():
     prompt = hot_topic_service.DEFAULT_HOT_TOPIC_AGENT_PROMPT
 
     assert "## 任务目标" in prompt
-    assert "【" not in prompt
-    assert "】" not in prompt
     assert "不超过 150" in prompt
-    assert "只能是一个搜索关键词" in prompt
+    assert "只能是一个高度简单且可以高度代表该条目" in prompt
+    assert "关键词搜索命中率尽可能高" in prompt
+    assert "不要放太多定语、日期等描述" in prompt
+    assert "`time_range`参数设为`day`" in prompt
     assert "不评价热度、排名、趋势" in prompt
     assert "不要解释入选原因、讨论量、排序依据或热度变化" in prompt
     assert "topics_json" not in prompt
