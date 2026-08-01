@@ -36,25 +36,68 @@ type ImportResult = {
 
 export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragDepthRef = useRef(0);
   const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState<ImportResult[]>([]);
   const [summary, setSummary] = useState<{ total: number; success: number; exists: number; failed: number } | null>(null);
   const queryClient = useQueryClient();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) {
-      if (!f.name.endsWith('.zip')) {
-        setError('仅支持 .zip 格式文件');
-        return;
-      }
-      setFile(f);
-      setError('');
-      setResults([]);
-      setSummary(null);
+  const selectFile = (selectedFile: File | undefined) => {
+    if (!selectedFile) return;
+
+    setResults([]);
+    setSummary(null);
+
+    if (!selectedFile.name.endsWith('.zip')) {
+      setFile(null);
+      setError('仅支持 .zip 格式文件');
+      return;
     }
+
+    setFile(selectedFile);
+    setError('');
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    selectFile(event.target.files?.[0]);
+    event.target.value = '';
+  };
+
+  const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!event.dataTransfer.types.includes('Files')) return;
+
+    dragDepthRef.current += 1;
+    setIsDragging(true);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer.types.includes('Files')) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current = 0;
+    setIsDragging(false);
+    selectFile(event.dataTransfer.files[0]);
   };
 
   const parseSSE = (text: string): ImportEvent | null => {
@@ -163,7 +206,9 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
 
   const handleClose = () => {
     if (!importing) {
+      dragDepthRef.current = 0;
       setFile(null);
+      setIsDragging(false);
       setResults([]);
       setSummary(null);
       setError('');
@@ -185,8 +230,16 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
           {!importing && !summary && (
             <>
               <div
-                className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                  isDragging
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/50'
+                }`}
                 onClick={() => fileInputRef.current?.click()}
+                onDragEnter={handleDragEnter}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                 <input
                   ref={fileInputRef}
@@ -195,7 +248,12 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                   className="hidden"
                   onChange={handleFileChange}
                 />
-                {file ? (
+                {isDragging ? (
+                  <div className="text-primary">
+                    <Upload size={32} className="mx-auto mb-2" />
+                    <p className="text-sm">松开以上传 zip 文件</p>
+                  </div>
+                ) : file ? (
                   <div className="flex items-center justify-center gap-2 text-green-600">
                     <Check size={20} />
                     <span className="font-medium">{file.name}</span>
@@ -305,7 +363,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
 
         <DialogFooter>
           {!importing && (
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={handleClose}>
               关闭
             </Button>
           )}
