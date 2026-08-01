@@ -12,6 +12,7 @@ import ssl
 from dataclasses import dataclass
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr
 from typing import Protocol
 
 from social_platform.app.core.config import Settings, get_settings
@@ -105,8 +106,12 @@ class SmtpEmailSender:
         try:
             mime_message = MIMEMultipart("alternative")
             mime_message["Subject"] = message.subject
-            mime_message["From"] = (
-                f"{self.settings.SMTP_SENDER_NAME} <{self.settings.SMTP_SENDER_EMAIL}>"
+            mime_message["From"] = formataddr(
+                (
+                    self.settings.SMTP_SENDER_NAME,
+                    self.settings.SMTP_SENDER_EMAIL,
+                ),
+                charset="utf-8",
             )
             mime_message["To"] = message.recipient_email
             mime_message.attach(MIMEText(message.text_body, "plain", "utf-8"))
@@ -126,4 +131,3 @@ class SmtpEmailSender:
 
 smtp_email_sender = SmtpEmailSender()
 """默认 SMTP 邮件发件器实例，供 HTTP 适配层或业务适配器复用。"""
-
