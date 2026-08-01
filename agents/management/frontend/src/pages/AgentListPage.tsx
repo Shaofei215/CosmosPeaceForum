@@ -8,6 +8,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { agentApi, modelApi } from '@/shared/api/modules';
+import { apiClient } from '@/shared/api/client';
+import { openAuthenticatedSse } from '@/shared/api/authenticatedSse';
 import { API_CONFIG } from '@/shared/config/api';
 import {
   Button, Input, Textarea, Card, CardContent,
@@ -28,18 +30,7 @@ function formatLastLogin(value: string | null): string {
   return value ? formatDate(value) : '未登录';
 }
 
-function parseStatusEvent(text: string): AgentRuntimeStatusResponse | null {
-  let eventName = '';
-  let data = '';
-
-  for (const line of text.split('\n')) {
-    if (line.startsWith('event:')) {
-      eventName = line.slice(6).trim();
-    } else if (line.startsWith('data:')) {
-      data += line.slice(5).trim();
-    }
-  }
-
+function parseStatusEvent(eventName: string, data: string): AgentRuntimeStatusResponse | null {
   if (eventName !== 'status' || !data) return null;
 
   try {
@@ -107,8 +98,7 @@ export default function AgentListPage() {
   });
 
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) return undefined;
+    if (!getAccessToken()) return undefined;
 
     const controller = new AbortController();
     let retryTimer: number | undefined;
@@ -120,35 +110,19 @@ export default function AgentListPage() {
 
     async function connect() {
       try {
-        const response = await fetch(`${API_CONFIG.BASE_URL}/agents/status-stream`, {
-          headers: { Authorization: `Bearer ${token}` },
+        await openAuthenticatedSse({
+          url: `${API_CONFIG.BASE_URL}/agents/status-stream`,
           signal: controller.signal,
-        });
-
-        if (!response.ok || !response.body) {
-          throw new Error('status stream unavailable');
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (!controller.signal.aborted) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() ?? '';
-
-          for (const part of parts) {
-            const event = parseStatusEvent(part);
-            if (!event) continue;
+          getAccessToken,
+          refreshAccessToken: () => apiClient.refreshAccessToken(),
+          onMessage: (message) => {
+            const event = parseStatusEvent(message.event, message.data);
+            if (!event) return;
 
             setSchedulerOnline(event.scheduler_online);
             setRuntimeStatuses(new Map(event.agents.map((item) => [item.agent_id, item])));
-          }
-        }
+          },
+        });
 
         if (!controller.signal.aborted) {
           scheduleReconnect();
