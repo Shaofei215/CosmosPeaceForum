@@ -62,7 +62,7 @@ class ApiClient {
    * refreshPromise 用于合并同一时间爆发的多个 401，避免并发请求重复消费同一个
    * 一次性 refresh token。
    */
-  private async refreshAccessToken(): Promise<string | null> {
+  async refreshAccessToken(): Promise<string | null> {
     if (this.refreshPromise) return this.refreshPromise;
     const refreshToken = getRefreshToken();
     if (!refreshToken) return null;
