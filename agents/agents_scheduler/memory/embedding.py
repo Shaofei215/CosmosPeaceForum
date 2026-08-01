@@ -52,6 +52,7 @@ class EmbeddingModel:
         payload = {
             "model": self.model_name,
             "input": text,
+            "dimensions": self.dimension,
         }
 
         async with httpx.AsyncClient() as client:
@@ -88,6 +89,7 @@ class EmbeddingModel:
         payload = {
             "model": self.model_name,
             "input": texts,
+            "dimensions": self.dimension,
         }
 
         async with httpx.AsyncClient() as client:
