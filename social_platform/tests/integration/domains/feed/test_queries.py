@@ -190,6 +190,51 @@ def test_recommended_feed_is_stable_for_same_seed(db_session: Session) -> None:
     assert sorted(item.id for item in first.data) == [10, 11, 12, 13]
 
 
+def test_recommended_feed_is_stable_across_page_sizes(db_session: Session) -> None:
+    """相同 seed 的推荐流不能因客户端分页大小变化而重复或漏项。"""
+
+    author = User(id=20, username="large_feed_author")
+    db_session.add(author)
+    db_session.flush()
+    now = datetime(2026, 1, 2, 12, 0, 0)
+    db_session.add_all(
+        [
+            Post(
+                id=100 + index,
+                author_id=author.id,
+                content=f"post {index}",
+                created_at=now - timedelta(minutes=index),
+                heat_score=100 - index,
+            )
+            for index in range(100)
+        ]
+    )
+    db_session.commit()
+
+    whole = feed_queries.get_feed(
+        db=db_session,
+        page=1,
+        page_size=100,
+        feed_type="recommended",
+        seed="stable-pages",
+    )
+    paged_ids = [
+        item.id
+        for page in range(1, 21)
+        for item in feed_queries.get_feed(
+            db=db_session,
+            page=page,
+            page_size=5,
+            feed_type="recommended",
+            seed="stable-pages",
+        ).data
+    ]
+
+    whole_ids = [item.id for item in whole.data]
+    assert paged_ids == whole_ids
+    assert len(paged_ids) == len(set(paged_ids)) == 100
+
+
 def test_feed_items_include_user_state_repost_and_mentions(db_session: Session) -> None:
     """信息流响应项保留点赞、关注、转发源和提及用户字段。"""
 

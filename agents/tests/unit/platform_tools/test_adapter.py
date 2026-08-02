@@ -16,6 +16,7 @@ from agents.platform_tools import (
     PlatformToolError,
     execute_platform_tool,
 )
+from agents.platform_tools.registry import _fetch_paged_items_after_offset
 from agents.platform_tools.presenters import _format_article_content, _plain_markdown_excerpt
 
 
@@ -268,6 +269,86 @@ def test_internal_adapter_keeps_notification_scroll_state(monkeypatch: pytest.Mo
 
     assert second.data["notifications"][0]["id"] == 102
     assert stored_cursor is None
+
+
+def test_internal_adapter_preserves_feed_cursor_after_same_page_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """同页互动工具不得清空仍可继续使用的信息流游标。"""
+
+    client = FakePlatformClient()
+    stored_cursor: dict[str, Any] | None = None
+
+    def build_context() -> PlatformToolContext:
+        """按内部会话当前游标构造共享工具上下文。"""
+
+        return PlatformToolContext(
+            client=client,
+            access_token="token",
+            current_user={"id": 1, "username": "old_name", "bio": "old signature"},
+            cursor=stored_cursor,
+        )
+
+    def save_cursor(cursor: dict[str, Any] | None) -> None:
+        """记录内部适配器准备保存的滚动游标。"""
+
+        nonlocal stored_cursor
+        stored_cursor = cursor
+
+    monkeypatch.setattr(shared_platform, "_build_internal_context", build_context)
+    monkeypatch.setattr(shared_platform, "set_scroll_cursor", save_cursor)
+
+    first = shared_platform.run_shared_tool("get_global_feed", {})
+    shared_platform.run_shared_tool("update_profile", {"personal_signature": "new signature"})
+
+    assert stored_cursor == first.cursor
+
+
+@pytest.mark.parametrize(
+    ("offset", "count", "expected_calls"),
+    [
+        (45, 10, [(3, 20)]),
+        (95, 10, [(5, 20), (6, 20)]),
+        (105, 20, [(6, 20), (7, 20)]),
+    ],
+)
+def test_paged_offset_window_handles_deep_and_changed_counts(
+    offset: int,
+    count: int,
+    expected_calls: list[tuple[int, int]],
+) -> None:
+    """深页读取必须严格从 offset 开始，不能因 count 改变而重复或跳项。"""
+
+    calls: list[tuple[int, int]] = []
+    total = 140
+
+    def fetch(page: int, page_size: int) -> dict[str, Any]:
+        """返回可观测的标准页码响应。"""
+
+        calls.append((page, page_size))
+        start = (page - 1) * page_size
+        return {
+            "data": [{"id": item_id} for item_id in range(start, min(start + page_size, total))],
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "total_pages": (total + page_size - 1) // page_size,
+                "has_next": start + page_size < total,
+            },
+        }
+
+    items, has_more = _fetch_paged_items_after_offset(
+        fetch,
+        offset,
+        count,
+        max_page_size=50,
+    )
+
+    assert [item["id"] for item in items] == list(range(offset, offset + count))
+    assert calls == expected_calls
+    assert all(page_size <= 50 for _, page_size in calls)
+    assert has_more is True
 
 
 def test_create_post_rejects_poll_on_article_before_platform_request() -> None:

@@ -24,7 +24,6 @@ from social_platform.app.schemas.response import APIResponse, PaginationInfo
 
 
 MIN_RECOMMENDATION_POOL_SIZE = 80
-POOL_PAGE_MULTIPLIER = 4
 
 
 def get_feed(
@@ -437,10 +436,7 @@ def get_posts_for_feed(
     if feed_type == "latest":
         return post_query.order_by(*post_order_by(feed_type)).offset(offset).limit(page_size).all()
 
-    pool_size = min(
-        total,
-        max(MIN_RECOMMENDATION_POOL_SIZE, offset + page_size * POOL_PAGE_MULTIPLIER),
-    )
+    pool_size = min(total, MIN_RECOMMENDATION_POOL_SIZE)
     candidates = post_query.order_by(*post_order_by(feed_type)).limit(pool_size).all()
     actual_pool_size = len(candidates)
     candidates = [
@@ -451,4 +447,14 @@ def get_posts_for_feed(
             reverse=True,
         )
     ]
-    return candidates[offset:offset + page_size]
+    page_end = offset + page_size
+    posts = candidates[offset:min(page_end, actual_pool_size)]
+    if len(posts) < page_size and page_end > actual_pool_size:
+        tail_offset = max(offset, actual_pool_size)
+        posts.extend(
+            post_query.order_by(*post_order_by(feed_type))
+            .offset(tail_offset)
+            .limit(page_size - len(posts))
+            .all()
+        )
+    return posts

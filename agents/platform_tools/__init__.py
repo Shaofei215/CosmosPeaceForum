@@ -7,10 +7,11 @@
 
 from agents.platform_tools.context import PlatformToolContext
 from agents.platform_tools.registry import PLATFORM_TOOLS, execute_platform_tool
-from agents.platform_tools.results import PlatformToolError, PlatformToolResult, ToolCursor
+from agents.platform_tools.results import CursorPolicy, PlatformToolError, PlatformToolResult, ToolCursor
 
 __all__ = [
     "PLATFORM_TOOLS",
+    "CursorPolicy",
     "PlatformToolContext",
     "PlatformToolError",
     "PlatformToolResult",
