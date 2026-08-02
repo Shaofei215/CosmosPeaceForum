@@ -52,6 +52,10 @@ class _FakePlatformClient:
         )
         if endpoint.endswith("/follow-status"):
             return {"is_following": False, "is_mutual": False}
+        if method == "POST" and endpoint == "/posts/1/like":
+            return {"is_liked": True, "like_count": 1}
+        if endpoint == "/posts/1":
+            return {**_post_payload(), "id": 1, "content": "post 1", "is_liked": True}
         if endpoint == "/posts/10":
             return _post_payload()
         if endpoint == "/posts/10/comments/201":
@@ -339,6 +343,20 @@ def test_scroll_continues_global_feed_without_args(monkeypatch):
     _install_shared_client(monkeypatch)
 
     first = feed.get_global_feed.invoke({})
+    second = feed.scroll.invoke({})
+
+    assert [post["id"] for post in first["data"]["posts"]] == [1, 2, 3, 4, 5]
+    assert [post["id"] for post in second["data"]["posts"]] == [6, 7, 8, 9, 10]
+
+
+def test_scroll_continues_global_feed_after_same_page_like(monkeypatch):
+    """点赞当前信息流帖子后仍应能继续读取下方帖子。"""
+
+    shared_platform.clear_scroll_cursor()
+    _install_shared_client(monkeypatch)
+
+    first = feed.get_global_feed.invoke({})
+    social.toggle_post_like.invoke({"post_id": 1})
     second = feed.scroll.invoke({})
 
     assert [post["id"] for post in first["data"]["posts"]] == [1, 2, 3, 4, 5]

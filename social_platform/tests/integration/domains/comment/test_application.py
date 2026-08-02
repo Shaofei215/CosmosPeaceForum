@@ -157,3 +157,48 @@ def test_comment_tree_uses_stored_reply_count_without_legacy_recount(db_session)
     focused_reply = comment_service.get_comment_by_id(reply_to_reply.id, user_id=None, db=db)
     assert focused_reply is not None
     assert focused_reply.root_comment_id == root.id
+
+
+def test_recommended_comments_are_stable_across_page_sizes(db_session):
+    """默认评论流不能因滚动 count 变化而重复或漏项。"""
+
+    db = db_session
+    db.add_all(
+        [
+            Comment(
+                post_id=1,
+                owner_id=2,
+                content=f"comment {index}",
+                heat_score=50 - index,
+            )
+            for index in range(50)
+        ]
+    )
+    db.commit()
+
+    whole, total = comment_service.get_comment_tree(
+        post_id=1,
+        user_id=None,
+        skip=0,
+        limit=50,
+        db=db,
+        sort="default",
+        seed="stable-pages",
+    )
+    paged_ids = []
+    for skip in range(0, 50, 5):
+        page, page_total = comment_service.get_comment_tree(
+            post_id=1,
+            user_id=None,
+            skip=skip,
+            limit=5,
+            db=db,
+            sort="default",
+            seed="stable-pages",
+        )
+        assert page_total == total
+        paged_ids.extend(comment.id for comment in page)
+
+    whole_ids = [comment.id for comment in whole]
+    assert paged_ids == whole_ids
+    assert len(paged_ids) == len(set(paged_ids)) == 50

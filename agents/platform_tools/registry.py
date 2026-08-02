@@ -28,6 +28,7 @@ from agents.platform_tools.results import PlatformToolError, PlatformToolResult
 
 
 logger = logging.getLogger(__name__)
+PAGED_FETCH_SIZE = 20
 
 
 @dataclass(frozen=True)
@@ -57,21 +58,50 @@ def _fetch_paged_items_after_offset(
     fetcher: Callable[..., dict[str, Any]],
     offset: int,
     count: int,
+    *,
+    max_page_size: int = 100,
 ) -> tuple[list[dict[str, Any]], bool]:
-    """按 offset 读取页码型平台列表，并只返回实体与是否可继续滚动。"""
+    """按任意 offset 读取页码型列表，并返回准确窗口与后续状态。
 
-    request_size = offset + count
-    if request_size <= 100:
-        response = fetcher(page=1, page_size=request_size)
-        all_items = response.get("data", [])
-        items = all_items[offset : offset + count]
+    Args:
+        fetcher: 接收 page 和 page_size 的平台读取函数。
+        offset: 已经读取的实体数量。
+        count: 本次希望读取的实体数量。
+        max_page_size: 对应平台接口允许的最大页大小。
+
+    Returns:
+        tuple[list[dict[str, Any]], bool]: 当前窗口实体与是否仍有后续内容。
+    """
+
+    page_size = max(1, min(PAGED_FETCH_SIZE, max_page_size))
+    window_end = offset + count
+    first_page = (offset // page_size) + 1
+    last_page = ((window_end - 1) // page_size) + 1
+    items: list[dict[str, Any]] = []
+    total: int | None = None
+    last_pagination: dict[str, Any] | None = None
+
+    for page in range(first_page, last_page + 1):
+        response = fetcher(page=page, page_size=page_size)
+        page_items = response.get("data", [])
         pagination = response.get("pagination") or {}
-        total = int(pagination.get("total", len(all_items)) or 0)
-        return items, offset + len(items) < total
+        last_pagination = pagination
+        if "total" in pagination:
+            total = int(pagination.get("total", 0) or 0)
 
-    response = fetcher(page=(offset // count) + 1, page_size=count)
-    items = response.get("data", [])
-    return items, has_next_from_pagination(response.get("pagination"), len(items))
+        page_start = (page - 1) * page_size
+        slice_start = max(offset - page_start, 0)
+        slice_end = min(window_end - page_start, len(page_items))
+        if slice_start < slice_end:
+            items.extend(page_items[slice_start:slice_end])
+
+        if not has_next_from_pagination(pagination, len(page_items)):
+            break
+
+    next_offset = offset + len(items)
+    if total is not None:
+        return items, next_offset < total
+    return items, has_next_from_pagination(last_pagination, len(items))
 
 
 def _get_global_feed(ctx: PlatformToolContext, args: schemas.FeedArguments) -> PlatformToolResult:
@@ -264,6 +294,7 @@ def _scroll(ctx: PlatformToolContext, args: schemas.ScrollArguments) -> Platform
             ),
             offset,
             count,
+            max_page_size=50,
         )
         if search_type == "user":
             users = [normalize_user(item, ctx) for item in items]
@@ -441,6 +472,7 @@ def _update_profile(ctx: PlatformToolContext, args: schemas.UpdateProfileArgumen
     return PlatformToolResult(
         action=f"修改了自己的{'和'.join(changed_fields)}",
         data=user,
+        cursor_policy="preserve",
     )
 
 
@@ -578,7 +610,7 @@ def _create_post(ctx: PlatformToolContext, args: schemas.CreatePostArguments) ->
         action = f"发布了带投票的新帖子：{truncate_text(args.content)}"
     else:
         action = f"发布了新帖子：{truncate_text(args.content)}"
-    return PlatformToolResult(action=action, data={"post": created})
+    return PlatformToolResult(action=action, data={"post": created}, cursor_policy="preserve")
 
 
 def _create_comment(ctx: PlatformToolContext, args: schemas.CreateCommentArguments) -> PlatformToolResult:
@@ -618,6 +650,7 @@ def _create_comment(ctx: PlatformToolContext, args: schemas.CreateCommentArgumen
     return PlatformToolResult(
         action=action,
         data={"post": post, "parent_comment": parent, "new_comment": new_comment},
+        cursor_policy="preserve",
     )
 
 
@@ -629,7 +662,7 @@ def _toggle_post_like(ctx: PlatformToolContext, args: schemas.TogglePostLikeArgu
     author = post.get("author_username", "") if post else ""
     content = truncate_text(post.get("content", "") if post else "", 120)
     action = f"点赞了 @{author} 的帖子：{content}" if author and content else f"点赞了帖子 {args.post_id}"
-    return PlatformToolResult(action=action, data={"post": post})
+    return PlatformToolResult(action=action, data={"post": post}, cursor_policy="preserve")
 
 
 def _vote_post_poll(ctx: PlatformToolContext, args: schemas.VotePostPollArguments) -> PlatformToolResult:
@@ -649,6 +682,7 @@ def _vote_post_poll(ctx: PlatformToolContext, args: schemas.VotePostPollArgument
     return PlatformToolResult(
         action=f"参与了帖子 {args.post_id} 的投票，选择了「{option_text}」",
         data={"poll": poll_result, "post": post},
+        cursor_policy="preserve",
     )
 
 
@@ -661,7 +695,11 @@ def _toggle_comment_like(ctx: PlatformToolContext, args: schemas.ToggleCommentLi
     author = comment.get("author_username", "") if comment else ""
     content = truncate_text(comment.get("content", "") if comment else "", 120)
     action = f"点赞了 @{author} 的评论：{content}" if author and content else f"点赞了评论 {args.comment_id}"
-    return PlatformToolResult(action=action, data={"post": post, "comment": comment})
+    return PlatformToolResult(
+        action=action,
+        data={"post": post, "comment": comment},
+        cursor_policy="preserve",
+    )
 
 
 def _toggle_follow(ctx: PlatformToolContext, args: schemas.ToggleFollowArguments) -> PlatformToolResult:
@@ -681,7 +719,7 @@ def _toggle_follow(ctx: PlatformToolContext, args: schemas.ToggleFollowArguments
         action = f"取消关注了用户 {args.user_id}"
     else:
         action = f"关注了用户 {args.user_id}"
-    return PlatformToolResult(action=action, data=user)
+    return PlatformToolResult(action=action, data=user, cursor_policy="preserve")
 
 
 def _delete_content(ctx: PlatformToolContext, args: schemas.DeleteContentArguments) -> PlatformToolResult:
@@ -697,6 +735,7 @@ def _delete_content(ctx: PlatformToolContext, args: schemas.DeleteContentArgumen
             "content_id": args.content_id,
             "deleted": True,
         },
+        cursor_policy="preserve",
     )
 
 
@@ -722,6 +761,7 @@ def _report_content(ctx: PlatformToolContext, args: schemas.ReportContentArgumen
             "report_reason": reason,
             "report": report,
         },
+        cursor_policy="preserve",
     )
 
 
@@ -741,7 +781,7 @@ def _repost(ctx: PlatformToolContext, args: schemas.RepostArguments) -> Platform
         if origin_author and origin_content
         else f"转发了{args.source_type} {args.source_id}：{repost_content}"
     )
-    return PlatformToolResult(action=action, data={"post": post})
+    return PlatformToolResult(action=action, data={"post": post}, cursor_policy="preserve")
 
 
 def _view_full_hot_topics(ctx: PlatformToolContext, args: schemas.EmptyArguments) -> PlatformToolResult:

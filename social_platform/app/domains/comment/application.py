@@ -20,7 +20,6 @@ from social_platform.app.domains.mention import application as mention_service
 
 
 MIN_COMMENT_POOL_SIZE = 40
-COMMENT_POOL_PAGE_MULTIPLIER = 4
 
 
 class PostNotFoundError(Exception):
@@ -141,21 +140,28 @@ def _get_comments_for_tree(query, skip: int, limit: int, total: int, sort: str, 
     if sort == "latest":
         return query.order_by(*_comment_order_by(sort)).offset(skip).limit(limit).all()
 
-    pool_size = min(
-        total,
-        max(MIN_COMMENT_POOL_SIZE, skip + limit * COMMENT_POOL_PAGE_MULTIPLIER),
-    )
+    pool_size = min(total, MIN_COMMENT_POOL_SIZE)
     candidates = query.order_by(*_comment_order_by(sort)).limit(pool_size).all()
-    pool_size = len(candidates)
+    actual_pool_size = len(candidates)
     candidates = [
         comment
         for _, comment in sorted(
             enumerate(candidates),
-            key=lambda item: _comment_recommendation_rank(item[0], pool_size, item[1], seed),
+            key=lambda item: _comment_recommendation_rank(item[0], actual_pool_size, item[1], seed),
             reverse=True,
         )
     ]
-    return candidates[skip:skip + limit]
+    page_end = skip + limit
+    comments = candidates[skip:min(page_end, actual_pool_size)]
+    if len(comments) < limit and page_end > actual_pool_size:
+        tail_offset = max(skip, actual_pool_size)
+        comments.extend(
+            query.order_by(*_comment_order_by(sort))
+            .offset(tail_offset)
+            .limit(limit - len(comments))
+            .all()
+        )
+    return comments
 
 
 def _resolve_thread_root_id(comment: Comment, db: Session) -> int:

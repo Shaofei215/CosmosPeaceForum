@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 ToolCursor = dict[str, Any]
+CursorPolicy = Literal["replace", "preserve"]
 
 
 class PlatformToolError(Exception):
@@ -20,8 +21,10 @@ class PlatformToolResult:
         action: 自然语言操作记录。
         data: 工具返回给 Agent 的结构化数据。
         cursor: 下一次 `scroll` 使用的未签名游标状态。
+        cursor_policy: 是否用本次结果替换当前滚动游标；同页互动应保留已有游标。
     """
 
     action: str
     data: dict[str, Any]
     cursor: ToolCursor | None = None
+    cursor_policy: CursorPolicy = "replace"

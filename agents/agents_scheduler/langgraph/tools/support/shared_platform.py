@@ -144,5 +144,6 @@ def run_shared_tool(name: str, arguments: dict[str, Any]) -> PlatformToolResult:
         detail = f": {exc.detail}" if exc.detail else ""
         raise ToolExecutionError(f"{exc}{detail}") from exc
 
-    set_scroll_cursor(result.cursor)
+    if result.cursor_policy == "replace":
+        set_scroll_cursor(result.cursor)
     return result
