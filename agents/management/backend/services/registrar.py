@@ -375,7 +375,7 @@ def notify_scheduler_reload(
     通知 scheduler 重载配置
 
     Args:
-        reload_type: system / model / agent / all
+        reload_type: system / model / agent / agents / relations / all
         target_id: 目标 ID（model 或 agent 类型时需要），agents 类型时传 ID 列表
         action: restart / start / stop（仅 agent 类型时有效）
 
@@ -400,6 +400,9 @@ def notify_scheduler_reload(
         endpoint = "/internal/reload/agents"
         agent_ids = [target_id] if isinstance(target_id, int) else list(target_id or [])
         payload = {"agent_ids": agent_ids, "action": action}
+    elif reload_type == "relations":
+        endpoint = "/internal/reload/relations"
+        payload = None
     else:
         return False
 

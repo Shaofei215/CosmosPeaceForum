@@ -86,6 +86,27 @@ class TestAIUserScheduler:
         assert scheduler._stop_event.is_set() is True
         assert scheduler._stop_requested_at is not None
 
+    def test_scheduler_stop_reports_timeout_when_thread_remains_alive(self):
+        """等待结束后线程仍存活时应显式返回 ``False``。"""
+        scheduler = AIUserScheduler(
+            username="test_user",
+            name="Test",
+            agent_id=1,
+            monthly_logins=30,
+            password="password",
+            personality_prompt="friendly",
+            personal_signature="sig",
+            time_system=MagicMock(),
+        )
+        with (
+            patch.object(scheduler, "is_alive", side_effect=[True, True]),
+            patch.object(scheduler, "join") as join,
+        ):
+            stopped = scheduler.stop(timeout=0.01, wait=True)
+
+        assert stopped is False
+        join.assert_called_once_with(timeout=0.01)
+
     def test_scheduler_zero_monthly_logins(self):
         mock_time = MagicMock()
         mock_time.get_scaled_time.return_value = MagicMock()
@@ -286,6 +307,231 @@ class TestAgentSchedulerManager:
 
         assert created is False
         assert manager.schedulers == {}
+
+    def test_concurrent_restart_agent_never_keeps_two_live_schedulers(self) -> None:
+        """并发重启可以顺序执行，但任意时刻只能存在一个存活调度线程。"""
+        live_count = 0
+        max_live_count = 0
+        live_lock = threading.Lock()
+
+        class FakeScheduler:
+            def __init__(self, **kwargs):
+                self.agent_id = kwargs["agent_id"]
+                self.alive = False
+                self.stopping = False
+
+            @property
+            def is_stopping(self):
+                return self.stopping and self.alive
+
+            def start(self):
+                nonlocal live_count, max_live_count
+                with live_lock:
+                    self.alive = True
+                    live_count += 1
+                    max_live_count = max(max_live_count, live_count)
+
+            def stop(self, timeout=5, wait=True):
+                nonlocal live_count
+                with live_lock:
+                    if self.alive:
+                        self.alive = False
+                        live_count -= 1
+                self.stopping = True
+                return True
+
+            def is_alive(self):
+                return self.alive
+
+        agent = {
+            "id": 1,
+            "name": "测试角色",
+            "username": "test_user",
+            "is_active": True,
+        }
+        db = MagicMock()
+        db.get_agent_config.return_value = agent
+
+        with (
+            patch("agents.agents_scheduler.scheduler.scheduler.get_db_client", return_value=db),
+            patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config") as config,
+            patch("agents.agents_scheduler.scheduler.scheduler.AIUserScheduler", FakeScheduler),
+        ):
+            config.return_value.ai_user_password = "password"
+            manager = AgentSchedulerManager(time_system=MagicMock())
+            manager._is_running = True
+            original = FakeScheduler(agent_id=1)
+            original.start()
+            manager.schedulers[1] = original
+
+            workers = [threading.Thread(target=manager.restart_agent, args=(1,)) for _ in range(2)]
+            for worker in workers:
+                worker.start()
+            for worker in workers:
+                worker.join(timeout=2)
+
+            assert all(not worker.is_alive() for worker in workers)
+            assert max_live_count == 1
+            assert len(manager.schedulers) == 1
+            assert sum(scheduler.is_alive() for scheduler in manager.schedulers.values()) == 1
+            manager.stop(wait=False)
+
+    def test_restart_timeout_defers_single_replacement_until_old_thread_exits(self) -> None:
+        """停止超时后保留旧实例，待其退出后按最新配置替换一次。"""
+        release_old = threading.Event()
+        created = []
+
+        class SlowScheduler:
+            def __init__(self):
+                self.alive = True
+                self.stopping = False
+
+            @property
+            def is_stopping(self):
+                return self.stopping and self.alive
+
+            def stop(self, timeout=5, wait=True):
+                self.stopping = True
+                return False
+
+            def join(self, timeout=None):
+                release_old.wait(timeout)
+                if release_old.is_set():
+                    self.alive = False
+
+            def is_alive(self):
+                return self.alive
+
+        class ReplacementScheduler:
+            def __init__(self, **kwargs):
+                self.alive = False
+                self.stopping = False
+                created.append(self)
+
+            @property
+            def is_stopping(self):
+                return self.stopping and self.alive
+
+            def start(self):
+                self.alive = True
+
+            def stop(self, timeout=5, wait=True):
+                self.stopping = True
+                self.alive = False
+                return True
+
+            def is_alive(self):
+                return self.alive
+
+        agent = {
+            "id": 1,
+            "name": "测试角色",
+            "username": "latest_user",
+            "is_active": True,
+        }
+        db = MagicMock()
+        db.get_agent_config.return_value = agent
+
+        with (
+            patch("agents.agents_scheduler.scheduler.scheduler.get_db_client", return_value=db),
+            patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config") as config,
+            patch(
+                "agents.agents_scheduler.scheduler.scheduler.AIUserScheduler",
+                ReplacementScheduler,
+            ),
+        ):
+            config.return_value.ai_user_password = "password"
+            manager = AgentSchedulerManager(time_system=MagicMock())
+            manager._is_running = True
+            old_scheduler = SlowScheduler()
+            manager.schedulers[1] = old_scheduler
+
+            assert manager.restart_agent(1) is True
+            deferred_worker = manager._deferred_restarts[1]
+            assert manager.schedulers[1] is old_scheduler
+            assert created == []
+
+            assert manager.restart_agent(1) is True
+            assert manager._deferred_restarts[1] is deferred_worker
+            release_old.set()
+            deferred_worker.join(timeout=2)
+
+            assert not deferred_worker.is_alive()
+            assert len(created) == 1
+            assert manager.schedulers[1] is created[0]
+            assert created[0].is_alive()
+            manager.stop(wait=False)
+
+    def test_restart_inactive_agent_does_not_create_scheduler(self) -> None:
+        """未启用角色的重启只收敛到停止状态。"""
+        agent = {"id": 1, "name": "停用角色", "username": "inactive", "is_active": False}
+        db = MagicMock()
+        db.get_agent_config.return_value = agent
+        manager = AgentSchedulerManager(time_system=MagicMock())
+        manager._is_running = True
+
+        with (
+            patch("agents.agents_scheduler.scheduler.scheduler.get_db_client", return_value=db),
+            patch.object(manager, "_create_scheduler_locked") as create_scheduler,
+        ):
+            assert manager.restart_agent(1) is True
+
+        create_scheduler.assert_not_called()
+        assert manager.schedulers == {}
+
+    def test_scheduler_start_failure_rolls_back_registration(self) -> None:
+        """线程启动异常后不能在管理字典中留下未启动实例。"""
+        class FailingScheduler:
+            def __init__(self, **kwargs):
+                pass
+
+            def is_alive(self):
+                return False
+
+            def start(self):
+                raise RuntimeError("start failed")
+
+        manager = AgentSchedulerManager(time_system=MagicMock())
+        with (
+            patch("agents.agents_scheduler.scheduler.scheduler.get_scheduler_config") as config,
+            patch("agents.agents_scheduler.scheduler.scheduler.AIUserScheduler", FailingScheduler),
+        ):
+            config.return_value.ai_user_password = "password"
+            created = manager._create_scheduler({"id": 1, "name": "角色", "username": "agent"})
+
+        assert created is False
+        assert manager.schedulers == {}
+
+    def test_restart_all_requests_keep_one_worker_and_one_trailing_run(self) -> None:
+        """执行中的全量重启把请求合并成至多一次尾部重启。"""
+        first_started = threading.Event()
+        release_first = threading.Event()
+        call_count = 0
+        manager = AgentSchedulerManager(time_system=MagicMock())
+        manager._is_running = True
+
+        def fake_restart_all():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                first_started.set()
+                release_first.wait(timeout=2)
+
+        with patch.object(manager, "restart_all", side_effect=fake_restart_all):
+            assert manager.request_restart_all() is True
+            assert first_started.wait(timeout=1)
+            worker = manager._restart_all_worker
+            assert worker is not None
+            assert manager.request_restart_all() is True
+            assert manager.request_restart_all() is True
+            assert manager._restart_all_worker is worker
+
+            release_first.set()
+            worker.join(timeout=2)
+
+        assert not worker.is_alive()
+        assert call_count == 2
+        assert manager._restart_all_worker is None
 
 
 class TestMemoryDecayScheduler:

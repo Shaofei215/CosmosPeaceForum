@@ -1022,7 +1022,7 @@ def update_agent_relation(
     if updated is None:
         raise HTTPException(status_code=404, detail="Agent 不存在")
 
-    notify_scheduler_reload("all")
+    notify_scheduler_reload("relations")
 
     create_log(db, current_admin, "update_agent_relation", "agent", agent_id)
 

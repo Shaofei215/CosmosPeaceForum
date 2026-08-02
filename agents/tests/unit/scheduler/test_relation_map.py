@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -159,6 +161,58 @@ class TestRelationMappingService:
             rm.build_from_db()
         repr_str = repr(rm)
         assert "RelationMappingService" in repr_str
+
+    def test_rebuild_publishes_only_complete_snapshots(self):
+        """重建过程中读取方只能看到完整旧快照或完整新快照。"""
+        service = RelationMappingService()
+        old_configs = [
+            {
+                "id": 1,
+                "social_platform_user_id": 101,
+                "username": "owner",
+                "name": "Owner",
+                "knows_ids": [2],
+            },
+            {
+                "id": 2,
+                "social_platform_user_id": 202,
+                "username": "friend",
+                "name": "旧名字",
+                "knows_ids": [],
+            },
+        ]
+        new_configs = [
+            old_configs[0],
+            {**old_configs[1], "name": "新名字"},
+        ]
+        with patch("agents.agents_scheduler.scheduler.relation_map.get_db_client") as db:
+            db.return_value.get_agent_configs.return_value = old_configs
+            service.build_from_db()
+
+        rebuild_paused = threading.Event()
+        continue_rebuild = threading.Event()
+        original_add = UsernameMap.add
+
+        def blocking_add(username_map, user_id, username, name):
+            if not rebuild_paused.is_set():
+                rebuild_paused.set()
+                continue_rebuild.wait(timeout=2)
+            original_add(username_map, user_id, username, name)
+
+        with (
+            patch("agents.agents_scheduler.scheduler.relation_map.get_db_client") as db,
+            patch.object(UsernameMap, "add", new=blocking_add),
+        ):
+            db.return_value.get_agent_configs.return_value = new_configs
+            worker = threading.Thread(target=service.build_from_db)
+            worker.start()
+            assert rebuild_paused.wait(timeout=1)
+            assert service.expand_author("friend", 202, 101) == "friend（旧名字）"
+            continue_rebuild.set()
+            worker.join(timeout=2)
+
+        assert not worker.is_alive()
+        assert service.expand_author("friend", 202, 101) == "friend（新名字）"
 
 
 class TestRelationMapFunctions:

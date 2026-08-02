@@ -8,6 +8,7 @@ Scheduler 内部 HTTP 接口服务
 - POST /internal/reload/system  - 重载系统配置
 - POST /internal/reload/model   - 重载模型配置
 - POST /internal/reload/agent   - 重载 Agent 配置
+- POST /internal/reload/relations - 重载角色关系映射
 - POST /internal/reload/all     - 重载全部配置
 - POST /internal/session-injections - 添加下一次会话注入
 """
@@ -125,6 +126,8 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
                 self._handle_reload_agent()
             elif path == '/internal/reload/agents':
                 self._handle_reload_agents()
+            elif path == '/internal/reload/relations':
+                self._handle_reload_relations()
             elif path == '/internal/reload/all':
                 self._handle_reload_all()
             elif path == '/internal/session-injections':
@@ -276,6 +279,18 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             logger.exception("批量 Agent 配置重载失败: %s", e)
             self._send_json_response(500, {"error": str(e)})
 
+    def _handle_reload_relations(self) -> None:
+        """仅热更新角色关系映射，不重启任何角色线程。"""
+        try:
+            from agents.agents_scheduler.scheduler.relation_map import rebuild_relation_maps
+
+            rebuild_relation_maps()
+            logger.info("角色关系映射已重载")
+            self._send_json_response(200, {"message": "relations reloaded"})
+        except Exception as e:
+            logger.exception("角色关系映射重载失败: %s", e)
+            self._send_json_response(500, {"error": str(e)})
+
     def _handle_reload_all(self):
         """重载全部配置"""
         try:
@@ -296,31 +311,18 @@ class SchedulerInternalHandler(BaseHTTPRequestHandler):
             reload_time_scale()
             rebuild_relation_maps()
 
-            if self.scheduler_manager:
-                threading.Thread(
-                    target=self._restart_all_agents_in_background,
-                    name="scheduler-reload-all",
-                    daemon=True,
-                ).start()
+            if not self.scheduler_manager:
+                self._send_json_response(503, {"error": "scheduler manager unavailable"})
+                return
+            if not self.scheduler_manager.request_restart_all():
+                self._send_json_response(503, {"error": "scheduler manager stopped"})
+                return
 
             logger.info("[热更新] 全部配置已重载")
             self._send_json_response(200, {"message": "all config reloaded"})
         except Exception as e:
             logger.exception("全部配置重载失败: %s", e)
             self._send_json_response(500, {"error": str(e)})
-
-    def _restart_all_agents_in_background(self) -> None:
-        """
-        后台重启所有 Agent 调度线程。
-
-        reload/all 由 management 后端同步调用，HTTP 客户端有较短超时时间。
-        将耗时的线程重启动作放到后台，避免调用方先断开导致 Broken pipe。
-        """
-        try:
-            if self.scheduler_manager:
-                self.scheduler_manager.restart_all()
-        except Exception as e:
-            logger.exception("[热更新] 后台重启全部 Agent 失败: %s", e)
 
     def _handle_session_injections(self):
         """添加下一次登录会话使用的一次性注入。"""
