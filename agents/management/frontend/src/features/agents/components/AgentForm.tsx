@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { agentApi } from '@/shared/api/modules';
 import type { AgentConfig, AgentCreate, AgentUpdate, AgentRelationUpdate } from '@/shared/types/api';
+import { buildAgentSavePlan } from './agentSavePlan';
 import {
   Button, Input, Textarea, Card, CardContent, CardHeader, CardTitle,
   Skeleton,
@@ -127,24 +128,22 @@ export default function AgentFormPage({
       });
     } else if (agent) {
       try {
-        await updateMutation.mutateAsync({
-          id: agent.id,
-          data: {
-            username: username.trim(),
-            name: name.trim(),
-            monthly_logins: monthlyLogins,
-            personal_signature: signature.trim(),
-            personality_prompt: personalityPrompt.trim(),
-            is_active: isActive,
-          },
+        const savePlan = buildAgentSavePlan(agent, {
+          username,
+          name,
+          monthlyLogins,
+          signature,
+          personalityPrompt,
+          isActive,
+          knowsIds: selectedKnowsIds,
+          bidirectional,
         });
-        await relationMutation.mutateAsync({
-          id: agent.id,
-          data: {
-            knows_ids: Array.from(selectedKnowsIds),
-            bidirectional,
-          },
-        });
+        if (savePlan.agentUpdate) {
+          await updateMutation.mutateAsync({ id: agent.id, data: savePlan.agentUpdate });
+        }
+        if (savePlan.relationUpdate) {
+          await relationMutation.mutateAsync({ id: agent.id, data: savePlan.relationUpdate });
+        }
         if (onSuccess) {
           onSuccess();
         } else {

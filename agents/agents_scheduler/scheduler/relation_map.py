@@ -1,6 +1,7 @@
 # 角色关系映射模块
 # 从数据库读取 Agent 配置，构建关系映射表
 import re
+import threading
 from typing import Dict, List, Set, Optional
 
 from agents.management.backend.db_client import get_db_client
@@ -96,56 +97,68 @@ class RelationMappingService:
     """
 
     _instance: Optional['RelationMappingService'] = None
+    _instance_lock = threading.Lock()
 
     def __new__(cls) -> 'RelationMappingService':
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
+        with cls._instance_lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
 
     def __init__(self):
-        if self._initialized:
-            return
-        self._relation_maps: Dict[int, RelationMap] = {}
-        self._username_map = UsernameMap()
-        self._initialized = True
+        with type(self)._instance_lock:
+            if self._initialized:
+                return
+            self._relation_maps: Dict[int, RelationMap] = {}
+            self._username_map = UsernameMap()
+            self._rebuild_lock = threading.Lock()
+            self._state_lock = threading.RLock()
+            self._initialized = True
 
     def build_from_db(self) -> None:
-        """从数据库读取 Agent 配置构建关系映射表"""
-        self._relation_maps.clear()
-        self._username_map = UsernameMap()
+        """从数据库构造完整快照并原子替换当前关系映射。"""
+        with self._rebuild_lock:
+            agent_configs = get_db_client().get_agent_configs()
+            agent_id_to_user_id = {
+                agent['id']: agent['social_platform_user_id']
+                for agent in agent_configs
+                if agent.get('id') is not None
+                and agent.get('social_platform_user_id') is not None
+            }
+            relation_maps: Dict[int, RelationMap] = {}
+            username_map = UsernameMap()
 
-        agent_configs = get_db_client().get_agent_configs()
-        agent_id_to_user_id = {
-            agent['id']: agent['social_platform_user_id']
-            for agent in agent_configs
-            if agent.get('id') is not None and agent.get('social_platform_user_id') is not None
-        }
+            for agent in agent_configs:
+                user_id = agent.get('social_platform_user_id')
+                username = agent.get('username', '')
+                name = agent.get('name', '')
+                knows_ids = [
+                    agent_id_to_user_id[agent_id]
+                    for agent_id in agent.get('knows_ids', [])
+                    if agent_id in agent_id_to_user_id
+                ]
 
-        for agent in agent_configs:
-            user_id = agent.get('social_platform_user_id')
-            username = agent.get('username', '')
-            name = agent.get('name', '')
-            knows_ids = [
-                agent_id_to_user_id[agent_id]
-                for agent_id in agent.get('knows_ids', [])
-                if agent_id in agent_id_to_user_id
-            ]
+                if user_id is None:
+                    continue
 
-            if user_id is None:
-                continue
+                relation_maps[user_id] = RelationMap(user_id, knows_ids)
+                if username and name:
+                    username_map.add(user_id, username, name)
 
-            self._relation_maps[user_id] = RelationMap(user_id, knows_ids)
-            if username and name:
-                self._username_map.add(user_id, username, name)
+            with self._state_lock:
+                self._relation_maps = relation_maps
+                self._username_map = username_map
 
     def get_relation_map(self, user_id: int) -> Optional[RelationMap]:
         """获取指定用户的关系映射"""
-        return self._relation_maps.get(user_id)
+        with self._state_lock:
+            return self._relation_maps.get(user_id)
 
     def get_username_map(self) -> UsernameMap:
         """获取用户名映射表"""
-        return self._username_map
+        with self._state_lock:
+            return self._username_map
 
     def expand_author(
         self,
@@ -154,20 +167,24 @@ class RelationMappingService:
         owner_id: int
     ) -> str:
         """拓展作者显示名称"""
-        relation_map = self.get_relation_map(owner_id)
-        if relation_map is None:
-            return author_username
-
-        return self._username_map.get_display_name(author_username, author_id, relation_map)
+        with self._state_lock:
+            relation_map = self._relation_maps.get(owner_id)
+            if relation_map is None:
+                return author_username
+            return self._username_map.get_display_name(
+                author_username,
+                author_id,
+                relation_map,
+            )
 
     def expand_content_mentions(self, content: str, owner_id: int) -> str:
         """拓展内容中的 @mention"""
-        relation_map = self.get_relation_map(owner_id)
-        if relation_map is None:
-            return content
-
-        knows_ids = relation_map.knows_ids
-        username_map = self._username_map
+        with self._state_lock:
+            relation_map = self._relation_maps.get(owner_id)
+            if relation_map is None:
+                return content
+            knows_ids = relation_map.knows_ids
+            username_map = self._username_map
 
         def replace_mention(match):
             username = match.group(1)
@@ -181,13 +198,15 @@ class RelationMappingService:
 
     def get_all_known_users(self, owner_id: int) -> List[int]:
         """获取当前用户认识的所有用户 ID"""
-        relation_map = self.get_relation_map(owner_id)
-        if relation_map is None:
-            return []
-        return list(relation_map.knows_ids)
+        with self._state_lock:
+            relation_map = self._relation_maps.get(owner_id)
+            if relation_map is None:
+                return []
+            return list(relation_map.knows_ids)
 
     def __repr__(self) -> str:
-        return f"RelationMappingService(loaded_users={len(self._relation_maps)})"
+        with self._state_lock:
+            return f"RelationMappingService(loaded_users={len(self._relation_maps)})"
 
 
 def get_relation_mapping_service() -> RelationMappingService:
