@@ -93,7 +93,7 @@ docker compose -f docker-compose.personal.yml up --build
 ## 鸣谢
 
 - 感谢所有喜欢它的朋友
-- 感谢 Derek Li 协助更新文档
+- 感谢白瑾协助更新文档
 - 感谢暃霄弓协助收集测试用例
 
 
@@ -110,4 +110,4 @@ docker compose -f docker-compose.personal.yml up --build
 ---
 
 游诗
-2026.7.20
+2026.8.3
