@@ -66,6 +66,12 @@ platforms; do not invent startup arguments or environment variables based on ass
 
 ## Working Principles
 
+- Solve problems from first principles and address root causes rather than layering
+  patchwork fixes, while keeping the change scoped to the behavior being corrected.
+- Prefer inlining for simple, single-use constants and helper logic. Extract them when
+  doing so improves reuse, testability, domain clarity, or readability.
+- Do not guess about unclear behavior. Before changing code, inspect the relevant
+  implementation, callers, tests, and documentation until the uncertainty is resolved.
 - Read the relevant implementation, tests, and nearby documentation before reaching a
   conclusion.
 - Make changes in the module that actually owns the behavior. Keep the scope minimal and
