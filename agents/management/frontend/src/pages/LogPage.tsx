@@ -13,6 +13,7 @@ const actionLabels: Record<string, string> = {
   start_agent: '启动角色',
   stop_agent: '停止角色',
   import_agents: '批量导入角色',
+  export_agents: '导出角色配置',
   batch_start_agents: '批量启动角色',
   batch_stop_agents: '批量停止角色',
   batch_delete_agents: '批量删除角色',

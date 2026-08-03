@@ -16,8 +16,9 @@ from datetime import datetime, time as datetime_time
 from agents.management.backend.core.timezone import local_now
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlmodel import col, func, select
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session
+from starlette.background import BackgroundTask
 
 from agents.management.backend.core.database import get_db
 from agents.management.backend.core.config import get_config
@@ -237,6 +238,42 @@ def list_agents(
     items, total = agent_service.list_agents(db, skip, limit)
     responses = [agent_service.agent_to_response(a) for a in items]
     return AgentListResponse(items=responses, total=total)
+
+
+@router.get("/export", response_class=FileResponse)
+def export_agents(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
+):
+    """导出全部角色为批量导入兼容的 ZIP 压缩包。"""
+    try:
+        export_archive = agent_service.export_agents_to_zip(db, _get_api_base_url(db))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        create_log(
+            db,
+            current_admin,
+            "export_agents",
+            "agent",
+            details={
+                "count": export_archive.agent_count,
+                "avatar_count": export_archive.avatar_count,
+            },
+        )
+    except Exception:
+        if os.path.exists(export_archive.path):
+            os.remove(export_archive.path)
+        raise
+
+    filename = f"agents_config_{local_now().strftime('%Y%m%d_%H%M%S')}.zip"
+    return FileResponse(
+        path=export_archive.path,
+        media_type="application/zip",
+        filename=filename,
+        background=BackgroundTask(os.remove, export_archive.path),
+    )
 
 
 @router.get("/dashboard-stats", response_model=DashboardStatsResponse)

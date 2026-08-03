@@ -148,6 +148,13 @@ class ApiClient {
       headers: { 'Content-Type': undefined },
     });
   }
+
+  async download(url: string): Promise<Blob> {
+    return this.client.get(url, {
+      responseType: 'blob',
+      timeout: 120_000,
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

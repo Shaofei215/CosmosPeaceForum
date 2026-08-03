@@ -4,19 +4,33 @@ Management Backend - Agent 配置服务
 
 import json
 import logging
+import mimetypes
 import os
 import tempfile
 import zipfile
+from dataclasses import dataclass
 from datetime import datetime
-from agents.management.backend.core.timezone import local_now
 from typing import List, Optional
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
+import requests
 from sqlmodel import Session, col, select
 
+from agents.logging_config import get_outbound_request_headers
+from agents.management.backend.core.timezone import local_now
 from agents.management.backend.models.agent_config import AgentConfig
 from agents.management.backend.schemas import AgentCreate, AgentResponse, AgentUpdate
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AgentExportArchive:
+    """角色配置导出压缩包及其统计信息。"""
+
+    path: str
+    agent_count: int
+    avatar_count: int
 
 
 def list_agents(db: Session, skip: int = 0, limit: int = 100) -> tuple[List[AgentConfig], int]:
@@ -176,6 +190,190 @@ def agent_to_response(agent: AgentConfig) -> AgentResponse:
         total_login_count=agent.total_login_count,
         created_at=agent.created_at,
         updated_at=agent.updated_at,
+    )
+
+
+def _resolve_avatar_download_url(api_base_url: str, avatar_url: str) -> Optional[str]:
+    """将公开平台返回的头像地址解析为可下载的 HTTP(S) URL。"""
+    parsed_avatar = urlsplit(avatar_url)
+    if parsed_avatar.scheme:
+        return avatar_url if parsed_avatar.scheme in {"http", "https"} else None
+    if parsed_avatar.netloc:
+        return None
+
+    parsed_api = urlsplit(api_base_url)
+    platform_root = urlunsplit((parsed_api.scheme, parsed_api.netloc, "/", "", ""))
+    return urljoin(platform_root, avatar_url.lstrip("/"))
+
+
+def _avatar_filename(avatar_url: str, user_id: int, content_type: str) -> str:
+    """根据头像 URL 和响应类型生成安全的归档文件名。"""
+    decoded_path = unquote(urlsplit(avatar_url).path).replace("\\", "/")
+    filename = decoded_path.rsplit("/", 1)[-1]
+    if not filename or filename in {".", ".."}:
+        filename = f"avatar_{user_id}"
+
+    if "." not in filename:
+        mime_type = content_type.split(";", 1)[0].strip().lower()
+        extension = mimetypes.guess_extension(mime_type) if mime_type else None
+        filename = f"{filename}{extension or '.bin'}"
+    return filename
+
+
+def _unique_avatar_filename(
+    filename: str,
+    user_id: int,
+    source_url: str,
+    archived_sources: dict[str, str],
+) -> str:
+    """避免不同远程头像在 ZIP 中因同名而相互覆盖。"""
+    if filename not in archived_sources or archived_sources[filename] == source_url:
+        return filename
+
+    stem, extension = os.path.splitext(filename)
+    candidate = f"{stem}_{user_id}{extension}"
+    suffix = 2
+    while candidate in archived_sources and archived_sources[candidate] != source_url:
+        candidate = f"{stem}_{user_id}_{suffix}{extension}"
+        suffix += 1
+    return candidate
+
+
+def _fetch_agent_avatar(
+    api_base_url: str,
+    agent: AgentConfig,
+) -> Optional[tuple[str, bytes, str]]:
+    """从 social_platform 获取角色当前头像。
+
+    Args:
+        api_base_url: social_platform API 根地址。
+        agent: 待导出角色配置。
+
+    Returns:
+        Optional[tuple[str, bytes, str]]: 头像文件名、内容和来源 URL；角色没有
+        公开平台映射、没有头像或下载失败时返回 ``None``。
+    """
+    user_id = agent.social_platform_user_id
+    if user_id is None:
+        return None
+
+    try:
+        profile_response = requests.get(
+            f"{api_base_url}/users/{user_id}",
+            headers=get_outbound_request_headers(),
+            timeout=10,
+        )
+        if profile_response.status_code != 200:
+            logger.warning(
+                "导出角色头像: 获取 %s 的公开平台资料失败: HTTP %d",
+                agent.username,
+                profile_response.status_code,
+            )
+            return None
+
+        profile_data = profile_response.json()
+        if not isinstance(profile_data, dict):
+            logger.warning("导出角色头像: %s 的公开平台资料格式无效", agent.username)
+            return None
+        avatar_url = profile_data.get("avatar_url")
+        if not isinstance(avatar_url, str) or not avatar_url.strip():
+            return None
+        avatar_url = avatar_url.strip()
+        download_url = _resolve_avatar_download_url(api_base_url, avatar_url)
+        if download_url is None:
+            logger.warning("导出角色头像: %s 的头像 URL 协议不受支持", agent.username)
+            return None
+
+        avatar_response = requests.get(download_url, timeout=30)
+        if avatar_response.status_code != 200:
+            logger.warning(
+                "导出角色头像: 下载 %s 的头像失败: HTTP %d",
+                agent.username,
+                avatar_response.status_code,
+            )
+            return None
+
+        filename = _avatar_filename(
+            avatar_url,
+            user_id,
+            avatar_response.headers.get("content-type", ""),
+        )
+        return filename, avatar_response.content, download_url
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("导出角色头像: 获取 %s 的头像失败: %s", agent.username, exc)
+        return None
+
+
+def export_agents_to_zip(db: Session, api_base_url: str) -> AgentExportArchive:
+    """将全部角色导出为批量导入兼容的 ZIP 压缩包。
+
+    Args:
+        db: Management 数据库会话。
+        api_base_url: social_platform API 根地址。
+
+    Returns:
+        AgentExportArchive: 临时 ZIP 路径及导出统计信息。调用方负责删除文件。
+
+    Raises:
+        ValueError: 数据库中没有可导出的角色。
+        OSError: 创建压缩包或读取头像失败。
+    """
+    agents = list(
+        db.exec(select(AgentConfig).order_by(col(AgentConfig.id))).all()
+    )
+    if not agents:
+        raise ValueError("当前数据库中没有可导出的角色")
+
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+            tmp_path = tmp.name
+
+        with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            export_users: list[dict[str, object]] = []
+            archived_sources: dict[str, str] = {}
+            avatar_count = 0
+            for agent in agents:
+                user_config: dict[str, object] = {
+                    "name": agent.name,
+                    "username": agent.username,
+                    "monthly_logins": agent.monthly_logins,
+                    "personal_signature": agent.personal_signature,
+                    "personality_prompt": agent.personality_prompt,
+                }
+
+                avatar = _fetch_agent_avatar(api_base_url, agent)
+                if avatar is not None:
+                    avatar_filename, avatar_content, source_url = avatar
+                    avatar_filename = _unique_avatar_filename(
+                        avatar_filename,
+                        agent.social_platform_user_id or 0,
+                        source_url,
+                        archived_sources,
+                    )
+                    user_config["avatar"] = avatar_filename
+                    if avatar_filename not in archived_sources:
+                        archive.writestr(f"avatar/{avatar_filename}", avatar_content)
+                        archived_sources[avatar_filename] = source_url
+                        avatar_count += 1
+
+                export_users.append(user_config)
+
+            config_json = json.dumps(
+                {"ai_users": export_users},
+                ensure_ascii=False,
+                indent=2,
+            ).encode("utf-8")
+            archive.writestr("ai_users_config.json", config_json)
+    except Exception:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+
+    return AgentExportArchive(
+        path=tmp_path,
+        agent_count=len(export_users),
+        avatar_count=avatar_count,
     )
 
 
