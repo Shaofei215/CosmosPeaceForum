@@ -80,8 +80,10 @@ export const agentApi = {
     return apiClient.upload<AgentListResponse>('/agents/import', formData);
   },
 
-  exportAgents: () =>
-    apiClient.download('/agents/export'),
+  exportAgents: (ids?: number[]) =>
+    ids
+      ? apiClient.postDownload('/agents/batch-export', ids)
+      : apiClient.download('/agents/export'),
 
   uploadAvatar: (id: number, file: File) => {
     const formData = new FormData();

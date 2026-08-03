@@ -240,16 +240,27 @@ def list_agents(
     return AgentListResponse(items=responses, total=total)
 
 
-@router.get("/export", response_class=FileResponse)
-def export_agents(
-    db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
-):
-    """导出全部角色为批量导入兼容的 ZIP 压缩包。"""
+def _build_agent_export_response(
+    db: Session,
+    current_admin: AdminUser,
+    agent_ids: Optional[list[int]] = None,
+) -> FileResponse:
+    """生成角色配置导出响应并记录审计日志。"""
     try:
-        export_archive = agent_service.export_agents_to_zip(db, _get_api_base_url(db))
+        export_archive = agent_service.export_agents_to_zip(
+            db,
+            _get_api_base_url(db),
+            agent_ids=agent_ids,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    details: dict[str, object] = {
+        "count": export_archive.agent_count,
+        "avatar_count": export_archive.avatar_count,
+    }
+    if agent_ids is not None:
+        details["agent_ids"] = agent_ids
 
     try:
         create_log(
@@ -257,23 +268,43 @@ def export_agents(
             current_admin,
             "export_agents",
             "agent",
-            details={
-                "count": export_archive.agent_count,
-                "avatar_count": export_archive.avatar_count,
-            },
+            details=details,
         )
     except Exception:
         if os.path.exists(export_archive.path):
             os.remove(export_archive.path)
         raise
 
-    filename = f"agents_config_{local_now().strftime('%Y%m%d_%H%M%S')}.zip"
+    filename_prefix = "selected_agents_config" if agent_ids is not None else "agents_config"
+    filename = f"{filename_prefix}_{local_now().strftime('%Y%m%d_%H%M%S')}.zip"
     return FileResponse(
         path=export_archive.path,
         media_type="application/zip",
         filename=filename,
         background=BackgroundTask(os.remove, export_archive.path),
     )
+
+
+@router.get("/export", response_class=FileResponse)
+def export_agents(
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
+):
+    """导出全部角色为批量导入兼容的 ZIP 压缩包。"""
+    return _build_agent_export_response(db, current_admin)
+
+
+@router.post("/batch-export", response_class=FileResponse)
+def export_selected_agents(
+    agent_ids: list[int],
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(require_permission(PERMISSION_MANAGE_AGENTS)),
+):
+    """导出选中角色为批量导入兼容的 ZIP 压缩包。"""
+    unique_ids = list(dict.fromkeys(agent_ids))
+    if not unique_ids:
+        raise HTTPException(status_code=400, detail="请选择要导出的角色")
+    return _build_agent_export_response(db, current_admin, unique_ids)
 
 
 @router.get("/dashboard-stats", response_model=DashboardStatsResponse)

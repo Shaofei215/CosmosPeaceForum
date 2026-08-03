@@ -155,6 +155,13 @@ class ApiClient {
       timeout: 120_000,
     });
   }
+
+  async postDownload(url: string, data: unknown): Promise<Blob> {
+    return this.client.post(url, data, {
+      responseType: 'blob',
+      timeout: 120_000,
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

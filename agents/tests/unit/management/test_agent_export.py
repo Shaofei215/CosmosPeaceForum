@@ -248,6 +248,7 @@ def test_export_agents_returns_zip_logs_and_removes_temporary_file(tmp_path: Pat
     export_mock.assert_called_once_with(
         db,
         "http://social-platform:8000/api/v1",
+        agent_ids=None,
     )
     assert archive_path.exists()
     assert response.background is not None
@@ -267,3 +268,94 @@ def test_export_agents_maps_empty_database_to_bad_request() -> None:
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "当前数据库中没有可导出的角色"
+
+
+def test_export_agents_to_zip_filters_selected_agent_ids() -> None:
+    """指定角色 ID 时，数据库查询和导出包都只能包含选中角色。"""
+    selected_agent = AgentConfig(
+        id=2,
+        name="选中角色",
+        username="selected_agent",
+        monthly_logins=18,
+    )
+    db = _mock_db_with_agents([selected_agent])
+
+    result = agent_service.export_agents_to_zip(
+        db,
+        "http://social-platform:8000/api/v1",
+        agent_ids=[2, 2, 9],
+    )
+
+    try:
+        statement = db.exec.call_args.args[0]
+        assert "WHERE agent_configs.id IN" in str(statement)
+        with zipfile.ZipFile(result.path) as archive:
+            config = json.loads(archive.read("ai_users_config.json"))
+            assert [item["username"] for item in config["ai_users"]] == ["selected_agent"]
+    finally:
+        os.remove(result.path)
+
+
+def test_export_selected_agents_deduplicates_ids_and_records_scope(tmp_path: Path) -> None:
+    """批量导出接口应去重角色 ID，并在审计日志中记录实际请求范围。"""
+    archive_path = tmp_path / "selected-export.zip"
+    archive_path.write_bytes(b"zip-content")
+    export_archive = agent_service.AgentExportArchive(
+        path=str(archive_path),
+        agent_count=2,
+        avatar_count=1,
+    )
+    db = MagicMock()
+    admin = SimpleNamespace(id=7)
+
+    with (
+        patch.object(
+            agents_api.agent_service,
+            "export_agents_to_zip",
+            return_value=export_archive,
+        ) as export_mock,
+        patch.object(
+            agents_api,
+            "_get_api_base_url",
+            return_value="http://social-platform:8000/api/v1",
+        ),
+        patch.object(agents_api, "create_log") as create_log,
+        patch.object(agents_api, "local_now", return_value=datetime(2026, 8, 4, 10, 9, 8)),
+    ):
+        response = agents_api.export_selected_agents(
+            agent_ids=[2, 2, 9],
+            db=db,
+            current_admin=admin,
+        )
+
+    export_mock.assert_called_once_with(
+        db,
+        "http://social-platform:8000/api/v1",
+        agent_ids=[2, 9],
+    )
+    create_log.assert_called_once_with(
+        db,
+        admin,
+        "export_agents",
+        "agent",
+        details={"count": 2, "avatar_count": 1, "agent_ids": [2, 9]},
+    )
+    assert response.headers["content-disposition"].endswith(
+        'filename="selected_agents_config_20260804_100908.zip"'
+    )
+    assert response.background is not None
+    asyncio.run(response.background())
+    assert not archive_path.exists()
+
+
+def test_export_selected_agents_rejects_empty_selection() -> None:
+    """批量导出接口必须拒绝空角色列表。"""
+    with pytest.raises(HTTPException) as exc_info:
+        agents_api.export_selected_agents(
+            agent_ids=[],
+            db=MagicMock(),
+            current_admin=MagicMock(),
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "请选择要导出的角色"

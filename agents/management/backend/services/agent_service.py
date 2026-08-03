@@ -304,25 +304,37 @@ def _fetch_agent_avatar(
         return None
 
 
-def export_agents_to_zip(db: Session, api_base_url: str) -> AgentExportArchive:
-    """将全部角色导出为批量导入兼容的 ZIP 压缩包。
+def export_agents_to_zip(
+    db: Session,
+    api_base_url: str,
+    agent_ids: Optional[List[int]] = None,
+) -> AgentExportArchive:
+    """将全部或指定角色导出为批量导入兼容的 ZIP 压缩包。
 
     Args:
         db: Management 数据库会话。
         api_base_url: social_platform API 根地址。
+        agent_ids: 需要导出的角色 ID；省略时导出全部角色。
 
     Returns:
         AgentExportArchive: 临时 ZIP 路径及导出统计信息。调用方负责删除文件。
 
     Raises:
-        ValueError: 数据库中没有可导出的角色。
+        ValueError: 数据库中没有符合范围的可导出角色。
         OSError: 创建压缩包或读取头像失败。
     """
-    agents = list(
-        db.exec(select(AgentConfig).order_by(col(AgentConfig.id))).all()
-    )
+    stmt = select(AgentConfig).order_by(col(AgentConfig.id))
+    if agent_ids is not None:
+        unique_ids = list(dict.fromkeys(agent_ids))
+        if not unique_ids:
+            raise ValueError("请选择要导出的角色")
+        stmt = stmt.where(col(AgentConfig.id).in_(unique_ids))
+
+    agents = list(db.exec(stmt).all())
     if not agents:
-        raise ValueError("当前数据库中没有可导出的角色")
+        if agent_ids is None:
+            raise ValueError("当前数据库中没有可导出的角色")
+        raise ValueError("选中的角色不存在或已被删除")
 
     tmp_path = ""
     try:

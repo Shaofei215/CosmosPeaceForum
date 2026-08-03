@@ -334,7 +334,7 @@ export default function AgentListPage() {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={() => exportMutation.mutate()}
+            onClick={() => exportMutation.mutate(undefined)}
             disabled={exportMutation.isPending || isLoading || (data?.total ?? 0) === 0}
           >
             {exportMutation.isPending ? (
@@ -402,6 +402,19 @@ export default function AgentListPage() {
                 >
                   <FileText size={14} className="mr-1" />
                   提示词注入
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => exportMutation.mutate(Array.from(selectedIds))}
+                  disabled={batchProcessing || exportMutation.isPending}
+                >
+                  {exportMutation.isPending ? (
+                    <Loader2 size={14} className="mr-1 animate-spin" />
+                  ) : (
+                    <Download size={14} className="mr-1" />
+                  )}
+                  导出配置
                 </Button>
                 <Button
                   size="sm"
