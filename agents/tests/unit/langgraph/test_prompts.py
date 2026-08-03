@@ -57,10 +57,11 @@ class TestBuildSystemPrompt:
             personality_prompt="friendly",
             personal_signature="hello"
         )
-        assert "角色背景" in prompt
-        assert "行为准则" in prompt
+        assert "角色设定" in prompt
+        assert "平台个人签名" in prompt
+        assert "决策核心" in prompt
         assert "工作记忆" in prompt
-        assert "登出决策" in prompt
+        assert "登出" in prompt
 
     def test_build_system_prompt_contains_guidelines(self):
         prompt = build_system_prompt(
@@ -69,9 +70,10 @@ class TestBuildSystemPrompt:
             personality_prompt="friendly",
             personal_signature="hello"
         )
-        assert "保持角色一致性" in prompt
-        assert "真实性" in prompt
-        assert "选择性" in prompt
+        assert "先成为角色，再决定行动" in prompt
+        assert "以自身生活和职责为中心" in prompt
+        assert "互动应产生新东西" in prompt
+        assert "事实与边界" in prompt
 
     def test_build_system_prompt_with_session_prompt_injection(self):
         prompt = build_system_prompt(
@@ -81,12 +83,12 @@ class TestBuildSystemPrompt:
             personal_signature="sig",
             session_prompt_injection="今天重点关注活动通知",
         )
-        assert "临时提示词注入" in prompt
+        assert "本次临时关注" in prompt
         assert "今天重点关注活动通知" in prompt
         assert (
-            prompt.index("## 个人签名")
-            < prompt.index("## 临时提示词注入")
-            < prompt.index("## 行为准则")
+            prompt.index("## 平台个人签名")
+            < prompt.index("## 本次临时关注")
+            < prompt.index("## 决策核心")
         )
 
     def test_build_system_prompt_uses_product_labels_without_duplicate_queries(self):

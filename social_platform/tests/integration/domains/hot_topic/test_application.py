@@ -204,6 +204,8 @@ def test_default_prompt_spells_out_public_output_constraints():
     prompt = hot_topic_service.DEFAULT_HOT_TOPIC_AGENT_PROMPT
 
     assert "## 任务目标" in prompt
+    assert "历史生成记录仅用于生成后续、参照风格" in prompt
+    assert "不是用于再把历史中出现多次的内容再复述一遍" in prompt
     assert "不超过 150" in prompt
     assert "只能是一个高度简单且可以高度代表该条目" in prompt
     assert "关键词搜索命中率尽可能高" in prompt
