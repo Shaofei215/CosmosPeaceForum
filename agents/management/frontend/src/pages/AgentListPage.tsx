@@ -17,12 +17,13 @@ import {
   DialogFooter, DialogDescription, Skeleton, Badge, Label,
 } from '@/shared/components/ui';
 import {
-  Plus, Search, Eye, Edit, Trash2, Upload, Loader2, Play, Square, FileText,
+  Plus, Search, Eye, Edit, Trash2, Upload, Download, Loader2, Play, Square, FileText,
   LogIn,
 } from 'lucide-react';
 import { ImportDialog } from '@/features/agents/components/ImportDialog';
 import AgentFormPage from '@/features/agents/components/AgentForm';
 import { formatDate } from '@/shared/lib/format';
+import { buildAgentExportFilename, downloadBlob } from '@/shared/lib/download';
 import type { AgentRuntimeStatus, AgentRuntimeStatusResponse } from '@/shared/types/api';
 import { getAccessToken } from '@/features/auth/tokenStorage';
 
@@ -70,6 +71,7 @@ export default function AgentListPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [showImport, setShowImport] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [showCreateAgent, setShowCreateAgent] = useState(false);
   const [deleteAgentId, setDeleteAgentId] = useState<number | null>(null);
   const [stoppingId, setStoppingId] = useState<number | null>(null);
@@ -203,6 +205,19 @@ export default function AgentListPage() {
     },
   });
 
+  const exportMutation = useMutation({
+    mutationFn: agentApi.exportAgents,
+    onMutate: () => {
+      setExportError('');
+    },
+    onSuccess: (archive) => {
+      downloadBlob(archive, buildAgentExportFilename());
+    },
+    onError: (err: unknown) => {
+      setExportError(getErrorMessage(err, '导出配置失败，请稍后重试'));
+    },
+  });
+
   const filtered = data?.items.filter(
     (a) => a.name.toLowerCase().includes(search.toLowerCase()) ||
            a.username.toLowerCase().includes(search.toLowerCase())
@@ -317,6 +332,18 @@ export default function AgentListPage() {
       <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">角色管理</h1>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => exportMutation.mutate(undefined)}
+            disabled={exportMutation.isPending || isLoading || (data?.total ?? 0) === 0}
+          >
+            {exportMutation.isPending ? (
+              <Loader2 size={16} className="mr-1 animate-spin" />
+            ) : (
+              <Download size={16} className="mr-1" />
+            )}
+            {exportMutation.isPending ? '导出中' : '导出配置'}
+          </Button>
           <Button variant="outline" onClick={() => setShowImport(true)}>
             <Upload size={16} className="mr-1" /> 批量导入
           </Button>
@@ -335,6 +362,12 @@ export default function AgentListPage() {
       {appLoginError && (
         <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {appLoginError}
+        </div>
+      )}
+
+      {exportError && (
+        <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {exportError}
         </div>
       )}
 
@@ -369,6 +402,19 @@ export default function AgentListPage() {
                 >
                   <FileText size={14} className="mr-1" />
                   提示词注入
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => exportMutation.mutate(Array.from(selectedIds))}
+                  disabled={batchProcessing || exportMutation.isPending}
+                >
+                  {exportMutation.isPending ? (
+                    <Loader2 size={14} className="mr-1 animate-spin" />
+                  ) : (
+                    <Download size={14} className="mr-1" />
+                  )}
+                  导出配置
                 </Button>
                 <Button
                   size="sm"
