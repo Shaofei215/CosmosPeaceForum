@@ -11,6 +11,7 @@ from agents.agents_scheduler.langgraph.nodes import (
     _attach_current_unread_count,
     parse_tool_calls,
     _normalize_tool_calls_for_batch,
+    _refresh_short_term_memory,
     start_node,
     recall_memory_node,
     llm_decision_node,
@@ -527,6 +528,63 @@ class TestNormalizeToolCallsForBatch:
         assert len(return_value_tools) == 1
         assert len(no_return_tools) == 1
 
+    def test_short_term_memory_edit_drops_same_batch_logout(self):
+        """交接编辑必须先执行并进入下一次决策，不能被同批登出吞掉。"""
+
+        result = _normalize_tool_calls_for_batch(
+            [
+                {
+                    "name": "edit_short_term_memory",
+                    "args": {"content": "next", "reason": "handoff", "summary": "done"},
+                },
+                {"name": "logout", "args": {"reason": "done"}},
+            ]
+        )
+
+        assert [call["name"] for call in result] == ["edit_short_term_memory"]
+
+    def test_short_term_memory_edit_takes_priority_over_other_return_value(self):
+        """同批误用多个有返回值工具时也应优先保存交接快照。"""
+
+        result = _normalize_tool_calls_for_batch(
+            [
+                {"name": "get_global_feed", "args": {"reason": "browse"}},
+                {
+                    "name": "edit_short_term_memory",
+                    "args": {"content": "next", "reason": "handoff", "summary": "done"},
+                },
+                {"name": "logout", "args": {"reason": "done"}},
+            ]
+        )
+
+        assert [call["name"] for call in result] == ["edit_short_term_memory"]
+
+
+def test_refresh_short_term_memory_uses_newer_persisted_revision() -> None:
+    """管理员在登录期间编辑后，下一次决策应刷新当前 SessionState。"""
+
+    state = {
+        "agent_id": 7,
+        "short_term_memory": "old",
+        "short_term_memory_revision": 2,
+        "short_term_memory_updated_at": 100.0,
+        "short_term_memory_updated_login_count": 3,
+    }
+    db = MagicMock()
+    db.get_short_term_memory.return_value = {
+        "content": "new snapshot",
+        "revision": 3,
+        "updated_at": 200.0,
+        "updated_login_count": 4,
+    }
+
+    with patch("agents.management.backend.db_client.get_db_client", return_value=db):
+        refreshed = _refresh_short_term_memory(state)
+
+    assert refreshed["short_term_memory"] == "new snapshot"
+    assert refreshed["short_term_memory_revision"] == 3
+    assert state["short_term_memory"] == "old"
+
 
 class TestStartNode:
     def test_start_node_resets_state(self, caplog):
@@ -803,6 +861,74 @@ class TestToolExecutionNode:
 
         assert result["username"] == "new_name"
         assert result["personal_signature"] == "new signature"
+
+    def test_short_term_memory_edit_updates_current_session_state(self) -> None:
+        """工具成功后当前 SessionState 应立即采用数据库中的新 revision。"""
+
+        state = {
+            "user_id": 1,
+            "username": "observer",
+            "name": "观察者",
+            "agent_id": 7,
+            "personality_prompt": "观察社区",
+            "personal_signature": "记录变化",
+            "short_term_memory": "old",
+            "short_term_memory_revision": 1,
+            "short_term_memory_updated_at": 100.0,
+            "short_term_memory_updated_login_count": 2,
+            "step_count": 0,
+            "max_steps": 10,
+            "exit_reason": None,
+            "action_history": [],
+            "current_location": "主页（信息流）",
+            "last_tool_result": None,
+            "pending_tool": {
+                "tool_name": "edit_short_term_memory",
+                "args": {
+                    "content": "new snapshot",
+                    "reason": "进度变化",
+                    "summary": "我刚完成第二篇",
+                },
+            },
+            "pending_tools": None,
+            "last_error": None,
+            "summary": None,
+            "recalled_memories": "",
+        }
+        mock_tool = MagicMock()
+        mock_tool.name = "edit_short_term_memory"
+        mock_tool.invoke.return_value = {
+            "action": "更新了短期记忆",
+            "data": {"success": True, "revision": 2},
+        }
+        refreshed = {
+            **state,
+            "short_term_memory": "new snapshot",
+            "short_term_memory_revision": 2,
+            "short_term_memory_updated_at": 200.0,
+            "short_term_memory_updated_login_count": 2,
+        }
+
+        with (
+            patch(
+                "agents.agents_scheduler.langgraph.nodes.get_social_tools",
+                return_value=[mock_tool],
+            ),
+            patch(
+                "agents.agents_scheduler.langgraph.nodes._attach_current_unread_count",
+                side_effect=lambda data: data,
+            ),
+            patch(
+                "agents.agents_scheduler.langgraph.nodes._refresh_short_term_memory",
+                return_value=refreshed,
+            ),
+        ):
+            result = tool_execution_node(state)
+
+        assert result["short_term_memory"] == "new snapshot"
+        assert result["short_term_memory_revision"] == 2
+        assert result["action_history"][0]["reason"] == "进度变化"
+        assert result["action_history"][0]["summary"] == "我刚完成第二篇"
 
 
 class TestShouldContinueEdge:

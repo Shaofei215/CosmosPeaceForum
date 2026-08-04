@@ -311,6 +311,119 @@ class ManagementDBClient:
                 "last_login_at": None,
             }
 
+    def get_short_term_memory(self, agent_id: int) -> dict:
+        """读取内部角色当前的短期记忆快照。
+
+        Args:
+            agent_id: Management 中的角色配置 ID。
+
+        Returns:
+            dict: 当前 Markdown、revision、缩放更新时间和更新时登录次数。记录或表
+            尚不存在时返回显式空状态。
+        """
+
+        empty = {
+            "content": "",
+            "revision": 0,
+            "updated_at": None,
+            "updated_login_count": 0,
+        }
+        try:
+            conn = self._get_connection()
+            try:
+                row = conn.execute(
+                    """
+                    SELECT content, revision, updated_at, updated_login_count
+                    FROM short_term_memories
+                    WHERE id = ?
+                    """,
+                    (agent_id,),
+                ).fetchone()
+                return dict(row) if row else empty
+            finally:
+                conn.close()
+        except (sqlite3.Error, ValueError, TypeError):
+            return empty
+
+    def update_short_term_memory(
+        self,
+        agent_id: int,
+        content: str,
+        updated_at: float,
+    ) -> Optional[dict]:
+        """原子覆盖内部角色短期记忆并递增 revision。
+
+        Args:
+            agent_id: Management 中的角色配置 ID。
+            content: 保存后的完整 Markdown；空字符串表示清空。
+            updated_at: 编辑发生时的 Scheduler 缩放时间戳。
+
+        Returns:
+            Optional[dict]: 新版本元数据；角色、表不存在或写入失败时返回 ``None``。
+        """
+
+        try:
+            conn = self._get_connection()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                agent = conn.execute(
+                    "SELECT total_login_count FROM agent_configs WHERE id = ?",
+                    (agent_id,),
+                ).fetchone()
+                if agent is None:
+                    conn.rollback()
+                    return None
+
+                current = conn.execute(
+                    "SELECT revision FROM short_term_memories WHERE id = ?",
+                    (agent_id,),
+                ).fetchone()
+                updated_login_count = max(0, int(agent["total_login_count"] or 0))
+                if current is None:
+                    revision = 1
+                    conn.execute(
+                        """
+                        INSERT INTO short_term_memories (
+                            id, content, revision, updated_at, updated_login_count
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            agent_id,
+                            content,
+                            revision,
+                            float(updated_at),
+                            updated_login_count,
+                        ),
+                    )
+                else:
+                    revision = int(current["revision"]) + 1
+                    conn.execute(
+                        """
+                        UPDATE short_term_memories
+                        SET content = ?, revision = ?, updated_at = ?,
+                            updated_login_count = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            content,
+                            revision,
+                            float(updated_at),
+                            updated_login_count,
+                            agent_id,
+                        ),
+                    )
+                conn.commit()
+                return {
+                    "success": True,
+                    "revision": revision,
+                    "updated_at": float(updated_at),
+                    "updated_login_count": updated_login_count,
+                }
+            finally:
+                conn.close()
+        except (sqlite3.Error, ValueError, TypeError):
+            return None
+
     def record_agent_login(
         self,
         agent_id: int,

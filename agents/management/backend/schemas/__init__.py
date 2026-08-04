@@ -217,6 +217,22 @@ class MemoryUpdateRequest(BaseModel):
     memory_type: Literal["normal", "static"]
 
 
+class ShortTermMemoryUpdateRequest(BaseModel):
+    """管理端完整覆盖一个角色的短期记忆 Markdown 快照。"""
+
+    content: str
+
+
+class ShortTermMemoryResponse(BaseModel):
+    """短期记忆当前快照；尚未建立时 revision 为 0。"""
+
+    agent_id: int
+    content: str
+    revision: int = 0
+    updated_at: Optional[float] = None
+    updated_login_count: int = 0
+
+
 # ==================== Model Config ====================
 
 class ModelConfigCreate(BaseModel):

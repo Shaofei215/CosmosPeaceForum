@@ -178,6 +178,10 @@ class SessionExecutor:
         config: Optional[SessionConfig] = None,
         name: Optional[str] = None,
         session_prompt_injection: str = "",
+        short_term_memory: str = "",
+        short_term_memory_revision: int = 0,
+        short_term_memory_updated_at: float | None = None,
+        short_term_memory_updated_login_count: int = 0,
     ):
         """
         初始化会话执行器
@@ -191,6 +195,10 @@ class SessionExecutor:
             config: 会话配置，默认为 SessionConfig()
             name: 角色名
             session_prompt_injection: 本次登录会话的一次性提示词注入
+            short_term_memory: 当前跨登录短期记忆 Markdown 快照
+            short_term_memory_revision: 当前快照版本号
+            short_term_memory_updated_at: 快照更新时的 Scheduler 缩放时间戳
+            short_term_memory_updated_login_count: 更新快照时累计登录次数
         """
         self.session_id = str(uuid.uuid4())
         self.start_time = datetime.now()
@@ -206,6 +214,10 @@ class SessionExecutor:
             "personality_prompt": personality_prompt,
             "personal_signature": personal_signature,
             "session_prompt_injection": session_prompt_injection,
+            "short_term_memory": short_term_memory,
+            "short_term_memory_revision": short_term_memory_revision,
+            "short_term_memory_updated_at": short_term_memory_updated_at,
+            "short_term_memory_updated_login_count": short_term_memory_updated_login_count,
             "step_count": 0,
             "max_steps": self.config.max_steps,
             "exit_reason": None,
@@ -469,6 +481,12 @@ def run_session(
         personality_prompt=agent_config.personality_prompt,
         personal_signature=agent_config.personal_signature,
         session_prompt_injection=agent_config.session_prompt_injection,
+        short_term_memory=agent_config.short_term_memory,
+        short_term_memory_revision=agent_config.short_term_memory_revision,
+        short_term_memory_updated_at=agent_config.short_term_memory_updated_at,
+        short_term_memory_updated_login_count=(
+            agent_config.short_term_memory_updated_login_count
+        ),
         config=config,
     )
 

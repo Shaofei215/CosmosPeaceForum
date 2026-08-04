@@ -80,6 +80,7 @@ TOOL_TO_LOCATION = {
     "report_content": None,
     "scroll": None,
     "recall_memory": None,
+    "edit_short_term_memory": None,
     "web_search": None,
     "logout": None,
 }
@@ -98,6 +99,7 @@ TOOLS_WITH_RETURN_VALUE = {
     "scroll",
     "vote_post_poll",
     "recall_memory",
+    "edit_short_term_memory",
     "web_search",
 }
 
@@ -164,6 +166,25 @@ def _normalize_tool_calls_for_batch(tool_calls: List[Dict[str, Any]]) -> List[Di
     Returns:
         List[Dict[str, Any]]: 规范化后的工具调用列表
     """
+    # 短期记忆交接必须先落盘并进入下一次决策，不能被同批 logout 抢先终止。
+    has_short_term_edit = any(
+        call.get("name", "").lower() == "edit_short_term_memory"
+        for call in tool_calls
+    )
+    if has_short_term_edit:
+        short_term_edits = [
+            call
+            for call in tool_calls
+            if call.get("name", "").lower() == "edit_short_term_memory"
+        ]
+        other_calls = [
+            call
+            for call in tool_calls
+            if call.get("name", "").lower()
+            not in {"edit_short_term_memory", "logout"}
+        ]
+        tool_calls = [*short_term_edits, *other_calls]
+
     result = []
     has_return_value_tool = False
 
@@ -245,6 +266,45 @@ def _build_memory_query_context(state: SessionState) -> str:
             query_parts.append("\n".join(action_lines))
 
     return "\n\n".join(query_parts)
+
+
+def _refresh_short_term_memory(state: SessionState) -> SessionState:
+    """按 revision 将持久化短期记忆刷新进当前会话状态。
+
+    角色工具写入后和管理员在登录期间编辑后都会走这里，因此下一次决策无需等待
+    重新登录就能看到新快照。读取失败时保留当前状态，避免瞬时数据库问题把已加载
+    的内容误清空。
+
+    Args:
+        state: 当前 LangGraph 会话状态。
+
+    Returns:
+        SessionState: 持久化版本更新时返回合并后的新状态，否则原样返回。
+    """
+
+    agent_id = state.get("agent_id")
+    if not agent_id:
+        return state
+
+    try:
+        from agents.management.backend.db_client import get_db_client
+
+        snapshot = get_db_client().get_short_term_memory(agent_id)
+        revision = int(snapshot.get("revision", 0) or 0)
+    except (TypeError, ValueError):
+        return state
+
+    if revision <= int(state.get("short_term_memory_revision", 0) or 0):
+        return state
+    return {
+        **state,
+        "short_term_memory": str(snapshot.get("content", "")),
+        "short_term_memory_revision": revision,
+        "short_term_memory_updated_at": snapshot.get("updated_at"),
+        "short_term_memory_updated_login_count": int(
+            snapshot.get("updated_login_count", 0) or 0
+        ),
+    }
 
 
 # ============================================================
@@ -389,12 +449,21 @@ def llm_decision_node(
             "pending_tools": None,
         }
 
+    state = _refresh_short_term_memory(state)
+
     system_prompt = build_system_prompt(
         username=state["username"],
         name=state.get("name", state["username"]),
         personality_prompt=state["personality_prompt"],
         personal_signature=state["personal_signature"],
         session_prompt_injection=state.get("session_prompt_injection", ""),
+        short_term_memory=state.get("short_term_memory", ""),
+        short_term_memory_revision=state.get("short_term_memory_revision", 0),
+        short_term_memory_updated_at=state.get("short_term_memory_updated_at"),
+        short_term_memory_updated_login_count=state.get(
+            "short_term_memory_updated_login_count",
+            0,
+        ),
     )
 
     user_prompt = build_decision_prompt(state)
@@ -615,6 +684,14 @@ def tool_execution_node(state: SessionState) -> SessionState:
         )
     last_tool_result = _attach_current_unread_count(last_tool_result)
 
+    short_term_memory_state: SessionState | None = None
+    if (
+        tool_name == "edit_short_term_memory"
+        and isinstance(last_tool_result, dict)
+        and last_tool_result.get("success") is True
+    ):
+        short_term_memory_state = _refresh_short_term_memory(state)
+
     updated_username: Optional[str] = None
     updated_personal_signature: Optional[str] = None
     if tool_name == "update_profile" and isinstance(last_tool_result, dict):
@@ -652,6 +729,17 @@ def tool_execution_node(state: SessionState) -> SessionState:
         updated_state["username"] = updated_username
     if updated_personal_signature is not None:
         updated_state["personal_signature"] = updated_personal_signature
+    if short_term_memory_state is not None:
+        updated_state["short_term_memory"] = short_term_memory_state["short_term_memory"]
+        updated_state["short_term_memory_revision"] = short_term_memory_state[
+            "short_term_memory_revision"
+        ]
+        updated_state["short_term_memory_updated_at"] = short_term_memory_state[
+            "short_term_memory_updated_at"
+        ]
+        updated_state["short_term_memory_updated_login_count"] = short_term_memory_state[
+            "short_term_memory_updated_login_count"
+        ]
     return updated_state
 
 
@@ -729,7 +817,14 @@ def summarize_node(state: SessionState, llm_invoker: Callable[[str, str], AIMess
             username=state["username"],
             name=state.get("name", state["username"]),
             personality_prompt=state["personality_prompt"],
-            personal_signature=state["personal_signature"]
+            personal_signature=state["personal_signature"],
+            short_term_memory=state.get("short_term_memory", ""),
+            short_term_memory_revision=state.get("short_term_memory_revision", 0),
+            short_term_memory_updated_at=state.get("short_term_memory_updated_at"),
+            short_term_memory_updated_login_count=state.get(
+                "short_term_memory_updated_login_count",
+                0,
+            ),
         )
 
         user_prompt = build_summarize_prompt(state)

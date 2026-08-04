@@ -12,6 +12,7 @@ from agents.management.backend.models.system_config import SystemConfig
 from agents.management.backend.models.operation_log import OperationLog
 from agents.management.backend.models.prompt_config import PromptConfig
 from agents.management.backend.models.scheduler_time_state import SchedulerTimeState
+from agents.management.backend.models.short_term_memory import ShortTermMemory
 
 __all__ = [
     "AdminUser",
@@ -24,4 +25,5 @@ __all__ = [
     "OperationLog",
     "PromptConfig",
     "SchedulerTimeState",
+    "ShortTermMemory",
 ]

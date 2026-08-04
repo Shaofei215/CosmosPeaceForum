@@ -98,9 +98,12 @@ class SessionConfig:
         anthropic_model_name = model_name if is_anthropic_provider else ""
         temperature = float(active_model.get("temperature") or 1.2)
         raw_tavily_max_results = _get("TAVILY_MAX_RESULTS", "").strip()
+        resolved_model_id = model_config_id or active_model.get("id")
+        if resolved_model_id is None:
+            raise RuntimeError("模型配置缺少有效 ID")
 
         return cls(
-            model_config_id=int(model_config_id or active_model.get("id")),
+            model_config_id=int(resolved_model_id),
             max_steps=int(_get("LANGGRAPH_MAX_STEPS", "20")),
             tool_timeout=int(_get("LANGGRAPH_TOOL_TIMEOUT", "30")),
             temperature=temperature,
@@ -146,6 +149,10 @@ class AgentConfig:
     personal_signature: str
     token: str
     session_prompt_injection: str = ""
+    short_term_memory: str = ""
+    short_term_memory_revision: int = 0
+    short_term_memory_updated_at: float | None = None
+    short_term_memory_updated_login_count: int = 0
 
 
 def get_default_config() -> SessionConfig:

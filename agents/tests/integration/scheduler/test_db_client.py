@@ -71,6 +71,15 @@ def temp_db():
             updated_at DATETIME NOT NULL
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS short_term_memories (
+            id INTEGER PRIMARY KEY,
+            content TEXT NOT NULL,
+            revision INTEGER NOT NULL,
+            updated_at REAL NOT NULL,
+            updated_login_count INTEGER NOT NULL
+        )
+    """)
 
     cursor.execute("INSERT INTO system_configs (key, value) VALUES (?, ?)", ("TEST_KEY", "test_value"))
     cursor.execute(
@@ -204,6 +213,48 @@ class TestManagementDBClient:
 
         assert result["total_login_count"] == 0
         assert result["last_login_timestamp"] is None
+
+    def test_short_term_memory_full_snapshot_round_trip(self, temp_db):
+        """短期记忆只保留当前完整快照，并在每次覆盖时递增 revision。"""
+
+        client = ManagementDBClient(db_path=temp_db)
+
+        assert client.get_short_term_memory(1) == {
+            "content": "",
+            "revision": 0,
+            "updated_at": None,
+            "updated_login_count": 0,
+        }
+
+        client.record_agent_login(1, scaled_timestamp=100.0)
+        first = client.update_short_term_memory(1, "# 连载\n\n下一篇写署名争论", 120.0)
+        second = client.update_short_term_memory(1, "", 180.0)
+
+        assert first == {
+            "success": True,
+            "revision": 1,
+            "updated_at": 120.0,
+            "updated_login_count": 1,
+        }
+        assert second == {
+            "success": True,
+            "revision": 2,
+            "updated_at": 180.0,
+            "updated_login_count": 1,
+        }
+        assert client.get_short_term_memory(1) == {
+            "content": "",
+            "revision": 2,
+            "updated_at": 180.0,
+            "updated_login_count": 1,
+        }
+
+    def test_short_term_memory_update_rejects_unknown_agent(self, temp_db):
+        """内部工具不能为不存在的角色建立隐藏状态。"""
+
+        client = ManagementDBClient(db_path=temp_db)
+
+        assert client.update_short_term_memory(999, "unexpected", 120.0) is None
 
     def test_update_agent_profile_requires_matching_platform_user(self, temp_db: str) -> None:
         """资料镜像只允许由匹配的公开平台账号更新。"""

@@ -52,7 +52,7 @@ export const router = createBrowserRouter([
           { path: 'agents/:id/edit', element: <AgentEditPage /> },
           { path: 'models', element: <ModelListPage /> },
           { path: 'memories', element: <MemoryListPage /> },
-          { path: 'memories/:ownerId', element: <MemoryDetailPage /> },
+          { path: 'memories/:agentId', element: <MemoryDetailPage /> },
           { path: 'prompts', element: <PromptConfigPage /> },
           { path: 'system', element: <SystemConfigPage /> },
           { path: 'admins', element: <AdminListPage /> },

@@ -1,0 +1,1 @@
+export { ShortTermMemoryEditor } from './ShortTermMemoryEditor';

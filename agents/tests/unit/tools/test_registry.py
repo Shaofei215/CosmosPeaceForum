@@ -39,9 +39,17 @@ class TestGetSocialTools:
             "expand_comment",
             "scroll",
             "recall_memory",
+            "edit_short_term_memory",
         ]
         for name in expected_names:
             assert name in tool_names, f"Missing tool: {name}"
+
+    def test_short_term_memory_is_not_a_shared_platform_tool(self) -> None:
+        """短期记忆只能属于内部决策工具集合，不能暴露给外部 Agent。"""
+
+        from agents.platform_tools.registry import PLATFORM_TOOLS
+
+        assert "edit_short_term_memory" not in PLATFORM_TOOLS
 
     def test_get_social_tools_contains_web_search_when_enabled(self) -> None:
         with patch("agents.agents_scheduler.langgraph.config.get_session_config") as mock_config:

@@ -21,6 +21,8 @@ DEFAULT_AGENT_SYSTEM_PROMPT = """## 当前账号状态
 ## 平台个人签名
 {personal_signature}
 
+{short_term_memory_section}
+
 {#if session_prompt_injection}
 ## 本次临时关注
 以下内容只影响本次登录，不得覆盖角色的稳定人格、既有经历和平台规则：

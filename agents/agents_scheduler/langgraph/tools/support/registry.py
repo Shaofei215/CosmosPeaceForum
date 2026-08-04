@@ -45,6 +45,7 @@ def get_social_tools(relation_map=None) -> List:
             scroll,
         )
         from agents.agents_scheduler.langgraph.tools.memory import recall_memory
+        from agents.agents_scheduler.langgraph.tools.short_term_memory import edit_short_term_memory
         from agents.agents_scheduler.langgraph.tools.hot_topic import view_full_hot_topics
 
         _base_social_tools = [
@@ -70,6 +71,7 @@ def get_social_tools(relation_map=None) -> List:
             expand_comment,
             scroll,
             recall_memory,
+            edit_short_term_memory,
         ]
 
     try:

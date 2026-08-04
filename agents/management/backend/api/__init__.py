@@ -15,6 +15,7 @@ from agents.management.backend.api.embeddings import router as embeddings_router
 from agents.management.backend.api.chunk_models import router as chunk_models_router
 from agents.management.backend.api.memories import router as memories_router
 from agents.management.backend.api.terminal_logs import router as terminal_logs_router
+from agents.management.backend.api.short_term_memories import router as short_term_memories_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth", tags=["认证"])
@@ -27,6 +28,11 @@ api_router.include_router(prompts_router, prefix="/prompts", tags=["提示词配
 api_router.include_router(logs_router, prefix="/logs", tags=["操作日志"])
 api_router.include_router(embeddings_router, prefix="/embeddings", tags=["Embedding配置"])
 api_router.include_router(memories_router, prefix="/memories", tags=["记忆管理"])
+api_router.include_router(
+    short_term_memories_router,
+    prefix="/short-term-memories",
+    tags=["短期记忆管理"],
+)
 api_router.include_router(terminal_logs_router, prefix="/terminal-logs", tags=["终端日志"])
 
 __all__ = ["api_router"]

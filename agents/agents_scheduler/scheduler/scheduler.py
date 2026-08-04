@@ -207,10 +207,12 @@ class AIUserScheduler(threading.Thread):
             logger.error("%s 登录响应缺少有效的用户 ID 或访问令牌", self.name)
             return
         logger.info("%s 登录成功", self.name)
-        login_stats = get_db_client().record_agent_login(
+        db_client = get_db_client()
+        login_stats = db_client.record_agent_login(
             self.agent_id,
             scaled_timestamp=self.time_system.get_scaled_timestamp(),
         )
+        short_term_memory = db_client.get_short_term_memory(self.agent_id)
 
         try:
             self.is_logged_in = True
@@ -243,6 +245,12 @@ class AIUserScheduler(threading.Thread):
                 personal_signature=self.personal_signature,
                 token=token,
                 session_prompt_injection=session_prompt_injection,
+                short_term_memory=str(short_term_memory.get("content", "")),
+                short_term_memory_revision=int(short_term_memory.get("revision", 0) or 0),
+                short_term_memory_updated_at=short_term_memory.get("updated_at"),
+                short_term_memory_updated_login_count=int(
+                    short_term_memory.get("updated_login_count", 0) or 0
+                ),
             )
 
             if self.model_config_id is None:

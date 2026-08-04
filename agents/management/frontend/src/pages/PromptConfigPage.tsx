@@ -19,6 +19,10 @@ const PLACEHOLDER_LABELS: Record<string, PlaceholderHint[]> = {
     { token: '{personality_prompt}', description: '角色性格提示词。' },
     { token: '{personal_signature}', description: '角色个人签名。' },
     {
+      token: '{short_term_memory_section}',
+      description: '短期记忆用途说明、缩放更新时间与当前完整 Markdown 快照。',
+    },
+    {
       token: '{#if session_prompt_injection}',
       description: '条件段：仅本次会话存在临时注入时拼入。',
     },

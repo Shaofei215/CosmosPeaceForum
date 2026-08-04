@@ -364,6 +364,18 @@ export interface MemoryBatchUploadRequest {
   enable_rag_on_chunking?: boolean;
 }
 
+export interface ShortTermMemory {
+  agent_id: number;
+  content: string;
+  revision: number;
+  updated_at: number | null;
+  updated_login_count: number;
+}
+
+export interface ShortTermMemoryUpdateRequest {
+  content: string;
+}
+
 export interface TerminalLog {
   timestamp: string;
   level: string;
