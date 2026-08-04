@@ -10,6 +10,7 @@ import type {
   ChunkModelConfig, ChunkModelConfigCreate, ChunkModelConfigUpdate,
   MemoryListResponse, MemoryOwnerListResponse, MemoryUploadRequest, MemoryBatchUploadRequest,
   MemoryUpdateRequest, MemoryUpdateResponse,
+  ShortTermMemory, ShortTermMemoryUpdateRequest,
   TerminalLog, TerminalLogListResponse,
 } from '@/shared/types/api';
 
@@ -215,6 +216,14 @@ export const memoryApi = {
 
   clearUserMemories: (ownerId: number) =>
     apiClient.delete<MessageResponse>(`/memories/user/${ownerId}`),
+};
+
+export const shortTermMemoryApi = {
+  get: (agentId: number) =>
+    apiClient.get<ShortTermMemory>(`/short-term-memories/${agentId}`),
+
+  update: (agentId: number, data: ShortTermMemoryUpdateRequest) =>
+    apiClient.put<ShortTermMemory>(`/short-term-memories/${agentId}`, data),
 };
 
 interface TerminalLogParams {

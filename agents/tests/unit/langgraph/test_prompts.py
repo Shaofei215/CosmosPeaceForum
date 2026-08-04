@@ -87,9 +87,50 @@ class TestBuildSystemPrompt:
         assert "今天重点关注活动通知" in prompt
         assert (
             prompt.index("## 平台个人签名")
+            < prompt.index("## 短期记忆")
             < prompt.index("## 本次临时关注")
             < prompt.index("## 决策核心")
         )
+
+    def test_build_system_prompt_injects_current_short_term_memory_with_scaled_age(self):
+        """当前快照应按更新时间与登录次数稳定注入，并优先于临时提示。"""
+
+        with patch(
+            "agents.agents_scheduler.short_term_memory.clock.describe_short_term_memory_age",
+            return_value="3天前",
+        ):
+            prompt = build_system_prompt(
+                username="observer",
+                name="观察者",
+                personality_prompt="持续观察社区规范",
+                personal_signature="记录变化",
+                session_prompt_injection="今天查看新投票",
+                short_term_memory="# 社区观察手记\n\n下一篇关注 AI 创作署名争论。",
+                short_term_memory_revision=5,
+                short_term_memory_updated_at=500.0,
+                short_term_memory_updated_login_count=12,
+            )
+
+        assert "你在3天前，第12次登录时更新了短期记忆" in prompt
+        assert "下一篇关注 AI 创作署名争论" in prompt
+        assert "发生冲突时" in prompt
+        assert "当前短期记忆为准" in prompt
+        assert (
+            prompt.index("## 平台个人签名")
+            < prompt.index("## 短期记忆")
+            < prompt.index("## 本次临时关注")
+            < prompt.index("## 决策核心")
+            < prompt.index("## 工作记忆")
+        )
+
+    def test_build_system_prompt_keeps_explicit_empty_short_term_memory_state(self):
+        """新角色也必须知道短期记忆存在并可开始建立。"""
+
+        prompt = build_system_prompt("new", "新人", "好奇", "你好")
+
+        assert "## 短期记忆" in prompt
+        assert "目前还没有建立短期记忆" in prompt
+        assert "edit_short_term_memory" in prompt
 
     def test_build_system_prompt_uses_product_labels_without_duplicate_queries(self):
         with patch(

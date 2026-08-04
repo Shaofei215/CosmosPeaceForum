@@ -71,6 +71,10 @@ class SessionState(TypedDict):
         personality_prompt: 角色性格描述，用于构建 LLM 的系统提示词
         personal_signature: 个性签名，用户的简短自我介绍
         session_prompt_injection: 本次登录会话的一次性提示词注入
+        short_term_memory: 当前跨登录短期记忆 Markdown 快照
+        short_term_memory_revision: 当前快照版本号
+        short_term_memory_updated_at: 快照更新时的 Scheduler 缩放时间戳
+        short_term_memory_updated_login_count: 更新快照时的累计登录次数
 
         step_count: 当前已执行的步数，用于控制最大步数限制
         max_steps: 最大步数限制，防止无限循环
@@ -94,6 +98,10 @@ class SessionState(TypedDict):
     personality_prompt: str                  # 角色性格描述
     personal_signature: str                   # 个性签名
     session_prompt_injection: str             # 本次会话的一次性提示词注入
+    short_term_memory: str                    # 跨登录当前快照
+    short_term_memory_revision: int           # 当前快照版本
+    short_term_memory_updated_at: Optional[float]  # Scheduler 缩放更新时间
+    short_term_memory_updated_login_count: int  # 更新时累计登录次数
 
     # === 会话控制 ===
     step_count: int                          # 当前步数

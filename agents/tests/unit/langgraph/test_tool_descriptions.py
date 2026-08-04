@@ -61,3 +61,14 @@ def test_update_profile_description_excludes_internal_avatar_upload() -> None:
 
     assert "不能通过此工具上传或设置头像" in descriptions["update_profile"]
     assert "空字符串" in descriptions["update_profile"]
+
+
+def test_short_term_memory_description_preserves_snapshot_rules() -> None:
+    """短期记忆工具必须向角色暴露完整覆盖和清理语义。"""
+
+    description = _description_by_name()["edit_short_term_memory"]
+
+    assert "完整内容，不是待追加片段" in description
+    assert "已经完成、错误、失效或不再重要" in description
+    assert "事实、主观判断、愿望与计划" in description
+    assert "清空时传空字符串" in description

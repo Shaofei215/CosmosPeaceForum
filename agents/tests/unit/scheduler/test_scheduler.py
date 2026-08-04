@@ -214,6 +214,57 @@ class TestAIUserScheduler:
         mock_run_session.assert_not_called()
         assert scheduler.is_logged_in is False
 
+    def test_execute_session_loads_short_term_memory_into_session_config(self) -> None:
+        """每次成功登录都必须按内部角色 ID 读取当前短期记忆。"""
+
+        time_system = MagicMock()
+        time_system.get_scaled_timestamp.return_value = 900.0
+        scheduler = AIUserScheduler(
+            username="test_user",
+            name="Test",
+            agent_id=7,
+            monthly_logins=30,
+            password="password",
+            personality_prompt="friendly",
+            personal_signature="sig",
+            time_system=time_system,
+            model_config_id=2,
+        )
+        db = MagicMock()
+        db.record_agent_login.return_value = {"total_login_count": 5}
+        db.get_short_term_memory.return_value = {
+            "content": "# 当前目标\n\n继续连载",
+            "revision": 4,
+            "updated_at": 800.0,
+            "updated_login_count": 4,
+        }
+
+        with (
+            patch(
+                "agents.agents_scheduler.scheduler.scheduler.login_user",
+                return_value={"id": 42, "access_token": "token"},
+            ),
+            patch(
+                "agents.agents_scheduler.scheduler.scheduler.get_db_client",
+                return_value=db,
+            ),
+            patch(
+                "agents.agents_scheduler.scheduler.scheduler.SessionConfig.from_db",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "agents.agents_scheduler.scheduler.scheduler.run_session"
+            ) as run_session,
+        ):
+            scheduler._execute_login_and_session()
+
+        db.get_short_term_memory.assert_called_once_with(7)
+        session_config = run_session.call_args.args[0]
+        assert session_config.short_term_memory == "# 当前目标\n\n继续连载"
+        assert session_config.short_term_memory_revision == 4
+        assert session_config.short_term_memory_updated_at == 800.0
+        assert session_config.short_term_memory_updated_login_count == 4
+
     def test_sync_profile_rejects_non_integer_user_id(self) -> None:
         """资料同步应拒绝无法满足公开平台用户 ID 契约的数据。"""
 

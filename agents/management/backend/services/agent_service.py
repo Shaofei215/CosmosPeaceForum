@@ -108,6 +108,11 @@ def delete_agent(db: Session, agent_id: int) -> bool:
     db_agent = db.get(AgentConfig, agent_id)
     if not db_agent:
         return False
+    from agents.management.backend.services.short_term_memory_service import (
+        delete_short_term_memory,
+    )
+
+    delete_short_term_memory(db, agent_id)
     db.delete(db_agent)
     db.commit()
     return True

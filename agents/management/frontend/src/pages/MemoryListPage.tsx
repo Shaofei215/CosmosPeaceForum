@@ -61,7 +61,8 @@ export default function MemoryListPage() {
     enabled: Boolean(searchQuery),
   });
 
-  const configuredAgents = agents?.items.filter((a) => a.social_platform_user_id) ?? [];
+  const configuredAgents = agents?.items ?? [];
+  const uploadableAgents = configuredAgents.filter((agent) => agent.social_platform_user_id);
   
   // 将记忆数据转换为以 owner_id 为 key 的映射表，方便查找
   const memoryOwnerMap = new Map(
@@ -70,8 +71,8 @@ export default function MemoryListPage() {
 
   // 构建完整的角色列表，包含记忆信息（即使没有记忆也会显示）
   const agentsWithMemoryInfo = configuredAgents.map((agent) => {
-    const ownerId = agent.social_platform_user_id!;
-    const memoryInfo = memoryOwnerMap.get(ownerId);
+    const ownerId = agent.social_platform_user_id;
+    const memoryInfo = ownerId ? memoryOwnerMap.get(ownerId) : undefined;
     return {
       agent,
       ownerId,
@@ -81,6 +82,13 @@ export default function MemoryListPage() {
       hasMemory: !!memoryInfo,
     };
   });
+  const agentIdByOwnerId = new Map(
+    configuredAgents.flatMap((agent) =>
+      agent.social_platform_user_id
+        ? [[agent.social_platform_user_id, agent.id] as const]
+        : []
+    )
+  );
 
   const totalMemories = memoryOwners?.items.reduce((sum, owner) => sum + owner.memory_count, 0) ?? 0;
   const searchTotalPages = Math.ceil((searchResults?.total ?? 0) / searchLimit);
@@ -114,7 +122,7 @@ export default function MemoryListPage() {
           </p>
         </div>
         <Button onClick={() => setBatchDialogOpen(true)}>
-          <Upload size={16} className="mr-1" /> 批量上传记忆
+          <Upload size={16} className="mr-1" /> 批量上传长期记忆
         </Button>
       </div>
 
@@ -161,8 +169,13 @@ export default function MemoryListPage() {
                 {searchResults?.items.map((memory) => (
                 <Card
                   key={memory.id}
-                  className="cursor-pointer hover:border-primary transition-colors"
-                  onClick={() => navigate(`/memories/${memory.owner_id}`)}
+                  className={agentIdByOwnerId.has(memory.owner_id)
+                    ? 'cursor-pointer hover:border-primary transition-colors'
+                    : ''}
+                  onClick={() => {
+                    const agentId = agentIdByOwnerId.get(memory.owner_id);
+                    if (agentId) navigate(`/memories/${agentId}`);
+                  }}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-4">
@@ -184,7 +197,9 @@ export default function MemoryListPage() {
                           </div>
                         )}
                       </div>
-                      <Button variant="ghost" size="sm">查看角色记忆</Button>
+                      {agentIdByOwnerId.has(memory.owner_id) && (
+                        <Button variant="ghost" size="sm">查看角色记忆</Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -225,11 +240,11 @@ export default function MemoryListPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {agentsWithMemoryInfo.map(({ agent, ownerId, memoryCount, latestSystemTimestamp, latestSemanticTimestamp, hasMemory }) => (
+            {agentsWithMemoryInfo.map(({ agent, memoryCount, latestSystemTimestamp, latestSemanticTimestamp, hasMemory }) => (
               <Card
-                key={ownerId}
+                key={agent.id}
                 className="cursor-pointer hover:border-primary transition-colors"
-                onClick={() => navigate(`/memories/${ownerId}`)}
+                onClick={() => navigate(`/memories/${agent.id}`)}
               >
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-3">
@@ -237,15 +252,13 @@ export default function MemoryListPage() {
                       <h3 className="font-semibold text-lg truncate">{agent.name || agent.username}</h3>
                       <div className="flex items-center gap-2 mt-2">
                         <Brain size={14} className="text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">{memoryCount} 条记忆</span>
+                        <span className="text-sm text-muted-foreground">{memoryCount} 条长期记忆</span>
                       </div>
-                      {hasMemory ? (
+                      {hasMemory && (
                         <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                           <Clock size={12} />
                           <span>最近: {formatTimestamp(latestSemanticTimestamp || latestSystemTimestamp)}</span>
                         </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground mt-1">暂无记忆，点击添加</p>
                       )}
                     </div>
                   </div>
@@ -267,7 +280,7 @@ export default function MemoryListPage() {
       <BatchUploadDialog
         open={batchDialogOpen}
         onOpenChange={setBatchDialogOpen}
-        agents={configuredAgents}
+        agents={uploadableAgents}
       />
     </div>
   );
@@ -411,7 +424,7 @@ function BatchUploadDialog({
     >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>批量上传记忆</DialogTitle>
+          <DialogTitle>批量上传长期记忆</DialogTitle>
           <DialogDescription>
             将同一份文档分块后上传到多个角色的记忆库
           </DialogDescription>

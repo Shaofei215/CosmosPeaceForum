@@ -9,9 +9,10 @@ import {
   DialogFooter, DialogDescription,
 } from '@/shared/components/ui';
 import { ArrowLeft, Upload, Trash2, Loader2, Clock, Pencil, Search } from 'lucide-react';
+import { ShortTermMemoryEditor } from '@/features/short-term-memory';
 
 export default function MemoryDetailPage() {
-  const { ownerId } = useParams<{ ownerId: string }>();
+  const { agentId } = useParams<{ agentId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -22,28 +23,27 @@ export default function MemoryDetailPage() {
   const [page, setPage] = useState(0);
   const limit = 50;
 
-  const ownerIdNum = ownerId ? Number(ownerId) : undefined;
+  const agentIdNum = agentId ? Number(agentId) : undefined;
 
   const { data: agent } = useQuery({
-    queryKey: ['agent', ownerId],
-    queryFn: () => agentApi.list(0, 200).then((res) =>
-      res.items.find((a) => a.social_platform_user_id === ownerIdNum)
-    ),
-    enabled: !!ownerIdNum,
+    queryKey: ['agent', agentId],
+    queryFn: () => agentApi.getOne(agentIdNum!),
+    enabled: !!agentIdNum,
   });
+  const ownerIdNum = agent?.social_platform_user_id ?? undefined;
 
   const { data: memories, isLoading, error: memoriesError } = useQuery({
-    queryKey: ['memories', ownerId, page, searchQuery],
+    queryKey: ['memories', ownerIdNum, page, searchQuery],
     queryFn: () => searchQuery
       ? memoryApi.search(searchQuery, page * limit, limit, ownerIdNum)
       : memoryApi.list(page * limit, limit, ownerIdNum),
-    enabled: !!ownerIdNum,
+    enabled: ownerIdNum !== undefined,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => memoryApi.deleteMemory(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['memories', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['memories', ownerIdNum] });
       queryClient.invalidateQueries({ queryKey: ['memories-all'] });
       queryClient.invalidateQueries({ queryKey: ['memory-owners'] });
       setDeleteId(null);
@@ -53,7 +53,7 @@ export default function MemoryDetailPage() {
   const clearMutation = useMutation({
     mutationFn: (id: number) => memoryApi.clearUserMemories(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['memories', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['memories', ownerIdNum] });
       queryClient.invalidateQueries({ queryKey: ['memories-all'] });
       queryClient.invalidateQueries({ queryKey: ['memory-owners'] });
     },
@@ -67,7 +67,7 @@ export default function MemoryDetailPage() {
     setSearchQuery(searchInput.trim());
   };
 
-  if (!ownerIdNum) {
+  if (!agentIdNum) {
     return <div className="text-center py-12 text-muted-foreground">无效的角色链接</div>;
   }
 
@@ -82,13 +82,15 @@ export default function MemoryDetailPage() {
             {agent?.name || agent?.username || '角色'}的记忆
           </h1>
           <p className="text-sm text-muted-foreground">
-            共 {memories?.total ?? 0} 条记忆
+            共 {memories?.total ?? 0} 条长期记忆
           </p>
         </div>
-        <Button onClick={() => setUploadDialogOpen(true)}>
-          <Upload size={16} className="mr-1" /> 上传记忆
-        </Button>
-        {memories && memories.total > 0 && (
+        {ownerIdNum !== undefined && (
+          <Button onClick={() => setUploadDialogOpen(true)}>
+            <Upload size={16} className="mr-1" /> 上传长期记忆
+          </Button>
+        )}
+        {ownerIdNum !== undefined && memories && memories.total > 0 && (
           <Button
             variant="outline"
             onClick={() => clearMutation.mutate(ownerIdNum)}
@@ -99,6 +101,17 @@ export default function MemoryDetailPage() {
         )}
       </div>
 
+      {agent?.id && (
+        <ShortTermMemoryEditor
+          agentId={agent.id}
+        />
+      )}
+
+      {ownerIdNum !== undefined && (
+        <>
+      <div className="mb-3">
+        <h2 className="text-lg font-semibold">长期记忆</h2>
+      </div>
       <form onSubmit={submitSearch} className="relative mb-6 max-w-md">
         <Search
           size={18}
@@ -190,7 +203,7 @@ export default function MemoryDetailPage() {
                 <CardContent className="py-12 text-center text-muted-foreground">
                   {searchQuery
                     ? '没有找到符合当前检索条件的记忆'
-                    : '暂无记忆记录，点击上方「上传记忆」添加'}
+                    : '暂无记忆记录，点击上方「上传长期记忆」添加'}
                 </CardContent>
               </Card>
             )}
@@ -221,21 +234,27 @@ export default function MemoryDetailPage() {
           )}
         </>
       )}
+        </>
+      )}
 
-      <UploadDialog
-        open={uploadDialogOpen}
-        onOpenChange={setUploadDialogOpen}
-        agent={agent}
-        ownerId={ownerIdNum}
-      />
+      {ownerIdNum !== undefined && (
+        <UploadDialog
+          open={uploadDialogOpen}
+          onOpenChange={setUploadDialogOpen}
+          agent={agent}
+          ownerId={ownerIdNum}
+        />
+      )}
 
-      <EditMemoryDialog
-        memory={editMemory}
-        onOpenChange={(open) => {
-          if (!open) setEditMemory(null);
-        }}
-        ownerId={ownerIdNum}
-      />
+      {ownerIdNum !== undefined && (
+        <EditMemoryDialog
+          memory={editMemory}
+          onOpenChange={(open) => {
+            if (!open) setEditMemory(null);
+          }}
+          ownerId={ownerIdNum}
+        />
+      )}
 
       <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>
@@ -528,7 +547,7 @@ function UploadDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>上传记忆 - {agent?.name}</DialogTitle>
+          <DialogTitle>上传长期记忆 - {agent?.name}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
