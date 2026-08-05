@@ -254,7 +254,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                     <p className="text-sm">松开以上传 zip 文件</p>
                   </div>
                 ) : file ? (
-                  <div className="flex items-center justify-center gap-2 text-green-600">
+                  <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
                     <Check size={20} />
                     <span className="font-medium">{file.name}</span>
                   </div>
@@ -275,21 +275,27 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                   {r.type === 'success' && (
                     <>
                       <Check size={14} className="text-green-500 shrink-0" />
-                      <span className="text-green-600 font-medium">{r.username}</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        {r.username}
+                      </span>
                       <span className="text-muted-foreground">注册成功</span>
                     </>
                   )}
                   {r.type === 'exists' && (
                     <>
                       <AlertTriangle size={14} className="text-yellow-500 shrink-0" />
-                      <span className="text-yellow-600 font-medium">{r.username}</span>
+                      <span className="font-medium text-yellow-600 dark:text-yellow-400">
+                        {r.username}
+                      </span>
                       <span className="text-muted-foreground">已存在</span>
                     </>
                   )}
                   {r.type === 'error' && (
                     <>
                       <XCircle size={14} className="text-red-500 shrink-0" />
-                      <span className="text-red-600 font-medium">{r.username}</span>
+                      <span className="font-medium text-red-600 dark:text-red-400">
+                        {r.username}
+                      </span>
                       <span className="text-muted-foreground">{r.message}</span>
                     </>
                   )}
@@ -305,11 +311,11 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                   <span>总计</span>
                   <span className="font-medium">{summary.total}</span>
                 </div>
-                <div className="flex justify-between text-sm text-green-600">
+                <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                   <span>注册成功</span>
                   <span className="font-medium">{summary.success}</span>
                 </div>
-                <div className="flex justify-between text-sm text-yellow-600">
+                <div className="flex justify-between text-sm text-yellow-600 dark:text-yellow-400">
                   <span>已存在</span>
                   <span className="font-medium">{summary.exists}</span>
                 </div>
@@ -328,21 +334,27 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                       {r.type === 'success' && (
                         <>
                           <Check size={14} className="text-green-500 shrink-0" />
-                          <span className="text-green-600 font-medium">{r.username}</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            {r.username}
+                          </span>
                           <span className="text-muted-foreground">注册成功</span>
                         </>
                       )}
                       {r.type === 'exists' && (
                         <>
                           <AlertTriangle size={14} className="text-yellow-500 shrink-0" />
-                          <span className="text-yellow-600 font-medium">{r.username}</span>
+                          <span className="font-medium text-yellow-600 dark:text-yellow-400">
+                            {r.username}
+                          </span>
                           <span className="text-muted-foreground">已存在</span>
                         </>
                       )}
                       {r.type === 'error' && (
                         <>
                           <XCircle size={14} className="text-red-500 shrink-0" />
-                          <span className="text-red-600 font-medium">{r.username}</span>
+                          <span className="font-medium text-red-600 dark:text-red-400">
+                            {r.username}
+                          </span>
                           <span className="text-muted-foreground">{r.message}</span>
                         </>
                       )}

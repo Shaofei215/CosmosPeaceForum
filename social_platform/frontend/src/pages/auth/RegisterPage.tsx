@@ -153,7 +153,7 @@ export default function RegisterPage() {
       <BigLogo />
       <Card
         className={cn(
-          'auth-card rounded-lg border bg-white shadow-sm',
+          'auth-card rounded-lg border bg-card shadow-sm',
           invitationRequired && 'auth-register-card'
         )}
       >
@@ -258,7 +258,7 @@ export default function RegisterPage() {
                     !email.trim() ||
                     (invitationRequired && !invitationCode.trim())
                   }
-                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
+                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-primary text-primary-foreground shadow-none hover:opacity-90"
                 >
                   <span className="auth-code-button-label">
                     {countdown > 0
@@ -323,7 +323,7 @@ export default function RegisterPage() {
                 checked={rememberMe}
                 onChange={e => setRememberMe(e.target.checked)}
                 disabled={isPending}
-                className="h-4 w-4 rounded border-gray-300"
+                className="h-4 w-4 rounded border-input"
               />
               {copywriting('auth.remember_me', '记住我')}
             </label>
@@ -334,7 +334,7 @@ export default function RegisterPage() {
                 checked={acceptedTerms}
                 onChange={e => setAcceptedTerms(e.target.checked)}
                 disabled={isPending}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                className="mt-0.5 h-4 w-4 rounded border-input"
               />
               <span>
                 {copywriting('auth.accept', '同意')}{' '}

@@ -52,7 +52,7 @@ export default function LoginPage() {
     <div className="auth-page" data-auth-word="Login">
       <AuthIllustration />
       <BigLogo />
-      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card w-full max-w-md rounded-lg border bg-card shadow-sm">
         <CardHeader className="space-y-2 text-center">
           <CardTitle className="text-2xl font-bold">登录</CardTitle>
         </CardHeader>
@@ -98,7 +98,7 @@ export default function LoginPage() {
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
                 disabled={isPending}
-                className="h-4 w-4 rounded border-gray-300"
+                className="h-4 w-4 rounded border-input"
               />
               记住我
             </label>

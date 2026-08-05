@@ -42,7 +42,7 @@ export function MobileBottomBar() {
             className="fixed inset-0 z-40 bg-black/10"
             onClick={() => setIsComposerOpen(false)}
           />
-          <div className="mobile-composer-panel fixed inset-x-2 bottom-[5.25rem] z-50 rounded-2xl bg-white p-3 shadow-lg">
+          <div className="mobile-composer-panel fixed inset-x-2 bottom-[5.25rem] z-50 rounded-2xl bg-card p-3 text-card-foreground shadow-lg">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">
                 {copywriting('navigation.publish_post', '发布动态')}
@@ -61,7 +61,7 @@ export function MobileBottomBar() {
         </>
       )}
 
-      <nav className="mobile-bottom-nav fixed inset-x-2 bottom-2 z-50 rounded-[2rem] border border-white/40 bg-white/45 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-white/35">
+      <nav className="mobile-bottom-nav fixed inset-x-2 bottom-2 z-50 rounded-[2rem] border border-border/70 bg-card/80 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-card/70">
         <div className="grid grid-cols-5 items-center gap-1">
           <MobileNavLink
             to="/feed"
@@ -96,7 +96,7 @@ export function MobileBottomBar() {
               'flex min-w-0 flex-col items-center gap-1 rounded-2xl px-2 py-1.5 text-xs font-medium',
               'text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground',
               isComposerOpen &&
-                'bg-white text-foreground shadow-sm hover:bg-white hover:text-foreground'
+                'bg-background text-foreground shadow-sm hover:bg-background hover:text-foreground'
             )}
             onClick={openComposer}
           >

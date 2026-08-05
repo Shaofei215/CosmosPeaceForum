@@ -2,10 +2,46 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="__PLATFORM_LOGO_MIME__" href="__PLATFORM_LOGO_PATH__" />
+    <link
+      data-theme-favicon
+      rel="icon"
+      type="__PLATFORM_LOGO_MIME__"
+      href="__PLATFORM_LOGO_PATH__"
+      data-light-type="__PLATFORM_LOGO_MIME__"
+      data-light-href="__PLATFORM_LOGO_PATH__"
+      data-dark-type="__PLATFORM_DARK_LOGO_MIME__"
+      data-dark-href="__PLATFORM_DARK_LOGO_PATH__"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="platform-display-name" content="__PLATFORM_DISPLAY_NAME__" />
     <title>__PLATFORM_DISPLAY_NAME__</title>
+    <script>
+      (() => {
+        let mode = 'system';
+        try {
+          const storedMode = localStorage.getItem('cosmos-peace-forum-theme');
+          if (storedMode === 'light' || storedMode === 'dark' || storedMode === 'system') {
+            mode = storedMode;
+          }
+        } catch {}
+        const resolvedTheme =
+          mode === 'dark' ||
+          (mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+            ? 'dark'
+            : 'light';
+        document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
+        document.documentElement.style.colorScheme = resolvedTheme;
+        const favicon = document.querySelector('link[data-theme-favicon]');
+        if (favicon) {
+          const href =
+            resolvedTheme === 'dark' ? favicon.dataset.darkHref : favicon.dataset.lightHref;
+          const type =
+            resolvedTheme === 'dark' ? favicon.dataset.darkType : favicon.dataset.lightType;
+          if (href) favicon.setAttribute('href', href);
+          if (type) favicon.setAttribute('type', type);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

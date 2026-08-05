@@ -5,6 +5,7 @@ import {
   Menu, X, LogOut, Brain, Shield, ScrollText, Github,
 } from 'lucide-react';
 import { useLogout, useCurrentAdmin } from '@/features/auth';
+import { ThemeCycleButton } from '@/features/theme';
 import { BrandImage } from '@/shared/components/BrandImage';
 import type { AdminPermission } from '@/shared/types/api';
 
@@ -103,7 +104,12 @@ export function AppLayout() {
         <div className="border-t border-border p-2.5">
           {sidebarOpen && (
             <div className="mb-2 min-w-0">
-              <p className="truncate text-sm font-medium">{admin?.username || '管理员'}</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {admin?.username || '管理员'}
+                </p>
+                <ThemeCycleButton className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" />
+              </div>
               <p className="truncate text-xs text-muted-foreground">
                 {admin?.is_super_admin ? '超级管理员' : '管理员'}
               </p>

@@ -5,10 +5,9 @@
  * 使部署方无需修改代码即可替换不同格式的品牌资源。
  */
 
-import { useEffect, useState, type ImgHTMLAttributes } from 'react';
-
-/** 品牌图片格式优先级；PNG 置于首位以保持现有部署行为。 */
-const BRAND_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'] as const;
+import { useState, type ImgHTMLAttributes } from 'react';
+import { useTheme } from '@/features/theme';
+import { buildBrandImageCandidates } from '@/shared/lib/brandImages';
 
 interface BrandImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> {
   /** public 目录中的主文件名，不含扩展名。 */
@@ -18,29 +17,32 @@ interface BrandImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src
 }
 
 /**
- * 按文件名及格式优先级生成候选 URL。
- *
- * @param names public 目录中的文件名列表，均不含扩展名。
- * @returns 按文件名、PNG/JPG/JPEG/WebP/GIF 顺序排列的 URL。
- */
-function buildBrandImageCandidates(names: readonly string[]): string[] {
-  return names.flatMap(name => BRAND_IMAGE_EXTENSIONS.map(extension => `/${name}.${extension}`));
-}
-
-/**
- * 渲染自动匹配实际扩展名的品牌图片。
+ * 渲染随主题自动切换并匹配实际扩展名的品牌图片。
  *
  * @param props 图片属性、主文件名及可选备用文件名。
  * @returns 会在加载失败时自动尝试下一候选格式的 img 元素。
  */
 export function BrandImage({ name, fallbackNames = [], ...props }: BrandImageProps) {
-  const namesKey = [name, ...fallbackNames].join('\0');
-  const candidates = buildBrandImageCandidates([name, ...fallbackNames]);
-  const [candidateIndex, setCandidateIndex] = useState(0);
+  const { resolvedTheme } = useTheme();
+  const names = [name, ...fallbackNames];
+  const candidates = buildBrandImageCandidates(names, resolvedTheme);
 
-  useEffect(() => {
-    setCandidateIndex(0);
-  }, [namesKey]);
+  return (
+    <FallbackImage
+      key={`${resolvedTheme}\0${names.join('\0')}`}
+      candidates={candidates}
+      {...props}
+    />
+  );
+}
+
+interface FallbackImageProps extends ImgHTMLAttributes<HTMLImageElement> {
+  candidates: readonly string[];
+}
+
+/** 在图片加载失败时按既定优先级尝试下一候选资源。 */
+function FallbackImage({ candidates, ...props }: FallbackImageProps) {
+  const [candidateIndex, setCandidateIndex] = useState(0);
 
   return (
     <img

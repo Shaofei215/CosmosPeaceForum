@@ -26,7 +26,7 @@ export function LeftSidebar() {
   return (
     <aside className="fixed top-24 z-30 h-fit max-h-[calc(100vh-6.75rem)] w-64 space-y-3 overflow-y-auto pb-3">
       {/* 用户信息卡片 - 白色+阴影 */}
-      <div className="rounded-lg bg-white shadow-sm p-4">
+      <div className="rounded-lg bg-card p-4 text-card-foreground shadow-sm">
         {isAuthenticated && user && displayedUser ? (
           <div className="space-y-4">
             {/* 用户头像 - 独立一行居中 */}
@@ -75,7 +75,7 @@ export function LeftSidebar() {
             <Button
               asChild
               variant="outline"
-              className="w-full gap-2 rounded-md border-zinc-950 bg-white text-zinc-950 hover:bg-zinc-100"
+              className="w-full gap-2 rounded-md border-primary bg-card text-primary hover:bg-accent"
               size="sm"
             >
               <Link to="/notifications">
@@ -103,7 +103,7 @@ export function LeftSidebar() {
               <Button
                 asChild
                 size="sm"
-                className="w-full gap-2 rounded-md border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800 hover:text-white"
+                className="w-full gap-2 rounded-md border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
               >
                 <Link to="/login">{copywriting('common.login', '登录')}</Link>
               </Button>

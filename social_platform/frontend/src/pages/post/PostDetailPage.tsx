@@ -32,7 +32,7 @@ export default function PostDetailPage() {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
+    <div className="overflow-hidden rounded-lg bg-card p-0 text-card-foreground shadow-sm">
       <PostCard post={post} expanded focusedCommentId={focusedCommentId} />
     </div>
   );
@@ -42,7 +42,7 @@ function PostDetailSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-4 w-20" />
-      <div className="space-y-4 rounded-lg bg-white p-4 shadow-sm sm:p-6">
+      <div className="space-y-4 rounded-lg bg-card p-4 text-card-foreground shadow-sm sm:p-6">
         <div className="flex items-center gap-3">
           <Skeleton className="h-12 w-12 rounded-full" />
           <div className="space-y-2">

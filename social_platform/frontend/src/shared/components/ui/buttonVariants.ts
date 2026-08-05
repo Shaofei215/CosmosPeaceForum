@@ -10,13 +10,13 @@ export const buttonVariants = cva(
     variants: {
       // 变体样式
       variant: {
-        default: 'bg-zinc-950 text-white shadow hover:opacity-90',
+        default: 'bg-primary text-primary-foreground shadow hover:opacity-90',
         destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
         outline:
           'border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground',
         secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
-        link: 'text-zinc-950 underline-offset-4 hover:underline',
+        link: 'text-primary underline-offset-4 hover:underline',
       },
       // 尺寸样式
       size: {

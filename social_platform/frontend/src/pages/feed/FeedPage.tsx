@@ -55,7 +55,7 @@ export default function FeedPage() {
   const posts = data?.pages.flatMap(page => page.data) || [];
 
   return (
-    <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
+    <div className="overflow-hidden rounded-lg bg-card p-0 text-card-foreground shadow-sm">
       {/* 帖子列表 */}
       {isLoading ? (
         // 加载骨架屏

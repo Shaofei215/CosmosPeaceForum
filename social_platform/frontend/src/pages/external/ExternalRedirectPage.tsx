@@ -68,7 +68,7 @@ export default function ExternalRedirectPage(): ReactElement {
             {targetUrl ? (
               <Button
                 asChild
-                className="w-28 rounded-md hover:bg-zinc-800 hover:text-white hover:shadow-md"
+                className="w-28 rounded-md hover:bg-primary hover:text-primary-foreground hover:shadow-md"
               >
                 <a href={targetUrl} rel="noreferrer">
                   {copywriting('external_redirect.confirm', '确认跳转')}

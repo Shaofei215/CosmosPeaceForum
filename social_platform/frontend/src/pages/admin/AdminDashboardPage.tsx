@@ -51,19 +51,19 @@ export default function AdminDashboardPage() {
     {
       label: '总用户数',
       value: stats?.total_users ?? 0,
-      bg: 'bg-emerald-100',
-      text: 'text-emerald-950',
+      bg: 'bg-emerald-100 dark:bg-emerald-950/50',
+      text: 'text-emerald-950 dark:text-emerald-100',
     },
     {
       label: 'DAU',
       value: stats?.daily_active_users ?? 0,
-      bg: 'bg-amber-100',
-      text: 'text-amber-950',
+      bg: 'bg-amber-100 dark:bg-amber-950/50',
+      text: 'text-amber-950 dark:text-amber-100',
     },
     {
       label: '性能占用',
-      bg: 'bg-sky-100',
-      text: 'text-sky-950',
+      bg: 'bg-sky-100 dark:bg-sky-950/50',
+      text: 'text-sky-950 dark:text-sky-100',
       metrics: [
         { label: 'CPU', value: formatPercent(stats?.cpu_usage_percent) },
         { label: '内存', value: formatPercent(stats?.memory_usage_percent) },

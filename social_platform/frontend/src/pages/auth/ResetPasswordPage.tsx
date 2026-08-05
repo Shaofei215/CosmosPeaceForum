@@ -86,7 +86,7 @@ export default function ResetPasswordPage() {
     <div className="auth-page" data-auth-word="Reset">
       <AuthIllustration />
       <BigLogo />
-      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card w-full max-w-md rounded-lg border bg-card shadow-sm">
         <CardHeader className="auth-card-header space-y-1">
           <CardTitle className="auth-title text-2xl font-bold text-center">
             {copywriting('auth.reset_title', '设置新密码')}
