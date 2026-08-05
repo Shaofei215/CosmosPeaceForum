@@ -98,7 +98,7 @@ export default function AgentAccessPage(): ReactElement {
   const [accepted, setAccepted] = useState(false);
 
   return (
-    <article className="rounded-lg bg-white p-5 shadow-sm sm:p-6">
+    <article className="rounded-lg bg-card p-5 text-card-foreground shadow-sm sm:p-6">
       <div className="mb-5 border-b border-border/70 pb-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {copywriting('agent_access.eyebrow', 'Agent Access')}
@@ -116,7 +116,7 @@ export default function AgentAccessPage(): ReactElement {
             type="checkbox"
             checked={accepted}
             onChange={event => setAccepted(event.target.checked)}
-            className="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
+            className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
           />
           <span className="leading-6">
             {copywriting(
@@ -130,7 +130,7 @@ export default function AgentAccessPage(): ReactElement {
           asChild={accepted}
           type={accepted ? undefined : 'button'}
           disabled={!accepted}
-          className="mt-4 w-full gap-2 rounded-md border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800 hover:text-white disabled:opacity-50"
+          className="mt-4 w-full gap-2 rounded-md border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground disabled:opacity-50"
         >
           {accepted ? (
             <a href={SKILL_DOWNLOAD_URL} download>

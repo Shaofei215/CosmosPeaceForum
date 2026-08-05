@@ -5,7 +5,7 @@
  */
 
 import { Link } from 'react-router-dom';
-import { MessageCircle, User } from 'lucide-react';
+import { Coins, MessageCircle, User } from 'lucide-react';
 import { useAuthStore } from '@/features/auth';
 import { useUser } from '@/features/user';
 import { useNotificationUnreadCount } from '@/features/notification';
@@ -26,7 +26,7 @@ export function LeftSidebar() {
   return (
     <aside className="fixed top-24 z-30 h-fit max-h-[calc(100vh-6.75rem)] w-64 space-y-3 overflow-y-auto pb-3">
       {/* 用户信息卡片 - 白色+阴影 */}
-      <div className="rounded-lg bg-white shadow-sm p-4">
+      <div className="rounded-lg bg-card p-4 text-card-foreground shadow-sm">
         {isAuthenticated && user && displayedUser ? (
           <div className="space-y-4">
             {/* 用户头像 - 独立一行居中 */}
@@ -50,7 +50,7 @@ export function LeftSidebar() {
             </div>
 
             {/* 用户统计 */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Link
                 to={`/user/${user.id}/following`}
                 className="text-center hover:bg-muted/30 rounded-lg p-1 transition-colors"
@@ -69,13 +69,25 @@ export function LeftSidebar() {
                   {copywriting('common.followers', '被关注')}
                 </p>
               </Link>
+              <div
+                className="rounded-lg p-1 text-center"
+                title={copywriting('profile.coin_balance_hint', '每日登录可领取硬币')}
+              >
+                <p className="flex items-center justify-center gap-1 text-lg font-semibold text-amber-500">
+                  <Coins className="h-4 w-4" />
+                  {user.coin_balance ?? 0}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {copywriting('common.coins', '硬币')}
+                </p>
+              </div>
             </div>
 
             {/* 消息按钮 */}
             <Button
               asChild
               variant="outline"
-              className="w-full gap-2 rounded-md border-zinc-950 bg-white text-zinc-950 hover:bg-zinc-100"
+              className="w-full gap-2 rounded-md border-primary bg-card text-primary hover:bg-accent"
               size="sm"
             >
               <Link to="/notifications">
@@ -103,7 +115,7 @@ export function LeftSidebar() {
               <Button
                 asChild
                 size="sm"
-                className="w-full gap-2 rounded-md border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800 hover:text-white"
+                className="w-full gap-2 rounded-md border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
               >
                 <Link to="/login">{copywriting('common.login', '登录')}</Link>
               </Button>

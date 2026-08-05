@@ -37,7 +37,7 @@ export function BackToTopButton() {
         type="button"
         onClick={handleBackToTop}
         aria-label={copywriting('navigation.back_to_top', '回到顶部')}
-        className="flex h-12 w-12 items-center justify-center rounded-lg bg-white shadow-sm transition-colors hover:bg-muted/40"
+        className="flex h-12 w-12 items-center justify-center rounded-lg bg-card text-card-foreground shadow-sm transition-colors hover:bg-muted/40"
       >
         <ChevronUp className="h-5 w-5 text-foreground" />
       </button>

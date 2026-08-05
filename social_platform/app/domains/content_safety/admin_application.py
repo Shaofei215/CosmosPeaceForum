@@ -29,6 +29,7 @@ from social_platform.app.domains.content_safety.events import (
 from social_platform.app.domains.content_safety.models import ContentReport, ContentReportEscalation
 from social_platform.app.domains.heat import application as heat_service
 from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.post.events import PostUpdated
 from social_platform.app.domains.post import application as post_application
 from social_platform.app.domains.search import application as search_service
 from social_platform.app.shared.events import publish_domain_event
@@ -278,6 +279,7 @@ def restore_post_as_admin(db: Session, post_id: int, admin: PlatformAdminUser) -
         target_id=post_id,
         details={},
     )
+    publish_domain_event(db, PostUpdated(post_id=post.id, author_id=post.author_id))
     db.commit()
     db.refresh(post)
     search_service.index_post(post)
@@ -385,6 +387,7 @@ def list_content(
                 created_at=post.created_at,
                 created_by_agent=post.created_by_agent,
                 like_count=post.like_count,
+                dislike_count=post.dislike_count,
                 comment_count=post.comment_count,
                 moderation_status=post.moderation_status,
                 archived_at=post.archived_at,
@@ -466,6 +469,7 @@ def list_archived_content(
                 created_at=post.created_at,
                 created_by_agent=post.created_by_agent,
                 like_count=post.like_count,
+                dislike_count=post.dislike_count,
                 comment_count=post.comment_count,
                 moderation_status=post.moderation_status,
                 archived_at=post.archived_at,
@@ -964,6 +968,9 @@ def _reported_user_item_from_group(
         bio=user.bio,
         avatar_url=user.avatar_url,
         created_at=user.created_at,
+        coin_balance=user.coin_balance,
+        login_streak=user.login_streak,
+        last_coin_reward_date=user.last_coin_reward_date,
         report_count=unique_reporter_count + len(escalations),
         report_reasons=report_reasons,
         last_reported_at=max(last_reported_values),

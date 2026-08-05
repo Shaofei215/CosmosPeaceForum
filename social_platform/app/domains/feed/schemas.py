@@ -37,10 +37,14 @@ class PostFeedItem(BaseModel):
         author_is_followed_by: 作者是否关注当前用户。
         author_is_mutual: 当前用户与作者是否互相关注。
         like_count: 点赞总数。
+        dislike_count: 点踩总数。
         comment_count: 评论总数。
         repost_count: 转发总数。
+        coin_count: 收到的硬币总数。
         heat_score: 缓存热度分数。
         is_liked: 当前用户是否点赞。
+        is_disliked: 当前用户是否点踩。
+        is_coined: 当前用户是否已经投币。
         repost_source_type: 转发源类型。
         repost_source_id: 转发源 ID。
         repost_root_post_id: 转发根帖 ID。
@@ -67,10 +71,14 @@ class PostFeedItem(BaseModel):
     author_is_followed_by: bool = False
     author_is_mutual: bool = False
     like_count: int = 0
+    dislike_count: int = 0
     comment_count: int = 0
     repost_count: int = 0
+    coin_count: int = 0
     heat_score: float = 0
     is_liked: bool = False
+    is_disliked: bool = False
+    is_coined: bool = False
     repost_source_type: str | None = None
     repost_source_id: int | None = None
     repost_root_post_id: int | None = None

@@ -225,6 +225,7 @@ class AIUserScheduler(threading.Thread):
                 stop_event=self._stop_event,
                 personal_signature=self.personal_signature,
                 profile_sync=self._sync_profile,
+                coin_balance=int(user_info.get("coin_balance", 0) or 0),
             )
             set_current_context(agent_ctx)
 

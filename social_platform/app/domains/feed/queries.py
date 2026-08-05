@@ -13,10 +13,12 @@ from sqlalchemy import func
 from sqlalchemy.orm import Query, Session, joinedload
 
 from social_platform.app.domains.feed.schemas import PostFeedItem
+from social_platform.app.domains.coin import application as coin_service
 from social_platform.app.domains.follow.models import Follow
 from social_platform.app.domains.post import poll_queries, queries as post_queries
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.post.schemas import RepostChainAuthor
+from social_platform.app.domains.reaction import application as reaction_service
 from social_platform.app.domains.reaction.models import Like
 from social_platform.app.domains.topic import queries as topic_queries
 from social_platform.app.domains.user.models import User
@@ -159,6 +161,12 @@ def build_feed_items(
 
     post_ids = [post.id for post in posts]
     like_status_map = get_user_like_status(db, post_ids, current_user_id)
+    dislike_status_map = reaction_service.get_user_dislike_status(
+        db,
+        post_ids,
+        current_user_id,
+    )
+    coin_status_map = coin_service.get_user_coin_statuses(db, post_ids, current_user_id)
     follow_status_map = get_author_follow_status(
         db,
         [post.author_id for post in posts],
@@ -190,10 +198,14 @@ def build_feed_items(
                 author_is_followed_by=author_follow_status.get("is_followed_by", False),
                 author_is_mutual=author_follow_status.get("is_mutual", False),
                 like_count=post.like_count,
+                dislike_count=post.dislike_count,
                 comment_count=post.comment_count,
                 repost_count=post.repost_count,
+                coin_count=post.coin_count,
                 heat_score=post.heat_score or 0,
                 is_liked=like_status_map.get(post.id, False),
+                is_disliked=dislike_status_map.get(post.id, False),
+                is_coined=coin_status_map.get(post.id, False),
                 repost_source_type=post.repost_source_type,
                 repost_source_id=post.repost_source_id,
                 repost_root_post_id=post.repost_root_post_id,

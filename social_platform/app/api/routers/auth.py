@@ -25,6 +25,7 @@ from social_platform.app.domains.identity import application as identity_service
 from social_platform.app.domains.identity import sessions as session_service
 from social_platform.app.domains.identity import verification as verification_service
 from social_platform.app.domains.identity.models import UserSession
+from social_platform.app.domains.coin import application as coin_service
 from social_platform.app.domains.hot_topic import application as hot_topic_service
 from social_platform.app.domains.notification import application as notification_service
 from social_platform.app.domains.topic import application as topic_service
@@ -82,6 +83,12 @@ def _session_response(session: UserSession, current_session_id: str | None = Non
     )
 
 
+def _grant_login_coins(db: Session, user: User) -> coin_service.DailyCoinRewardResult:
+    """执行一次与成功登录同事务提交的每日硬币奖励检查。"""
+
+    return coin_service.grant_daily_login_reward(db, user)
+
+
 def _current_user_payload(
     credentials: HTTPAuthorizationCredentials,
     db: Session,
@@ -131,6 +138,7 @@ def _build_agent_login_context(db: Session, user: User) -> AgentLoginContext:
     unread_count = int(summary.get("unread_count", 0) or 0)
     return AgentLoginContext(
         platform_user_id=user.id,
+        coin_balance=int(getattr(user, "coin_balance", 0) or 0),
         following_count=int(summary.get("following_count", 0) or 0),
         followers_count=int(summary.get("followers_count", 0) or 0),
         unread_count=unread_count if unread_count > 0 else None,
@@ -425,6 +433,7 @@ def verify_and_register(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     client_type, user_agent, ip_address = _request_session_context(request, user_data.client_type)
+    reward = _grant_login_coins(db, db_user)
     token_pair = session_service.create_session_token_pair(
         db=db,
         account_id=db_user.id,
@@ -440,6 +449,9 @@ def verify_and_register(
         id=db_user.id,
         username=db_user.username,
         message="注册成功，请完善您的个人资料",
+        daily_coin_reward=reward.amount,
+        coin_balance=reward.coin_balance,
+        login_streak=reward.streak,
         **token_pair,
     )
 
@@ -529,6 +541,7 @@ def login(
             ) from exc
 
     client_type, user_agent, ip_address = _request_session_context(request, user_data.client_type)
+    reward = _grant_login_coins(db, user)
     token_pair = session_service.create_session_token_pair(
         db=db,
         account_id=user.id,
@@ -545,7 +558,13 @@ def login(
         if user_data.client_type == "agent"
         else None
     )
-    return TokenResponse(**token_pair, agent_context=agent_context)
+    return TokenResponse(
+        **token_pair,
+        agent_context=agent_context,
+        daily_coin_reward=reward.amount,
+        coin_balance=reward.coin_balance,
+        login_streak=reward.streak,
+    )
 
 
 # ========== 内建 Agent 登录 ==========
@@ -573,6 +592,7 @@ def internal_agent_login(
     user = _authenticate_username_password_account(db, login_data.username, login_data.password)
 
     client_type, user_agent, ip_address = _request_session_context(request, client_type="agent")
+    reward = _grant_login_coins(db, user)
     token_pair = session_service.create_session_token_pair(
         db=db,
         account_id=user.id,
@@ -584,7 +604,12 @@ def internal_agent_login(
         revoke_same_client=False,
     )
 
-    return TokenResponse(**token_pair)
+    return TokenResponse(
+        **token_pair,
+        daily_coin_reward=reward.amount,
+        coin_balance=reward.coin_balance,
+        login_streak=reward.streak,
+    )
 
 
 @router.post("/admin-agent-login", response_model=TokenResponse)
@@ -621,6 +646,7 @@ def admin_agent_login(
 
     user = _authenticate_username_password_account(db, login_data.username, login_data.password)
     client_type, user_agent, ip_address = _request_session_context(request)
+    reward = _grant_login_coins(db, user)
     token_pair = session_service.create_session_token_pair(
         db=db,
         account_id=user.id,
@@ -632,7 +658,12 @@ def admin_agent_login(
         revoke_same_client=False,
     )
 
-    return TokenResponse(**token_pair)
+    return TokenResponse(
+        **token_pair,
+        daily_coin_reward=reward.amount,
+        coin_balance=reward.coin_balance,
+        login_streak=reward.streak,
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)

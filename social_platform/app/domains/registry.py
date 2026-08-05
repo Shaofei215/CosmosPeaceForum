@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from social_platform.app.admin.models.admin_user import PlatformAdminUser
 from social_platform.app.domains.comment.models import Comment, CommentLike
+from social_platform.app.domains.coin.models import DailyCoinReward, PostCoin
 from social_platform.app.domains.content_safety.models import (
     ContentModerationLLMSettings,
     ContentReport,
@@ -20,13 +21,14 @@ from social_platform.app.domains.identity.models import EmailVerificationCode, U
 from social_platform.app.domains.invitation.models import RegistrationInvitation
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.post.models import PollOption, PollVote, Post
-from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.reaction.models import Dislike, Like
 from social_platform.app.domains.topic.models import PostTopic, Topic
 from social_platform.app.domains.user.models import User
 
 __all__ = [
     "Comment",
     "CommentLike",
+    "DailyCoinReward",
     "ContentModerationLLMSettings",
     "ContentReport",
     "ModerationAppeal",
@@ -37,11 +39,13 @@ __all__ = [
     "HotTopicSettings",
     "EmailVerificationCode",
     "Like",
+    "Dislike",
     "Notification",
     "PlatformAdminUser",
     "PollOption",
     "PollVote",
     "Post",
+    "PostCoin",
     "PostTopic",
     "RegistrationInvitation",
     "User",

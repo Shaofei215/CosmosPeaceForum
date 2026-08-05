@@ -29,8 +29,10 @@ def calculate_post_heat_score(post: Post, now: Optional[datetime] = None) -> flo
         1 + (post.like_count or 0) * 1
         + (post.comment_count or 0) * 2
         + (post.repost_count or 0) * 4
+        + (post.coin_count or 0) * 8
+        - (post.dislike_count or 0) * 1
     )
-    quality_score = math.sqrt(weighted_interactions)
+    quality_score = math.sqrt(max(weighted_interactions, 0))
     # 六小时平滑窗口避免发布后分数断崖式下降，1.6 次幂让旧内容更快让位。
     time_decay = (age_hours + 6) ** 1.6
     return quality_score / time_decay

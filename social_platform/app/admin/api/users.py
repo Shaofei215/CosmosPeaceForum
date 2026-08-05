@@ -20,6 +20,8 @@ from social_platform.app.admin.schemas import (
     UserViolationRequest,
     ViolationCategory,
     UserWithModerationResponse,
+    UserCoinBalanceResponse,
+    UserCoinBalanceUpdateRequest,
 )
 from social_platform.app.admin.services.moderation_service import (
     list_moderated_users,
@@ -44,6 +46,7 @@ from social_platform.app.domains.content_safety.appeal_application import (
     reject_appeal,
 )
 from social_platform.app.domains.invitation import application as invitation_service
+from social_platform.app.domains.coin import application as coin_service
 
 router = APIRouter(prefix="/users", tags=["platform-admin-users"])
 
@@ -58,6 +61,31 @@ async def users(
 ):
     items, total = list_users(db, skip=skip, limit=limit, keyword=keyword)
     return PaginatedResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.put("/{user_id}/coin-balance", response_model=UserCoinBalanceResponse)
+async def update_user_coin_balance(
+    user_id: int,
+    request: UserCoinBalanceUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: PlatformAdminUser = Depends(require_permission(PERMISSION_MANAGE_USERS)),
+) -> UserCoinBalanceResponse:
+    """手动设置用户硬币余额，并写入管理员操作日志。"""
+
+    try:
+        user = coin_service.set_user_coin_balance(db, user_id, request.coin_balance)
+    except coin_service.UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    create_operation_log(
+        db,
+        current_admin,
+        "update_user_coin_balance",
+        "user",
+        user_id,
+        {"coin_balance": request.coin_balance},
+    )
+    db.commit()
+    return UserCoinBalanceResponse(user_id=user.id, coin_balance=user.coin_balance)
 
 
 @router.post("/violations/batch", response_model=UserModerationBatchUpdateResponse)

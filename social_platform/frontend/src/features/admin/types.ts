@@ -122,7 +122,15 @@ export interface UserWithModeration {
   followers_count: number;
   post_count: number;
   comment_count: number;
+  coin_balance: number;
+  login_streak: number;
+  last_coin_reward_date: string | null;
   moderation: UserModerationStatus;
+}
+
+export interface UserCoinBalanceResponse {
+  user_id: number;
+  coin_balance: number;
 }
 
 export type ViolationCategory =
@@ -221,6 +229,9 @@ export interface ReportedUserItem {
   bio: string | null;
   avatar_url: string | null;
   created_at: string;
+  coin_balance: number;
+  login_streak: number;
+  last_coin_reward_date: string | null;
   report_count: number;
   report_reasons: ContentReportReason[];
   last_reported_at: string;

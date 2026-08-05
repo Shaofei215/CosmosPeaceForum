@@ -65,6 +65,22 @@ class FakePlatformClient:
             }
         if endpoint == "/posts/1/comments":
             return {"items": [], "total": 12, "skip": 0, "limit": 5}
+        if endpoint == "/posts/1/coin":
+            return {
+                "post_id": 1,
+                "coin_count": 1,
+                "is_coined": True,
+                "coin_balance": 4,
+            }
+        if endpoint == "/posts/1/dislike":
+            return {
+                "post_id": 1,
+                "dislike_count": 1,
+                "is_disliked": True,
+                "like_count": 1,
+                "is_liked": False,
+                "archived": False,
+            }
         if endpoint == "/users/10/follow-status":
             return {"is_following": False, "is_mutual": False, "is_followed_by": False}
         if endpoint == "/feeds/feed/all":
@@ -203,6 +219,45 @@ def test_feed_uses_explicit_token_and_returns_cursor() -> None:
     }
     assert set(result.data) == {"posts"}
     assert result.cursor == {"kind": "global_feed", "feed_type": "recommended", "seed": "abc", "offset": 1}
+
+
+def test_give_post_coin_returns_balance_and_refreshed_post() -> None:
+    """共享投币工具应调用公开 API，并把余额与最新帖子一并交给 Agent。"""
+
+    client = FakePlatformClient()
+    result = execute_platform_tool(
+        "give_post_coin",
+        {"post_id": 1},
+        PlatformToolContext(client=client, access_token="token", current_user={"id": 1}),
+    )
+
+    assert [call["endpoint"] for call in client.calls] == [
+        "/posts/1/coin",
+        "/posts/1",
+        "/users/10/follow-status",
+    ]
+    assert result.data["coin"]["coin_balance"] == 4
+    assert result.data["post"]["id"] == 1
+    assert result.cursor_policy == "preserve"
+
+
+def test_toggle_post_dislike_returns_reaction_and_refreshed_post() -> None:
+    """共享点踩工具应返回点踩状态并刷新帖子。"""
+
+    client = FakePlatformClient()
+    result = execute_platform_tool(
+        "toggle_post_dislike",
+        {"post_id": 1},
+        PlatformToolContext(client=client, access_token="token", current_user={"id": 1}),
+    )
+
+    assert [call["endpoint"] for call in client.calls] == [
+        "/posts/1/dislike",
+        "/posts/1",
+        "/users/10/follow-status",
+    ]
+    assert result.data["reaction"]["is_disliked"] is True
+    assert result.data["post"]["id"] == 1
 
 
 def test_notifications_and_scroll_share_cursor() -> None:

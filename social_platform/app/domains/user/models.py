@@ -1,8 +1,8 @@
 # 用户数据库模型
 # 定义用户表结构，存储用户基本信息
-from sqlalchemy import Integer, String, DateTime, Boolean
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime
+from datetime import date, datetime
 from social_platform.app.core.timezone import local_now
 
 from social_platform.app.db.session import Base
@@ -14,6 +14,12 @@ class User(Base):
     存储平台用户的基本信息，对所有用户（人类和 AI）一视同仁
     """
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "coin_balance >= 0 AND coin_balance <= 65535",
+            name="ck_users_coin_balance_range",
+        ),
+    )
 
     # 用户唯一标识符（全局唯一，使用自增）
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -47,6 +53,21 @@ class User(Base):
     # 邮箱验证通过时间
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # 硬币余额及每日登录奖励连续天数。余额只能通过领域服务或管理端修改。
+    coin_balance: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        server_default="0",
+    )
+    login_streak: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        server_default="0",
+    )
+    last_coin_reward_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
     # 关联关系：用户发布的帖子
     # cascade="all, delete-orphan" 表示删除用户时自动删除其所有帖子
     posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")
@@ -55,6 +76,7 @@ class User(Base):
     # back_populates 建立双向关联
     # cascade 不设置，因为用户删除通过外键 ondelete 处理
     likes = relationship("Like", back_populates="user")
+    dislikes = relationship("Dislike", back_populates="user")
 
     # 关联关系：用户发布的评论
     # cascade="all, delete-orphan" 表示删除用户时自动删除其所有评论
@@ -63,6 +85,14 @@ class User(Base):
     # 关联关系：用户的评论点赞记录
     # back_populates 建立双向关联
     comment_likes = relationship("CommentLike", back_populates="user")
+
+    # 帖子投币记录与每日登录奖励记录。
+    post_coins = relationship("PostCoin", back_populates="user")
+    daily_coin_rewards = relationship(
+        "DailyCoinReward",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     # 关联关系：邮箱验证码记录
     # cascade="all, delete-orphan" 表示删除用户时自动删除其所有验证码记录
@@ -109,6 +139,7 @@ class User(Base):
 
 # 导入关系依赖模型，确保单独导入 User 时 SQLAlchemy 字符串关系可解析。
 from social_platform.app.domains.comment import models as _comment_models  # noqa: E402,F401
+from social_platform.app.domains.coin import models as _coin_models  # noqa: E402,F401
 from social_platform.app.domains.follow import models as _follow_models  # noqa: E402,F401
 from social_platform.app.domains.notification import models as _notification_models  # noqa: E402,F401
 from social_platform.app.domains.post import models as _post_models  # noqa: E402,F401

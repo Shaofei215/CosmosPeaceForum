@@ -665,6 +665,47 @@ def _toggle_post_like(ctx: PlatformToolContext, args: schemas.TogglePostLikeArgu
     return PlatformToolResult(action=action, data={"post": post}, cursor_policy="preserve")
 
 
+def _toggle_post_dislike(
+    ctx: PlatformToolContext,
+    args: schemas.TogglePostDislikeArguments,
+) -> PlatformToolResult:
+    """切换帖子点踩状态，并兼容达到阈值后帖子已归档的结果。"""
+
+    reaction = ctx.request("POST", f"/posts/{args.post_id}/dislike")
+    post = None
+    if not reaction.get("archived"):
+        post = normalize_post(ctx.request("GET", f"/posts/{args.post_id}"), ctx)
+    action = (
+        f"点踩了帖子 {args.post_id}；帖子达到阈值并被系统删除"
+        if reaction.get("archived")
+        else f"{'点踩了' if reaction.get('is_disliked') else '取消点踩了'}帖子 {args.post_id}"
+    )
+    return PlatformToolResult(
+        action=action,
+        data={"reaction": reaction, "post": post},
+        cursor_policy="preserve",
+    )
+
+
+def _give_post_coin(ctx: PlatformToolContext, args: schemas.GivePostCoinArguments) -> PlatformToolResult:
+    """向帖子投出一枚不可撤销的硬币。"""
+
+    coin_result = ctx.request("POST", f"/posts/{args.post_id}/coin")
+    post = normalize_post(ctx.request("GET", f"/posts/{args.post_id}"), ctx)
+    author = post.get("author_username", "") if post else ""
+    content = truncate_text(post.get("content", "") if post else "", 120)
+    action = (
+        f"给 @{author} 的帖子投了一枚硬币：{content}"
+        if author and content
+        else f"给帖子 {args.post_id} 投了一枚硬币"
+    )
+    return PlatformToolResult(
+        action=action,
+        data={"post": post, "coin": coin_result},
+        cursor_policy="preserve",
+    )
+
+
 def _vote_post_poll(ctx: PlatformToolContext, args: schemas.VotePostPollArguments) -> PlatformToolResult:
     """参与帖子投票。"""
 
@@ -915,6 +956,22 @@ PLATFORM_TOOLS: dict[str, PlatformToolDefinition] = {
         "write",
         schemas.TogglePostLikeArguments,
         _toggle_post_like,
+        True,
+    ),
+    "toggle_post_dislike": PlatformToolDefinition(
+        "toggle_post_dislike",
+        "切换帖子点踩状态；点踩会降低热度，达到阈值会删除帖子",
+        "write",
+        schemas.TogglePostDislikeArguments,
+        _toggle_post_dislike,
+        True,
+    ),
+    "give_post_coin": PlatformToolDefinition(
+        "give_post_coin",
+        "转给帖子作者一枚硬币并支持帖子；每帖仅一次且不可撤销",
+        "write",
+        schemas.GivePostCoinArguments,
+        _give_post_coin,
         True,
     ),
     "toggle_comment_like": PlatformToolDefinition(

@@ -70,6 +70,8 @@ TOOL_TO_LOCATION = {
     "get_user_profile": "用户主页",
     "update_profile": None,
     "toggle_post_like": None,
+    "toggle_post_dislike": None,
+    "give_post_coin": None,
     "vote_post_poll": None,
     "toggle_comment_like": None,
     "toggle_follow": None,
@@ -105,6 +107,8 @@ TOOLS_WITH_RETURN_VALUE = {
 
 TOOL_NO_RETURN_VALUE = {
     "toggle_post_like",
+    "toggle_post_dislike",
+    "give_post_coin",
     "toggle_comment_like",
     "toggle_follow",
     "create_comment",

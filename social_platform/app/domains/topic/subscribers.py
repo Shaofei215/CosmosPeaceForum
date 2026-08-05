@@ -17,7 +17,7 @@ from social_platform.app.domains.post.events import (
     RepostCreated,
 )
 from social_platform.app.domains.post.models import Post
-from social_platform.app.domains.reaction.events import LikeChanged
+from social_platform.app.domains.reaction.events import DislikeChanged, LikeChanged
 from social_platform.app.domains.topic import application as topic_application
 from social_platform.app.shared.events import subscribe_domain_event
 
@@ -73,6 +73,12 @@ def handle_like_changed(db: Session, event: LikeChanged) -> None:
     topic_application.refresh_topics_for_post(db, event.post_id or event.target_id)
 
 
+def handle_dislike_changed(db: Session, event: DislikeChanged) -> None:
+    """点踩状态变化后刷新相关帖子的话题热度。"""
+
+    topic_application.refresh_topics_for_post(db, event.post_id)
+
+
 def handle_comment_created(db: Session, event: CommentCreated) -> None:
     """评论创建后刷新所属帖子的话题热度。"""
 
@@ -94,5 +100,6 @@ def register_topic_subscribers() -> None:
     subscribe_domain_event(RepostCreated, handle_repost_created)
     subscribe_domain_event(RepostCountChanged, handle_repost_count_changed)
     subscribe_domain_event(LikeChanged, handle_like_changed)
+    subscribe_domain_event(DislikeChanged, handle_dislike_changed)
     subscribe_domain_event(CommentCreated, handle_comment_created)
     subscribe_domain_event(CommentDeleted, handle_comment_deleted)

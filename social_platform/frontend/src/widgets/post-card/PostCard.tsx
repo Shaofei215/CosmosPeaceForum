@@ -12,12 +12,14 @@ import {
   ChevronDown as ExpandIcon,
   ChevronUp,
   Clock,
+  Coins,
   CornerDownRight,
   Flag,
   Flame,
   MessageCircle,
   MoreHorizontal,
   Repeat2,
+  ThumbsDown,
   ThumbsUp,
   Trash2,
 } from 'lucide-react';
@@ -35,6 +37,8 @@ import {
   useToggleCommentLike,
 } from '@/features/comment';
 import { useToggleLike } from '@/features/like';
+import { useToggleDislike } from '@/features/dislike';
+import { useGivePostCoin } from '@/features/coin';
 import { useFollowStatus, useToggleFollow, type FollowStatusResponse } from '@/features/follow';
 import { COMMENT_CONTENT_MAX_LENGTH, POST_CONTENT_MAX_LENGTH } from '@/shared/config/contentLimits';
 import { useAuthStore } from '@/features/auth';
@@ -115,6 +119,8 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const toggleLike = useToggleLike();
+  const toggleDislike = useToggleDislike();
+  const giveCoin = useGivePostCoin();
   const toggleFollow = useToggleFollow();
   const createComment = useCreateComment(post.id);
   const repost = useRepost();
@@ -136,6 +142,8 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportError, setReportError] = useState('');
   const [repostContent, setRepostContent] = useState('');
+  const [coinMessage, setCoinMessage] = useState('');
+  const [dislikeMessage, setDislikeMessage] = useState('');
   const articleContentRef = useRef<HTMLDivElement>(null);
   const postContentRef = useRef<HTMLParagraphElement>(null);
   const contentToggleRef = useRef<HTMLButtonElement>(null);
@@ -149,8 +157,39 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
   const authorAvatar =
     'author_avatar' in post ? post.author_avatar : post.author?.avatar_url || null;
   const authorBio = 'author_bio' in post ? post.author_bio : post.author?.bio || null;
-  const isLiked = 'is_liked' in post ? post.is_liked : post.is_liked_by_current_user;
+  const baseIsLiked = 'is_liked' in post ? post.is_liked : post.is_liked_by_current_user;
+  const baseIsDisliked =
+    'is_disliked' in post ? post.is_disliked : post.is_disliked_by_current_user;
+  const likeResponse = toggleLike.data?.post_id === post.id ? toggleLike.data : undefined;
+  const dislikeResponse = toggleDislike.data?.post_id === post.id ? toggleDislike.data : undefined;
+  const isLiked = likeResponse
+    ? likeResponse.is_liked
+    : dislikeResponse
+      ? dislikeResponse.is_liked
+      : baseIsLiked;
+  const isDisliked = likeResponse
+    ? likeResponse.is_disliked
+    : dislikeResponse
+      ? dislikeResponse.is_disliked
+      : baseIsDisliked;
+  const displayedLikeCount = likeResponse
+    ? likeResponse.like_count
+    : dislikeResponse
+      ? dislikeResponse.like_count
+      : post.like_count;
+  const displayedDislikeCount = likeResponse
+    ? likeResponse.dislike_count
+    : dislikeResponse
+      ? dislikeResponse.dislike_count
+      : post.dislike_count || 0;
+  const responseCoined = giveCoin.data?.post_id === post.id && giveCoin.data.is_coined;
+  const isCoined = Boolean(
+    responseCoined || ('is_coined' in post ? post.is_coined : post.is_coined_by_current_user)
+  );
+  const displayedCoinCount =
+    giveCoin.data?.post_id === post.id ? giveCoin.data.coin_count : post.coin_count || 0;
   const isCurrentUser = user?.id === post.author_id;
+  const hasInsufficientCoins = isAuthenticated && (user?.coin_balance ?? 0) < 1;
   const isArticle = post.type === 'article';
   const mentionUsers = post.mention_users || post.repost_chain_authors || [];
   const topicMentions = post.topic_mentions || [];
@@ -430,7 +469,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               toggleFollow.mutate(post.author_id);
             }}
             disabled={toggleFollow.isPending}
-            className="h-7 shrink-0 border-zinc-950 bg-white px-3 text-xs text-zinc-950 hover:bg-zinc-100/80"
+            className="h-7 shrink-0 border-primary bg-card px-3 text-xs text-primary hover:bg-accent"
           >
             {toggleFollow.isPending ? (
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -537,7 +576,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           <button
             ref={contentToggleRef}
             onClick={handleContentExpansionToggle}
-            className="mt-2 flex items-center gap-1 text-sm text-zinc-950 transition-colors hover:opacity-80"
+            className="mt-2 flex items-center gap-1 text-sm text-primary transition-colors hover:opacity-80"
           >
             {isContentExpanded ? (
               <>
@@ -562,12 +601,93 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           onClick={event => {
             event.preventDefault();
             event.stopPropagation();
+            if (!requireLogin()) return;
+            toggleDislike.reset();
             toggleLike.mutate(post.id);
           }}
           disabled={toggleLike.isPending}
         >
           <ThumbsUp className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
-          <span>{post.like_count}</span>
+          <span>{displayedLikeCount}</span>
+        </button>
+        <button
+          className={`flex items-center gap-1.5 text-sm transition-colors ${
+            isDisliked
+              ? 'text-slate-600 dark:text-slate-300'
+              : isCurrentUser
+                ? 'cursor-not-allowed text-muted-foreground/50'
+                : 'text-muted-foreground hover:text-slate-600 dark:hover:text-slate-300'
+          }`}
+          onClick={event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!requireLogin() || isCurrentUser) return;
+            setDislikeMessage('');
+            toggleLike.reset();
+            toggleDislike.mutate(post.id, {
+              onSuccess: data => {
+                setDislikeMessage(data.archived ? '点踩已记录，帖子达到阈值并被系统删除' : '');
+              },
+              onError: error => {
+                setDislikeMessage(
+                  error && typeof error === 'object' && 'message' in error
+                    ? String(error.message)
+                    : '点踩失败，请稍后重试'
+                );
+              },
+            });
+          }}
+          disabled={toggleDislike.isPending || isCurrentUser}
+          title={
+            isCurrentUser
+              ? copywriting('post.dislike_self_forbidden', '不能给自己的帖子点踩')
+              : copywriting('post.give_dislike', '点踩')
+          }
+          aria-label={copywriting('post.give_dislike', '点踩')}
+        >
+          <ThumbsDown className={`h-4 w-4 ${isDisliked ? 'fill-current' : ''}`} />
+          <span>{displayedDislikeCount}</span>
+        </button>
+        <button
+          className={`flex items-center gap-1.5 text-sm transition-colors ${
+            isCoined
+              ? 'text-amber-500'
+              : isCurrentUser || hasInsufficientCoins
+                ? 'cursor-not-allowed text-muted-foreground/50'
+                : 'text-muted-foreground hover:text-amber-500'
+          }`}
+          onClick={event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!requireLogin() || isCoined || isCurrentUser || hasInsufficientCoins) return;
+            setCoinMessage('');
+            giveCoin.mutate(post.id, {
+              onSuccess: data => {
+                setCoinMessage(`投币成功，对方获得 1 枚硬币；你剩余 ${data.coin_balance} 枚`);
+              },
+              onError: error => {
+                setCoinMessage(
+                  error && typeof error === 'object' && 'message' in error
+                    ? String(error.message)
+                    : '投币失败，请稍后重试'
+                );
+              },
+            });
+          }}
+          disabled={giveCoin.isPending || isCoined || isCurrentUser || hasInsufficientCoins}
+          title={
+            isCurrentUser
+              ? copywriting('post.coin_self_forbidden', '不能给自己的帖子投币')
+              : isCoined
+                ? copywriting('post.coin_already_given', '已经投过币')
+                : hasInsufficientCoins
+                  ? copywriting('post.coin_insufficient', '硬币余额不足')
+                  : copywriting('post.give_coin', '投币')
+          }
+          aria-label={copywriting('post.give_coin', '投币')}
+        >
+          <Coins className={`h-4 w-4 ${isCoined ? 'fill-current' : ''}`} />
+          <span>{displayedCoinCount}</span>
         </button>
         <button
           className={`flex items-center gap-1.5 text-sm transition-colors ${
@@ -638,6 +758,21 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           )}
         </div>
       </div>
+
+      {coinMessage && (
+        <p className={`mt-2 text-xs ${giveCoin.isError ? 'text-destructive' : 'text-amber-600'}`}>
+          {coinMessage}
+        </p>
+      )}
+      {dislikeMessage && (
+        <p
+          className={`mt-2 text-xs ${
+            toggleDislike.isError ? 'text-destructive' : 'text-muted-foreground'
+          }`}
+        >
+          {dislikeMessage}
+        </p>
+      )}
 
       {isRepostOpen && isAuthenticated && (
         <form onSubmit={handleSubmitRepost} className="mt-3">
@@ -923,12 +1058,12 @@ function PollBlock({
               handleVote(option.id);
             }}
             disabled={currentPoll.has_voted || votePoll.isPending}
-            className="group relative min-h-10 w-full overflow-hidden rounded-lg border-0 bg-slate-100 px-3 py-2 text-left text-sm transition-colors hover:bg-slate-200 disabled:cursor-default disabled:hover:bg-slate-100"
+            className="group relative min-h-10 w-full overflow-hidden rounded-lg border-0 bg-muted px-3 py-2 text-left text-sm transition-colors hover:bg-accent disabled:cursor-default disabled:hover:bg-muted"
           >
             {showResults && (
               <span
                 className={`absolute inset-y-0 left-0 transition-[width] duration-500 ease-out ${
-                  isSelected ? 'bg-sky-300' : 'bg-sky-100'
+                  isSelected ? 'bg-sky-300 dark:bg-sky-700' : 'bg-sky-100 dark:bg-sky-950'
                 }`}
                 style={{ width: animateProgress ? `${option.percentage}%` : 0 }}
               />
@@ -937,7 +1072,7 @@ function PollBlock({
               <span className="break-words text-foreground">{option.text}</span>
               {showResults && (
                 <span
-                  className={`shrink-0 text-xs ${isSelected ? 'text-sky-800' : 'text-slate-500'}`}
+                  className={`shrink-0 text-xs ${isSelected ? 'text-sky-700 dark:text-sky-300' : 'text-muted-foreground'}`}
                 >
                   {option.percentage}%
                 </span>

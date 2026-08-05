@@ -7,22 +7,30 @@ const DEFAULT_PLATFORM_DISPLAY_NAME = '宇宙和平论坛';
 const PLATFORM_DISPLAY_NAME_PLACEHOLDER = '__PLATFORM_DISPLAY_NAME__';
 const PLATFORM_LOGO_PATH_PLACEHOLDER = '__PLATFORM_LOGO_PATH__';
 const PLATFORM_LOGO_MIME_PLACEHOLDER = '__PLATFORM_LOGO_MIME__';
+const PLATFORM_DARK_LOGO_PATH_PLACEHOLDER = '__PLATFORM_DARK_LOGO_PATH__';
+const PLATFORM_DARK_LOGO_MIME_PLACEHOLDER = '__PLATFORM_DARK_LOGO_MIME__';
 const BRAND_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'] as const;
 
 /**
  * 从 public 目录按品牌格式优先级选择构建时使用的图片。
  *
  * @param name 不含扩展名的品牌文件名。
- * @returns 图片的公开路径与 MIME 类型；全部缺失时返回 PNG 兼容路径。
+ * @param fallback 全部格式均缺失时使用的备用图片。
+ * @returns 图片的公开路径与 MIME 类型；无备用图片时返回 PNG 兼容路径。
  */
-const resolvePublicBrandImage = (name: string): { path: string; mime: string } => {
-  const extension =
-    BRAND_IMAGE_EXTENSIONS.find((candidate) =>
-      existsSync(path.resolve(__dirname, 'public', `${name}.${candidate}`)),
-    ) ?? 'png';
-  const mimeExtension = extension === 'jpg' ? 'jpeg' : extension;
+const resolvePublicBrandImage = (
+  name: string,
+  fallback?: { path: string; mime: string },
+): { path: string; mime: string } => {
+  const extension = BRAND_IMAGE_EXTENSIONS.find((candidate) =>
+    existsSync(path.resolve(__dirname, 'public', `${name}.${candidate}`)),
+  );
+  if (extension === undefined && fallback !== undefined) return fallback;
 
-  return { path: `/${name}.${extension}`, mime: `image/${mimeExtension}` };
+  const resolvedExtension = extension ?? 'png';
+  const mimeExtension = resolvedExtension === 'jpg' ? 'jpeg' : resolvedExtension;
+
+  return { path: `/${name}.${resolvedExtension}`, mime: `image/${mimeExtension}` };
 };
 
 /**
@@ -48,6 +56,7 @@ export default defineConfig(({ command, mode }) => {
   const platformDisplayName =
     platformEnv.PLATFORM_DISPLAY_NAME?.trim() || DEFAULT_PLATFORM_DISPLAY_NAME;
   const platformLogo = resolvePublicBrandImage('icon');
+  const platformDarkLogo = resolvePublicBrandImage('icon_dark', platformLogo);
 
   return {
     plugins: [
@@ -56,8 +65,10 @@ export default defineConfig(({ command, mode }) => {
         name: 'management-html-branding',
         transformIndexHtml(html) {
           const brandedHtml = html
-            .replace(PLATFORM_LOGO_PATH_PLACEHOLDER, platformLogo.path)
-            .replace(PLATFORM_LOGO_MIME_PLACEHOLDER, platformLogo.mime);
+            .replaceAll(PLATFORM_LOGO_PATH_PLACEHOLDER, platformLogo.path)
+            .replaceAll(PLATFORM_LOGO_MIME_PLACEHOLDER, platformLogo.mime)
+            .replaceAll(PLATFORM_DARK_LOGO_PATH_PLACEHOLDER, platformDarkLogo.path)
+            .replaceAll(PLATFORM_DARK_LOGO_MIME_PLACEHOLDER, platformDarkLogo.mime);
 
           if (command === 'serve') {
             return brandedHtml.replaceAll(

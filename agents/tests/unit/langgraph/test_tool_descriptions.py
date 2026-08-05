@@ -45,6 +45,29 @@ def test_create_post_description_preserves_poll_constraints() -> None:
     assert "数量 2 到 5 个" in descriptions["create_post"]
 
 
+def test_give_post_coin_description_preserves_scarcity_and_constraints() -> None:
+    """投币工具必须让 Agent 理解稀缺性、不可撤销与自投限制。"""
+
+    description = _description_by_name()["give_post_coin"]
+
+    assert "稀缺资源" in description
+    assert "不能给自己的帖子投币" in description
+    assert "不能撤销" in description
+    assert "coin_balance" in description
+    assert "作者会因此获得一枚硬币" in description
+
+
+def test_dislike_description_warns_about_deletion_and_abuse() -> None:
+    """点踩工具必须让 Agent 理解删除后果与禁止围攻规则。"""
+
+    description = _description_by_name()["toggle_post_dislike"]
+
+    assert "降低帖子热度" in description
+    assert "帖子会被系统删除" in description
+    assert "不能把普通观点分歧当作点踩理由" in description
+    assert "不得组织或参与集中点踩" in description
+
+
 def test_hot_topic_description_preserves_usage_scenarios() -> None:
     """热榜工具的使用场景必须继续暴露给内部 Agent。"""
 

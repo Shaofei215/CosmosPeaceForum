@@ -453,7 +453,7 @@ export default function AdminHotTopicsPage() {
                       href="https://app.tavily.com"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm font-medium text-sky-600 transition-colors hover:text-sky-700 hover:underline"
+                      className="text-sm font-medium text-sky-600 transition-colors hover:text-sky-700 hover:underline dark:text-sky-400 dark:hover:text-sky-300"
                     >
                       开始使用 Tavily
                     </a>
@@ -901,13 +901,13 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (checked: b
       aria-checked={checked}
       className={cn(
         'relative h-6 w-11 overflow-hidden rounded-[9999px] transition-colors',
-        checked ? 'bg-zinc-950' : 'bg-muted'
+        checked ? 'bg-primary' : 'bg-muted'
       )}
       onClick={() => onChange(!checked)}
     >
       <span
         className={cn(
-          'absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform',
+          'absolute left-1 top-1 h-4 w-4 rounded-full bg-primary-foreground shadow transition-transform',
           checked ? 'translate-x-5' : 'translate-x-0'
         )}
       />

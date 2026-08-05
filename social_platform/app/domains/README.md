@@ -54,13 +54,14 @@ social_platform/app/domains/
 
 - `post`：发帖、编辑、删除、转发；发布帖子和转发相关事件。
 - `comment`：评论创建、删除、扁平回复、评论点赞状态；发布评论相关事件。
-- `reaction`：帖子/评论点赞等互动状态；发布 `LikeChanged`。
+- `reaction`：帖子点赞、点踩及互斥状态；发布 `LikeChanged`、`DislikeChanged`，并在点踩达到阈值时自动归档帖子。
+- `coin`：每日登录奖励、用户硬币余额和把硬币转给帖子作者的不可撤销投币；发布 `PostCoinGiven`。
 - `follow`：关注关系、关注/被关注列表；发布 `FollowChanged`。
 - `user`：用户公开资料、头像、公开用户信息；发布用户资料变化事件。
 - `identity`：注册、登录、session、邮箱验证、密码重置、AI 登录。
 - `email`：公共邮件模板、邮件内容组装和通用发件器。
-- `notification`：消费互动、关注、评论、转发事件，生成通知。
-- `heat`：消费互动、评论、转发、帖子事件，维护热度分数和排序值。
+- `notification`：消费互动、投币、关注、评论、转发事件，生成通知。
+- `heat`：消费互动、投币、评论、转发、帖子事件，维护热度分数和排序值。
 - `search`：消费帖子/用户变化事件，维护搜索索引投影。
 - `feed`：读模型上下文，组合帖子、关注、互动状态生成信息流。
 
@@ -249,8 +250,8 @@ def register_notification_subscribers() -> None:
 
 订阅组织规则：
 
-- `notification/subscribers.py` 订阅互动、关注、评论、转发事件来生成通知。
-- `heat/subscribers.py` 订阅互动、评论、转发、帖子事件来刷新热度。
+- `notification/subscribers.py` 订阅互动、投币、关注、评论、转发事件来生成通知。
+- `heat/subscribers.py` 订阅互动、投币、评论、转发、帖子事件来刷新热度。
 - `search/subscribers.py` 订阅帖子/用户变更事件来维护搜索投影。
 - 未来 `feed`、`analytics`、`recommendation` 也应各自放置订阅器。
 

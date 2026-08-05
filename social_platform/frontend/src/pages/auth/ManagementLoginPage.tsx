@@ -59,7 +59,7 @@ export default function ManagementLoginPage() {
     <div className="auth-page" data-auth-word="Login">
       <AuthIllustration />
       <BigLogo />
-      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card w-full max-w-md rounded-lg border bg-card shadow-sm">
         <CardContent className="auth-card-content p-6 text-center text-sm text-muted-foreground">
           {error || copywriting('auth.management_logging_in', '正在登录角色账号...')}
         </CardContent>

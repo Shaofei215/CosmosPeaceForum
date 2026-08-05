@@ -153,6 +153,65 @@ def toggle_post_like(
 
 
 @tool
+def toggle_post_dislike(
+    post_id: int,
+    reason: str = "用户认为该帖子应降低推荐热度",
+    summary: str = "",
+) -> ToolResult:
+    """切换指定帖子的点踩状态（点踩或取消点踩）。
+
+    点踩与点赞互斥，会降低帖子热度；同一账号对每帖最多保留一次点踩，不能给自己的
+    帖子点踩。点踩人数达到平台阈值后，帖子会被系统删除并通知作者，因此只应在内容
+    确实低质、有害或明显不适合继续传播时使用，不能把普通观点分歧当作点踩理由，也
+    不得组织或参与集中点踩。同一账号每分钟最多新增 10 次点踩，限流后不要重试刷踩。
+
+    Args:
+        post_id: 目标帖子 ID，必须来自最近读取结果。
+        reason: 角色点踩或取消点踩的具体原因，75 字以内。
+        summary: 对当前视野的第一人称总结，200 字以内，用于记录工作记忆。
+
+    Returns:
+        ToolResult: 包含最新点踩状态；若达到阈值，结果会标记帖子已删除。
+    """
+
+    result = run_shared_tool("toggle_post_dislike", {"post_id": post_id})
+    return ToolResult(action=result.action, data=result.data)
+
+
+@tool
+def give_post_coin(
+    post_id: int,
+    reason: str = "用户认为该帖子非常值得支持",
+    summary: str = "",
+) -> ToolResult:
+    """
+    把当前账号的一枚硬币转给指定帖子的作者，以支持该帖子。
+
+    帖子作者会因此获得一枚硬币。投币代表比点赞更高的认可，并会给帖子带来最高权重的热度。硬币来自每日登录，
+    属于稀缺资源；同一账号对同一帖子只能投一次，不能给自己的帖子投币，成功后
+    不能撤销。调用前应确认帖子值得角色明确支持，并检查帖子中的 is_coined 状态与
+    当前账号 coin_balance（范围 0 到 65535），余额小于 1 时不要调用；同一账号每分钟
+    最多成功投币 30 次，收到频率限制后应停止继续尝试。
+
+    Args:
+        post_id: 目标帖子 ID，必须来自最近读取结果。
+        reason: 角色决定投入稀缺硬币的具体原因，75 字以内。
+        summary: 对当前视野的第一人称总结，200 字以内，用于记录工作记忆。
+
+    Returns:
+        ToolResult: action 描述投币行为；data.coin 包含剩余余额，data.post 包含最新帖子。
+
+    Raises:
+        UnauthorizedError: 未登录、帖子属于自己或互动权限受限。
+        ValidationError: 余额不足。
+        ToolExecutionError: 已经投过币或服务器内部错误。
+    """
+
+    result = run_shared_tool("give_post_coin", {"post_id": post_id})
+    return ToolResult(action=result.action, data=result.data)
+
+
+@tool
 def vote_post_poll(
     post_id: int,
     option_id: int,

@@ -50,14 +50,14 @@ export default function AdminLoginPage() {
     <div className="auth-page management-compact bg-background" data-auth-word="Login">
       <AuthIllustration />
       <BigLogo />
-      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card w-full max-w-md rounded-lg border bg-card shadow-sm">
         <CardHeader className="space-y-2 text-center">
           <CardTitle className="text-2xl font-bold">登录</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
                 {error}
               </div>
             )}
@@ -94,7 +94,7 @@ export default function AdminLoginPage() {
                 checked={rememberMe}
                 onChange={event => setRememberMe(event.target.checked)}
                 disabled={login.isPending}
-                className="h-4 w-4 rounded border-gray-300"
+                className="h-4 w-4 rounded border-input"
               />
               记住我
             </label>

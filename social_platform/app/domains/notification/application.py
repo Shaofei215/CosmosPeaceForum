@@ -98,6 +98,27 @@ def create_post_like_notification(
     )
 
 
+def create_post_coin_notification(
+    db: Session,
+    post: Post,
+    sender_id: int,
+    created_by_agent: bool = False,
+) -> None:
+    """为帖子投币事件创建通知。"""
+
+    create_notification(
+        db=db,
+        recipient_id=post.author_id,
+        sender_id=sender_id,
+        notification_type="post_coin",
+        resource_type="post",
+        resource_id=post.id,
+        post_id=post.id,
+        source_content=format_post_source_content(post),
+        created_by_agent=created_by_agent,
+    )
+
+
 def create_comment_like_notification(
     db: Session,
     comment: Comment,

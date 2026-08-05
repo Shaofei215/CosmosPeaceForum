@@ -198,6 +198,7 @@ def test_agent_login_context_uses_platform_state_without_login_stats(monkeypatch
 
     assert payload == {
         "platform_user_id": 8,
+        "coin_balance": 0,
         "following_count": 2,
         "followers_count": 3,
         "unread_count": 4,

@@ -13,7 +13,8 @@ from social_platform.app.api.deps import (
 )
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.user.models import User
-from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.reaction.models import Dislike, Like
+from social_platform.app.domains.coin import application as coin_service
 from social_platform.app.domains.post.schemas import (
     PostCreate,
     PostResponse,
@@ -138,6 +139,7 @@ def repost(
 def get_posts(
     skip: int = Query(0, ge=0, description="跳过的记录数，用于分页"),
     limit: int = Query(10, ge=1, le=100, description="返回的记录数量，最大100"),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
@@ -155,9 +157,15 @@ def get_posts(
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     poll_map = poll_queries.build_poll_response_map(db, [post.id for post in posts], None)
+    coin_status_map = coin_service.get_user_coin_statuses(
+        db,
+        [post.id for post in posts],
+        current_user.id if current_user else None,
+    )
     for post in posts:
         post_queries.attach_repost_metadata(db, post)
         post.poll = poll_map.get(post.id)
+        post.is_coined_by_current_user = coin_status_map.get(post.id, False)
     return posts
 
 
@@ -187,12 +195,23 @@ def get_post(
         raise HTTPException(status_code=404, detail="帖子不存在")
 
     is_liked = False
+    is_disliked = False
+    is_coined = False
     if current_user is not None:
         like = db.query(Like).filter(
             Like.user_id == current_user.id,
             Like.post_id == post_id
         ).first()
         is_liked = like is not None
+        is_disliked = db.query(Dislike).filter(
+            Dislike.user_id == current_user.id,
+            Dislike.post_id == post_id,
+        ).first() is not None
+        is_coined = coin_service.get_user_coin_statuses(
+            db,
+            [post_id],
+            current_user.id,
+        ).get(post_id, False)
 
     return PostResponseWithLikeStatus(
         id=post.id,
@@ -204,8 +223,10 @@ def get_post(
         created_by_agent=post.created_by_agent,
         created_at=post.created_at,
         like_count=post.like_count,
+        dislike_count=post.dislike_count,
         comment_count=post.comment_count,
         repost_count=post.repost_count,
+        coin_count=post.coin_count,
         repost_source_type=post.repost_source_type,
         repost_source_id=post.repost_source_id,
         repost_root_post_id=post.repost_root_post_id,
@@ -216,7 +237,9 @@ def get_post(
         repost_origin=post.repost_root_post if post.repost_root_post_id else None,
         repost_origin_missing=post_queries.is_repost_origin_missing(post),
         poll=poll_queries.get_poll_response(db, post.id, current_user.id if current_user else None),
-        is_liked_by_current_user=is_liked
+        is_liked_by_current_user=is_liked,
+        is_disliked_by_current_user=is_disliked,
+        is_coined_by_current_user=is_coined,
     )
 
 
@@ -291,6 +314,7 @@ def get_user_posts(
     user_id: int,
     skip: int = Query(0, ge=0, description="跳过的记录数，用于分页"),
     limit: int = Query(10, ge=1, le=100, description="返回的记录数量，最大100"),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
@@ -319,7 +343,13 @@ def get_user_posts(
         joinedload(Post.repost_root_post).joinedload(Post.author),
     ).order_by(Post.created_at.desc()).offset(skip).limit(limit).all()
     poll_map = poll_queries.build_poll_response_map(db, [post.id for post in posts], None)
+    coin_status_map = coin_service.get_user_coin_statuses(
+        db,
+        [post.id for post in posts],
+        current_user.id if current_user else None,
+    )
     for post in posts:
         post_queries.attach_repost_metadata(db, post)
         post.poll = poll_map.get(post.id)
+        post.is_coined_by_current_user = coin_status_map.get(post.id, False)
     return posts

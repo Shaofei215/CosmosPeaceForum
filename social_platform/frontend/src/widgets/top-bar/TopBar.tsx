@@ -118,7 +118,7 @@ export function TopBar() {
       className={cn(
         'mobile-top-bar relative isolate overflow-visible rounded-[2rem] border border-transparent p-2 transition-all duration-200 sm:p-4',
         isScrolled
-          ? 'border-white/40 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-white/35'
+          ? 'border-border/70 shadow-md backdrop-blur-xl supports-[backdrop-filter]:bg-card/70'
           : 'shadow-sm'
       )}
     >
@@ -128,7 +128,9 @@ export function TopBar() {
       >
         <div
           className="absolute inset-0"
-          style={{ background: isScrolled ? 'rgba(255, 255, 255, 0.62)' : '#ffffff' }}
+          style={{
+            background: isScrolled ? 'hsl(var(--card) / 0.8)' : 'hsl(var(--card))',
+          }}
         />
       </div>
       <div className="relative z-10 flex items-center gap-2 sm:gap-4">
@@ -190,8 +192,8 @@ export function TopBar() {
                   aria-label={filter.label}
                   className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     activeFilter === filter.id
-                      ? 'bg-zinc-950 text-white'
-                      : 'bg-zinc-100/80 text-zinc-600 hover:opacity-85'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:opacity-85'
                   }`}
                 >
                   <Icon className="h-4 w-4 sm:hidden" />
@@ -212,8 +214,8 @@ export function TopBar() {
                   aria-label={filter.label}
                   className={`mobile-top-action feed-filter-action flex h-9 min-w-12 items-center justify-center rounded-[1.5rem] text-sm font-medium transition-colors sm:min-w-16 sm:gap-2 sm:px-4 sm:py-2 ${
                     urlSearchType === filter.id
-                      ? 'bg-zinc-950 text-white'
-                      : 'bg-zinc-100/80 text-zinc-600 hover:opacity-85'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:opacity-85'
                   }`}
                 >
                   <Icon className="h-4 w-4 sm:hidden" />
@@ -224,7 +226,7 @@ export function TopBar() {
             <button
               onClick={handleBack}
               aria-label={copywriting('common.back', '返回')}
-              className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-zinc-100/80 text-sm font-medium text-zinc-600 transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+              className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-muted text-sm font-medium text-muted-foreground transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">{copywriting('common.back', '返回')}</span>
@@ -234,7 +236,7 @@ export function TopBar() {
           <button
             onClick={handleBack}
             aria-label={copywriting('common.back', '返回')}
-            className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-zinc-100/80 text-sm font-medium text-zinc-600 transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+            className="mobile-top-action flex h-9 w-9 shrink-0 items-center justify-center rounded-[1.5rem] bg-muted text-sm font-medium text-muted-foreground transition-colors hover:opacity-85 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">{copywriting('common.back', '返回')}</span>

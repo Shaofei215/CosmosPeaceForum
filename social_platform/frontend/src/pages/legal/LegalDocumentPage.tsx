@@ -53,7 +53,7 @@ export default function LegalDocumentPage(): ReactElement {
 
   if (!legalDocument) {
     return (
-      <section className="rounded-lg bg-white p-6 text-center shadow-sm">
+      <section className="rounded-lg bg-card p-6 text-center text-card-foreground shadow-sm">
         <h1 className="text-xl font-semibold text-foreground">
           {copywriting('legal.not_found', '协议不存在')}
         </h1>
@@ -61,7 +61,7 @@ export default function LegalDocumentPage(): ReactElement {
           {copywriting('legal.not_found_hint', '请从注册页或站内链接访问有效协议。')}
         </p>
         <Link
-          className="mt-4 inline-flex text-sm font-medium text-sky-600 hover:text-sky-700"
+          className="mt-4 inline-flex text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
           to="/feed"
         >
           {copywriting('common.back_home', '返回主页')}
@@ -75,7 +75,7 @@ export default function LegalDocumentPage(): ReactElement {
     .join(PLATFORM_DISPLAY_NAME);
 
   return (
-    <article className="rounded-lg bg-white p-5 shadow-sm sm:p-6">
+    <article className="rounded-lg bg-card p-5 text-card-foreground shadow-sm sm:p-6">
       <div className="mb-5 border-b border-border/70 pb-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {copywriting('legal.eyebrow', 'Legal')}

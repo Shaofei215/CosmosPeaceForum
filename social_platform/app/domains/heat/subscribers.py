@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session
 
 from social_platform.app.domains.comment.events import CommentCreated, CommentDeleted
 from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.coin.events import PostCoinGiven
 from social_platform.app.domains.heat import application as heat_application
 from social_platform.app.domains.post.events import PostCreated, RepostCountChanged, RepostCreated
 from social_platform.app.domains.post.models import Post
-from social_platform.app.domains.reaction.events import LikeChanged
+from social_platform.app.domains.reaction.events import DislikeChanged, LikeChanged
 from social_platform.app.shared.events import subscribe_domain_event
 
 
@@ -45,6 +46,18 @@ def handle_like_changed(db: Session, event: LikeChanged) -> None:
         _refresh_post_by_id(db, event.target_id)
         return
     _refresh_comment_by_id(db, event.target_id)
+
+
+def handle_dislike_changed(db: Session, event: DislikeChanged) -> None:
+    """根据点踩状态变化刷新帖子热度。"""
+
+    _refresh_post_by_id(db, event.post_id)
+
+
+def handle_post_coin_given(db: Session, event: PostCoinGiven) -> None:
+    """投币成功后立即刷新目标帖子热度。"""
+
+    _refresh_post_by_id(db, event.post_id)
 
 
 def handle_comment_created(db: Session, event: CommentCreated) -> None:
@@ -90,6 +103,8 @@ def register_heat_subscribers() -> None:
     """注册热度领域事件订阅器。"""
 
     subscribe_domain_event(LikeChanged, handle_like_changed)
+    subscribe_domain_event(DislikeChanged, handle_dislike_changed)
+    subscribe_domain_event(PostCoinGiven, handle_post_coin_given)
     subscribe_domain_event(CommentCreated, handle_comment_created)
     subscribe_domain_event(CommentDeleted, handle_comment_deleted)
     subscribe_domain_event(PostCreated, handle_post_created)

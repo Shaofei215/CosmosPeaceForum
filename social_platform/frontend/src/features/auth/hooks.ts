@@ -132,6 +132,8 @@ export const useRegisterWithVerification = () => {
         created_at: new Date().toISOString(),
         avatar_url: null,
         bio: null,
+        coin_balance: data.coin_balance,
+        login_streak: data.login_streak,
       };
       setAuth(data.access_token, tempUser, data.refresh_token, Boolean(variables.remember_me));
     },

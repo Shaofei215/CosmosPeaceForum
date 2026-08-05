@@ -112,6 +112,9 @@ export const useToggleLike = () => {
     },
     onSuccess: (data, postId) => {
       queryClient.setQueryData<LikeStatusResponse>(['posts', postId, 'like-status'], data);
+      queryClient.invalidateQueries({ queryKey: ['post', postId] });
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
     onError: (_error, _postId, context) => {
       // 回滚所有之前保存的状态

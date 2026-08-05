@@ -160,6 +160,7 @@ class TestBuildSystemPrompt:
         context_text = prompt.split("## 当前账号状态\n", 1)[1].split("\n\n你是", 1)[0]
         assert json.loads(context_text) == {
             "platform_user_id": "unknown",
+            "coin_balance": 0,
             "关注": 1,
             "被关注": 2,
             "消息": 3,

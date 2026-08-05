@@ -15,7 +15,7 @@ from social_platform.app.db.session import SessionLocal
 from social_platform.app.domains.comment.models import Comment, CommentLike
 from social_platform.app.domains.notification.models import Notification
 from social_platform.app.domains.post.models import Post
-from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.reaction.models import Dislike, Like
 from social_platform.app.domains.user.models import User
 from social_platform.app.domains.notification.schemas import (
     NotificationListResponse,
@@ -219,6 +219,10 @@ def _serialize_post(db: Session, post: Post | None, current_user_id: int):
         Like.user_id == current_user_id,
         Like.post_id == post.id,
     ).first() is not None
+    is_disliked = db.query(Dislike).filter(
+        Dislike.user_id == current_user_id,
+        Dislike.post_id == post.id,
+    ).first() is not None
     post_session = object_session(post)
     return {
         "id": post.id,
@@ -230,9 +234,12 @@ def _serialize_post(db: Session, post: Post | None, current_user_id: int):
         "created_at": post.created_at,
         "created_by_agent": post.created_by_agent,
         "like_count": post.like_count,
+        "dislike_count": post.dislike_count,
         "comment_count": post.comment_count,
         "is_liked": is_liked,
         "is_liked_by_current_user": is_liked,
+        "is_disliked": is_disliked,
+        "is_disliked_by_current_user": is_disliked,
         "repost_count": getattr(post, "repost_count", 0),
         "repost_source_type": getattr(post, "repost_source_type", None),
         "repost_source_id": getattr(post, "repost_source_id", None),

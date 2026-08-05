@@ -27,12 +27,12 @@ export function RightSidebar() {
   return (
     <aside className="fixed top-24 z-30 h-fit w-64 space-y-3 pb-3">
       {isAuthenticated && (
-        <div className="rounded-lg bg-white p-3 shadow-sm">
+        <div className="rounded-lg bg-card p-3 text-card-foreground shadow-sm">
           <CreatePostForm />
         </div>
       )}
 
-      <div className="rounded-lg bg-white p-3 shadow-sm">
+      <div className="rounded-lg bg-card p-3 text-card-foreground shadow-sm">
         <div className="mb-3 flex items-center gap-2">
           <Flame className="h-5 w-5 text-orange-500" />
           <h3 className="font-semibold">{copywriting('hot_topics.title', '大家都在聊')}</h3>
@@ -74,7 +74,7 @@ export function RightSidebar() {
         )}
       </div>
 
-      <div className="rounded-lg bg-white p-3 shadow-sm">
+      <div className="rounded-lg bg-card p-3 text-card-foreground shadow-sm">
         <div className="mb-3 flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-primary" />
           <h3 className="font-semibold">{copywriting('hot_topics.topics_title', '话题')}</h3>

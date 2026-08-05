@@ -8,6 +8,7 @@ import { useUpdateUser, useUploadAvatar, useUser } from '@/features/user';
 import { useInfiniteUserFeed } from '@/features/feed';
 import { useToggleFollow, useFollowStatus } from '@/features/follow';
 import { useAuthStore, useLogout } from '@/features/auth';
+import { ThemeCycleButton } from '@/features/theme';
 import { useCreateReport } from '@/features/report';
 import { PostCard } from '@/widgets/post-card';
 import { Avatar, Skeleton, Button, Input, Textarea } from '@/shared/components/ui';
@@ -292,7 +293,7 @@ export default function ProfilePage() {
   return (
     <div className="space-y-3">
       {/* 用户资料卡片 */}
-      <div className="rounded-lg bg-white p-4 shadow-sm sm:p-5">
+      <div className="rounded-lg bg-card p-4 text-card-foreground shadow-sm sm:p-5">
         <div className="flex min-h-[84px] items-center gap-3 sm:gap-4">
           <div className="relative shrink-0">
             <button
@@ -309,7 +310,7 @@ export default function ProfilePage() {
               />
               {isEditing && (
                 <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-card/90 text-foreground shadow-sm">
                     {isSaving ? (
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                     ) : (
@@ -385,7 +386,7 @@ export default function ProfilePage() {
               disabled={toggleFollow.isPending}
               className={
                 followStatus?.is_following
-                  ? 'shrink-0 self-center border-zinc-950 px-4 text-zinc-950 hover:bg-zinc-100/80'
+                  ? 'shrink-0 self-center border-primary px-4 text-primary hover:bg-accent'
                   : 'shrink-0 self-center px-4'
               }
             >
@@ -462,7 +463,7 @@ export default function ProfilePage() {
             </button>
             {isUserMenuOpen && (
               <div
-                className="auth-menu-enter menu-origin-top-right absolute right-0 top-8 z-20 min-w-28 rounded-md border border-border bg-background p-1 shadow-md"
+                className="auth-menu-enter menu-origin-top-right absolute right-0 top-8 z-20 min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
                 onClick={event => event.stopPropagation()}
               >
                 {isCurrentUser === false && (
@@ -476,13 +477,19 @@ export default function ProfilePage() {
                   </button>
                 )}
                 {isCurrentUser && (
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={handleLogout}
-                  >
-                    {copywriting('common.logout', '登出')}
-                  </button>
+                  <>
+                    <ThemeCycleButton
+                      showLabel
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    />
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={handleLogout}
+                    >
+                      {copywriting('common.logout', '登出')}
+                    </button>
+                  </>
                 )}
               </div>
             )}
@@ -500,7 +507,7 @@ export default function ProfilePage() {
         />
       )}
       {/* 用户帖子列表 - 包含在大容器中 */}
-      <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
+      <div className="overflow-hidden rounded-lg bg-card p-0 text-card-foreground shadow-sm">
         <h2 className="text-lg font-semibold px-3 pt-3">
           {isCurrentUser
             ? copywriting('profile.my_posts', '我的帖子')
@@ -600,7 +607,7 @@ function ReportUserDialog({
 function ProfileSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="rounded-lg bg-white shadow-sm p-5">
+      <div className="rounded-lg bg-card p-5 text-card-foreground shadow-sm">
         <div className="flex items-center gap-4">
           <Skeleton className="h-16 w-16 rounded-full" />
           <div className="flex-1 space-y-3">

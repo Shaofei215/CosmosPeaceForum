@@ -673,6 +673,9 @@ def list_users(
             followers_count=user.followers_count,
             post_count=post_counts.get(user.id, 0),
             comment_count=comment_counts.get(user.id, 0),
+            coin_balance=user.coin_balance,
+            login_streak=user.login_streak,
+            last_coin_reward_date=user.last_coin_reward_date,
             moderation=moderation_to_status(moderations.get(user.id)),
         )
         for user in users
@@ -743,6 +746,9 @@ def list_moderated_users(
             followers_count=user.followers_count,
             post_count=post_counts.get(user.id, 0),
             comment_count=comment_counts.get(user.id, 0),
+            coin_balance=user.coin_balance,
+            login_streak=user.login_streak,
+            last_coin_reward_date=user.last_coin_reward_date,
             moderation=moderation_to_status(moderations.get(user.id)),
         )
         for user in users

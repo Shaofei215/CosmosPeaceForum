@@ -54,7 +54,7 @@ def test_upgrade_head_matches_current_metadata_and_downgrades(tmp_path: Path) ->
     assert set(inspector.get_table_names()) == expected_tables
     with engine.connect() as connection:
         revision = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert revision == "0002_hot_topic_tavily"
+    assert revision == "0006_post_dislikes"
     engine.dispose()
 
     command.check(config)

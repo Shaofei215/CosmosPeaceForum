@@ -50,7 +50,7 @@ export default function FollowersListPage() {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
+    <div className="overflow-hidden rounded-lg bg-card p-0 text-card-foreground shadow-sm">
       <h2 className="text-lg font-semibold px-3 pt-3">
         {copywriting('common.followers', '被关注')}
       </h2>

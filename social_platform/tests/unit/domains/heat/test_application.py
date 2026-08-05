@@ -19,6 +19,8 @@ def _post(
     like_count: int = 0,
     comment_count: int = 0,
     repost_count: int = 0,
+    coin_count: int = 0,
+    dislike_count: int = 0,
 ) -> Post:
     """构造热度计算测试使用的帖子。
 
@@ -27,6 +29,8 @@ def _post(
         like_count: 点赞数。
         comment_count: 评论与回复总数。
         repost_count: 转发数。
+        coin_count: 投币数。
+        dislike_count: 点踩数。
 
     Returns:
         Post: 不依赖数据库会话的帖子模型实例。
@@ -39,6 +43,8 @@ def _post(
         like_count=like_count,
         comment_count=comment_count,
         repost_count=repost_count,
+        coin_count=coin_count,
+        dislike_count=dislike_count,
     )
 
 
@@ -86,3 +92,32 @@ def test_more_interactions_still_raise_heat_at_the_same_age() -> None:
     )
 
     assert calculate_post_heat_score(active_post, now) > calculate_post_heat_score(quiet_post, now)
+
+
+def test_coin_has_the_highest_single_interaction_heat_weight() -> None:
+    """同龄帖子中，一枚硬币带来的热度必须高于单次其他互动。"""
+
+    now = datetime(2026, 7, 20, 12, 0, 0)
+    created_at = now - timedelta(hours=6)
+    coined_post = _post(created_at=created_at, coin_count=1)
+
+    assert calculate_post_heat_score(coined_post, now) > calculate_post_heat_score(
+        _post(created_at=created_at, repost_count=1),
+        now,
+    )
+
+
+def test_dislike_reduces_heat_without_producing_invalid_square_root() -> None:
+    """点踩应抵消热度，净互动为负时热度最低为零。"""
+
+    now = datetime(2026, 7, 20, 12, 0, 0)
+    created_at = now - timedelta(hours=1)
+    liked_post = _post(created_at=created_at, like_count=2)
+    disliked_post = _post(created_at=created_at, like_count=2, dislike_count=1)
+    heavily_disliked_post = _post(created_at=created_at, dislike_count=20)
+
+    assert calculate_post_heat_score(disliked_post, now) < calculate_post_heat_score(
+        liked_post,
+        now,
+    )
+    assert calculate_post_heat_score(heavily_disliked_post, now) == 0

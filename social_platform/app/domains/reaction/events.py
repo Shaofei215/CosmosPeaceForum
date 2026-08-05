@@ -23,3 +23,15 @@ class LikeChanged(DomainEvent):
     current_state: bool
     post_id: int | None = None
     created_by_agent: bool = False
+
+
+@dataclass(frozen=True)
+class DislikeChanged(DomainEvent):
+    """帖子点踩状态变化事件。"""
+
+    post_id: int
+    actor_id: int
+    owner_id: int
+    previous_state: bool
+    current_state: bool
+    created_by_agent: bool = False

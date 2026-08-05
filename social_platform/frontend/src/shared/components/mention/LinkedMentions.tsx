@@ -35,7 +35,8 @@ export function LinkedMentions({
   const topicByName = new Map(topics.map(topic => [topic.name, topic]));
   const parts = text.split(tokenPattern);
   const linkClassName =
-    className || 'font-medium text-sky-600 transition-colors hover:text-sky-700';
+    className ||
+    'font-medium text-sky-600 transition-colors hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300';
 
   return (
     <>

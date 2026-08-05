@@ -32,14 +32,14 @@ export default function AdminSetupPage() {
     <div className="auth-page management-compact bg-background" data-auth-word="Setup">
       <AuthIllustration />
       <BigLogo />
-      <Card className="auth-card w-full max-w-lg rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card w-full max-w-lg rounded-lg border bg-card shadow-sm">
         <CardHeader>
           <CardTitle>首次登录设置</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
                 {error}
               </div>
             )}

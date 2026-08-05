@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     # 开启后，真人注册必须提交与邮箱绑定的邀请码。
     INVITATION_REGISTRATION_ENABLED: bool = False
 
+    # 达到该点踩人数后，帖子自动归档并向作者发送站内管理通知。
+    POST_DISLIKE_ARCHIVE_THRESHOLD: int = Field(default=10, ge=1)
+
     AVATAR_UPLOAD_DIR: str = "uploads/avatars"
     AVATAR_STORAGE_STRATEGY: Literal["local", "object_storage"] = "local"
     MAX_AVATAR_SIZE: int = 5 * 1024 * 1024

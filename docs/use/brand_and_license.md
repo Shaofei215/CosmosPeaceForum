@@ -24,6 +24,16 @@
 | `banner` | 登录、注册等认证页面以及管理导航中的横幅标志 |
 | `background` | 登录、注册等认证页面的背景插图 |
 
+每种品牌图片还可以提供一个可选的暗色主题版本：
+
+| 文件名（不含扩展名） | 用途 |
+| --- | --- |
+| `icon_dark` | 暗色主题下的顶部导航、系统通知头像和浏览器页签图标 |
+| `banner_dark` | 暗色主题下的认证页面及管理导航横幅标志 |
+| `background_dark` | 暗色主题下的认证页面背景插图 |
+
+页面会根据实际生效的主题选择图片，因此手动选择暗色模式和“跟随系统”解析为暗色时都会使用 `_dark` 版本。对应的 `_dark` 图片不存在或所有支持格式均加载失败时，会自动回退到不含 `_dark` 的同名普通图片。
+
 ### 支持的图片格式
 
 图片支持以下扩展名：
@@ -46,6 +56,15 @@ PNG → JPG → JPEG → WebP → GIF
 
 例如，同时存在 `icon.png`、`icon.webp` 和 `icon.gif` 时，会使用 `icon.png`。如果不存在 `icon.png`，则继续尝试 `icon.jpg`、`icon.jpeg`、`icon.webp` 和 `icon.gif`。
 
+暗色图片与普通图片分别遵守相同的格式顺序，并且同一用途下会先完整尝试暗色文件，再回退普通文件：
+
+```text
+icon_dark.png → icon_dark.jpg → icon_dark.jpeg → icon_dark.webp → icon_dark.gif
+  → icon.png → icon.jpg → icon.jpeg → icon.webp → icon.gif
+```
+
+`background` 使用完全相同的规则，即先尝试 `background_dark` 的全部格式，再尝试 `background` 的全部格式。
+
 `banner` 还会以 `icon` 作为备用文件名。选取时会先按上述格式顺序尝试所有 `banner` 图片，全部不可用时才会按同样的顺序尝试 `icon`：
 
 ```text
@@ -53,7 +72,18 @@ banner.png → banner.jpg → banner.jpeg → banner.webp → banner.gif
   → icon.png → icon.jpg → icon.jpeg → icon.webp → icon.gif
 ```
 
-因此，即使同时存在 `banner.gif` 和 `icon.png`，横幅位置仍会优先使用 `banner.gif`。`icon` 和 `background` 没有备用文件名。
+暗色主题下，`banner` 会在每个文件名内先尝试暗色版本、再尝试普通版本，然后才进入 `icon` 备用文件名：
+
+```text
+banner_dark.png → banner_dark.jpg → banner_dark.jpeg → banner_dark.webp → banner_dark.gif
+  → banner.png → banner.jpg → banner.jpeg → banner.webp → banner.gif
+  → icon_dark.png → icon_dark.jpg → icon_dark.jpeg → icon_dark.webp → icon_dark.gif
+  → icon.png → icon.jpg → icon.jpeg → icon.webp → icon.gif
+```
+
+因此，即使同时存在 `banner.gif` 和 `icon.png`，横幅位置仍会优先使用 `banner.gif`；暗色主题下同时存在 `banner.png` 和 `icon_dark.png` 时，也会优先使用与横幅用途匹配的 `banner.png`。`icon` 和 `background` 没有其他备用文件名。
+
+浏览器页签图标同样会随实际主题在 `icon_dark` 与 `icon` 之间切换。构建时如果未找到任何 `icon_dark` 支持格式，暗色页签图标会直接复用已选中的普通 `icon` 文件。
 
 > 建议每个基础文件名只保留一种格式，以免旧的高优先级文件遮盖新图片。替换生产环境的图片后，需要重新构建并部署对应的前端。
 
