@@ -125,8 +125,11 @@ class PostResponse(PostBase):
     created_at: datetime
     created_by_agent: bool = False
     like_count: int = 0
+    dislike_count: int = 0
     comment_count: int = 0
     repost_count: int = 0
+    coin_count: int = 0
+    is_coined_by_current_user: bool = False
     repost_source_type: Optional[str] = None
     repost_source_id: Optional[int] = None
     repost_root_post_id: Optional[int] = None
@@ -146,3 +149,4 @@ class PostResponse(PostBase):
 class PostResponseWithLikeStatus(PostResponse):
     """帖子领域 API schema的响应模型，供 API adapter 做参数校验和响应序列化。"""
     is_liked_by_current_user: bool = False
+    is_disliked_by_current_user: bool = False

@@ -24,7 +24,7 @@ from social_platform.app.domains.post.events import (
 )
 from social_platform.app.domains.post.models import Post
 from social_platform.app.domains.post.schemas import PostCreate, PostUpdate, RepostCreate
-from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.reaction.models import Dislike, Like
 from social_platform.app.domains.user.models import User
 from social_platform.app.shared.events import publish_domain_event
 from social_platform.app.shared.unit_of_work import commit_session
@@ -288,6 +288,7 @@ def delete_post(db: Session, current_user: User, post_id: int) -> None:
         synchronize_session=False,
     )
     db.query(Like).filter(Like.post_id == post_id).delete(synchronize_session=False)
+    db.query(Dislike).filter(Dislike.post_id == post_id).delete(synchronize_session=False)
     db.query(Comment).filter(Comment.post_id == post_id).delete(synchronize_session=False)
     db.delete(post)
     publish_domain_event(db, PostDeleted(post_id=post_id, author_id=author_id))

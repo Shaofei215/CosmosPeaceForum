@@ -84,12 +84,16 @@ def _build_agent_context_json() -> str:
     hot_topic_titles = _get_hot_topic_titles()
     topic_titles = _get_topic_titles()
     try:
-        from agents.agents_scheduler.scheduler.context import get_current_user_id
+        from agents.agents_scheduler.scheduler.context import get_current_context, get_current_user_id
         platform_user_id = get_current_user_id() or "unknown"
+        current_context = get_current_context()
+        coin_balance = int(current_context.coin_balance if current_context else 0)
     except Exception:
         platform_user_id = "unknown"
+        coin_balance = 0
     account_context: Dict[str, Any] = {
         "platform_user_id": platform_user_id,
+        "coin_balance": coin_balance,
         "关注": summary.get("following_count", 0),
         "被关注": summary.get("followers_count", 0),
         "消息": summary.get("unread_count", 0),

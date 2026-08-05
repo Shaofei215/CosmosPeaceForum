@@ -3,6 +3,7 @@ import type { UserProfile } from '@/features/user/types';
 export type NotificationType =
   | 'post_like'
   | 'comment_like'
+  | 'post_coin'
   | 'comment'
   | 'comment_reply'
   | 'mention'

@@ -65,6 +65,9 @@ export interface RegisterResponse {
   session_id: string;
   /** 响应消息 */
   message: string;
+  daily_coin_reward: number;
+  coin_balance: number;
+  login_streak: number;
 }
 
 /**
@@ -115,11 +118,16 @@ export interface AuthResponse {
   session_id: string;
   /** 仅 client_type=agent 登录时返回的平台上下文 */
   agent_context?: AgentLoginContext;
+  /** 本次自然日首次登录获得的硬币数。 */
+  daily_coin_reward?: number;
+  coin_balance?: number;
+  login_streak?: number;
 }
 
 /** 外部 Agent 登录后立即可见的平台账号状态。 */
 export interface AgentLoginContext {
   platform_user_id: number;
+  coin_balance: number;
   following_count: number;
   followers_count: number;
   unread_count?: number;
@@ -149,6 +157,10 @@ export interface User {
   following_count?: number;
   /** 被关注数量 */
   followers_count?: number;
+  /** 当前可用硬币余额。 */
+  coin_balance?: number;
+  login_streak?: number;
+  last_coin_reward_date?: string | null;
 }
 
 /**

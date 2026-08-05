@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -15,6 +15,7 @@ class ContentItemResponse(BaseModel):
     created_at: datetime
     created_by_agent: bool = False
     like_count: int
+    dislike_count: int = 0
     comment_count: Optional[int] = None
     reply_count: Optional[int] = None
     moderation_status: str = "active"
@@ -38,6 +39,9 @@ class ReportedUserItemResponse(BaseModel):
     bio: Optional[str]
     avatar_url: Optional[str]
     created_at: datetime
+    coin_balance: int
+    login_streak: int
+    last_coin_reward_date: Optional[date] = None
     report_count: int
     report_reasons: list[ContentReportReasonResponse]
     last_reported_at: datetime

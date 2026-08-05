@@ -9,6 +9,7 @@ import {
   Repeat2,
   ShieldAlert,
   ThumbsUp,
+  Coins,
   UserPlus,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -529,6 +530,11 @@ function getTypeInfo(type: string) {
       label: copywriting('notifications.post_like', '赞了你的帖子'),
       icon: ThumbsUp,
       color: 'text-primary',
+    },
+    post_coin: {
+      label: copywriting('notifications.post_coin', '给你的帖子投了一枚硬币，你获得了1枚硬币'),
+      icon: Coins,
+      color: 'text-amber-500',
     },
     comment_like: {
       label: copywriting('notifications.comment_like', '赞了你的评论'),

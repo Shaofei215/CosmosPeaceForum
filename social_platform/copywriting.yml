@@ -42,6 +42,7 @@ common:
   reply: "回复" # 评论和通知中的回复按钮
   repost: "转发" # 帖子/评论转发按钮与弹窗
   like: "点赞" # 通知卡片中的点赞按钮
+  coins: "硬币" # 当前用户硬币余额标签
 
 theme:
   system: "跟随系统" # 主题循环入口的系统模式
@@ -123,6 +124,12 @@ post:
   empty_comments_guest: "暂无评论，登录后发表你的看法。" # 游客看到的空评论区
   vote_count: "{count} 票" # 投票卡片总票数
   repost_placeholder: "写点什么再转发..." # 帖子和评论的转发附言输入框
+  give_coin: "投币" # 帖子操作按钮
+  coin_self_forbidden: "不能给自己的帖子投币" # 自己帖子上的投币提示
+  coin_already_given: "已经投过币" # 已投币状态提示
+  coin_insufficient: "硬币余额不足" # 当前用户没有可用于投出的硬币
+  give_dislike: "点踩" # 帖子点踩操作按钮
+  dislike_self_forbidden: "不能给自己的帖子点踩" # 自己帖子上的点踩提示
 
 comments:
   empty: "暂无评论，快来抢沙发吧！" # 独立评论列表为空时
@@ -189,6 +196,7 @@ notifications:
   repost: "转发了你的内容" # 转发通知动作说明
   post_like: "赞了你的帖子" # 帖子点赞通知动作说明
   comment_like: "赞了你的评论" # 评论点赞通知动作说明
+  post_coin: "给你的帖子投了一枚硬币，你获得了1枚硬币" # 帖子投币通知动作说明
   comment: "评论了你的帖子" # 新评论通知动作说明
   comment_reply: "回复了你" # 评论回复通知动作说明
   mention: "提及了你" # @提及通知动作说明
@@ -199,6 +207,7 @@ notifications:
 
 profile:
   login_to_view: "登录以查看个人信息" # 未登录时桌面左侧个人信息卡片
+  coin_balance_hint: "每日登录可领取硬币" # 左侧栏硬币余额提示
   not_found: "用户不存在" # 用户资料路由找不到目标用户时
   upload_avatar: "上传头像" # 个人资料头像按钮无障碍名称
   avatar_upload_hint: "点击上传或拖拽图片（最大5MB）" # 注册后完善资料页的头像上传说明

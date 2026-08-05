@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from social_platform.app.domains.comment.events import CommentCreated
 from social_platform.app.domains.comment.models import Comment
+from social_platform.app.domains.coin.events import PostCoinGiven
 from social_platform.app.domains.content_safety.events import (
     ContentModerationActionApplied,
     ReportedContentViolationConfirmed,
@@ -45,6 +46,19 @@ def handle_like_changed(db: Session, event: LikeChanged) -> None:
             db,
             comment,
             event.actor_id,
+            created_by_agent=event.created_by_agent,
+        )
+
+
+def handle_post_coin_given(db: Session, event: PostCoinGiven) -> None:
+    """投币成功后通知帖子作者。"""
+
+    post = db.query(Post).filter(Post.id == event.post_id).first()
+    if post is not None:
+        notification_service.create_post_coin_notification(
+            db,
+            post,
+            event.sender_id,
             created_by_agent=event.created_by_agent,
         )
 
@@ -191,6 +205,7 @@ def register_notification_subscribers() -> None:
     """注册通知领域事件订阅器。"""
 
     subscribe_domain_event(LikeChanged, handle_like_changed)
+    subscribe_domain_event(PostCoinGiven, handle_post_coin_given)
     subscribe_domain_event(PostCreated, handle_post_created)
     subscribe_domain_event(CommentCreated, handle_comment_created)
     subscribe_domain_event(FollowChanged, handle_follow_changed)

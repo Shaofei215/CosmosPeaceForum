@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from social_platform.app.admin.services.moderation_guard import ensure_action_allowed
 from social_platform.app.api.deps import get_agent_operation_source, get_db, get_current_user
 from social_platform.app.domains.user.models import User
-from social_platform.app.domains.reaction.models import Like
+from social_platform.app.domains.post.models import Post
+from social_platform.app.domains.reaction.models import Dislike, Like
 from social_platform.app.domains.reaction.schemas import LikeToggleResponse
 from social_platform.app.domains.reaction import application as like_service
 
@@ -52,6 +53,16 @@ def toggle_like(
             like_count=like_count,
             is_liked=is_liked,
             created_by_agent=created_by_agent if is_liked else False,
+            dislike_count=(
+                db.query(Post.dislike_count).filter(Post.id == post_id).scalar() or 0
+            ),
+            is_disliked=(
+                db.query(Dislike).filter(
+                    Dislike.user_id == current_user.id,
+                    Dislike.post_id == post_id,
+                ).first()
+                is not None
+            ),
         )
 
     except like_service.PostNotFoundError as e:
@@ -99,6 +110,11 @@ def get_like_status(
             "is_liked": is_liked,
             "like_count": like_count,
             "created_by_agent": bool(relation and relation.created_by_agent),
+            "dislike_count": db.query(Post.dislike_count).filter(Post.id == post_id).scalar() or 0,
+            "is_disliked": db.query(Dislike).filter(
+                Dislike.user_id == current_user.id,
+                Dislike.post_id == post_id,
+            ).first() is not None,
         }
 
     except like_service.PostNotFoundError as e:

@@ -25,6 +25,8 @@ class TestGetSocialTools:
         expected_names = [
             "view_full_hot_topics",
             "toggle_post_like",
+            "toggle_post_dislike",
+            "give_post_coin",
             "toggle_comment_like",
             "create_comment",
             "toggle_follow",

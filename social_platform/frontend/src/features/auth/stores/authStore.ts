@@ -12,6 +12,7 @@ import { clearTokens, getAccessToken, setTokens } from '../tokenStorage';
 
 interface AuthStore extends AuthState {
   setAuth: (token: string, user: User, refreshToken?: string, rememberMe?: boolean) => void;
+  updateUser: (updates: Partial<User>) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
 }
@@ -35,6 +36,10 @@ export const useAuthStore = create<AuthStore>()(
           isAuthenticated: true,
           isLoading: false,
         });
+      },
+
+      updateUser: updates => {
+        set(state => ({ user: state.user ? { ...state.user, ...updates } : null }));
       },
 
       logout: () => {

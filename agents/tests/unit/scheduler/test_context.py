@@ -27,6 +27,7 @@ class TestAgentContext:
         assert ctx.agent_id == 100
         assert ctx.token == "test_token"
         assert ctx.user_config == {"key": "value"}
+        assert ctx.coin_balance == 0
 
     def test_agent_context_defaults(self):
         ctx = AgentContext()
@@ -35,6 +36,12 @@ class TestAgentContext:
         assert ctx.agent_id is None
         assert ctx.token is None
         assert ctx.user_config == {}
+        assert ctx.coin_balance == 0
+
+    def test_agent_context_keeps_login_coin_balance(self):
+        ctx = AgentContext(coin_balance=7)
+
+        assert ctx.coin_balance == 7
 
 
 class TestThreadLocalContext:

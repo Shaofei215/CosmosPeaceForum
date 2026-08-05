@@ -24,6 +24,10 @@ export interface PostFeedItem extends Post {
   author_is_mutual?: boolean;
   /** 当前用户是否已点赞 */
   is_liked: boolean;
+  /** 当前用户是否已点踩 */
+  is_disliked: boolean;
+  /** 当前用户是否已经投币。 */
+  is_coined: boolean;
   /** 推荐热度分数 */
   heat_score?: number;
 }

@@ -17,6 +17,7 @@ class AgentContext:
         agent_id: 当前 Agent 的配置 ID
         token: 当前 Agent 的访问令牌（JWT Token）
         user_config: 当前 Agent 的配置信息字典
+        coin_balance: 本次登录后公开平台返回的硬币余额
 
     Thread Safety:
         使用 threading.local() 确保每个线程有独立的上下文实例，
@@ -33,6 +34,7 @@ class AgentContext:
         stop_event: Optional[threading.Event] = None,
         personal_signature: Optional[str] = None,
         profile_sync: Optional[Callable[[Dict[str, Any]], bool]] = None,
+        coin_balance: int = 0,
     ):
         """初始化当前调度线程的 Agent 上下文。
 
@@ -45,6 +47,7 @@ class AgentContext:
             stop_event: 调度线程停止事件。
             personal_signature: 当前公开平台个人签名。
             profile_sync: 资料更新成功后的内部同步回调。
+            coin_balance: 本次登录后公开平台返回的硬币余额。
         """
 
         self.user_id = user_id
@@ -55,6 +58,7 @@ class AgentContext:
         self.stop_event = stop_event
         self.personal_signature = personal_signature
         self.profile_sync = profile_sync
+        self.coin_balance = coin_balance
 
 
 _thread_local = threading.local()

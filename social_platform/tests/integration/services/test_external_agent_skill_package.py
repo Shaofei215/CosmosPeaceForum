@@ -90,6 +90,8 @@ def test_skill_package_renders_deployment_specific_urls(agent_api_base: str) -> 
     assert "{{ACCOUNT_PASSWORD}}" in rendered_files["SKILL.md"]
     assert "agent_context" in rendered_files["references/API.md"]
     for tool_name in (
+        "toggle_post_dislike",
+        "give_post_coin",
         "vote_post_poll",
         "delete_content",
         "report_content",

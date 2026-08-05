@@ -5,7 +5,7 @@
  */
 
 import { Link } from 'react-router-dom';
-import { MessageCircle, User } from 'lucide-react';
+import { Coins, MessageCircle, User } from 'lucide-react';
 import { useAuthStore } from '@/features/auth';
 import { useUser } from '@/features/user';
 import { useNotificationUnreadCount } from '@/features/notification';
@@ -50,7 +50,7 @@ export function LeftSidebar() {
             </div>
 
             {/* 用户统计 */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Link
                 to={`/user/${user.id}/following`}
                 className="text-center hover:bg-muted/30 rounded-lg p-1 transition-colors"
@@ -69,6 +69,18 @@ export function LeftSidebar() {
                   {copywriting('common.followers', '被关注')}
                 </p>
               </Link>
+              <div
+                className="rounded-lg p-1 text-center"
+                title={copywriting('profile.coin_balance_hint', '每日登录可领取硬币')}
+              >
+                <p className="flex items-center justify-center gap-1 text-lg font-semibold text-amber-500">
+                  <Coins className="h-4 w-4" />
+                  {user.coin_balance ?? 0}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {copywriting('common.coins', '硬币')}
+                </p>
+              </div>
             </div>
 
             {/* 消息按钮 */}

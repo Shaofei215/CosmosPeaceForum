@@ -30,6 +30,29 @@ class LikeToggleResponse(BaseModel):
 
     # 当前存在的点赞关系是否由 Agent 通道创建。
     created_by_agent: bool = False
+    dislike_count: int = 0
+    is_disliked: bool = False
+
+
+class DislikeToggleResponse(BaseModel):
+    """帖子点踩切换结果。"""
+
+    post_id: int
+    dislike_count: int
+    is_disliked: bool
+    like_count: int
+    is_liked: bool
+    archived: bool = False
+    created_by_agent: bool = False
+
+
+class DislikeStatusResponse(BaseModel):
+    """当前用户的帖子点踩状态。"""
+
+    post_id: int
+    dislike_count: int
+    is_disliked: bool
+    created_by_agent: bool = False
 
 
 class LikeStatusMixin(BaseModel):

@@ -1,6 +1,6 @@
 # 帖子数据库模型
 # 定义帖子表结构，存储用户发布的内容
-from sqlalchemy import Boolean, CheckConstraint, Float, Integer, String, DateTime, ForeignKey, Index, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Float, Integer, String, DateTime, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from social_platform.app.core.timezone import local_now
@@ -42,6 +42,12 @@ class Post(Base):
     # 点赞计数，冗余存储以提高查询性能
     # 默认值为 0，每次点赞/取消点赞时更新
     like_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    dislike_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        server_default="0",
+    )
     
     # 评论计数，冗余存储以提高查询性能
     # 统计帖子下所有评论和回复的总数
@@ -49,6 +55,13 @@ class Post(Base):
 
     # 转发计数与转发链元数据
     repost_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # 收到的硬币数；投币是不可撤销且权重最高的帖子互动。
+    coin_count: Mapped[int] = mapped_column(
+        BigInteger,
+        default=0,
+        nullable=False,
+        server_default="0",
+    )
     repost_source_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     repost_source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     repost_root_post_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("posts.id"), nullable=True, index=True)
@@ -73,6 +86,7 @@ class Post(Base):
             f"type = 'article' OR length(content) <= {POST_CONTENT_MAX_LENGTH}",
             name="ck_posts_content_post_length",
         ),
+        CheckConstraint("dislike_count >= 0", name="ck_posts_dislike_count_nonnegative"),
         Index("idx_posts_latest", "created_at", "id"),
         Index("idx_posts_heat_latest", "heat_score", "created_at", "id"),
         Index("idx_posts_author_latest", "author_id", "created_at", "id"),
@@ -88,6 +102,8 @@ class Post(Base):
     # back_populates 建立双向关联
     # cascade 不设置，因为帖子删除通过外键 ondelete 处理
     likes = relationship("Like", back_populates="post")
+    dislikes = relationship("Dislike", back_populates="post")
+    coins = relationship("PostCoin", back_populates="post")
     
     # 关联关系：帖子的评论列表
     # cascade="all, delete-orphan" 表示删除帖子时自动删除其所有评论
@@ -181,5 +197,6 @@ class PollVote(Base):
 
 # 导入关系依赖模型，确保单独导入 Post 时 SQLAlchemy 字符串关系可解析。
 from social_platform.app.domains.comment import models as _comment_models  # noqa: E402,F401
+from social_platform.app.domains.coin import models as _coin_models  # noqa: E402,F401
 from social_platform.app.domains.reaction import models as _reaction_models  # noqa: E402,F401
 from social_platform.app.domains.user import models as _user_models  # noqa: E402,F401

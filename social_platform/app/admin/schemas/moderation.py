@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from social_platform.app.core.timezone import local_now
 from typing import Literal, Optional
 
@@ -130,7 +130,23 @@ class UserWithModerationResponse(BaseModel):
     followers_count: int
     post_count: int
     comment_count: int
+    coin_balance: int
+    login_streak: int
+    last_coin_reward_date: Optional[date] = None
     moderation: UserModerationStatusResponse
+
+
+class UserCoinBalanceUpdateRequest(BaseModel):
+    """管理员设置用户硬币余额。"""
+
+    coin_balance: int = Field(ge=0, le=65_535)
+
+
+class UserCoinBalanceResponse(BaseModel):
+    """管理员更新后的用户硬币余额。"""
+
+    user_id: int
+    coin_balance: int
 
 
 class ContentDeleteRequest(BaseModel):

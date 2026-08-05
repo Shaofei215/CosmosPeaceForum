@@ -44,6 +44,7 @@ import type {
   UserViolationRequest,
   ViolationCategory,
   UserWithModeration,
+  UserCoinBalanceResponse,
 } from './types';
 import { useAdminAuthStore } from './store';
 import { getAdminAccessToken, getAdminRefreshToken, updateAdminTokens } from './tokenStorage';
@@ -158,6 +159,10 @@ export const adminApi = {
   dashboardStats: () => client.get<unknown, DashboardStats>('/dashboard/stats'),
   users: (params: { skip?: number; limit?: number; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<UserWithModeration>>('/users/', { params }),
+  updateUserCoinBalance: (userId: number, coinBalance: number) =>
+    client.put<unknown, UserCoinBalanceResponse>(`/users/${userId}/coin-balance`, {
+      coin_balance: coinBalance,
+    }),
   reportedUsers: (params: { skip?: number; limit?: number; keyword?: string }) =>
     client.get<unknown, PaginatedResponse<ReportedUserItem>>('/users/reports', { params }),
   moderatedUsers: (params: { skip?: number; limit?: number; keyword?: string }) =>

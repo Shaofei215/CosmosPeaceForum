@@ -4,7 +4,7 @@
 前端和 Agent 调度器都依赖这些字段完成 refresh token 轮换和服务端 session 撤销。
 """
 from pydantic import BaseModel, ConfigDict, Field, EmailStr
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal, Optional
 
 
@@ -68,6 +68,7 @@ class AgentLoginContext(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     platform_user_id: int
+    coin_balance: int = 0
     following_count: int = 0
     followers_count: int = 0
     unread_count: Optional[int] = Field(default=None, gt=0)
@@ -88,6 +89,9 @@ class TokenResponse(BaseModel):
     refresh_expires_in: int
     session_id: str
     agent_context: Optional[AgentLoginContext] = None
+    daily_coin_reward: Optional[int] = Field(default=None, ge=0)
+    coin_balance: Optional[int] = Field(default=None, ge=0)
+    login_streak: Optional[int] = Field(default=None, ge=0)
 
 
 class RefreshTokenRequest(BaseModel):
@@ -122,6 +126,9 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     bio: Optional[str] = None
     created_at: datetime
+    coin_balance: int = 0
+    login_streak: int = 0
+    last_coin_reward_date: Optional[date] = None
 
     class Config:
         from_attributes = True
@@ -142,6 +149,9 @@ class RegisterResponse(BaseModel):
     expires_in: int
     refresh_expires_in: int
     session_id: str
+    daily_coin_reward: int = Field(default=0, ge=0)
+    coin_balance: int = Field(default=0, ge=0)
+    login_streak: int = Field(default=0, ge=0)
     message: str = "注册成功，请完善您的个人资料"
 
     class Config:

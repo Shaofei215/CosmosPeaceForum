@@ -26,10 +26,16 @@ export interface Post {
   created_by_agent: boolean;
   /** 点赞数 */
   like_count: number;
+  /** 点踩数 */
+  dislike_count: number;
   /** 评论数 */
   comment_count: number;
   /** 转发数 */
   repost_count: number;
+  /** 收到的硬币数。 */
+  coin_count: number;
+  /** 当前用户是否已经给该帖子投币。 */
+  is_coined_by_current_user?: boolean;
   /** 作者信息 */
   author?: PostAuthor | null;
   repost_source_type?: 'post' | 'comment' | null;
@@ -84,6 +90,8 @@ export interface RepostOriginPost {
 export interface PostWithLikeStatus extends Post {
   /** 当前用户是否已点赞 */
   is_liked_by_current_user: boolean;
+  /** 当前用户是否已点踩 */
+  is_disliked_by_current_user: boolean;
 }
 
 /**

@@ -154,6 +154,14 @@ class TogglePostLikeArguments(PostIdArguments):
     """帖子点赞切换参数。"""
 
 
+class TogglePostDislikeArguments(PostIdArguments):
+    """帖子点踩切换参数。"""
+
+
+class GivePostCoinArguments(PostIdArguments):
+    """帖子投币参数。"""
+
+
 class VotePostPollArguments(PostIdArguments):
     """帖子投票参数。"""
 

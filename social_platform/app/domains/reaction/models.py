@@ -55,3 +55,40 @@ class Like(Base):
     # 关联关系：被点赞的帖子
     # back_populates 建立双向关联
     post = relationship("Post", back_populates="likes")
+
+
+class Dislike(Base):
+    """用户对帖子的点踩记录。
+
+    复合主键确保同一用户对同一帖子最多保留一条点踩关系，用户或帖子删除时由
+    外键级联清理。点赞与点踩的互斥由 reaction 应用服务在同一事务中维护。
+    """
+
+    __tablename__ = "dislikes"
+
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    post_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=local_now, nullable=False)
+    created_by_agent: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        server_default="0",
+    )
+
+    user = relationship("User", back_populates="dislikes")
+    post = relationship("Post", back_populates="dislikes")
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "post_id", name="dislikes_pkey"),
+        Index("idx_dislikes_post_id", "post_id"),
+        Index("idx_dislikes_user_id", "user_id"),
+    )

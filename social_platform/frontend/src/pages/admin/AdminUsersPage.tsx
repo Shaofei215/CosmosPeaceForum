@@ -7,6 +7,7 @@ import {
   Bot,
   Braces,
   CheckCircle,
+  Coins,
   FileText,
   Heart,
   KeyRound,
@@ -63,6 +64,9 @@ function reportedUserToModerationUser(
       username: user.username,
       bio: user.bio,
       avatar_url: user.avatar_url,
+      coin_balance: user.coin_balance,
+      login_streak: user.login_streak,
+      last_coin_reward_date: user.last_coin_reward_date,
     };
   }
   return {
@@ -76,6 +80,9 @@ function reportedUserToModerationUser(
     followers_count: 0,
     post_count: 0,
     comment_count: 0,
+    coin_balance: user.coin_balance,
+    login_streak: user.login_streak,
+    last_coin_reward_date: user.last_coin_reward_date,
     moderation: {
       account_banned: false,
       account_banned_at: null,
@@ -260,6 +267,24 @@ export default function AdminUsersPage() {
       const { user_id, ...moderation } = response;
       setSelectedUser(current =>
         current && current.id === user_id ? { ...current, moderation } : current
+      );
+    },
+  });
+
+  const updateCoinBalanceMutation = useMutation({
+    mutationFn: ({ userId, coinBalance }: { userId: number; coinBalance: number }) =>
+      adminApi.updateUserCoinBalance(userId, coinBalance),
+    onSuccess: response => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      setSelectedUser(current =>
+        current && current.id === response.user_id
+          ? { ...current, coin_balance: response.coin_balance }
+          : current
+      );
+      setReportedModerationUser(current =>
+        current && current.id === response.user_id
+          ? { ...current, coin_balance: response.coin_balance }
+          : current
       );
     },
   });
@@ -548,6 +573,14 @@ export default function AdminUsersPage() {
                             </span>
                           </span>
                           <span
+                            className="inline-flex items-center gap-1 text-amber-500"
+                            title={`硬币余额；连续登录 ${user.login_streak} 天`}
+                            aria-label={`硬币余额 ${user.coin_balance}`}
+                          >
+                            <Coins size={15} />
+                            <span className="font-medium tabular-nums">{user.coin_balance}</span>
+                          </span>
+                          <span
                             className="inline-flex items-center gap-1 text-muted-foreground"
                             title="评论数"
                             aria-label={`评论数 ${user.comment_count}`}
@@ -689,6 +722,11 @@ export default function AdminUsersPage() {
           onRelease={category =>
             releaseRestrictionMutation.mutate({ userId: selectedUser.id, category })
           }
+          coinSaving={updateCoinBalanceMutation.isPending}
+          coinError={getErrorMessage(updateCoinBalanceMutation.error)}
+          onCoinBalanceSave={coinBalance =>
+            updateCoinBalanceMutation.mutate({ userId: selectedUser.id, coinBalance })
+          }
         />
       )}
       {batchOpen && (
@@ -722,6 +760,14 @@ export default function AdminUsersPage() {
           }
           onRelease={category =>
             releaseRestrictionMutation.mutate({ userId: reportedModerationUser.id, category })
+          }
+          coinSaving={updateCoinBalanceMutation.isPending}
+          coinError={getErrorMessage(updateCoinBalanceMutation.error)}
+          onCoinBalanceSave={coinBalance =>
+            updateCoinBalanceMutation.mutate({
+              userId: reportedModerationUser.id,
+              coinBalance,
+            })
           }
         />
       )}
@@ -1542,6 +1588,9 @@ function ViolationEditor({
   onClose,
   onSubmit,
   onRelease,
+  coinSaving = false,
+  coinError,
+  onCoinBalanceSave,
 }: {
   user?: UserWithModeration;
   title?: string;
@@ -1550,8 +1599,12 @@ function ViolationEditor({
   onClose: () => void;
   onSubmit: (payload: UserViolationRequest) => void;
   onRelease?: (category: ViolationCategory) => void;
+  coinSaving?: boolean;
+  coinError?: string | null;
+  onCoinBalanceSave?: (coinBalance: number) => void;
 }) {
   const [reason, setReason] = useState('');
+  const [coinBalance, setCoinBalance] = useState(user?.coin_balance ?? 0);
   const apply = (category: ViolationCategory) => {
     if (user && isCategoryControlled(user, category)) {
       onRelease?.(category);
@@ -1573,6 +1626,45 @@ function ViolationEditor({
           <CardTitle>{title || `管理 @${user?.username || `user_${user?.id}`}`}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {user && onCoinBalanceSave && (
+            <div className="rounded-md border p-3">
+              <div className="mb-2 flex items-center gap-2 font-medium">
+                <Coins size={16} className="text-amber-500" />
+                硬币余额
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  type="number"
+                  min={0}
+                  max={65535}
+                  value={coinBalance}
+                  onChange={event => setCoinBalance(Number(event.target.value))}
+                  aria-label="硬币余额"
+                />
+                <Button
+                  type="button"
+                  className="shrink-0 rounded-md"
+                  disabled={
+                    coinSaving ||
+                    !Number.isInteger(coinBalance) ||
+                    coinBalance < 0 ||
+                    coinBalance > 65535 ||
+                    coinBalance === user.coin_balance
+                  }
+                  onClick={() => onCoinBalanceSave(coinBalance)}
+                >
+                  {coinSaving ? '保存中' : '保存硬币'}
+                </Button>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                连续登录 {user.login_streak} 天
+                {user.last_coin_reward_date
+                  ? `；最近领取 ${user.last_coin_reward_date}`
+                  : '；尚未领取登录奖励'}
+              </p>
+              {coinError && <p className="mt-2 text-sm text-destructive">{coinError}</p>}
+            </div>
+          )}
           {user && (
             <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
               {(['publish', 'comment', 'interaction', 'avatar', 'username', 'bio'] as const).map(
