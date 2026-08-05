@@ -51,13 +51,6 @@ theme:
   current: "主题：{mode}" # 个人主页更多菜单展示的当前主题模式
   cycle_aria: "当前主题：{current}，点击切换为{next}" # 主题循环按钮的无障碍提示
 
-theme:
-  system: "跟随系统" # 主题循环入口的系统模式
-  light: "亮色" # 主题循环入口的亮色模式
-  dark: "暗色" # 主题循环入口的暗色模式
-  current: "主题：{mode}" # 个人主页更多菜单展示的当前主题模式
-  cycle_aria: "当前主题：{current}，点击切换为{next}" # 主题循环按钮的无障碍提示
-
 errors:
   not_found_title: "页面不存在" # 未匹配路由的 404 页面标题
   not_found_description: "The page, my friend, is blowin' in the wind." # 未匹配路由的 404 页面说明
