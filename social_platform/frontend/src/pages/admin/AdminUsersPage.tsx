@@ -823,7 +823,7 @@ function InvitationCodesPanel({
             </Button>
           </form>
           {(formError || error) && (
-            <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+            <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/40 dark:text-red-300">
               {formError || error}
             </div>
           )}
@@ -857,7 +857,7 @@ function InvitationCodesPanel({
                       <span
                         className={
                           invitation.status === 'used'
-                            ? 'rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700'
+                            ? 'rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
                             : 'rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground'
                         }
                       >
@@ -1413,13 +1413,13 @@ function CompactSwitch({
       aria-checked={checked}
       className={
         'relative h-6 w-11 overflow-hidden rounded-[9999px] transition-colors ' +
-        (checked ? 'bg-zinc-950' : 'bg-muted')
+        (checked ? 'bg-primary' : 'bg-muted')
       }
       onClick={() => onChange(!checked)}
     >
       <span
         className={
-          'absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ' +
+          'absolute left-1 top-1 h-4 w-4 rounded-full bg-primary-foreground shadow transition-transform ' +
           (checked ? 'translate-x-5' : 'translate-x-0')
         }
       />

@@ -40,7 +40,7 @@ export default function SetupPage() {
     <div className="auth-page" data-auth-word="Setup">
       <AuthIllustration />
       <BigLogo />
-      <Card className="auth-card w-full max-w-lg rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card w-full max-w-lg rounded-lg border bg-card shadow-sm">
         <CardHeader className="space-y-2 text-center">
           <CardTitle className="text-2xl font-bold">首次登录设置</CardTitle>
         </CardHeader>

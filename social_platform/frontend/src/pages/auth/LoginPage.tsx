@@ -176,7 +176,7 @@ export default function LoginPage() {
     <div className="auth-page" data-auth-word="Login">
       <AuthIllustration />
       <BigLogo />
-      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card w-full max-w-md rounded-lg border bg-card shadow-sm">
         <CardHeader className="auth-card-header space-y-1">
           <CardTitle className="auth-title text-2xl font-bold text-center">
             {copywriting('auth.login_title', '登录')}
@@ -215,15 +215,17 @@ export default function LoginPage() {
 
             {/* 登录方式切换 */}
             <div
-              className="auth-segmented relative grid grid-cols-2 rounded-lg bg-zinc-100/80 p-1"
+              className="auth-segmented relative grid grid-cols-2 rounded-lg bg-muted p-1"
               data-active={loginMethod}
             >
-              <span className="auth-segmented-slider absolute left-1 top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded-md bg-zinc-950 shadow-sm transition-transform duration-200 ease-out" />
+              <span className="auth-segmented-slider absolute left-1 top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded-md bg-primary shadow-sm transition-transform duration-200 ease-out" />
               <button
                 type="button"
                 onClick={() => setLoginMethod('password')}
                 className={`relative z-10 rounded-md py-2 text-sm font-medium transition-colors ${
-                  loginMethod === 'password' ? 'text-white' : 'text-zinc-600 hover:text-foreground'
+                  loginMethod === 'password'
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {copywriting('auth.password_login', '密码登录')}
@@ -232,7 +234,9 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => setLoginMethod('code')}
                 className={`relative z-10 rounded-md py-2 text-sm font-medium transition-colors ${
-                  loginMethod === 'code' ? 'text-white' : 'text-zinc-600 hover:text-foreground'
+                  loginMethod === 'code'
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {copywriting('auth.code_login', '验证码登录')}
@@ -283,7 +287,7 @@ export default function LoginPage() {
                     variant="outline"
                     onClick={handleSendCode}
                     disabled={isPending || countdown > 0 || !email.trim()}
-                    className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
+                    className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-primary text-primary-foreground shadow-none hover:opacity-90"
                   >
                     {countdown > 0
                       ? copywriting('auth.resend_after_short', '{seconds}秒后重发', {
@@ -302,7 +306,7 @@ export default function LoginPage() {
                   checked={rememberMe}
                   onChange={e => setRememberMe(e.target.checked)}
                   disabled={isPending}
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-4 w-4 rounded border-input"
                 />
                 {copywriting('auth.remember_me', '记住我')}
               </label>

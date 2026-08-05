@@ -11,7 +11,7 @@ export default function HotTopicsPage() {
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-lg bg-white shadow-sm">
+      <div className="overflow-hidden rounded-lg bg-card text-card-foreground shadow-sm">
         <div className="border-b border-border/50 p-4">
           <div className="flex items-center gap-2">
             <Flame className="h-5 w-5 text-orange-500" />
@@ -60,7 +60,7 @@ export default function HotTopicsPage() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-lg bg-white shadow-sm lg:hidden">
+      <div className="overflow-hidden rounded-lg bg-card text-card-foreground shadow-sm lg:hidden">
         <div className="border-b border-border/50 p-4">
           <h2 className="text-lg font-semibold">
             {copywriting('hot_topics.topics_title', '话题')}
@@ -76,7 +76,7 @@ export default function HotTopicsPage() {
               <Link
                 key={topic.id}
                 to={`/search?type=topic&q=${encodeURIComponent(topic.name)}`}
-                className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1.5 text-sm text-sky-700 transition-colors hover:bg-sky-100"
+                className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1.5 text-sm text-sky-700 transition-colors hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-900/60"
               >
                 #{topic.name}#
               </Link>

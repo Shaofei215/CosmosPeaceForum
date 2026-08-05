@@ -45,7 +45,7 @@ export default function SearchPage() {
   const userItems = items as UserSearchItem[];
 
   return (
-    <div className="overflow-hidden rounded-lg bg-white shadow-sm">
+    <div className="overflow-hidden rounded-lg bg-card text-card-foreground shadow-sm">
       {isLoading ? (
         <div className="divide-y divide-border/50">
           <SearchSkeleton type={type} />

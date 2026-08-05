@@ -58,12 +58,21 @@ function getRuntimeLabel(status?: AgentRuntimeStatus) {
     return { text: '已停止', className: 'bg-muted text-muted-foreground' };
   }
   if (status.status === 'stopping') {
-    return { text: '停止中', className: 'bg-orange-100 text-orange-700' };
+    return {
+      text: '停止中',
+      className: 'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
+    };
   }
   if (status.status === 'in_session') {
-    return { text: '会话中', className: 'bg-blue-100 text-blue-700' };
+    return {
+      text: '会话中',
+      className: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+    };
   }
-  return { text: '运行中', className: 'bg-green-100 text-green-700' };
+  return {
+    text: '运行中',
+    className: 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300',
+  };
 }
 
 export default function AgentListPage() {
@@ -354,7 +363,7 @@ export default function AgentListPage() {
       </div>
 
       {!schedulerOnline && (
-        <div className="mb-4 rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
+        <div className="mb-4 rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300">
           Scheduler 未连接，运行状态暂不可用。
         </div>
       )}
@@ -467,7 +476,7 @@ export default function AgentListPage() {
                           if (el) el.indeterminate = isSomeSelected;
                         }}
                         onChange={toggleSelectAll}
-                        className="h-4 w-4 rounded border-gray-300"
+                        className="h-4 w-4 rounded border-input"
                       />
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">角色</th>
@@ -493,7 +502,7 @@ export default function AgentListPage() {
                             type="checkbox"
                             checked={selectedIds.has(agent.id)}
                             onChange={() => toggleSelectOne(agent.id)}
-                            className="h-4 w-4 rounded border-gray-300"
+                            className="h-4 w-4 rounded border-input"
                           />
                         </td>
                         <td className="py-3 px-4">

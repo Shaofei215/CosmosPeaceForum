@@ -47,7 +47,7 @@ export default function NotificationsPage() {
   const items = data?.items ?? [];
 
   return (
-    <div className="overflow-hidden rounded-lg bg-white p-0 shadow-sm">
+    <div className="overflow-hidden rounded-lg bg-card p-0 text-card-foreground shadow-sm">
       <h2 className="text-lg font-semibold px-3 pt-3">
         {copywriting('notifications.title', '消息')}
       </h2>
@@ -241,7 +241,7 @@ function ModerationAppealAction({ notification }: { notification: NotificationIt
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
           <form
             onSubmit={submit}
-            className="w-full max-w-lg rounded-lg bg-white p-4 shadow-xl"
+            className="w-full max-w-lg rounded-lg bg-card p-4 text-card-foreground shadow-xl"
             onClick={event => event.stopPropagation()}
           >
             <div className="mb-3">
@@ -264,7 +264,7 @@ function ModerationAppealAction({ notification }: { notification: NotificationIt
               maxLength={1000}
               placeholder={copywriting('notifications.appeal_placeholder', '填写申诉理由')}
             />
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                 {copywriting('common.cancel', '取消')}
@@ -553,7 +553,7 @@ function getTypeInfo(type: string) {
     follow: {
       label: copywriting('notifications.follow', '关注了你'),
       icon: UserPlus,
-      color: 'text-emerald-600',
+      color: 'text-emerald-600 dark:text-emerald-400',
     },
     moderation: {
       label: copywriting('notifications.moderation', '发来一条管理通知'),
@@ -571,14 +571,14 @@ function getTypeInfo(type: string) {
     map[type as keyof typeof map] ?? {
       label: copywriting('notifications.direct_message', '给你发来一条消息'),
       icon: Info,
-      color: 'text-sky-600',
+      color: 'text-sky-600 dark:text-sky-400',
     }
   );
 }
 
 function NotificationSkeleton() {
   return (
-    <div className="rounded-lg bg-white shadow-sm p-0">
+    <div className="rounded-lg bg-card p-0 text-card-foreground shadow-sm">
       <Skeleton className="ml-3 mt-3 h-6 w-20" />
       {Array.from({ length: 5 }).map((_, index) => (
         <div key={index} className="flex gap-3 p-4 border-b border-border/50 last:border-b-0">

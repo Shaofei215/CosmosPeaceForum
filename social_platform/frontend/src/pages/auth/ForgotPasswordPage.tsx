@@ -104,7 +104,7 @@ export default function ForgotPasswordPage() {
     <div className="auth-page" data-auth-word="Reset">
       <AuthIllustration />
       <BigLogo />
-      <Card className="auth-card w-full max-w-md rounded-lg bg-white shadow-sm border">
+      <Card className="auth-card w-full max-w-md rounded-lg border bg-card shadow-sm">
         <CardHeader className="auth-card-header space-y-1">
           <CardTitle className="auth-title text-2xl font-bold text-center">
             {copywriting('auth.forgot_password_title', '忘记密码')}
@@ -160,7 +160,7 @@ export default function ForgotPasswordPage() {
                   variant="outline"
                   onClick={handleSendCode}
                   disabled={isSending || countdown > 0 || !email.trim()}
-                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-zinc-950 text-white shadow-none hover:opacity-90"
+                  className="auth-code-button whitespace-nowrap rounded-lg border-0 bg-primary text-primary-foreground shadow-none hover:opacity-90"
                 >
                   {countdown > 0
                     ? copywriting('auth.resend_after', '{seconds}秒后重试', {

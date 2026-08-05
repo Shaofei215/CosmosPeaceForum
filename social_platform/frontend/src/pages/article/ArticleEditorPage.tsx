@@ -581,7 +581,10 @@ export default function ArticleEditorPage() {
   };
 
   return (
-    <form onSubmit={submitArticle} className="overflow-hidden rounded-lg bg-white shadow-sm">
+    <form
+      onSubmit={submitArticle}
+      className="overflow-hidden rounded-lg bg-card text-card-foreground shadow-sm"
+    >
       <div className="border-b border-border/60 px-3 py-3 sm:px-4">
         <Input
           value={title}
@@ -594,7 +597,7 @@ export default function ArticleEditorPage() {
       <div
         className={cn(
           'article-editor-toolbar flex h-10 max-h-10 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden',
-          'border-b border-border/60 bg-white px-2 py-1 sm:px-3'
+          'border-b border-border/60 bg-card px-2 py-1 sm:px-3'
         )}
       >
         <ToolbarButton label={text.h1} active={toolbarState.h1} onClick={() => applyStyle('h1')}>
@@ -697,7 +700,7 @@ export default function ArticleEditorPage() {
 
       {linkDialog.open && (
         <div
-          className="article-link-bar fixed z-50 flex w-[min(34rem,calc(100vw-1rem))] items-center gap-2 rounded-full border border-border bg-white p-1.5 shadow-xl"
+          className="article-link-bar fixed z-50 flex w-[min(34rem,calc(100vw-1rem))] items-center gap-2 rounded-full border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
           style={linkBarStyle}
           onKeyDown={handleLinkBarKeyDown}
         >
@@ -751,10 +754,10 @@ function ToolbarButton({
       onClick={onClick}
       className={cn(
         'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-transparent text-muted-foreground',
-        'transition-colors hover:bg-zinc-100/80 hover:text-zinc-950',
+        'transition-colors hover:bg-accent hover:text-accent-foreground',
         disabled && 'cursor-default opacity-60 hover:bg-transparent',
         active &&
-          'border-zinc-950 bg-zinc-950 text-white shadow-sm hover:bg-zinc-950 hover:text-white hover:opacity-90'
+          'border-primary bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground hover:opacity-90'
       )}
       aria-pressed={Boolean(active)}
       title={label}

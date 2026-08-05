@@ -121,7 +121,7 @@ export default function SystemConfigPage() {
                 href="https://app.tavily.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm font-medium text-sky-600 transition-colors hover:text-sky-700 hover:underline"
+                className="text-sm font-medium text-sky-600 transition-colors hover:text-sky-700 hover:underline dark:text-sky-400 dark:hover:text-sky-300"
               >
                 开始使用 Tavily
               </a>

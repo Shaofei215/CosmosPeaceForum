@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAdminAuthStore, useAdminLogout, type AdminPermission } from '@/features/admin';
+import { ThemeCycleButton } from '@/features/theme';
 import { BrandImage } from '@/shared/components/BrandImage';
 
 const navItems = [
@@ -142,7 +143,12 @@ export function AdminLayout() {
         <div className="border-t border-border p-2.5">
           {sidebarOpen && (
             <div className="mb-2 min-w-0">
-              <p className="truncate text-sm font-medium">{admin?.username || '管理员'}</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {admin?.username || '管理员'}
+                </p>
+                <ThemeCycleButton className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" />
+              </div>
               <p className="truncate text-xs text-muted-foreground">
                 {admin?.is_super_admin ? '超级管理员' : '管理员'}
               </p>

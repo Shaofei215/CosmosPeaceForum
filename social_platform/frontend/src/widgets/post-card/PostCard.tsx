@@ -430,7 +430,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
               toggleFollow.mutate(post.author_id);
             }}
             disabled={toggleFollow.isPending}
-            className="h-7 shrink-0 border-zinc-950 bg-white px-3 text-xs text-zinc-950 hover:bg-zinc-100/80"
+            className="h-7 shrink-0 border-primary bg-card px-3 text-xs text-primary hover:bg-accent"
           >
             {toggleFollow.isPending ? (
               <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -537,7 +537,7 @@ export function PostCard({ post, expanded = false, focusedCommentId }: PostCardP
           <button
             ref={contentToggleRef}
             onClick={handleContentExpansionToggle}
-            className="mt-2 flex items-center gap-1 text-sm text-zinc-950 transition-colors hover:opacity-80"
+            className="mt-2 flex items-center gap-1 text-sm text-primary transition-colors hover:opacity-80"
           >
             {isContentExpanded ? (
               <>
@@ -923,12 +923,12 @@ function PollBlock({
               handleVote(option.id);
             }}
             disabled={currentPoll.has_voted || votePoll.isPending}
-            className="group relative min-h-10 w-full overflow-hidden rounded-lg border-0 bg-slate-100 px-3 py-2 text-left text-sm transition-colors hover:bg-slate-200 disabled:cursor-default disabled:hover:bg-slate-100"
+            className="group relative min-h-10 w-full overflow-hidden rounded-lg border-0 bg-muted px-3 py-2 text-left text-sm transition-colors hover:bg-accent disabled:cursor-default disabled:hover:bg-muted"
           >
             {showResults && (
               <span
                 className={`absolute inset-y-0 left-0 transition-[width] duration-500 ease-out ${
-                  isSelected ? 'bg-sky-300' : 'bg-sky-100'
+                  isSelected ? 'bg-sky-300 dark:bg-sky-700' : 'bg-sky-100 dark:bg-sky-950'
                 }`}
                 style={{ width: animateProgress ? `${option.percentage}%` : 0 }}
               />
@@ -937,7 +937,7 @@ function PollBlock({
               <span className="break-words text-foreground">{option.text}</span>
               {showResults && (
                 <span
-                  className={`shrink-0 text-xs ${isSelected ? 'text-sky-800' : 'text-slate-500'}`}
+                  className={`shrink-0 text-xs ${isSelected ? 'text-sky-700 dark:text-sky-300' : 'text-muted-foreground'}`}
                 >
                   {option.percentage}%
                 </span>

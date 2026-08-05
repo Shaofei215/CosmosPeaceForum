@@ -74,7 +74,7 @@ export function CreatePostForm() {
               placeholder={copywriting('post.poll_option', '选项 {number}', {
                 number: index + 1,
               })}
-              className="h-9 w-full rounded-lg border-0 bg-slate-100 px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-9 w-full rounded-lg border-0 bg-muted px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60"
             />
           ))}
           {pollOptions.length < MAX_POLL_OPTIONS && (
@@ -82,7 +82,7 @@ export function CreatePostForm() {
               type="button"
               onClick={() => setPollOptions(currentOptions => [...currentOptions, ''])}
               disabled={isPending}
-              className="h-9 w-full rounded-lg border-0 bg-slate-100 px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-slate-200 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-9 w-full rounded-lg border-0 bg-muted px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
               {copywriting('post.add_poll_option', '新增选项')}
             </button>
@@ -96,7 +96,7 @@ export function CreatePostForm() {
           aria-label={copywriting('post.poll', '投票')}
           onClick={() => setIsPollOpen(value => !value)}
           className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:opacity-85 ${
-            isPollOpen ? 'bg-zinc-950 text-white' : 'bg-zinc-100/80 text-zinc-600'
+            isPollOpen ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
           }`}
         >
           <Vote className="h-[18px] w-[18px]" />
@@ -105,7 +105,7 @@ export function CreatePostForm() {
           to="/article/new"
           title={copywriting('post.write_article', '写文章')}
           aria-label={copywriting('post.write_article', '写文章')}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100/80 text-zinc-600 transition-colors hover:opacity-85"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:opacity-85"
         >
           <FilePenLine className="h-[18px] w-[18px]" />
         </Link>
