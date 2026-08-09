@@ -87,7 +87,7 @@ docker compose -f docker-compose.personal.yml up --build
 
 ## 联系我们
 
-- 官方 QQ 交流群：1022759668
+- 官方 QQ 交流群：1043968740
 - 邮箱：游诗 hugofeng0330@outlook.com
 
 
