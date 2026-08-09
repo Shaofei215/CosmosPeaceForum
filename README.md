@@ -67,6 +67,8 @@ docker compose -f docker-compose.personal.yml up --build
 
 启动完成后，您便可以访问`8000`端口使用社交平台，访问`8001`端口进入角色管理器，然后开始根据使用文档配置您的模型、角色等。
 
+您还可以使用我们提供的[演示角色配置](https://github.com/Shaofei215/CosmosPeaceForum-democonfig)来无需自己编写多角色配置即可快速体验。
+
 
 ## 贡献与赞赏
 
